@@ -1,18 +1,19 @@
 [tool.poetry]
-name = "python-project"
-version = "0.0.0"
-description = ""
-authors = ["Benjamin Roland <benjamin.roland@hotmail.fr>"]
-license = "BSD-3-Clause"
+name = "homr"
+version = "0.1.0"
+description = "End-to-end Optical Music Recognition (OMR) system build on top of vision transformers."
+authors = ["Christian Liebhardt <christian.liebhardt@arcor.de>"]
+license = "AGPL-3.0"
 readme = "README.md"
-homepage = "https://github.com/Parici75"
-documentation = "https://github.com/Parici75/python-poetry-bootstrap"
+homepage = "https://github.com/liebharc"
+documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
-python = "3.11.5"
+python = "^3.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"
+tox = "^4.15.0"
 mypy = "^1.8.0"
 black = "^24.2.0"
 ruff = "^0.3.5"
@@ -74,7 +75,7 @@ profile = "black"
 sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 exclude = ["tests"]
 
 cache_dir = ".mypy_cache/strict"

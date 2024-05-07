@@ -1,4 +1,4 @@
-from libs.main import hello_world
+from homr.main import hello_world
 
 
 def test_hello_world(caplog):
