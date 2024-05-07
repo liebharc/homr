@@ -31,7 +31,7 @@ jobs:
           python -m pip install poetry==1.8.2
 
       - name: Init
-        run: make init
+        run: make init-poetry
 
       - name: CI
         run: make ci

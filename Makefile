@@ -16,8 +16,7 @@ exists-%:
 
 print-%: ; @echo $* = $($*)
 
-
-init:
+init-poetry:
 ifneq ($(POETRY_AVAILABLE), 1)
 	@echo "No Poetry executable found, cannot init project" && exit 1;
 endif
@@ -29,14 +28,14 @@ endif
 	@poetry self add "poetry-dynamic-versioning[plugin]"
 	@poetry install
 
-	make pre-commit
+init: init-poetry pre-commit
 
 # CI targets
 lint-%:
 	@echo lint-"$*"
 	@poetry run black --check "$*"
 	@poetry run isort --check "$*"
-	@poetry run ruff "$*"
+	@poetry run ruff check "$*"
 	@echo "    ✅ All good"
 
 lint: $(addprefix lint-, $(CI_DIRECTORIES))
