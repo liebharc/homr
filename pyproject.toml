@@ -1,0 +1,105 @@
+[tool.poetry]
+name = "python-project"
+version = "0.0.0"
+description = ""
+authors = ["Benjamin Roland <benjamin.roland@hotmail.fr>"]
+license = "BSD-3-Clause"
+readme = "README.md"
+homepage = "https://github.com/Parici75"
+documentation = "https://github.com/Parici75/python-poetry-bootstrap"
+
+[tool.poetry.dependencies]
+python = "3.11.5"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.2"
+mypy = "^1.8.0"
+black = "^24.2.0"
+ruff = "^0.3.5"
+isort = "^5.13.2"
+pyupgrade = "^3.15.1"
+pre-commit = "^3.6.2"
+pyclean = "^2.7.3"
+coverage = "^7.4.4"
+
+[tool.poetry.group.docs]
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+furo = "^2023.5.20"
+myst-parser = "^2.0.0"
+myst-nb = "^1.1.0"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "semver"
+pattern  = "^(?P<base>\\d+\\.\\d+\\.\\d+)(-?((?P<stage>[a-zA-Z]+)\\.?(?P<revision>\\d+)?))?"
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+## Tools
+[tool.black]
+target-version = ['py311']
+line-length = 100
+preview = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "UP", # pyupgrade
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+    "S", # flake8-bandit
+    "A", # flake8-builtins
+    "INP", # flake8-no-pep420
+    "PIE", # flake8-pie
+    "PL", # pylint
+]
+ignore = [
+    "UP015", # Unnecessary open mode parameters
+    "PLC1901", # compare-to-empty-string
+    "PLR0913", # Too many arguments to function call
+]
+
+[tool.isort]
+profile = "black"
+sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
+
+[tool.mypy]
+python_version = "3.11"
+exclude = ["tests"]
+
+cache_dir = ".mypy_cache/strict"
+show_error_codes = true
+show_column_numbers = true
+
+# Strict guidelines taken from https://github.com/pytorch/pytorch/blob/master/mypy-strict.ini
+# Across versions of mypy, the flags toggled by --strict vary.  To ensure
+# we have reproducible type check, we instead manually specify the flags
+follow_imports = "normal"
+warn_no_return = true
+warn_return_any = true
+disallow_any_unimported = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+implicit_reexport = false
+strict_equality = true
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = 10
+testpaths = ["tests"]

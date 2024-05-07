@@ -1,0 +1,13 @@
+# MacOS
+.DS_Store
+
+__pycache__/
+.venv/
+*_cache/
+.vscode/
+.idea/
+*.log
+*.env
+
+# Docs
+_build/

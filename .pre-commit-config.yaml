@@ -1,0 +1,54 @@
+# Built-in hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+    -   id: check-added-large-files
+    -   id: check-ast
+    -   id: fix-byte-order-marker
+    -   id: check-case-conflict
+    -   id: check-docstring-first
+    -   id: check-executables-have-shebangs
+    -   id: check-json
+    -   id: check-merge-conflict
+    -   id: check-toml
+    -   id: check-yaml
+    -   id: debug-statements
+    -   id: detect-private-key
+    -   id: end-of-file-fixer
+    -   id: requirements-txt-fixer
+    -   id: trailing-whitespace
+
+
+# Pyupgrade
+- repo: https://github.com/asottile/pyupgrade
+  rev: v3.15.2
+  hooks:
+      - id: pyupgrade
+
+# Ruff
+# We put this hook before Black hook, as autofix results may need to be reformatted by Black linter
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.2
+    hooks:
+    -   id: ruff
+        args: [ --fix, --exit-non-zero-on-fix ]
+        exclude: ^(tests|docs)/
+# Black
+-   repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+    -   id: black
+# Isort
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+    -   id: isort
+        exclude: ^.*/?setup\.py$
+# MyPy
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0  # Use the sha / tag you want to point at
+    hooks:
+    -   id: mypy
+        args: [--ignore-missing-imports]
+        files: ^libs/
