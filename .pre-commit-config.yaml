@@ -29,7 +29,7 @@ repos:
 # Ruff
 # We put this hook before Black hook, as autofix results may need to be reformatted by Black linter
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.2
+    rev: v0.4.3
     hooks:
     -   id: ruff
         args: [ --fix, --exit-non-zero-on-fix ]
