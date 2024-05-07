@@ -29,7 +29,7 @@ endif
 	@poetry self add "poetry-dynamic-versioning[plugin]"
 	@poetry install
 
-	pre-commit
+	make pre-commit
 
 # CI targets
 lint-%:
