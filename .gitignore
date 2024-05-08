@@ -4,10 +4,13 @@
 __pycache__/
 .venv/
 *_cache/
-.vscode/
 .idea/
 *.log
 *.env
 
 # Docs
 _build/
+
+# Datasets
+/datasets/*
+!/datasets/*.py

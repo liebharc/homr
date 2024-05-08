@@ -40,6 +40,16 @@ lint-%:
 
 lint: $(addprefix lint-, $(CI_DIRECTORIES))
 
+ruff-%:
+	@echo ruff-"$*"
+	@poetry run ruff check "$*"
+
+ruff: $(addprefix ruff-, $(CI_DIRECTORIES))
+
+format:
+	@poetry run black .
+	@poetry run isort .
+
 typecheck-%:
 	@echo typecheck-"$*"
 	@poetry run mypy "$*"

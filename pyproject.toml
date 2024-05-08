@@ -10,10 +10,18 @@ documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
 python = "^3.10"
+numpy = "^1.26.4"
+tensorflow = "^2.15.1"
+opencv-python-headless = "^4.9.0.80"
+Pillow = "^10.0.0"
+types-Pillow = "^10.1.0.1"
+scipy = "^1.11.2"
+types-tensorflow = "^2.12.0.10"
+torch = "^2.2.1"
+typing_extensions = "^4.5.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"
-tox = "^4.15.0"
 mypy = "^1.8.0"
 black = "^24.2.0"
 ruff = "^0.3.5"
@@ -22,6 +30,7 @@ pyupgrade = "^3.15.1"
 pre-commit = "^3.6.2"
 pyclean = "^2.7.3"
 coverage = "^7.4.4"
+augly = "^1.0.0"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]
@@ -68,6 +77,7 @@ ignore = [
     "UP015", # Unnecessary open mode parameters
     "PLC1901", # compare-to-empty-string
     "PLR0913", # Too many arguments to function call
+    "S311",  # pseudo-random generators are not suitable for cryptographic purposes - we use them to randomize training data
 ]
 
 [tool.isort]
