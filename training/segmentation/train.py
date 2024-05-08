@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageColor
 
-from .build_label import build_label, close_lines, make_symbols_stronger
+from .build_label import build_label, close_lines
 from .constant_min import CHANNEL_NUM
 from .types import Model, NDArray
 from .unet import semantic_segmentation, u_net
@@ -216,7 +216,6 @@ class DataLoader(MultiprocessingDataLoader):
                 staff_img_array = cv2.imread(staff_img_path)
                 staff_img_array = cv2.cvtColor(staff_img_array, cv2.COLOR_BGR2GRAY).astype(np.uint8)
                 staff_img_array = close_lines(staff_img_array)
-                staff_img_array = make_symbols_stronger(staff_img_array, kernel_size=(3, 3))
                 staff_img = Image.fromarray(staff_img_array)
                 staff_img = imaugs.resize(staff_img, width=tar_w, height=tar_h)
                 staff_img = imaugs.resize(staff_img_path, width=tar_w, height=tar_h)

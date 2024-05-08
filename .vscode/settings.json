@@ -1,0 +1,15 @@
+{
+    "files.exclude": {
+        "**/checkpoints/**": true,
+        "**/logs/**": true,
+        "**/CvcMuscima-Distortions/**": true,
+        "**/ds2_dense/**": true,
+        "**/Corpus/**": true,
+        "**/CPMS/**": true,
+        "**/grandstaff/**": true,
+        "**/.mypy_cache/**": true,
+        "**/.pytest_cache/**": true,
+        "**/.ruff_cache/**": true,
+        "**/__pycache__/**": true
+    }
+}
