@@ -5,13 +5,14 @@ import time
 
 import tensorflow as tf
 
-from datasets import download
+from training import download
 from training.segmentation import train
 from training.segmentation.model_utils import save_model
+from training.transformer.train import train_transformer
 
 
-def get_model_base_name(model_name: str) -> str:
-    model_path = os.path.join(script_location, "..", "homr", "models")
+def get_segmentation_model_path(model_name: str) -> str:
+    model_path = os.path.join(script_location, "..", "homr", "segmentation")
     timestamp = str(round(time.time()))
     return os.path.join(model_path, f"{model_name}_{timestamp}")
 
@@ -20,6 +21,11 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 
 parser = argparse.ArgumentParser(description="Train a model")
 parser.add_argument("model_name", type=str, help="The name of the model to train")
+parser.add_argument(
+    "--fast",
+    action="store_true",
+    help="Only applicable for the transformer: Trains with fp16 accuracy",
+)
 args = parser.parse_args()
 
 model_type = args.model_name
@@ -27,7 +33,7 @@ model_type = args.model_name
 if model_type == "segnet":
     dataset = download.download_deep_scores()
     model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=10)
-    filename = get_model_base_name(model_type)
+    filename = get_segmentation_model_path(model_type)
     meta = {
         "input_shape": list(model.input_shape),
         "output_shape": list(model.output_shape),
@@ -37,7 +43,7 @@ if model_type == "segnet":
 elif model_type == "unet":
     dataset = download.download_cvs_musicma()
     model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=10)
-    filename = get_model_base_name(model_type)
+    filename = get_segmentation_model_path(model_type)
     meta = {
         "input_shape": list(model.input_shape),
         "output_shape": list(model.output_shape),
@@ -49,13 +55,15 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
         "seg_unet.keras", custom_objects={"WarmUpLearningRate": train.WarmUpLearningRate}
     )
     model_name = model_type.split("_")[0]
-    filename = get_model_base_name(model_name)
+    filename = get_segmentation_model_path(model_name)
     meta = {
         "input_shape": list(model.input_shape),
         "output_shape": list(model.output_shape),
     }
     save_model(model, meta, filename)
     print("Model saved as " + filename)
+elif model_type == "transformer":
+    train_transformer(fast=args.fast)
 else:
     print("Unknown model: " + model_type)
     sys.exit(1)

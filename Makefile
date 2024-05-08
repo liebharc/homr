@@ -3,7 +3,7 @@ PYTHON_SHELL_VERSION := $(shell python --version | cut -d " " -f 2)
 POETRY_AVAILABLE := $(shell which poetry > /dev/null && echo 1 || echo 0)
 
 # CI variables
-CI_EXCLUDED_DIRS = __pycache__ docs tests
+CI_EXCLUDED_DIRS = __pycache__ docs datasets
 CI_DIRECTORIES=$(filter-out $(CI_EXCLUDED_DIRS), $(foreach dir, $(dir $(wildcard */)), $(dir:/=)))
 
 
@@ -46,9 +46,11 @@ ruff-%:
 
 ruff: $(addprefix ruff-, $(CI_DIRECTORIES))
 
-format:
-	@poetry run black .
-	@poetry run isort .
+format-%:
+	@poetry run black "$*"
+	@poetry run isort "$*"
+
+format: $(addprefix format-, $(CI_DIRECTORIES))
 
 typecheck-%:
 	@echo typecheck-"$*"

@@ -1,0 +1,37 @@
+{
+    "version": "1.0",
+    "truncation": null,
+    "padding": null,
+    "normalizer": null,
+    "pre_tokenizer": {
+        "type": "Sequence",
+        "pretokenizers": [
+            {
+                "type": "Split",
+                "pattern": {
+                    "String": "+"
+                },
+                "behavior": "Removed",
+                "invert": false
+            },
+            {
+                "type": "Split",
+                "pattern": {
+                    "String": "\n"
+                },
+                "behavior": "Removed",
+                "invert": false
+            }
+        ]
+    },
+    "post_processor": null,
+    "decoder": null,
+    "model": {
+        "type": "WordLevel",
+        "vocab": {
+            "nonote"    : 0,
+            "note" : 1
+        },
+        "unk_token": "<unk>"
+    }
+}

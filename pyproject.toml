@@ -19,6 +19,8 @@ scipy = "^1.11.2"
 types-tensorflow = "^2.12.0.10"
 torch = "^2.2.1"
 typing_extensions = "^4.5.0"
+transformers = "^4.39.1"
+x-transformers = "^1.27.19"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"
@@ -31,6 +33,12 @@ pre-commit = "^3.6.2"
 pyclean = "^2.7.3"
 coverage = "^7.4.4"
 augly = "^1.0.0"
+albumentations = "^1.4.0"
+timm = "^0.9.16"
+editdistance = "^0.8.1"
+xmltodict = "^0.13.0"
+torchvision = "^0.17.1"
+types-xmltodict = "^0.13.0.3"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]
@@ -86,7 +94,7 @@ sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
 
 [tool.mypy]
 python_version = "3.10"
-exclude = ["tests"]
+exclude = ["datasets"]
 
 cache_dir = ".mypy_cache/strict"
 show_error_codes = true

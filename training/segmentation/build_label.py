@@ -6,9 +6,10 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from homr.types import NDArray
+
 from .constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
 from .dense_dataset_definitions import DENSE_DATASET_DEFINITIONS as DEF
-from .types import NDArray
 
 HALF_WHOLE_NOTE = DEF.NOTEHEADS_HOLLOW + DEF.NOTEHEADS_WHOLE + [42]
 

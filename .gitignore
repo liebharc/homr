@@ -15,5 +15,9 @@ _build/
 /datasets/*
 !/datasets/*.py
 
+# Models
+/homr/models/*
+!/homr/models/*.py
+
 # Byprodcuts of a training run
 seg_unet.keras

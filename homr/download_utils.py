@@ -16,11 +16,14 @@ def download_file(url: str, filename: str) -> None:
                 f.write(chunk)
                 progress = f.tell()
                 progressMb = round(progress / 1024 / 1024)
-                progressPercent = 100 * progress // total
-                print(
-                    f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
-                    end="",
-                )
+                if total > 0:
+                    progressPercent = 100 * progress // total
+                    print(
+                        f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
+                        end="",
+                    )
+                else:
+                    print(f"\rDownloaded {progressMb} MB", end="")
     print()
 
 
