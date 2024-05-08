@@ -15,6 +15,7 @@ def download_cvs_musicma() -> str:
     download_url = "http://datasets.cvc.uab.es/muscima/CVCMUSCIMA_SR.zip"
     download_path = os.path.join(script_location, "CVCMUSCIMA_SR.zip")
     download_file(download_url, download_path)
+    print("Extracting download")
     unzip_file(download_path, script_location)
     print("Download complete")
     return dataset_path
@@ -28,6 +29,7 @@ def download_deep_scores() -> str:
     download_url = "https://zenodo.org/records/4012193/files/ds2_dense.tar.gz?download=1"
     download_path = os.path.join(script_location, "ds2_dense.tar.gz")
     download_file(download_url, download_path)
+    print("Extracting download")
     untar_file(download_path, script_location)
     print("Download complete")
     return dataset_path

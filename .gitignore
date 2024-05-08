@@ -14,3 +14,6 @@ _build/
 # Datasets
 /datasets/*
 !/datasets/*.py
+
+# Byprodcuts of a training run
+seg_unet.keras

@@ -69,7 +69,9 @@ def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
     return tar
 
 
-def build_label(seg_path: str, strenghten_channels: dict[int, tuple[int, int]] = None) -> NDArray:
+def build_label(
+    seg_path: str, strenghten_channels: dict[int, tuple[int, int]] | None = None
+) -> NDArray:
     if strenghten_channels is None:
         strenghten_channels = {}
     img = Image.open(seg_path)

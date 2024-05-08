@@ -32,6 +32,11 @@ def unzip_file(filename: str, output_folder: str) -> None:
                 print(f"Skipping potentially unsafe file {member}")
                 continue
 
+            # Handle directories
+            if member.endswith("/"):
+                os.makedirs(os.path.join(output_folder, member), exist_ok=True)
+                continue
+
             # Extract file
             source = zip_ref.open(member)
             target = open(os.path.join(output_folder, member), "wb")
@@ -50,6 +55,11 @@ def untar_file(filename: str, output_folder: str) -> None:
             # Ensure file path is safe
             if os.path.isabs(member.name) or ".." in member.name:
                 print(f"Skipping potentially unsafe file {member.name}")
+                continue
+
+            # Handle directories
+            if member.type == tarfile.DIRTYPE:
+                os.makedirs(os.path.join(output_folder, member.name), exist_ok=True)
                 continue
 
             # Extract file
