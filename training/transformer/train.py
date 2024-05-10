@@ -17,6 +17,7 @@ from training.convert_primus import (
     primus_distorted_train_index,
     primus_train_index,
 )
+from training.run_id import get_run_id
 
 from .data_loader import load_dataset
 from .mix_datasets import mix_training_sets
@@ -115,8 +116,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     if compile_model:
         print("Compiling model")
 
-    git_count = os.popen("git rev-list --count HEAD").read().strip()  # noqa: S605, S607
-    git_head = os.popen("git rev-parse HEAD").read().strip()  # noqa: S605, S607
+    run_id = get_run_id()
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -132,7 +132,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
         weight_decay=0.01,
         load_best_model_at_end=True,
         metric_for_best_model="loss",
-        logging_dir=os.path.join("logs", f"run{git_count}-{git_head}"),
+        logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
         label_names=["rhythms_seq", "note_seq", "lifts_seq", "pitchs_seq"],
         fp16=fast,
@@ -160,7 +160,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
         print("Interrupted")
 
     model_destination = os.path.join(
-        script_location, "workspace", "checkpoints", f"pytorch_model_{git_count}-{git_head}.pth"
+        script_location, "workspace", "checkpoints", f"pytorch_model_{run_id}.pth"
     )
     torch.save(model.state_dict(), model_destination)
     print(f"Saved model to {model_destination}")

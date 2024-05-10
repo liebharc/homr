@@ -18,7 +18,7 @@ from .types import Model
 from .unet import semantic_segmentation, u_net
 
 
-def monkey_path_float_for_imaugs() -> None:
+def monkey_patch_float_for_imaugs() -> None:
     """
     Monkey path workaround of np.float for imaugs
     """
@@ -120,9 +120,9 @@ def preprocess_image(img_path: str) -> Image.Image:
 
 def batch_transform(
     img: Image.Image | NDArray, trans_func: Callable[[Image.Image], Image.Image]
-) -> Image.Image:
+) -> NDArray:
     if isinstance(img, Image.Image):
-        return trans_func(img)
+        return np.array(trans_func(img))
 
     if not isinstance(img, np.ndarray):
         raise ValueError("Input image should be either PIL.Image or np.ndarray")
@@ -136,7 +136,7 @@ def batch_transform(
         tmp_img = Image.fromarray(img[..., i].astype(np.uint8))
         tmp_img = trans_func(tmp_img)
         result.append(np.array(tmp_img))
-    return Image.fromarray(np.dstack(result))
+    return np.dstack(result)
 
 
 class MultiprocessingDataLoader:
@@ -225,7 +225,7 @@ class DataLoader(MultiprocessingDataLoader):
 
                 # Random perspective transform
                 seed = random.randint(0, 1000)
-                monkey_path_float_for_imaugs()
+                monkey_patch_float_for_imaugs()
 
                 def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
                     return imaugs.perspective_transform(img, seed=seed, sigma=70)
@@ -355,7 +355,7 @@ class DsDataLoader(MultiprocessingDataLoader):
 
                 # Random perspective transform
                 seed = random.randint(0, 1000)
-                monkey_path_float_for_imaugs()
+                monkey_patch_float_for_imaugs()
 
                 def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
                     return imaugs.perspective_transform(img, seed=seed, sigma=70)

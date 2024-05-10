@@ -7,9 +7,10 @@ import numpy as np
 from PIL import Image
 
 from homr.types import NDArray
-
-from .constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
-from .dense_dataset_definitions import DENSE_DATASET_DEFINITIONS as DEF
+from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
+from training.segmentation.dense_dataset_definitions import (
+    DENSE_DATASET_DEFINITIONS as DEF,
+)
 
 HALF_WHOLE_NOTE = DEF.NOTEHEADS_HOLLOW + DEF.NOTEHEADS_WHOLE + [42]
 
@@ -73,8 +74,6 @@ def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
 def build_label(
     seg_path: str, strenghten_channels: dict[int, tuple[int, int]] | None = None
 ) -> NDArray:
-    if strenghten_channels is None:
-        strenghten_channels = {}
     img = Image.open(seg_path)
     arr = np.array(img)
     color_set = set(np.unique(arr))
@@ -91,10 +90,9 @@ def build_label(
             output[..., ch] += note
         elif ch != 0:
             output[..., ch] += np.where(arr == color, 1, 0)
-    for strenghten_channel in strenghten_channels.keys():
-        output[..., strenghten_channel] = make_symbols_stronger(
-            output[..., strenghten_channel], strenghten_channels[strenghten_channel]
-        )
+    if strenghten_channels is not None:
+        for ch in strenghten_channels.keys():
+            output[..., ch] = make_symbols_stronger(output[..., ch], strenghten_channels[ch])
         # The background channel is 1 if all other channels are 0
         background_ch = np.ones((arr.shape[0], arr.shape[1]))
         for ch in range(1, total_chs):
@@ -154,10 +152,15 @@ def find_example(
 
 
 if __name__ == "__main__":
-    seg_folder = "ds2_dense/segmentation"
+    from pathlib import Path
+
+    script_location = os.path.dirname(os.path.realpath(__file__))
+    git_root = Path(script_location).parent.parent.absolute()
+    dataset_root = os.path.join(git_root, "datasets")
+    seg_folder = os.path.join(dataset_root, "ds2_dense", "segmentation")
     color = int(sys.argv[1])
     with_background = find_example(seg_folder, color)
     if with_background is None:
         print("Found no examples")
     else:
-        cv2.imwrite("example.png", with_background)
+        cv2.imwrite("example.png", 255 * with_background)

@@ -281,7 +281,3 @@ def u_net(win_size: int = 288, out_class: int = 3) -> Model:
     out1 = L.Conv2D(out_class, (1, 1), activation="softmax", padding="same", dtype=tf.float32)(tl1)
 
     return tf.keras.Model(inputs=inp, outputs=out1)
-
-
-if __name__ == "__main__":
-    m = u_net()

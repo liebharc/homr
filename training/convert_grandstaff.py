@@ -14,10 +14,10 @@ from torchvision import transforms as tr  # type: ignore
 from torchvision.transforms import Compose  # type: ignore
 
 from homr.download_utils import download_file, untar_file
+from homr.staff_dewarping import warp_image_randomly
 from homr.types import NDArray
 from training.image_processing import add_image_into_tr_omr_canvas
 from training.music_xml import music_xml_to_semantic
-from training.warp import warp_image_randomly
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
