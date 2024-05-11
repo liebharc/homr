@@ -16,8 +16,24 @@ _build/
 !/datasets/*.py
 
 # Models
-/homr/models/*
-!/homr/models/*.py
+/homr/segmentation/*
+!/homr/segmentation/*.py
+
+/homr/transformer/*
+!/homr/transformer/*.py
 
 # Byprodcuts of a training run
-seg_unet.keras
+/seg_unet.keras
+/logs
+/current_training
+
+# Testdata
+/*.jpeg
+/*.jpg
+/*.png
+/*.npy
+/*.musicxml
+/testdata
+
+# WSL
+*Zone.Identifier

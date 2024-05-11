@@ -21,6 +21,8 @@ torch = "^2.2.1"
 typing_extensions = "^4.5.0"
 transformers = "^4.39.1"
 x-transformers = "^1.27.19"
+musicxml = "^1.4"
+easyocr = "^1.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"
@@ -39,6 +41,7 @@ editdistance = "^0.8.1"
 xmltodict = "^0.13.0"
 torchvision = "^0.17.1"
 types-xmltodict = "^0.13.0.3"
+transformers = {extras = ["torch"], version = "^4.40.2"}
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]
@@ -122,3 +125,6 @@ strict_equality = true
 log_cli = true
 log_cli_level = 10
 testpaths = ["tests"]
+
+[tool.poetry.scripts]
+homr = "homr.main:main"

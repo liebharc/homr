@@ -3,7 +3,7 @@ PYTHON_SHELL_VERSION := $(shell python --version | cut -d " " -f 2)
 POETRY_AVAILABLE := $(shell which poetry > /dev/null && echo 1 || echo 0)
 
 # CI variables
-CI_EXCLUDED_DIRS = __pycache__ docs datasets
+CI_EXCLUDED_DIRS = __pycache__ docs datasets current_training logs testdata
 CI_DIRECTORIES=$(filter-out $(CI_EXCLUDED_DIRS), $(foreach dir, $(dir $(wildcard */)), $(dir:/=)))
 
 
@@ -30,7 +30,6 @@ endif
 
 init: init-poetry pre-commit
 
-# CI targets
 lint-%:
 	@echo lint-"$*"
 	@poetry run black --check "$*"

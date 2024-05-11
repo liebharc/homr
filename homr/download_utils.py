@@ -24,7 +24,7 @@ def download_file(url: str, filename: str) -> None:
                     )
                 else:
                     print(f"\rDownloaded {progressMb} MB", end="")
-    print()
+    print()  # Add newline after download progress
 
 
 def unzip_file(filename: str, output_folder: str) -> None:

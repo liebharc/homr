@@ -7,8 +7,8 @@ from pathlib import Path
 import cv2
 
 from homr.download_utils import download_file, untar_file, unzip_file
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
-from training.image_processing import add_image_into_tr_omr_canvas
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -60,7 +60,7 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:
         return []
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
-    preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+    preprocessed, _ignored = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
     preprocessed_path = _replace_suffix(path, "-pre.jpg")
     if preprocessed_path is None:
         print("Warning: Unknown extension", path)

@@ -59,11 +59,7 @@ def load_and_mix_training_sets(
 script_location = os.path.dirname(os.path.realpath(__file__))
 
 vocabulary = os.path.join(script_location, "vocabulary_semantic.txt")
-git_root = os.path.join(script_location, "..")
-
-tr_omr_pretrained = os.path.join(
-    script_location, "workspace", "checkpoints", "img2score_epoch47.pth"
-)
+git_root = os.path.join(script_location, "..", "..")
 
 
 def _check_datasets_are_present() -> None:
@@ -101,10 +97,8 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
 
     config = Config()
     if fast:
-        optim = "adamw_apex_fused"
         config.reduced_precision = True
-    else:
-        optim = "adamw_torch"  # TrOMR Paper page 3 species an Adam optimizer
+    optim = "adamw_torch"  # TrOMR Paper page 3 species an Adam optimizer
 
     datasets = load_dataset(train_index, config, val_split=0.1)
 
@@ -143,6 +137,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     if pretrained:
         print("Loading pretrained model")
         model = TrOMR(config)
+        tr_omr_pretrained = config.filepaths.checkpoint
         model.load_state_dict(torch.load(tr_omr_pretrained), strict=False)
     else:
         model = TrOMR(config)
@@ -159,8 +154,6 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     except KeyboardInterrupt:
         print("Interrupted")
 
-    model_destination = os.path.join(
-        script_location, "workspace", "checkpoints", f"pytorch_model_{run_id}.pth"
-    )
+    model_destination = os.path.join(git_root, "homr", "transformer", f"pytorch_model_{run_id}.pth")
     torch.save(model.state_dict(), model_destination)
     print(f"Saved model to {model_destination}")

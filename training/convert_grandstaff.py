@@ -1,6 +1,7 @@
 import multiprocessing
 import os
 import platform
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -15,8 +16,8 @@ from torchvision.transforms import Compose  # type: ignore
 
 from homr.download_utils import download_file, untar_file
 from homr.staff_dewarping import warp_image_randomly
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.types import NDArray
-from training.image_processing import add_image_into_tr_omr_canvas
 from training.music_xml import music_xml_to_semantic
 
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -35,6 +36,8 @@ if platform.system() == "Windows":
 if not os.path.exists(hum2xml):
     print("Downloading hum2xml from https://extras.humdrum.org/man/hum2xml/")
     download_file("http://extras.humdrum.org/bin/linux/hum2xml", hum2xml)
+    os.chmod(hum2xml, stat.S_IXUSR)
+
 
 if not os.path.exists(grandstaff_root):
     print("Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets")
@@ -96,7 +99,8 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    return add_image_into_tr_omr_canvas(image)
+    result, _ignored = add_image_into_tr_omr_canvas(image)
+    return result
 
 
 def _get_image_bounds(dark_pixels_per_row: NDArray) -> tuple[int, int]:

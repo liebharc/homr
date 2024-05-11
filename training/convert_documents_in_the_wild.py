@@ -7,7 +7,7 @@ from pathlib import Path
 
 import cv2
 
-from training.image_processing import add_image_into_tr_omr_canvas
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -44,7 +44,8 @@ def _convert_file(file: Path) -> list[str]:
     cropped = image[top:bottom, left:right, :]
 
     target_path = str(file).replace(".png", "-pre.png")
-    cv2.imwrite(target_path, add_image_into_tr_omr_canvas(cropped))
+    converted, _ignored = add_image_into_tr_omr_canvas(cropped)
+    cv2.imwrite(target_path, converted)
     return [f"{target_path},nosymbols\n"]
 
 

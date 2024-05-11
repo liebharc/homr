@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 
 from homr.transformer.configs import Config
+from homr.transformer.staff2score import readimg
 from homr.types import NDArray
-from training.image_processing import readimg
 
 from .split_merge_symbols import split_semantic_file
 
@@ -15,7 +15,7 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 
 os.environ["WANDB_DISABLED"] = "true"
 
-git_root = os.path.join(script_location, "..")
+git_root = os.path.join(script_location, "..", "..")
 
 
 class DataLoader:
@@ -60,13 +60,7 @@ class DataLoader:
             # Instead we construct take up to 3 random mask lengths and the full length
             mask_lens = set()
             mask_lens.add(semantic_len + 2)
-            image_basename = os.path.basename(image)
-            image_basename_hash = hash(image_basename)
 
-            # Seed the random generator here to get more reproducible results
-            # Although it isn't clear if this really affects the results more
-            # than all the randomness in the conversion of the data sets
-            random.seed(image_basename_hash)
             number_of_desired_samples = 2
             for _ in range(1, min(number_of_desired_samples, semantic_len)):
                 mask_lens.add(random.randint(1, semantic_len) + 1)
@@ -195,25 +189,11 @@ def _translate_symbols(
     return result
 
 
-rhythm_tokenizer_path = os.path.join(
-    script_location, "workspace", "tokenizers", "tokenizer_rhythm.json"
-)
-pitch_tokenizer_path = os.path.join(
-    script_location, "workspace", "tokenizers", "tokenizer_pitch.json"
-)
-note_tokenizer_path = os.path.join(
-    script_location, "workspace", "tokenizers", "tokenizer_note.json"
-)
-lift_tokenizer_path = os.path.join(
-    script_location, "workspace", "tokenizers", "tokenizer_lift.json"
-)
-
-
 def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
-    rhythm_tokenizer_config = json.load(open(rhythm_tokenizer_path))
-    pitch_tokenizer_config = json.load(open(pitch_tokenizer_path))
-    note_tokenizer_config = json.load(open(note_tokenizer_path))
-    lift_tokenizer_config = json.load(open(lift_tokenizer_path))
+    rhythm_tokenizer_config = json.load(open(config.filepaths.rhythmtokenizer))
+    pitch_tokenizer_config = json.load(open(config.filepaths.pitchtokenizer))
+    note_tokenizer_config = json.load(open(config.filepaths.notetokenizer))
+    lift_tokenizer_config = json.load(open(config.filepaths.lifttokenizer))
 
     rhythm_tokenizer_vocab = rhythm_tokenizer_config["model"]["vocab"]
     pitch_tokenizer_vocab = pitch_tokenizer_config["model"]["vocab"]

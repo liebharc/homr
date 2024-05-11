@@ -233,7 +233,7 @@ class DataLoader(MultiprocessingDataLoader):
                 image_trans = np.array(perspect_trans(image))  # RGB image
                 staff_img_trans = np.array(perspect_trans(staff_img))  # 1-bit mask
                 symbol_img_trans = np.array(perspect_trans(symbol_img))  # 1-bit mask
-                staff_img_trans = np.where(symbol_img_trans, 1, 0)
+                staff_img_trans = np.where(staff_img_trans, 1, 0)
                 symbol_img_trans = np.where(symbol_img_trans, 1, 0)
 
                 self._queue.put([image_trans, staff_img_trans, symbol_img_trans, ratio])
