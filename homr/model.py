@@ -20,12 +20,10 @@ from .results import (
     ClefType,
     ResultClef,
     ResultDuration,
-    ResultMeasure,
     ResultNote,
     ResultNoteGroup,
     ResultPitch,
     ResultRest,
-    ResultStaff,
     ResultSymbol,
 )
 
@@ -428,68 +426,6 @@ class StaffPoint:
         return BoundingBox(
             [int(self.x), int(self.y[0]), int(self.x), int(self.y[-1])], np.array([]), -2
         )
-
-
-class CompactStaffPoint:
-    """
-    An item which position is either specified by the x from the staff beginning or
-    by the measure number and the x starting from the beginning of the measure.
-    """
-
-    def __init__(self, x: int, measure_number: int, x_measure: int, item: SymbolOnStaff) -> None:
-        self.measure_number = measure_number
-        self.x = x
-        self.x_measure = x_measure
-        self.item = item
-
-
-class CompactMeasure:
-    def __init__(self, measure_number: int, x_measure: int) -> None:
-        self.measure_number = measure_number
-        self.x_measure = x_measure
-        self.points: list[CompactStaffPoint] = []
-
-    def add_point(self, point: CompactStaffPoint) -> None:
-        self.points.append(point)
-
-    def remove_point(self, point_to_remove: CompactStaffPoint) -> None:
-        len_before = len(self.points)
-        self.points = [point for point in self.points if point != point_to_remove]
-        if len_before == len(self.points):
-            raise Exception("Could not remove point")
-
-    def is_empty(self) -> bool:
-        number_of_rests_and_notes = len(
-            [point for point in self.points if isinstance(point.item, Rest | Note | Clef)]
-        )
-        return number_of_rests_and_notes == 0
-
-    def to_result(self) -> ResultMeasure:
-        symbols = []
-        for point in self.points:
-            possible_result = point.item.to_result()
-            if possible_result is not None:
-                symbols.append(possible_result)
-        return ResultMeasure(symbols)
-
-
-class CompactStaff:
-    """
-    A staff which has been reduced to one dimension.
-    """
-
-    def __init__(self, measures: list[CompactMeasure]) -> None:
-        self.measures = measures
-
-    def add_measure(self, measure: CompactMeasure) -> None:
-        self.measures.append(measure)
-
-    def merge(self, other: "CompactStaff") -> "CompactStaff":
-        result = CompactStaff(self.measures + other.measures)
-        return result
-
-    def to_result(self) -> ResultStaff:
-        return ResultStaff([measure.to_result() for measure in self.measures])
 
 
 class Staff(DebugDrawable):
