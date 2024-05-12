@@ -90,8 +90,8 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, cpms_train_index, grandstaff_train_index],
-        [1.0, 1.0, 1.0],
+        [primus_train_index, cpms_train_index, grandstaff_train_index, diw_train_index],
+        [1.0, 1.0, 1.0, 1.0],
         number_of_files,
     )
 
