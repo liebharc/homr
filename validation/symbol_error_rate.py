@@ -7,10 +7,7 @@ import editdistance  # type: ignore
 from homr import download_utils
 from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
-from training.transformer.split_merge_symbols import (
-    convert_alter_to_accidentals,
-    merge_symbols,
-)
+from training.transformer.split_merge_symbols import convert_alter_to_accidentals
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
@@ -23,8 +20,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
         expected_str = convert_alter_to_accidentals(_load_semantic_file(semantic_path))[0].strip()
-        predrhythms, predpitchs, predlifts = model.predict(img_path)
-        actual = merge_symbols(predrhythms, predpitchs, predlifts)[0].split("+")
+        actual = model.predict_and_merge(img_path)[0].split("+")
         actual = [
             symbol for symbol in actual if not symbol.startswith("timeSignature")
         ]  # reference data has no time signature

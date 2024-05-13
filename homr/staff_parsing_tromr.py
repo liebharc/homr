@@ -3,7 +3,8 @@ from homr.logging import eprint
 from .model import Note, NoteGroup, Staff
 from .results import ResultClef, ResultNote, ResultNoteGroup, ResultStaff
 from .tr_omr_parser import parse_tr_omr_output
-from .transformer.inference import Inference
+from .transformer.configs import default_config
+from .transformer.staff2score import Staff2Score
 
 
 def _get_notes_with_clef_information(
@@ -104,15 +105,15 @@ def _override_note_pitches(staff: Staff, result: ResultStaff) -> None:  # noqa: 
     )
 
 
-inference: Inference | None = None
+inference: Staff2Score | None = None
 
 
 def parse_staff_tromr(staff: Staff, staff_file: str) -> ResultStaff:
     global inference  # noqa: PLW0603
     print("Running TrOmr inference on", staff_file)
     if inference is None:
-        inference = Inference()
-    output = str.join("", inference.predict(staff_file))
+        inference = Staff2Score(default_config)
+    output = str.join("", inference.predict_and_merge(staff_file))
     result = parse_tr_omr_output(output)
     _override_note_pitches(staff, result)
     return result

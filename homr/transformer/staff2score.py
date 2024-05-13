@@ -9,6 +9,7 @@ from albumentations.pytorch import ToTensorV2  # type: ignore
 from transformers import PreTrainedTokenizerFast  # type: ignore
 
 from homr.types import NDArray
+from training.transformer.split_merge_symbols import merge_symbols
 
 from .configs import Config
 from .tromr_arch import TrOMR
@@ -74,6 +75,10 @@ class Staff2Score:
         predpitch = self.detokenize(pitch, self.pitchtokenizer)
         predrhythm = self.detokenize(rhythm, self.rhythmtokenizer)
         return predrhythm, predpitch, predlift
+
+    def predict_and_merge(self, filepath: str) -> list[str]:
+        predrhythms, predpitchs, predlifts = self.predict(filepath)
+        return merge_symbols(predrhythms, predpitchs, predlifts)
 
 
 _transform = alb.Compose(

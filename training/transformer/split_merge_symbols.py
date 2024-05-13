@@ -7,37 +7,53 @@ from homr.circle_of_fifths import (
 )
 
 
+class SymbolMerger:
+    def __init__(self) -> None:
+        self.merge: list[str] = []
+        self.chord: list[str] = []
+
+    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> None:
+        if predrhythm == "|":
+            self.chord = self.merge.pop().split("|")
+        elif "note" in predrhythm:
+            lift = ""
+            if predlift in (
+                "lift_##",
+                "lift_#",
+                "lift_bb",
+                "lift_b",
+                "lift_N",
+            ):
+                lift = predlift.split("_")[-1]
+            self.chord.append(predpitch + lift + "_" + predrhythm.split("note-")[-1])
+            self.merge.append(str.join("|", self.chord))
+            self.chord.clear()
+        else:
+            self.merge.append(predrhythm)
+
+    def complete(self) -> str:
+        return str.join("+", self.merge)
+
+
+def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: list[str]) -> str:
+    merger = SymbolMerger()
+
+    for j in range(len(predrhythm)):
+        merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
+
+    return merger.complete()
+
+
 def merge_symbols(
     predrhythms: list[list[str]], predpitchs: list[list[str]], predlifts: list[list[str]]
 ) -> list[str]:
     merges = []
     for i in range(len(predrhythms)):
+        predrhythm = predrhythms[i]
         predlift = predlifts[i]
         predpitch = predpitchs[i]
-        predrhythm = predrhythms[i]
-
-        if len(predrhythm) == 0:
-            merges.append("")
-            continue
-
-        merge = predrhythm[0] + "+"
-        for j in range(1, len(predrhythm)):
-            if predrhythm[j] == "|":
-                merge = merge[:-1] + predrhythm[j]
-            elif "note" in predrhythm[j]:
-                lift = ""
-                if predlift[j] in (
-                    "lift_##",
-                    "lift_#",
-                    "lift_bb",
-                    "lift_b",
-                    "lift_N",
-                ):
-                    lift = predlift[j].split("_")[-1]
-                merge += predpitch[j] + lift + "_" + predrhythm[j].split("note-")[-1] + "+"
-            else:
-                merge += predrhythm[j] + "+"
-        merges.append(merge[:-1])
+        merge = merge_single_line(predrhythm, predpitch, predlift)
+        merges.append(merge)
     return merges
 
 
