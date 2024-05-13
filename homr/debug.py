@@ -55,8 +55,14 @@ class Debug:
         if not self.debug:
             return
 
+        prefixes = (
+            self.base_filename + "_debug_",
+            self.base_filename + "_tesseract_input",
+            self.base_filename + "_staff-",
+        )
+
         for file in os.listdir("."):
-            if file.startswith(self.base_filename + "_debug_") and file not in self.written_files:
+            if file.startswith(prefixes) and file not in self.written_files:
                 os.remove(file)
 
     def _debug_file_name(self, suffix: str) -> str:

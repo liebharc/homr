@@ -129,6 +129,7 @@ def process_image(  # noqa: PLR0915
 ) -> tuple[str, str, str]:
     eprint("Processing " + image_path)
     predictions, debug = load_and_preprocess_predictions(image_path, enable_debug, enable_cache)
+    xml_file = replace_extension(image_path, ".musicxml")
     try:
         eprint("Loaded segmentation")
         symbols = predict_symbols(debug, predictions)
@@ -215,7 +216,6 @@ def process_image(  # noqa: PLR0915
 
         eprint("Writing XML")
         xml = generate_xml(result_staffs, title)
-        xml_file = replace_extension(image_path, ".musicxml")
         xml.write(xml_file)
 
         eprint("Finished parsing " + str(len(staffs)) + " staffs")
@@ -224,6 +224,10 @@ def process_image(  # noqa: PLR0915
         debug.clean_debug_files_from_previous_runs()
 
         return xml_file, title, teaser_file
+    except:
+        if os.path.exists(xml_file):
+            os.remove(xml_file)
+        raise
     finally:
         debug.clean_debug_files_from_previous_runs()
 
@@ -235,7 +239,10 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     without_teasers = [
         img
         for img in image_files
-        if "_teaser" not in img and "_debug" not in img and "_staff" not in img
+        if "_teaser" not in img
+        and "_debug" not in img
+        and "_staff" not in img
+        and "_tesseract" not in img
     ]
     return sorted(without_teasers)
 
@@ -297,6 +304,7 @@ def main() -> None:
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
+        error_files = []
         for image_file in image_files:
             eprint("=========================================")
             try:
@@ -304,5 +312,8 @@ def main() -> None:
                 eprint("Finished", image_file)
             except Exception as e:
                 eprint(f"An error occurred while processing {image_file}: {e}")
+                error_files.append(image_file)
+        if len(error_files) > 0:
+            eprint("Errors occurred while processing the following files:", error_files)
     else:
         raise ValueError(f"{args.image} is not a valid file or directory")
