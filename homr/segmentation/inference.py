@@ -46,7 +46,7 @@ class InferenceModel:
             batch = np.array(data[idx : idx + batch_size])
             out = self.model.serve(batch)
             pred.append(out)
-        print()  # Add newline after progress
+        print(f"{len(data)}/{len(data)} (step: {batch_size})")  # Add newline after progress
 
         # Merge prediction patches
         output_shape = image.shape[:2] + (self.output_shape[-1],)
