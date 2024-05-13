@@ -8,6 +8,16 @@ homr is an Optical Music Recognition (OMR) software which takes camera pictures 
 - Poetry
 - NVidia GPU with CUDA 12.1
 
+## Example
+
+This example gives an impression of the current performance of the current implementation. Several mistakes are made in the output, but the overall structure is correct.
+
+| original image | homr result |
+|:----:|:-----------:|
+| <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="figures/tabi.svg" width="400" > |
+
+The homr result is obtained by taking the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
+
 ## Technical Details
 
 homr uses the segmentation as described in [oemer](https://github.com/BreezeWhite/oemer) to find possible staff lines, clefs, bar lines and note heads on an image. It combines the staff lines, clefs and bars to find the position of the staffs in the picture.
