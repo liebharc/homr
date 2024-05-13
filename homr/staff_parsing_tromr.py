@@ -113,7 +113,7 @@ def parse_staff_tromr(staff: Staff, staff_file: str) -> ResultStaff:
     print("Running TrOmr inference on", staff_file)
     if inference is None:
         inference = Staff2Score(default_config)
-    output = str.join("", inference.predict_and_merge(staff_file))
+    output = str.join("", inference.predict(staff_file))
     result = parse_tr_omr_output(output)
     _override_note_pitches(staff, result)
     return result

@@ -1,15 +1,12 @@
 import os
-from typing import Any
 
 import albumentations as alb  # type: ignore
 import cv2
 import safetensors
 import torch
 from albumentations.pytorch import ToTensorV2  # type: ignore
-from transformers import PreTrainedTokenizerFast  # type: ignore
 
 from homr.types import NDArray
-from training.transformer.split_merge_symbols import merge_symbols
 
 from .configs import Config
 from .tromr_arch import TrOMR
@@ -35,26 +32,8 @@ class Staff2Score:
 
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
-        self.lifttokenizer = PreTrainedTokenizerFast(tokenizer_file=config.filepaths.lifttokenizer)
-        self.pitchtokenizer = PreTrainedTokenizerFast(
-            tokenizer_file=config.filepaths.pitchtokenizer
-        )
-        self.rhythmtokenizer = PreTrainedTokenizerFast(
-            tokenizer_file=config.filepaths.rhythmtokenizer
-        )
 
-    def detokenize(self, tokens: Any, tokenizer: Any) -> list[list[str]]:
-        toks = [tokenizer.convert_ids_to_tokens(tok) for tok in tokens]
-        for b in range(len(toks)):
-            for i in reversed(range(len(toks[b]))):
-                if toks[b][i] is None:
-                    toks[b][i] = ""
-                toks[b][i] = toks[b][i].replace("Ġ", " ").strip()
-                if toks[b][i] in (["[BOS]", "[EOS]", "[PAD]"]):
-                    del toks[b][i]
-        return toks
-
-    def predict_token(self, imgpath: str) -> tuple[NDArray, NDArray, NDArray]:
+    def predict(self, imgpath: str) -> list[str]:
         imgs: list[NDArray] = []
         if os.path.isdir(imgpath):
             for item in os.listdir(imgpath):
@@ -62,23 +41,7 @@ class Staff2Score:
         else:
             imgs.append(readimg(self.config, imgpath))
         imgs_tensor = torch.cat(imgs).float().unsqueeze(1)  # type: ignore
-        output = self.model.generate(
-            imgs_tensor.to(self.device), temperature=self.config.temperature
-        )
-        rhythm, pitch, lift = output
-        return rhythm, pitch, lift
-
-    def predict(self, imgpath: str) -> tuple[list[list[str]], list[list[str]], list[list[str]]]:
-        rhythm, pitch, lift = self.predict_token(imgpath)
-
-        predlift = self.detokenize(lift, self.lifttokenizer)
-        predpitch = self.detokenize(pitch, self.pitchtokenizer)
-        predrhythm = self.detokenize(rhythm, self.rhythmtokenizer)
-        return predrhythm, predpitch, predlift
-
-    def predict_and_merge(self, filepath: str) -> list[str]:
-        predrhythms, predpitchs, predlifts = self.predict(filepath)
-        return merge_symbols(predrhythms, predpitchs, predlifts)
+        return self.model.generate(imgs_tensor.to(self.device), temperature=self.config.temperature)
 
 
 _transform = alb.Compose(

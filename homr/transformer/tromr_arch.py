@@ -32,11 +32,11 @@ class TrOMR(nn.Module):
         return loss
 
     @torch.no_grad()
-    def generate(self, x: torch.Tensor, temperature: float = 0.25) -> tuple[Any, Any, Any]:
+    def generate(self, x: torch.Tensor, temperature: float = 0.25) -> list[str]:
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 
-        out_lift, out_pitch, out_rhythm = self.decoder.generate(
+        return self.decoder.generate(
             start_token,
             nonote_token,
             self.config.max_seq_len,
@@ -44,5 +44,3 @@ class TrOMR(nn.Module):
             context=self.encoder(x),
             temperature=temperature,
         )
-
-        return out_lift, out_pitch, out_rhythm

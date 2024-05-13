@@ -20,7 +20,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
         expected_str = convert_alter_to_accidentals(_load_semantic_file(semantic_path))[0].strip()
-        actual = model.predict_and_merge(img_path)[0].split("+")
+        actual = model.predict(img_path)[0].split("+")
         actual = [
             symbol for symbol in actual if not symbol.startswith("timeSignature")
         ]  # reference data has no time signature

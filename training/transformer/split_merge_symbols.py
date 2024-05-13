@@ -12,9 +12,15 @@ class SymbolMerger:
         self.merge: list[str] = []
         self.chord: list[str] = []
 
-    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> None:
+    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
+        """
+        Adds a symbol to the merge list. Returns True if the symbol is a barline.
+
+        If you done with adding symbols, call complete() to get the merged string.
+        """
         if predrhythm == "|":
             self.chord = self.merge.pop().split("|")
+            return True
         elif "note" in predrhythm:
             lift = ""
             if predlift in (
@@ -26,10 +32,13 @@ class SymbolMerger:
             ):
                 lift = predlift.split("_")[-1]
             self.chord.append(predpitch + lift + "_" + predrhythm.split("note-")[-1])
+            self.chord = sorted(self.chord, key=pitch_name_to_sortable)
             self.merge.append(str.join("|", self.chord))
             self.chord.clear()
+            return False
         else:
             self.merge.append(predrhythm)
+            return False
 
     def complete(self) -> str:
         return str.join("+", self.merge)
@@ -158,12 +167,12 @@ def _note_name_to_sortable(note_name: str) -> int:
 
 
 def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
-    note_name = note_name_with_octave[:-1]
-    octave = int(note_name_with_octave[-1])
+    note_name = note_name_with_octave[0]
+    octave = int(note_name_with_octave[1])
     return _note_name_to_sortable(note_name) + octave * 7
 
 
-def _pitch_name_to_sortable(pitch_name: str) -> int:
+def pitch_name_to_sortable(pitch_name: str) -> int:
     note_name = pitch_name.split("-")[-1]
     return _note_name_and_octave_to_sortable(note_name)
 
@@ -188,7 +197,7 @@ def _sort_by_pitch(
         for j in range(i + 1, len(pitches)):
             if pitches[j] == "nonote":
                 continue
-            if _pitch_name_to_sortable(pitches[i]) < _pitch_name_to_sortable(pitches[j]):
+            if pitch_name_to_sortable(pitches[i]) < pitch_name_to_sortable(pitches[j]):
                 swap(i, j)
     return lifts, pitches, rhythms, notes
 

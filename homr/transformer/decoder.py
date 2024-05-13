@@ -4,12 +4,15 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from torch import nn
+from transformers import PreTrainedTokenizerFast  # type: ignore
 from x_transformers.x_transformers import (  # type: ignore
     AbsolutePositionalEmbedding,
     AttentionLayers,
     Decoder,
     TokenEmbedding,
 )
+
+from training.transformer.split_merge_symbols import SymbolMerger
 
 from .configs import Config
 
@@ -100,23 +103,29 @@ class ScoreDecoder(nn.Module):
         self,
         transformer: ScoreTransformerWrapper,
         noteindexes: list[int],
-        num_rhythm_tokens: int,
-        reduced_precision: bool,
+        config: Config,
         ignore_index: int = -100,
-        pad_value: int = 0,
     ):
         super().__init__()
-        self.pad_value = pad_value
+        self.pad_value = (config.pad_token,)
         self.ignore_index = ignore_index
+
+        self.lifttokenizer = PreTrainedTokenizerFast(tokenizer_file=config.filepaths.lifttokenizer)
+        self.pitchtokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=config.filepaths.pitchtokenizer
+        )
+        self.rhythmtokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=config.filepaths.rhythmtokenizer
+        )
 
         self.net = transformer
         self.max_seq_len = transformer.max_seq_len
 
-        note_mask = torch.zeros(num_rhythm_tokens)
+        note_mask = torch.zeros(config.num_rhythm_tokens)
         note_mask[noteindexes] = 1
         self.note_mask = nn.Parameter(note_mask)
 
-        self.mask_value = -1e4 if reduced_precision else -1e9
+        self.mask_value = -1e4 if config.reduced_precision else -1e9
 
         # Weight the actual lift tokens (so neither nonote nor null) higher
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -131,7 +140,7 @@ class ScoreDecoder(nn.Module):
         temperature: float = 1.0,
         filter_thres: float = 0.9,
         **kwargs: Any,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> list[str]:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -145,6 +154,7 @@ class ScoreDecoder(nn.Module):
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         mask = kwargs.pop("mask", None)
+        merger = SymbolMerger()
 
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
@@ -182,12 +192,17 @@ class ScoreDecoder(nn.Module):
             ):
                 break
 
+            lift_token = detokenize(lift_sample, self.lifttokenizer)
+            pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
+            rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
+            merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
+
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
 
         self.net.train(was_training)
-        return out_rhythm, out_pitch, out_lift
+        return [merger.complete()]
 
     def forward(
         self,
@@ -316,8 +331,30 @@ def get_decoder(config: Config) -> ScoreDecoder:
                 **config.decoder_args.to_dict(),
             ),
         ),
-        pad_value=config.pad_token,
-        num_rhythm_tokens=config.num_rhythm_tokens,
-        reduced_precision=config.reduced_precision,
+        config=config,
         noteindexes=config.noteindexes,
     )
+
+
+def detokenize(tokens: torch.Tensor, tokenizer: Any) -> list[list[str]]:
+    toks = [tokenizer.convert_ids_to_tokens(tok) for tok in tokens]
+    for b in range(len(toks)):
+        for i in reversed(range(len(toks[b]))):
+            if toks[b][i] is None:
+                toks[b][i] = ""
+            toks[b][i] = toks[b][i].replace("Ġ", " ").strip()
+            if toks[b][i] in (["[BOS]", "[EOS]", "[PAD]"]):
+                del toks[b][i]
+    return toks
+
+
+def tokenize(symbols: list[str], vocab: Any, default_token: int, vocab_name: str) -> list[int]:
+
+    result = []
+    for symbol in symbols:
+        if symbol in vocab:
+            result.append(vocab[symbol])
+        else:
+            print("Warning: " + symbol + " not in " + vocab_name + " vocabulary")
+            result.append(default_token)
+    return result

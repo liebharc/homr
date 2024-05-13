@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from homr.transformer.configs import Config
+from homr.transformer.decoder import tokenize
 from homr.transformer.staff2score import readimg
 from homr.types import NDArray
 
@@ -144,18 +145,10 @@ class DataLoader:
             sample_full_filepath
         )
 
-        rhythm = _translate_symbols(
-            rhythmsymbols[0], self.rhythm_vocab, self.config.pad_token, "rhythm"
-        )
-        lifts = _translate_symbols(
-            liftsymbols[0], self.lift_vocab, self.config.nonote_token, "lift"
-        )
-        pitch = _translate_symbols(
-            pitchsymbols[0], self.pitch_vocab, self.config.nonote_token, "pitch"
-        )
-        notes = _translate_symbols(
-            note_symbols[0], self.note_vocab, self.config.nonote_token, "note"
-        )
+        rhythm = tokenize(rhythmsymbols[0], self.rhythm_vocab, self.config.pad_token, "rhythm")
+        lifts = tokenize(liftsymbols[0], self.lift_vocab, self.config.nonote_token, "lift")
+        pitch = tokenize(pitchsymbols[0], self.pitch_vocab, self.config.nonote_token, "pitch")
+        notes = tokenize(note_symbols[0], self.note_vocab, self.config.nonote_token, "note")
         rhythm_seq = self._check_seq_values(self._pad_rhythm(rhythm), self.config.num_rhythm_tokens)
         mask = np.zeros(self.config.max_seq_len).astype(np.bool_)
         mask[: entry["mask_len"]] = 1
@@ -174,19 +167,6 @@ class DataLoader:
             ),
         }
         return result
-
-
-def _translate_symbols(
-    symbols: list[str], vocab: Any, default_token: int, vocab_name: str
-) -> list[int]:
-    result = []
-    for symbol in symbols:
-        if symbol in vocab:
-            result.append(vocab[symbol])
-        else:
-            print("Warning: " + symbol + " not in " + vocab_name + " vocabulary")
-            result.append(default_token)
-    return result
 
 
 def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
