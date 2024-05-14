@@ -1,6 +1,6 @@
 # homr
 
-homr is an Optical Music Recognition (OMR) software which takes camera pictures of sheet music and turns them into machine readable [MusicXML](https://www.w3.org/2021/06/musicxml40/). MusicXML can then futher processed e.g. with tools such as [musescore](https://musescore.com/).
+homr is an Optical Music Recognition (OMR) software designed to transform camera pictures of sheet music into machine-readable MusicXML format. The resulting [MusicXML](https://www.w3.org/2021/06/musicxml40/) files can be further processed using tools such as [musescore](https://musescore.com/).
 
 ## Prequisites
 
@@ -10,65 +10,63 @@ homr is an Optical Music Recognition (OMR) software which takes camera pictures 
 
 ## Example
 
-This example gives an impression of the current performance of the current implementation. Several mistakes are made in the output, but the overall structure is correct.
+The example below provides an overview of the current performance of the implementation. While some errors are present in the output, the overall structure remains accurate.
 
-| original image | homr result |
+| Original Image | homr Result |
 |:----:|:-----------:|
 | <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="figures/tabi.svg" width="400" > |
 
-The homr result is obtained by taking the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
+The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
 
 ## Technical Details
 
-homr uses the segmentation as described in [oemer](https://github.com/BreezeWhite/oemer) to find possible staff lines, clefs, bar lines and note heads on an image. It combines the staff lines, clefs and bars to find the position of the staffs in the picture.
+homr employs segmentation techniques outlined in [oemer](https://github.com/BreezeWhite/oemer) to identify staff lines, clefs, bar lines, and note heads in an image. These components are combined to determine the position of staffs within the picture.
 
-In an next step if passes each staff image into the transformer (based on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model)) to get the symbols on the staff.
+Subsequently, each staff image undergoes transformation using a transformer model (based on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model)) to identify symbols present on the staff. Pitch information is cross-validated with note head data obtained from the segmentation model.
 
-Pitch information is double checked with the note head information obtained from the segmentation model.
+The results are then converted into MusicXML format and saved to disk.
 
-The results are then converted into MusicXML and written to disk.
+### Image Predictions
 
-### Image predictions
+homr utilizes oemer's UNet implementations to isolate staff lines and other symbols for note head identification. These predictions serve as input for staff and symbol detection.
 
-homr uses oemers UNet implementations to separate stafflines and other symbols and to find noteheads.
-The predictions are the input of the staff and symbol detection.
+Preprocessing the image has shown to enhance robustness against noisy backgrounds and variations in brightness.
 
-In test results we found that preprocessing the image improves the robustness against noisy background and brightness variations.
+### Staff and Symbol Detection
 
-### Staff and symbol detection
+The detection process involves extracting model data types from the image predictions. A key concept is the "staff anchor," which serves as a reference point ensuring accurate staff detection amidst symbols that might obscure it. Clefs and bar lines are currently utilized as anchor symbols.
 
-Extracts model data types from the image predictions. A central concept is the "staff anchor": Sheet music can have a lot of symbols which confuse the staff detection. Ledger lines or slurs are examples here. A "staff anchor" is a symbol from which we know for sure that it's never above or below a staff (e.g. note heads change their position) but always on the staff. A second criteria is that we can detect those anchor symbols with high confidence so that we avoid incorrect detections. At the moment we use clefs and bar lines as anchors.
+For each anchor, the algorithm attempts to locate five staff lines and constructs the remainder of the staff around these anchors.
 
-For each anchor we try to find five staff lines. And then we can build the rest of the staff around those anchors.
+#### Unit Sizes
 
-#### Unit sizes
+The unit size denotes the distance between staff lines, which may vary due to camera perspective. To accommodate this, the unit size is calculated per staff.
 
-The unit size describes the distance between staff lines. Due to the camera perspective it can be different depending on where you are on the picture. E.g. the staffs in the upper part of the image might appear larger than in the bottom. We take this into account by calculating the unit size per staff.
+#### Connecting Staffs
 
-#### Connecting staffs
+Support for multiple voices and grand staffs is facilitated by identifying braces and brackets to combine individual staffs.
 
-We want to support multiple voices and/or grand staffs. The algorithm tries to find braces and brackets and then combines the individual staffs.
+### Rhythm Parsing
 
-### Rhythm parsing
+Dewarped images of each staff are computed and passed through a transformer to extract staff contents. From this point onward, semantic information from the sheet music is utilized rather than pixel-based data.
 
-Calculates dewarped images of every staff and with that the model input extracts staff contents. The output uses the results model as now we no longer work on the image level, but with the abstract content of what is written on the sheet music.
+### XML Generation
 
-### XML generation
-
-Takes the previous outputs in term of result model objects and generated music XML from it.
+The previous outputs in terms of result model objects are used to generate music XML.
 
 ## Citation
 
-Please cite [oemer](https://github.com/BreezeWhite/oemer) and [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model) if you use this code in your research work.
+If you use this code in your research work, please cite [oemer](https://github.com/BreezeWhite/oemer) and [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model).
 
 ## Name
 
-homr stands for Homer's Optical Music Recognition (OMR). It's up to you if it's this [Homer](https://en.wikipedia.org/wiki/Homer) or that [Homer](https://en.wikipedia.org/wiki/The_Simpsons).
+The name "homr" stands for Homer's Optical Music Recognition (OMR), leaving the interpretation of "Homer" to the user's discretion, whether referring to the ancient poet [Homer](https://en.wikipedia.org/wiki/Homer) or the iconic character from [The Simpsons](https://en.wikipedia.org/wiki/The_Simpsons).
+
 
 ## Thanks
 
-This project is based on prevous work.
+This project builds upon previous work, including:
 
 - The segmentation models of [oemer](https://github.com/BreezeWhite/oemer)
 - The transformer model of [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model)
-- The starter template from [Benjamin Roland](https://github.com/Parici75/python-poetry-bootstrap)
+- The starter template provided by [Benjamin Roland](https://github.com/Parici75/python-poetry-bootstrap)
