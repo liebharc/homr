@@ -174,7 +174,7 @@ def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
     try:
         note_name = note_name_with_octave[0]
         octave = int(note_name_with_octave[1])
-        return _note_name_to_sortable(note_name) + octave * 7
+        return -(_note_name_to_sortable(note_name) + octave * 7)
     except ValueError:
         print(f"Error: {note_name_with_octave} in pitch_name_to_sortable")
         return 0
@@ -205,7 +205,7 @@ def _sort_by_pitch(
         for j in range(i + 1, len(pitches)):
             if pitches[j] == "nonote":
                 continue
-            if pitch_name_to_sortable(pitches[i]) < pitch_name_to_sortable(pitches[j]):
+            if pitch_name_to_sortable(pitches[i]) > pitch_name_to_sortable(pitches[j]):
                 swap(i, j)
     return lifts, pitches, rhythms, notes
 

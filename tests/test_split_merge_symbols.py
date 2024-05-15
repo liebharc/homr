@@ -103,7 +103,7 @@ prednotes = [
     ]
 ]
 merged = [
-    "clef-G2+keySignature-EM+timeSignature-6/8+note-C4_half.+barline+note-F4_half.+barline+note-G4_half.+barline+note-B4_half.+barline+note-B4_half+note-C5_eighth+note-D5_eighth+barline+note-E4#_eighth|note-G4_eighth|note-C5_eighth"
+    "clef-G2+keySignature-EM+timeSignature-6/8+note-C4_half.+barline+note-F4_half.+barline+note-G4_half.+barline+note-B4_half.+barline+note-B4_half+note-C5_eighth+note-D5_eighth+barline+note-C5_eighth|note-G4_eighth|note-E4#_eighth"
 ]
 
 
