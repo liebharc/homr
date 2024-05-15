@@ -124,7 +124,7 @@ class ScoreDecoder(nn.Module):
         note_mask[noteindexes] = 1
         self.note_mask = nn.Parameter(note_mask)
 
-        self.mask_value = -1e4 if config.reduced_precision else -1e9
+        self.mask_value = -1e4 if config.reduced_precision else -1e6
 
         # Weight the actual lift tokens (so neither nonote nor null) higher
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -8,7 +8,6 @@ from transformers import Trainer, TrainingArguments  # type: ignore
 
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
-from training.convert_documents_in_the_wild import convert_diw_dataset, diw_train_index
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
 from training.convert_primus import (
     convert_cpms_dataset,
@@ -71,9 +70,6 @@ def _check_datasets_are_present() -> None:
     if not os.path.exists(grandstaff_train_index):
         convert_grandstaff()
 
-    if not os.path.exists(diw_train_index):
-        convert_diw_dataset()
-
 
 def train_transformer(fast: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
@@ -89,8 +85,8 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, cpms_train_index, grandstaff_train_index, diw_train_index],
-        [1.0, 1.0, 1.0, 1.0],
+        [primus_train_index, cpms_train_index, grandstaff_train_index],
+        [1.0, 1.0, 1.0],
         number_of_files,
     )
 
@@ -117,7 +113,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
         overwrite_output_dir=True,
         evaluation_strategy="epoch",
         # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
-        learning_rate=1e-4,
+        learning_rate=1e-4 if fast else 1e-3,
         optim=optim,
         per_device_train_batch_size=16,  # TrOMR Paper page 3
         per_device_eval_batch_size=8,
