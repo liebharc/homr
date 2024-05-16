@@ -98,7 +98,6 @@ class Config:
         self.decoder_depth = 4
         self.decoder_heads = 8
         self.temperature = 0.01
-        self.reduced_precision = False
         self.decoder_args = DecoderArgs()
 
     def to_dict(self) -> dict[str, Any]:
@@ -124,7 +123,6 @@ class Config:
             "decoder_depth": self.decoder_depth,
             "decoder_heads": self.decoder_heads,
             "temperature": self.temperature,
-            "reduced_precision": self.reduced_precision,
             "decoder_args": self.decoder_args.to_dict(),
         }
 

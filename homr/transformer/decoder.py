@@ -124,8 +124,6 @@ class ScoreDecoder(nn.Module):
         note_mask[noteindexes] = 1
         self.note_mask = nn.Parameter(note_mask)
 
-        self.mask_value = -1e4 if config.reduced_precision else -1e6
-
         # Weight the actual lift tokens (so neither nonote nor null) higher
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -291,11 +289,6 @@ class ScoreDecoder(nn.Module):
         mask: torch.Tensor,
         weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        logits_mask = mask.unsqueeze(2)
-
-        # Apply the mask to the logits
-        logits = logits.masked_fill(logits_mask == 0, self.mask_value)
-
         # Calculate the cross-entropy loss
         loss = F.cross_entropy(
             logits.transpose(1, 2),
@@ -305,10 +298,9 @@ class ScoreDecoder(nn.Module):
             ignore_index=self.ignore_index,
         )
 
-        # Apply the mask to the loss
+        # As reduction is "none", we can apply the mask to the loss
+        # and this way we ignore the loss for the padded tokens
         loss = loss * mask
-
-        # Average the loss over the non-masked elements
         loss = loss.sum() / mask.sum()
 
         return loss
