@@ -1,6 +1,5 @@
-from . import constants
-from .logging import eprint
-from .results import (
+from homr import constants
+from homr.results import (
     ClefType,
     ResultClef,
     ResultDuration,
@@ -12,6 +11,7 @@ from .results import (
     ResultStaff,
     ResultTimeSignature,
 )
+from homr.simple_logging import eprint
 
 
 def parse_clef(clef: str) -> ResultClef:

@@ -1,11 +1,9 @@
 import cv2.typing as cvt
 import numpy as np
 
-from homr.types import NDArray
-
-from . import constants
-from .bounding_boxes import BoundingEllipse, DebugDrawable, RotatedBoundingBox
-from .model import (
+from homr import constants
+from homr.bounding_boxes import BoundingEllipse, DebugDrawable, RotatedBoundingBox
+from homr.model import (
     Note,
     NoteGroup,
     NoteHeadType,
@@ -14,6 +12,7 @@ from .model import (
     StemDirection,
     SymbolOnStaff,
 )
+from homr.type_definitions import NDArray
 
 
 class NoteheadWithStem(DebugDrawable):

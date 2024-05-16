@@ -5,18 +5,17 @@ import cv2.typing as cvt
 import numpy as np
 from scipy import signal  # type: ignore
 
-from homr.types import NDArray
-
-from . import constants
-from .bounding_boxes import (
+from homr import constants
+from homr.bounding_boxes import (
     DebugDrawable,
     RotatedBoundingBox,
     create_rotated_bounding_box,
 )
-from .debug import Debug
-from .image_utils import crop_image
-from .logging import eprint
-from .model import Staff, StaffPoint
+from homr.debug import Debug
+from homr.image_utils import crop_image
+from homr.model import Staff, StaffPoint
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 
 def prepare_staff_image(img: NDArray) -> NDArray:

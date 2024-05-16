@@ -1,7 +1,7 @@
 import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 
-from . import constants
-from .results import (
+from homr import constants
+from homr.results import (
     ClefType,
     ResultClef,
     ResultMeasure,

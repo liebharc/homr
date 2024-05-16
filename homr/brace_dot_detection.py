@@ -1,12 +1,11 @@
 import cv2
 import numpy as np
 
-from homr.types import NDArray
-
-from . import constants
-from .bounding_boxes import RotatedBoundingBox
-from .debug import Debug
-from .model import MultiStaff, Staff
+from homr import constants
+from homr.bounding_boxes import RotatedBoundingBox
+from homr.debug import Debug
+from homr.model import MultiStaff, Staff
+from homr.type_definitions import NDArray
 
 
 def prepare_brace_dot_image(

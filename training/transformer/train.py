@@ -18,9 +18,8 @@ from training.convert_primus import (
     primus_train_index,
 )
 from training.run_id import get_run_id
-
-from .data_loader import load_dataset
-from .mix_datasets import mix_training_sets
+from training.transformer.data_loader import load_dataset
+from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
 

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 
 
 def autocrop(img: NDArray) -> NDArray:

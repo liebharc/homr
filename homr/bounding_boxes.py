@@ -8,11 +8,10 @@ import cv2.typing as cvt
 import numpy as np
 from scipy import ndimage  # type: ignore
 
-from homr.types import NDArray
-
-from . import constants
-from .image_utils import crop_image
-from .logging import eprint
+from homr import constants
+from homr.image_utils import crop_image
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 TBounds = TypeVar("TBounds", bound="RotatedBoundingBox | BoundingBox | BoundingEllipse")
 

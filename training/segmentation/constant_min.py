@@ -1,4 +1,6 @@
-from .dense_dataset_definitions import DENSE_DATASET_DEFINITIONS as DEF
+from training.segmentation.dense_dataset_definitions import (
+    DENSE_DATASET_DEFINITIONS as DEF,
+)
 
 CLASS_CHANNEL_LIST = [
     DEF.STEM + DEF.ALL_RESTS_EXCEPT_LARGE + DEF.BARLINE_BETWEEN + DEF.BARLINE_END,

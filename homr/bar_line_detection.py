@@ -1,6 +1,6 @@
-from . import constants
-from .bounding_boxes import RotatedBoundingBox
-from .model import BarLine, Staff
+from homr import constants
+from homr.bounding_boxes import RotatedBoundingBox
+from homr.model import BarLine, Staff
 
 
 def detect_bar_lines(

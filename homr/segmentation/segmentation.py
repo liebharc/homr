@@ -6,11 +6,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from homr.logging import eprint
-from homr.types import NDArray
-
-from . import config
-from .inference import inference
+from homr.segmentation import config
+from homr.segmentation.inference import inference
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 
 def generate_pred(image: NDArray) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:

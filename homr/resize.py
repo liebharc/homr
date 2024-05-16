@@ -1,9 +1,8 @@
 import numpy as np
 from PIL import Image
 
-from homr.logging import eprint
-
-from .types import NDArray
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 
 def calc_target_image_size(image: Image.Image) -> tuple[int, int]:

@@ -1,10 +1,9 @@
-from homr.logging import eprint
-
-from .model import Note, NoteGroup, Staff
-from .results import ResultClef, ResultNote, ResultNoteGroup, ResultStaff
-from .tr_omr_parser import parse_tr_omr_output
-from .transformer.configs import default_config
-from .transformer.staff2score import Staff2Score
+from homr.model import Note, NoteGroup, Staff
+from homr.results import ResultClef, ResultNote, ResultNoteGroup, ResultStaff
+from homr.simple_logging import eprint
+from homr.tr_omr_parser import parse_tr_omr_output
+from homr.transformer.configs import default_config
+from homr.transformer.staff2score import Staff2Score
 
 
 def _get_notes_with_clef_information(

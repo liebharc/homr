@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
 from training.segmentation.dense_dataset_definitions import (
     DENSE_DATASET_DEFINITIONS as DEF,

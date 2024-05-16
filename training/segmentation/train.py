@@ -10,12 +10,11 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageColor
 
-from homr.types import NDArray
-
-from .build_label import build_label, close_lines
-from .constant_min import CHANNEL_NUM
-from .types import Model
-from .unet import semantic_segmentation, u_net
+from homr.type_definitions import NDArray
+from training.segmentation.build_label import build_label, close_lines
+from training.segmentation.constant_min import CHANNEL_NUM
+from training.segmentation.types import Model
+from training.segmentation.unet import semantic_segmentation, u_net
 
 
 def monkey_patch_float_for_imaugs() -> None:

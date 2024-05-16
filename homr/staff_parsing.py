@@ -1,14 +1,11 @@
 import cv2
 import numpy as np
 
-from homr.types import NDArray
-
-from . import constants
-from .debug import Debug
-from .image_utils import crop_image
-from .logging import eprint
-from .model import Clef, InputPredictions, MultiStaff, Staff
-from .results import (
+from homr import constants
+from homr.debug import Debug
+from homr.image_utils import crop_image
+from homr.model import Clef, InputPredictions, MultiStaff, Staff
+from homr.results import (
     ResultClef,
     ResultMeasure,
     ResultNote,
@@ -16,8 +13,10 @@ from .results import (
     ResultStaff,
     move_pitch_to_clef,
 )
-from .staff_dewarping import dewarp_staff_image
-from .staff_parsing_tromr import parse_staff_tromr
+from homr.simple_logging import eprint
+from homr.staff_dewarping import dewarp_staff_image
+from homr.staff_parsing_tromr import parse_staff_tromr
+from homr.type_definitions import NDArray
 
 
 def _ensure_same_number_of_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:

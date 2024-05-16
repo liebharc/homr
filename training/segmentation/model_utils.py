@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 
-from .types import Model
+from training.segmentation.types import Model
 
 
 def save_model(model: Model, metadata: dict[str, Any], model_path: str) -> None:

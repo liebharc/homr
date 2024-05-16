@@ -5,7 +5,7 @@ from itertools import chain
 import cv2
 
 from homr.bounding_boxes import DebugDrawable
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 
 
 def show_image_on_screen(img: NDArray, name: str = "image", wait: bool = True) -> None:

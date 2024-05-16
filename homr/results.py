@@ -2,7 +2,7 @@ from enum import Enum
 
 import numpy as np
 
-from . import constants
+from homr import constants
 
 
 class ResultSymbol:

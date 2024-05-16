@@ -13,7 +13,7 @@ from tensorflow.keras.layers import (
     LayerNormalization,
 )
 
-from .types import Model
+from training.segmentation.types import Model
 
 
 def conv_block(

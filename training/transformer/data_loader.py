@@ -8,9 +8,8 @@ import numpy as np
 from homr.transformer.configs import Config
 from homr.transformer.decoder import tokenize
 from homr.transformer.staff2score import readimg
-from homr.types import NDArray
-
-from .split_merge_symbols import split_semantic_file
+from homr.type_definitions import NDArray
+from training.transformer.split_merge_symbols import split_semantic_file
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 

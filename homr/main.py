@@ -6,35 +6,34 @@ import sys
 import cv2
 import numpy as np
 
-from homr.types import NDArray
-
-from . import color_adjust, download_utils
-from .accidental_rules import maintain_accidentals
-from .autocrop import autocrop
-from .bar_line_detection import add_bar_lines_to_staffs, detect_bar_lines
-from .bounding_boxes import (
+from homr import color_adjust, download_utils
+from homr.accidental_rules import maintain_accidentals
+from homr.autocrop import autocrop
+from homr.bar_line_detection import add_bar_lines_to_staffs, detect_bar_lines
+from homr.bounding_boxes import (
     BoundingEllipse,
     RotatedBoundingBox,
     create_bounding_ellipses,
     create_rotated_bounding_boxes,
 )
-from .brace_dot_detection import (
+from homr.brace_dot_detection import (
     find_braces_brackets_and_grand_staff_lines,
     prepare_brace_dot_image,
 )
-from .debug import Debug
-from .logging import eprint
-from .model import InputPredictions
-from .noise_filtering import filter_predictions
-from .note_detection import add_notes_to_staffs, combine_noteheads_with_stems
-from .resize import resize_image
-from .segmentation.config import segnet_path, unet_path
-from .segmentation.segmentation import segmentation
-from .staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
-from .staff_parsing import parse_staffs
-from .title_detection import detect_title
-from .transformer.configs import default_config
-from .xml_generator import generate_xml
+from homr.debug import Debug
+from homr.model import InputPredictions
+from homr.noise_filtering import filter_predictions
+from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
+from homr.resize import resize_image
+from homr.segmentation.config import segnet_path, unet_path
+from homr.segmentation.segmentation import segmentation
+from homr.simple_logging import eprint
+from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
+from homr.staff_parsing import parse_staffs
+from homr.title_detection import detect_title
+from homr.transformer.configs import default_config
+from homr.type_definitions import NDArray
+from homr.xml_generator import generate_xml
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -223,6 +222,8 @@ def process_image(  # noqa: PLR0915
         debug.write_teaser(teaser_file, staffs)
         debug.clean_debug_files_from_previous_runs()
 
+        eprint("Result was written to", xml_file)
+
         return xml_file, title, teaser_file
     except:
         if os.path.exists(xml_file):
@@ -295,7 +296,7 @@ def main() -> None:
         eprint("Init finished")
         return
 
-    if args.image == "":
+    if not args.image:
         eprint("No image provided")
         parser.print_help()
         sys.exit(1)
@@ -317,3 +318,7 @@ def main() -> None:
             eprint("Errors occurred while processing the following files:", error_files)
     else:
         raise ValueError(f"{args.image} is not a valid file or directory")
+
+
+if __name__ == "__main__":
+    main()

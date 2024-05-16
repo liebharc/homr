@@ -1,4 +1,4 @@
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 
 
 def _limit_x(image: NDArray, x: float) -> int:

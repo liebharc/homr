@@ -8,6 +8,13 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 - Poetry
 - NVidia GPU with CUDA 12.1
 
+## Getting started
+
+- Clone the repository
+- Install dependencies using `poetry install`
+- Run the program using `poetry run homr <image>`
+- The resulting MusicXML file will be saved in the same directory as the input image
+
 ## Example
 
 The example below provides an overview of the current performance of the implementation. While some errors are present in the output, the overall structure remains accurate.

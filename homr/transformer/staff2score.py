@@ -6,10 +6,9 @@ import safetensors
 import torch
 from albumentations.pytorch import ToTensorV2  # type: ignore
 
-from homr.types import NDArray
-
-from .configs import Config
-from .tromr_arch import TrOMR
+from homr.transformer.configs import Config
+from homr.transformer.tromr_arch import TrOMR
+from homr.type_definitions import NDArray
 
 
 class Staff2Score:

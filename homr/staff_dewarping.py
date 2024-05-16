@@ -4,9 +4,9 @@ import PIL.Image
 from skimage import transform
 
 from homr.debug import Debug
-from homr.logging import eprint
 from homr.model import Staff
-from homr.types import NDArray
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 
 class StaffDewarping:

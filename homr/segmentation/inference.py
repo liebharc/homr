@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 
 
 class InferenceModel:

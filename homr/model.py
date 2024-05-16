@@ -5,18 +5,16 @@ from typing import Any
 import cv2
 import numpy as np
 
-from homr.types import NDArray
-
-from . import constants
-from .bounding_boxes import (
+from homr import constants
+from homr.bounding_boxes import (
     AngledBoundingBox,
     BoundingBox,
     BoundingEllipse,
     DebugDrawable,
     RotatedBoundingBox,
 )
-from .circle_of_fifths import get_circle_of_fifth_notes
-from .results import (
+from homr.circle_of_fifths import get_circle_of_fifth_notes
+from homr.results import (
     ClefType,
     ResultClef,
     ResultDuration,
@@ -26,6 +24,7 @@ from .results import (
     ResultRest,
     ResultSymbol,
 )
+from homr.type_definitions import NDArray
 
 
 class Prediction:

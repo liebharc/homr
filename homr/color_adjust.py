@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import scipy  # type: ignore
 
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 
 
 def get_dominant_color(

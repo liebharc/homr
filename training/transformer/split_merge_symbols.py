@@ -5,7 +5,7 @@ from homr.circle_of_fifths import (
     NoKeyTransformation,
     key_signature_to_circle_of_fifth,
 )
-from homr.logging import eprint
+from homr.simple_logging import eprint
 
 
 class SymbolMerger:

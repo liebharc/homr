@@ -3,9 +3,9 @@ from typing import Any
 import torch
 from torch import nn
 
-from .configs import Config
-from .decoder import get_decoder
-from .encoder import get_encoder
+from homr.transformer.configs import Config
+from homr.transformer.decoder import get_decoder
+from homr.transformer.encoder import get_encoder
 
 
 class TrOMR(nn.Module):

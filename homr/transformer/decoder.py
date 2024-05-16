@@ -12,9 +12,8 @@ from x_transformers.x_transformers import (  # type: ignore
     TokenEmbedding,
 )
 
+from homr.transformer.configs import Config
 from training.transformer.split_merge_symbols import SymbolMerger
-
-from .configs import Config
 
 
 class ScoreTransformerWrapper(nn.Module):

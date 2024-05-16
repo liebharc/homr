@@ -1,5 +1,11 @@
-from .circle_of_fifths import get_circle_of_fifth_notes
-from .results import ResultClef, ResultNote, ResultNoteGroup, ResultPitch, ResultStaff
+from homr.circle_of_fifths import get_circle_of_fifth_notes
+from homr.results import (
+    ResultClef,
+    ResultNote,
+    ResultNoteGroup,
+    ResultPitch,
+    ResultStaff,
+)
 
 
 def _keep_accidentals_until_cancelled(staff: ResultStaff) -> None:

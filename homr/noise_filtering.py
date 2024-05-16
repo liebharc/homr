@@ -1,11 +1,11 @@
 import cv2
 import numpy as np
 
-from . import constants
-from .debug import Debug
-from .logging import eprint
-from .model import InputPredictions
-from .types import NDArray
+from homr import constants
+from homr.debug import Debug
+from homr.model import InputPredictions
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 
 def estimate_noise(gray: NDArray) -> int:

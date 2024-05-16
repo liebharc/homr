@@ -17,7 +17,7 @@ from torchvision.transforms import Compose  # type: ignore
 from homr.download_utils import download_file, untar_file
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.types import NDArray
+from homr.type_definitions import NDArray
 from training.music_xml import music_xml_to_semantic
 
 script_location = os.path.dirname(os.path.realpath(__file__))

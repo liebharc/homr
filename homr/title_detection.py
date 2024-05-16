@@ -4,8 +4,7 @@ import cv2
 import easyocr  # type: ignore
 
 from homr.debug import Debug
-
-from .model import Staff
+from homr.model import Staff
 
 reader = easyocr.Reader(["de", "en"], gpu=False, verbose=False)
 
