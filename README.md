@@ -29,7 +29,7 @@ The homr result is obtained by processing the [homr output](figures/tabi.musicxm
 
 homr employs segmentation techniques outlined in [oemer](https://github.com/BreezeWhite/oemer) to identify staff lines, clefs, bar lines, and note heads in an image. These components are combined to determine the position of staffs within the picture.
 
-Subsequently, each staff image undergoes transformation using a transformer model (based on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model)) to identify symbols present on the staff. Pitch information is cross-validated with note head data obtained from the segmentation model.
+Subsequently, each staff image undergoes transformation using a transformer model (based on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR)) to identify symbols present on the staff. Pitch information is cross-validated with note head data obtained from the segmentation model.
 
 The results are then converted into MusicXML format and saved to disk.
 
@@ -63,7 +63,7 @@ The previous outputs in terms of result model objects are used to generate music
 
 ## Citation
 
-If you use this code in your research work, please cite [oemer](https://github.com/BreezeWhite/oemer) and [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model).
+If you use this code in your research work, please cite [oemer](https://github.com/BreezeWhite/oemer) and [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR).
 
 ## Name
 
@@ -75,5 +75,5 @@ The name "homr" stands for Homer's Optical Music Recognition (OMR), leaving the 
 This project builds upon previous work, including:
 
 - The segmentation models of [oemer](https://github.com/BreezeWhite/oemer)
-- The transformer model of [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR/tree/master/tromr/model)
+- The transformer model of [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR)
 - The starter template provided by [Benjamin Roland](https://github.com/Parici75/python-poetry-bootstrap)
