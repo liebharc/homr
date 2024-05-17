@@ -6,7 +6,7 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 
 - Python 3.10
 - Poetry
-- NVidia GPU with CUDA 12.1
+- Optional: OpNVidia GPU with CUDA 12.1
 
 ## Getting started
 
@@ -19,8 +19,8 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 
 The example below provides an overview of the current performance of the implementation. While some errors are present in the output, the overall structure remains accurate.
 
-| Original Image | homr Result |
-|:----:|:-----------:|
+|                                          Original Image                                           |                homr Result                |
+| :-----------------------------------------------------------------------------------------------: | :---------------------------------------: |
 | <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="figures/tabi.svg" width="400" > |
 
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
@@ -68,7 +68,6 @@ If you use this code in your research work, please cite [oemer](https://github.c
 ## Name
 
 The name "homr" stands for Homer's Optical Music Recognition (OMR), leaving the interpretation of "Homer" to the user's discretion, whether referring to the ancient poet [Homer](https://en.wikipedia.org/wiki/Homer) or the iconic character from [The Simpsons](https://en.wikipedia.org/wiki/The_Simpsons).
-
 
 ## Thanks
 
