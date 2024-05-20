@@ -99,6 +99,10 @@ class Config:
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()
+        self.lift_vocab = json.load(open(self.filepaths.lifttokenizer))["model"]["vocab"]
+        self.pitch_vocab = json.load(open(self.filepaths.pitchtokenizer))["model"]["vocab"]
+        self.note_vocab = json.load(open(self.filepaths.notetokenizer))["model"]["vocab"]
+        self.rhythm_vocab = json.load(open(self.filepaths.rhythmtokenizer))["model"]["vocab"]
 
     def to_dict(self) -> dict[str, Any]:
         return {

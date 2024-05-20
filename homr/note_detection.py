@@ -155,7 +155,7 @@ def combine_noteheads_with_stems(
     return result, unaccounted_stems_or_bars
 
 
-def _match_note_head_or_staff(note1: Note, note2: Note, tolerance: float) -> bool:
+def _are_notes_likely_a_chord(note1: Note, note2: Note, tolerance: float) -> bool:
     if note1.stem is None or note2.stem is None:
         return abs(note1.center[0] - note2.center[0]) < tolerance
     return abs(note1.stem.center[0] - note2.stem.center[0]) < tolerance
@@ -175,7 +175,7 @@ def _group_notes_on_staff(staff: Staff) -> None:
         group_found = False
         for group in groups:
             for grouped_note in group:
-                if _match_note_head_or_staff(
+                if _are_notes_likely_a_chord(
                     note, grouped_note, constants.tolerance_note_grouping(staff.average_unit_size)
                 ):
                     group_found = True

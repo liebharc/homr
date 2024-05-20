@@ -99,7 +99,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    result, _ignored = add_image_into_tr_omr_canvas(image)
+    result, _ratio = add_image_into_tr_omr_canvas(image)
     return result
 
 

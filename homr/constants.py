@@ -44,7 +44,7 @@ def tolerance_for_staff_at_any_point(unit_size: float) -> int:
 
 
 def tolerance_note_grouping(unit_size: float) -> float:
-    return 1.0 * unit_size
+    return 1 * unit_size
 
 
 def bar_line_max_width(unit_size: float) -> float:
@@ -67,7 +67,7 @@ staff_line_segment_x_tolerance = 10
 
 notehead_type_threshold = 0.8
 
-maxColorDistanceOfStaffs = 0.25
+maxColorDistanceOfStaffs = 0.3
 
 # We don't have to worried about mis-detections,
 # because if not all staffs group the same way then we break the staffs up again
@@ -83,3 +83,19 @@ max_angle_for_lines_to_be_parallel = 5
 
 
 NOTEHEAD_SIZE_RATIO = 1.285714  # width/height
+
+
+def minimum_rest_width_or_height(unit_size: float) -> float:
+    return 0.7 * unit_size
+
+
+def maximum_rest_width_or_height(unit_size: float) -> float:
+    return 3.5 * unit_size
+
+
+def minimum_accidental_width_or_height(unit_size: float) -> float:
+    return 0.5 * unit_size
+
+
+def maximum_accidental_width_or_height(unit_size: float) -> float:
+    return 3 * unit_size

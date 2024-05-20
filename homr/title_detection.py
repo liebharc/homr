@@ -1,6 +1,5 @@
 import re
 
-import cv2
 import easyocr  # type: ignore
 
 from homr.debug import Debug
@@ -25,8 +24,8 @@ def detect_title(debug: Debug, top_staff: Staff) -> str:
     width = min(width, image.shape[1] - x)
     height = min(height, image.shape[0] - y)
     above_staff = image[y : y + height, x : x + width]
-    tesseract_input = debug.base_filename + "_tesseract_input.png"
-    cv2.imwrite(tesseract_input, above_staff)
+
+    tesseract_input = debug.write_model_input_image("_tesseract_input.png", above_staff)
     result = reader.readtext(tesseract_input, detail=0, paragraph=True)
     if len(result) == 0:
         return ""

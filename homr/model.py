@@ -1,9 +1,11 @@
 from abc import abstractmethod
+from collections.abc import Callable
 from enum import Enum
 from typing import Any
 
 import cv2
 import numpy as np
+from typing_extensions import Self
 
 from homr import constants
 from homr.bounding_boxes import (
@@ -63,6 +65,23 @@ class SymbolOnStaff(DebugDrawable):
     @abstractmethod
     def to_result(self) -> ResultSymbol | None:
         pass
+
+    @abstractmethod
+    def copy(self) -> Self:
+        pass
+
+    def transform_coordinates(
+        self, transformation: Callable[[tuple[float, float]], tuple[float, float]]
+    ) -> Self:
+        copy = self.copy()
+        copy.center = transformation(self.center)
+        return copy
+
+    def calc_distance_to(self, point: tuple[float, float]) -> float:
+        return float(np.linalg.norm(np.array(self.center) - np.array(point)))
+
+    def calc_x_distance_to(self, point: tuple[float, float]) -> float:
+        return abs(self.center[0] - point[0])
 
 
 class AccidentalType(Enum):
@@ -124,6 +143,15 @@ class Accidental(SymbolOnStaff):
     def to_result(self) -> None:
         return None
 
+    def __str__(self) -> str:
+        return "Accidental(" + str(self.center) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "Accidental":
+        return Accidental(self.box, self.prediction, self.position)
+
 
 class Rest(SymbolOnStaff):
     def __init__(self, box: BoundingBox, prediction: Prediction) -> None:
@@ -160,6 +188,15 @@ class Rest(SymbolOnStaff):
 
     def to_result(self) -> ResultRest:
         return ResultRest(ResultDuration(self.get_duration(), self.has_dot))
+
+    def __str__(self) -> str:
+        return "Rest(" + str(self.center) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "Rest":
+        return Rest(self.box, self.prediction)
 
 
 class StemDirection(Enum):
@@ -228,6 +265,9 @@ class Pitch:
 
     def to_result(self) -> ResultPitch:
         return ResultPitch(self.step, self.octave, self.alter)
+
+    def copy(self) -> "Pitch":
+        return Pitch(self.step, self.alter, self.octave)
 
 
 reference_pitch_f_clef = Pitch("F", 0, 2)
@@ -325,11 +365,22 @@ class Note(SymbolOnStaff):
             self.get_pitch().to_result(), ResultDuration(self.get_duration(), self.has_dot)
         )
 
+    def __str__(self) -> str:
+        return "Note(" + str(self.center) + ", " + str(self.position) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "Note":
+        return Note(self.box, self.position, self.notehead_type, self.stem, self.stem_direction)
+
 
 class NoteGroup(SymbolOnStaff):
     def __init__(self, notes: list[Note]) -> None:
-        super().__init__(notes[0].center)
-        self.notes = notes
+        average_center = np.mean([note.center for note in notes], axis=0)
+        super().__init__(average_center)
+        # sort notes by pitch, highest position first
+        self.notes = sorted(notes, key=lambda note: note.position, reverse=True)
 
     def to_result(self) -> ResultNoteGroup:
         return ResultNoteGroup([note.to_result() for note in self.notes])
@@ -337,6 +388,20 @@ class NoteGroup(SymbolOnStaff):
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         for note in self.notes:
             note.draw_onto_image(img, color)
+
+    def __str__(self) -> str:
+        return "NoteGroup(" + str.join(",", [str(note) for note in self.notes]) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "NoteGroup":
+        return NoteGroup([note.copy() for note in self.notes])
+
+    def transform_coordinates(
+        self, transformation: Callable[[tuple[float, float]], tuple[float, float]]
+    ) -> "NoteGroup":
+        return NoteGroup([note.transform_coordinates(transformation) for note in self.notes])
 
 
 class BarLine(SymbolOnStaff):
@@ -349,6 +414,15 @@ class BarLine(SymbolOnStaff):
 
     def to_result(self) -> None:
         return None
+
+    def __str__(self) -> str:
+        return "BarLine(" + str(self.center) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "BarLine":
+        return BarLine(self.box)
 
 
 class Clef(SymbolOnStaff):
@@ -393,11 +467,17 @@ class Clef(SymbolOnStaff):
             # are wrong detections, might be that naturals more look like sharps
             return 0
 
-    def __str__(self) -> str:
-        return str(self.get_clef_type()) + " " + str(self.get_circle_of_fifth())
-
     def to_result(self) -> ResultClef:
         return ResultClef(self.get_clef_type(), self.get_circle_of_fifth())
+
+    def __str__(self) -> str:
+        return "Clef(" + str(self.center) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "Clef":
+        return Clef(self.box, self.prediction)
 
 
 class StaffPoint:
@@ -529,6 +609,15 @@ class Staff(DebugDrawable):
             if not isinstance(symbol, Note):
                 result.append(symbol)
         return result
+
+    def __str__(self) -> str:
+        return "Staff(" + str.join(", ", [str(s) for s in self.symbols]) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def copy(self) -> "Staff":
+        return Staff(self.grid)
 
 
 class MultiStaff(DebugDrawable):

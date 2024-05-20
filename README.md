@@ -6,7 +6,7 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 
 - Python 3.10
 - Poetry
-- Optional: OpNVidia GPU with CUDA 12.1
+- Optional: NVidia GPU with CUDA 12.1
 
 ## Getting started
 
