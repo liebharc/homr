@@ -3,6 +3,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from homr.debug import AttentionDebug
+from homr.model import Staff
 from homr.transformer.configs import Config
 from homr.transformer.decoder import get_decoder
 from homr.transformer.encoder import get_encoder
@@ -32,15 +34,23 @@ class TrOMR(nn.Module):
         return loss
 
     @torch.no_grad()
-    def generate(self, x: torch.Tensor, temperature: float = 0.25) -> list[str]:
+    def generate(
+        self,
+        x: torch.Tensor,
+        staff: Staff | None = None,
+        debug: AttentionDebug | None = None,
+        temperature: float = 0.25,
+    ) -> list[str]:
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 
+        context = self.encoder(x)
         return self.decoder.generate(
             start_token,
             nonote_token,
             self.config.max_seq_len,
             eos_token=self.config.eos_token,
-            context=self.encoder(x),
-            temperature=temperature,
+            context=context,
+            staff=staff,
+            debug=debug,
         )

@@ -3,8 +3,8 @@ import numpy as np
 
 from homr import constants
 from homr.debug import Debug
-from homr.image_utils import crop_image
-from homr.model import Clef, InputPredictions, MultiStaff, Staff
+from homr.image_utils import crop_image_and_return_new_top
+from homr.model import Clef, InputPredictions, MultiStaff, NoteGroup, Staff
 from homr.results import (
     ResultClef,
     ResultMeasure,
@@ -14,7 +14,7 @@ from homr.results import (
     move_pitch_to_clef,
 )
 from homr.simple_logging import eprint
-from homr.staff_dewarping import dewarp_staff_image
+from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.type_definitions import NDArray
 
@@ -53,12 +53,14 @@ def add_image_into_tr_omr_canvas(
 
     if height / width > tr_omr_ratio:
         # The height is the limiting factor.
+        ratio = tr_omr_max_height / height
         new_shape = (
             int(width / height * tr_omr_max_height_with_margin),
             tr_omr_max_height_with_margin,
         )
     else:
         # The width is the limiting factor.
+        ratio = tr_omr_max_width / width
         new_shape = (tr_omr_max_width, int(height / width * tr_omr_max_width))
 
     resized = cv2.resize(image, new_shape)
@@ -73,7 +75,7 @@ def add_image_into_tr_omr_canvas(
         resized
     )
 
-    return new_image, new_shape[0] / width
+    return new_image, ratio
 
 
 def copy_image_in_center_of_double_the_height_and_white_background(image: NDArray) -> NDArray:
@@ -112,7 +114,7 @@ def prepare_staff_image(
     staff: Staff,
     predictions: InputPredictions,
     perform_dewarp: bool = True,
-) -> tuple[str, float]:
+) -> tuple[str, Staff]:
     centers = [s.center for s in staff.symbols]
     x_values = [c[0] for c in centers]
     y_values = [c[1] for c in centers]
@@ -138,21 +140,67 @@ def prepare_staff_image(
         ):
             region[1] = int(staff.min_y - min_y_offset)
             region[3] = int(staff.max_y + min_y_offset)
-    staff_image = crop_image(predictions.preprocessed, *region)
+    staff_image, top_left = crop_image_and_return_new_top(predictions.preprocessed, *region)
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
     if perform_dewarp:
         eprint("Dewarping staff", index)
-        dewarp = dewarp_staff_image(staff_image, staff, region, index, debug)
+        dewarp = dewarp_staff_image(staff_image, staff, list(top_left), index, debug)
         staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
         eprint("Dewarping staff", index, "done")
+    else:
+        dewarp = None
+
     margin_top = 0
     margin_bottom = 0
-    staff_image, x_ratio = add_image_into_tr_omr_canvas(
+    staff_image, ratio = add_image_into_tr_omr_canvas(
         staff_image, max(0, margin_top), max(0, margin_bottom)
     )
-    staff_file = debug.base_filename + f"_staff-{index}_input.jpg"
-    cv2.imwrite(staff_file, staff_image)
-    return staff_file, x_ratio
+    staff_file = debug.write_model_input_image(f"_staff-{index}_input.jpg", staff_image)
+    transformed_staff = _dewarp_staff(staff, dewarp, top_left, ratio)
+    if debug.debug:
+        for symbol in transformed_staff.symbols:
+            center = symbol.center
+            cv2.circle(staff_image, (int(center[0]), int(center[1])), 5, (0, 0, 255))
+            if isinstance(symbol, NoteGroup):
+                for note in symbol.notes:
+                    cv2.circle(
+                        staff_image, (int(note.center[0]), int(note.center[1])), 3, (255, 255, 0)
+                    )
+            cv2.putText(
+                staff_image,
+                type(symbol).__name__,
+                (int(center[0]), int(center[1])),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.3,
+                (0, 0, 255),
+                1,
+            )
+        debug.write_model_input_image(f"_staff-{index}_debug_annotated.jpg", staff_image)
+    return staff_file, transformed_staff
+
+
+def _dewarp_staff(
+    staff: Staff, dewarp: StaffDewarping | None, region: tuple[int, int], scaling: float
+) -> Staff:
+    """
+    Applies the same transformation on the staff coordinates as we did on the image.
+    """
+    staff_copy = staff.copy()
+
+    def transform_coordinates(point: tuple[float, float]) -> tuple[float, float]:
+        x, y = point
+        x -= region[0]
+        y -= region[1]
+        if dewarp is not None:
+            x, y = dewarp.dewarp_point((x, y))
+        x = x * scaling
+        y = y * scaling
+        return x, y
+
+    staff_copy.symbols = [
+        symbol.transform_coordinates(transform_coordinates) for symbol in staff.symbols
+    ]
+    return staff_copy
 
 
 def move_key_information(staff: Staff, destination: ResultStaff) -> None:
@@ -165,10 +213,18 @@ def move_key_information(staff: Staff, destination: ResultStaff) -> None:
 def parse_staff_image(
     debug: Debug, ranges: list[float], index: int, staff: Staff, predictions: InputPredictions
 ) -> ResultStaff:
-    staff_file, x_ratio = prepare_staff_image(
+    staff_file, transformed_staff = prepare_staff_image(
         debug, index, ranges, staff, predictions, perform_dewarp=True
     )
-    return parse_staff_tromr(staff, staff_file)
+    attention_debug = debug.build_attention_debug(staff_file)
+    result = parse_staff_tromr(
+        staff_file=staff_file,
+        staff=transformed_staff,
+        debug=attention_debug,
+    )
+    if attention_debug is not None:
+        attention_debug.write()
+    return result
 
 
 def _pick_most_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, PLR0912

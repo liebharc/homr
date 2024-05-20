@@ -3,29 +3,43 @@ from collections.abc import Sequence
 from itertools import chain
 
 import cv2
+import numpy as np
 
 from homr.bounding_boxes import DebugDrawable
 from homr.type_definitions import NDArray
 
 
-def show_image_on_screen(img: NDArray, name: str = "image", wait: bool = True) -> None:
-    cv2.imshow(name, img)
-    if wait:
-        cv2.waitKey(0)
+class AttentionDebug:
+    def __init__(self, filename: str, parent: "Debug") -> None:
+        self.image = cv2.imread(filename)
+        self.destname = filename.replace("_input", "_output")
+        self.attentions: list[NDArray] = []
+        self.parent = parent
 
+    def add_attention(self, attention: NDArray, center: tuple[float, float]) -> None:
+        attention_resized = cv2.resize(attention, (self.image.shape[1], self.image.shape[0]))
+        # Apply a colormap to the attention weights
+        attention_colormap = cv2.applyColorMap(  # type: ignore
+            np.uint8(255.0 * attention_resized / attention_resized.max()), cv2.COLORMAP_JET  # type: ignore
+        )
+        overlay = cv2.addWeighted(self.image, 0.6, attention_colormap, 0.4, 0)
 
-def show_image_and_boxes_on_screen(
-    img: NDArray,
-    boxes: Sequence[DebugDrawable],
-    name: str = "image",
-    wait: bool = True,
-) -> None:
-    img = cv2.cvtColor(255 * img, cv2.COLOR_GRAY2BGR)
-    for box in boxes:
-        box.draw_onto_image(img)
-    cv2.imshow(name, img)
-    if wait:
-        cv2.waitKey(0)
+        # Draw the center of attention
+        center_coordinates = (int(center[1]), int(center[0]))
+        radius = 20
+        color = (0, 255, 0)
+        thickness = 2
+        cv2.circle(overlay, center_coordinates, radius, color, thickness)
+
+        self.attentions.append(overlay)
+
+    def write(self) -> None:
+        if not self.attentions:
+            return
+        attention = cv2.vconcat(self.attentions)
+        self.parent._remember_file_name(self.destname)
+        cv2.imwrite(self.destname, attention)
+        self.attentions = []
 
 
 class Debug:
@@ -96,6 +110,13 @@ class Debug:
         self._remember_file_name(filename)
         cv2.imwrite(filename, image)
 
+    def write_image_with_fixed_suffix(self, suffix: str, image: NDArray) -> None:
+        if not self.debug:
+            return
+        filename = self.base_filename + suffix
+        self._remember_file_name(filename)
+        cv2.imwrite(filename, image)
+
     def write_all_bounding_boxes_alternating_colors(
         self, suffix: str, *boxes: Sequence[DebugDrawable]
     ) -> None:
@@ -115,3 +136,21 @@ class Debug:
             box.draw_onto_image(img, color)
         self._remember_file_name(filename)
         cv2.imwrite(filename, img)
+
+    def write_model_input_image(self, suffix: str, staff_image: NDArray) -> str:
+        """
+        These files aren't really debug files, but it's convenient to handle them here
+        so that they are cleaned up together with the debug files.
+
+        Model input images are the input to the transformer or OCR images.
+        """
+        filename = self.base_filename + suffix
+        if self.debug:
+            self._remember_file_name(filename)
+        cv2.imwrite(filename, staff_image)
+        return filename
+
+    def build_attention_debug(self, filename: str) -> AttentionDebug | None:
+        if not self.debug:
+            return None
+        return AttentionDebug(filename, self)

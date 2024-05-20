@@ -25,6 +25,11 @@ class StaffDewarping:
             cval=fill_color,
         )
 
+    def dewarp_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        if self.tform is None:
+            return point
+        return self.tform(point)  # type: ignore
+
 
 def is_point_on_image(pts: tuple[int, int], image: NDArray) -> bool:
     height, width = image.shape[:2]
@@ -111,7 +116,8 @@ def dewarp_staff_image(
             for line in optimal_points:
                 for point in line:
                     cv2.circle(debug_img, [int(point[0]), int(point[1])], 5, (255, 0, 0), -1)
-            cv2.imwrite(debug.base_filename + f"_staff-{index}_debug_0_span_points.png", debug_img)
+
+            debug.write_image_with_fixed_suffix(f"_staff-{index}_debug_span_points.png", debug_img)
         return calculate_dewarp_transformation(image, span_points, optimal_points)
     except Exception as e:
         eprint("Dewarping failed for staff", index, "with error", e)

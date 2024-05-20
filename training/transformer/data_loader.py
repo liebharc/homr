@@ -1,4 +1,3 @@
-import json
 import os
 import random
 from typing import Any
@@ -169,15 +168,10 @@ class DataLoader:
 
 
 def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
-    rhythm_tokenizer_config = json.load(open(config.filepaths.rhythmtokenizer))
-    pitch_tokenizer_config = json.load(open(config.filepaths.pitchtokenizer))
-    note_tokenizer_config = json.load(open(config.filepaths.notetokenizer))
-    lift_tokenizer_config = json.load(open(config.filepaths.lifttokenizer))
-
-    rhythm_tokenizer_vocab = rhythm_tokenizer_config["model"]["vocab"]
-    pitch_tokenizer_vocab = pitch_tokenizer_config["model"]["vocab"]
-    note_tokenizer_vocab = note_tokenizer_config["model"]["vocab"]
-    lift_tokenizer_vocab = lift_tokenizer_config["model"]["vocab"]
+    rhythm_tokenizer_vocab = config.rhythm_vocab
+    pitch_tokenizer_vocab = config.pitch_vocab
+    note_tokenizer_vocab = config.note_vocab
+    lift_tokenizer_vocab = config.lift_vocab
 
     # Train and validation split
     val_idx = int(len(samples) * val_split)

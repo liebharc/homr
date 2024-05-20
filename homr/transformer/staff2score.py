@@ -6,6 +6,8 @@ import safetensors
 import torch
 from albumentations.pytorch import ToTensorV2  # type: ignore
 
+from homr.debug import AttentionDebug
+from homr.model import Staff
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from homr.type_definitions import NDArray
@@ -36,7 +38,9 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(self, imgpath: str) -> list[str]:
+    def predict(
+        self, imgpath: str, staff: Staff | None = None, debug: AttentionDebug | None = None
+    ) -> list[str]:
         imgs: list[NDArray] = []
         if os.path.isdir(imgpath):
             for item in os.listdir(imgpath):
@@ -44,7 +48,12 @@ class Staff2Score:
         else:
             imgs.append(readimg(self.config, imgpath))
         imgs_tensor = torch.cat(imgs).float().unsqueeze(1)  # type: ignore
-        return self.model.generate(imgs_tensor.to(self.device), temperature=self.config.temperature)
+        return self.model.generate(
+            imgs_tensor.to(self.device),
+            temperature=self.config.temperature,
+            staff=staff,
+            debug=debug,
+        )
 
 
 _transform = alb.Compose(

@@ -60,7 +60,7 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:
         return []
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
-    preprocessed, _ignored = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+    preprocessed, _ratio = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
     preprocessed_path = _replace_suffix(path, "-pre.jpg")
     if preprocessed_path is None:
         print("Warning: Unknown extension", path)

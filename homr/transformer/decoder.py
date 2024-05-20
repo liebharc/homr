@@ -1,6 +1,7 @@
 from math import ceil
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -12,6 +13,8 @@ from x_transformers.x_transformers import (  # type: ignore
     TokenEmbedding,
 )
 
+from homr.debug import AttentionDebug
+from homr.model import Staff
 from homr.transformer.configs import Config
 from training.transformer.split_merge_symbols import SymbolMerger
 
@@ -19,36 +22,45 @@ from training.transformer.split_merge_symbols import SymbolMerger
 class ScoreTransformerWrapper(nn.Module):
     def __init__(
         self,
-        num_note_tokens: int,
-        num_rhythm_tokens: int,
-        num_pitch_tokens: int,
-        num_lift_tokens: int,
-        max_seq_len: int,
-        attn_layers: int,
-        emb_dim: int,
+        config: Config,
+        attn_layers: Any,
         l2norm_embed: bool = False,
-    ):
+    ) -> None:
         super().__init__()
         if not isinstance(attn_layers, AttentionLayers):
             raise ValueError("attention layers must be an instance of AttentionLayers")
 
         dim = attn_layers.dim
-        self.max_seq_len = max_seq_len
+        self.max_seq_len = config.max_seq_len
         self.l2norm_embed = l2norm_embed
-        self.lift_emb = TokenEmbedding(emb_dim, num_lift_tokens, l2norm_embed=l2norm_embed)
-        self.pitch_emb = TokenEmbedding(emb_dim, num_pitch_tokens, l2norm_embed=l2norm_embed)
-        self.rhythm_emb = TokenEmbedding(emb_dim, num_rhythm_tokens, l2norm_embed=l2norm_embed)
-        self.pos_emb = AbsolutePositionalEmbedding(emb_dim, max_seq_len, l2norm_embed=l2norm_embed)
+        self.lift_emb = TokenEmbedding(
+            config.decoder_dim, config.num_lift_tokens, l2norm_embed=l2norm_embed
+        )
+        self.pitch_emb = TokenEmbedding(
+            config.decoder_dim, config.num_pitch_tokens, l2norm_embed=l2norm_embed
+        )
+        self.rhythm_emb = TokenEmbedding(
+            config.decoder_dim, config.num_rhythm_tokens, l2norm_embed=l2norm_embed
+        )
+        self.pos_emb = AbsolutePositionalEmbedding(
+            config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
+        )
+        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
+        self.attention_width = config.max_width // config.patch_size
+        self.attention_height = config.max_height // config.patch_size
+        self.patch_size = config.patch_size
 
-        self.project_emb = nn.Linear(emb_dim, dim) if emb_dim != dim else nn.Identity()
+        self.project_emb = (
+            nn.Linear(config.decoder_dim, dim) if config.decoder_dim != dim else nn.Identity()
+        )
         self.attn_layers = attn_layers
         self.norm = nn.LayerNorm(dim)
         self.init_()
 
-        self.to_logits_lift = nn.Linear(dim, num_lift_tokens)
-        self.to_logits_pitch = nn.Linear(dim, num_pitch_tokens)
-        self.to_logits_rhythm = nn.Linear(dim, num_rhythm_tokens)
-        self.to_logits_note = nn.Linear(dim, num_note_tokens)
+        self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
+        self.to_logits_pitch = nn.Linear(dim, config.num_pitch_tokens)
+        self.to_logits_rhythm = nn.Linear(dim, config.num_rhythm_tokens)
+        self.to_logits_note = nn.Linear(dim, config.num_note_tokens)
 
     def init_(self) -> None:
         if self.l2norm_embed:
@@ -69,6 +81,7 @@ class ScoreTransformerWrapper(nn.Module):
         lifts: torch.Tensor,
         mask: torch.Tensor | None = None,
         return_hiddens: bool = True,
+        return_center_of_attention: bool = False,
         **kwargs: Any,
     ) -> Any:
         x = (
@@ -78,7 +91,15 @@ class ScoreTransformerWrapper(nn.Module):
             + self.pos_emb(rhythms)
         )
         x = self.project_emb(x)
+        debug = kwargs.pop("debug", None)
         x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
+
+        if return_center_of_attention:
+            center_of_attention = self.calculate_center_of_attention(
+                debug, hiddens.attn_intermediates
+            )
+        else:
+            center_of_attention = None
 
         x = self.norm(x)
 
@@ -86,7 +107,37 @@ class ScoreTransformerWrapper(nn.Module):
         out_pitchs = self.to_logits_pitch(x)
         out_rhythms = self.to_logits_rhythm(x)
         out_notes = self.to_logits_note(x)
-        return out_rhythms, out_pitchs, out_lifts, out_notes, x
+        return out_rhythms, out_pitchs, out_lifts, out_notes, x, center_of_attention
+
+    def calculate_center_of_attention(
+        self, debug: AttentionDebug | None, intermediates: Any
+    ) -> tuple[float, float]:
+        filtered_intermediate = [
+            tensor.post_softmax_attn[:, :, -1, :]
+            for tensor in intermediates
+            if tensor.post_softmax_attn.shape[-1] == self.attention_dim
+        ]
+
+        attention_all_layers = torch.mean(torch.stack(filtered_intermediate), dim=0)
+        attention_all_layers = attention_all_layers.squeeze(0).squeeze(1)
+        attention_all_layers = attention_all_layers.mean(dim=0)
+
+        image_attention = attention_all_layers[1:]
+        image_attention_2d = (
+            image_attention.reshape(self.attention_height, self.attention_width).cpu().numpy()
+        )
+        center_of_attention = np.unravel_index(
+            image_attention_2d.argmax(), image_attention_2d.shape
+        )
+        center_of_attention = (
+            center_of_attention[0] * self.patch_size,
+            center_of_attention[1] * self.patch_size,
+        )
+
+        if debug is not None:
+            debug.add_attention(image_attention_2d, center_of_attention)
+
+        return center_of_attention
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
@@ -108,6 +159,7 @@ class ScoreDecoder(nn.Module):
         super().__init__()
         self.pad_value = (config.pad_token,)
         self.ignore_index = ignore_index
+        self.config = config
 
         self.lifttokenizer = PreTrainedTokenizerFast(tokenizer_file=config.filepaths.lifttokenizer)
         self.pitchtokenizer = PreTrainedTokenizerFast(
@@ -152,6 +204,7 @@ class ScoreDecoder(nn.Module):
         out_lift = nonote_tokens
         mask = kwargs.pop("mask", None)
         merger = SymbolMerger()
+        staff: Staff | None = kwargs.pop("staff", None)  # noqa: F841
 
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
@@ -162,8 +215,8 @@ class ScoreDecoder(nn.Module):
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
 
-            rhythmsp, pitchsp, liftsp, notesp, _ = self.net(
-                x_rhythm, x_pitch, x_lift, mask=mask, **kwargs
+            rhythmsp, pitchsp, liftsp, notesp, _ignored, center_of_attention = self.net(
+                x_rhythm, x_pitch, x_lift, mask=mask, return_center_of_attention=True, **kwargs
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
@@ -222,7 +275,7 @@ class ScoreDecoder(nn.Module):
             mask = mask[:, :-1]
             kwargs["mask"] = mask
 
-        rhythmsp, pitchsp, liftsp, notesp, x = self.net(
+        rhythmsp, pitchsp, liftsp, notesp, x, _attention = self.net(
             rhythmsi, pitchsi, liftsi, **kwargs
         )  # this calls ScoreTransformerWrapper.forward
 
@@ -309,12 +362,7 @@ class ScoreDecoder(nn.Module):
 def get_decoder(config: Config) -> ScoreDecoder:
     return ScoreDecoder(
         ScoreTransformerWrapper(
-            num_note_tokens=config.num_note_tokens,
-            num_rhythm_tokens=config.num_rhythm_tokens,
-            num_pitch_tokens=config.num_pitch_tokens,
-            num_lift_tokens=config.num_lift_tokens,
-            max_seq_len=config.max_seq_len,
-            emb_dim=config.decoder_dim,
+            config=config,
             attn_layers=Decoder(
                 dim=config.decoder_dim,
                 depth=config.decoder_depth,

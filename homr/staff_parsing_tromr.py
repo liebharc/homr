@@ -1,3 +1,4 @@
+from homr.debug import AttentionDebug
 from homr.model import Note, NoteGroup, Staff
 from homr.results import ResultClef, ResultNote, ResultNoteGroup, ResultStaff
 from homr.simple_logging import eprint
@@ -107,12 +108,12 @@ def _override_note_pitches(staff: Staff, result: ResultStaff) -> None:  # noqa: 
 inference: Staff2Score | None = None
 
 
-def parse_staff_tromr(staff: Staff, staff_file: str) -> ResultStaff:
+def parse_staff_tromr(staff: Staff, staff_file: str, debug: AttentionDebug | None) -> ResultStaff:
     global inference  # noqa: PLW0603
     print("Running TrOmr inference on", staff_file)
     if inference is None:
         inference = Staff2Score(default_config)
-    output = str.join("", inference.predict(staff_file))
+    output = str.join("", inference.predict(staff_file, debug=debug, staff=staff))
     result = parse_tr_omr_output(output)
     _override_note_pitches(staff, result)
     return result
