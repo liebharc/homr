@@ -9,6 +9,8 @@ def download_file(url: str, filename: str) -> None:
     response = requests.get(url, stream=True, timeout=5)
     total = int(response.headers.get("content-length", 0))
     totalMb = round(total / 1024 / 1024)
+    last_percent = -1
+    complete = 100
 
     with open(filename, "wb") as f:
         for chunk in response.iter_content(chunk_size=1024):
@@ -17,14 +19,18 @@ def download_file(url: str, filename: str) -> None:
                 progress = f.tell()
                 progressMb = round(progress / 1024 / 1024)
                 if total > 0:
-                    progressPercent = 100 * progress // total
-                    print(
-                        f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
-                        end="",
-                    )
+                    progressPercent = complete * progress // total
+                    if progressPercent != last_percent:
+                        print(
+                            f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
+                            end="",
+                        )
                 else:
                     print(f"\rDownloaded {progressMb} MB", end="")
-    print()  # Add newline after download progress
+    if total > 0 and last_percent != complete:
+        print(f"\rDownloaded {totalMb} of {totalMb} MB (100%)")
+    else:
+        print()  # Add newline after download progress
 
 
 def unzip_file(filename: str, output_folder: str) -> None:
