@@ -28,8 +28,14 @@ jobs:
         run: |
           python -m pip install poetry==1.8.2
 
+      - name: Init
+        run: make init-poetry
+
       - name: Build
         run: poetry build
 
       - name: Publish
-        run: poetry publish
+        env:
+          USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: poetry publish -u $USERNAME -p $TOKEN
