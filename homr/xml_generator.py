@@ -25,7 +25,7 @@ def build_defaults() -> mxl.XMLDefaults:  # type: ignore
     # we only have to break staffs with every new detected staff
     # This works well for electronic formats, if the results are supposed
     # to get printed then they might need to be scaled down to fit the page
-    page_width = 100  # Unit is in tenths: https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/page-height/
+    page_width = 110  # Unit is in tenths: https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/page-height/
     page_height = 120
     defaults = mxl.XMLDefaults()
     page_layout = mxl.XMLPageLayout()

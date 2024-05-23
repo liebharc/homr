@@ -115,5 +115,5 @@ def parse_staff_tromr(staff: Staff, staff_file: str, debug: AttentionDebug | Non
         inference = Staff2Score(default_config)
     output = str.join("", inference.predict(staff_file, debug=debug, staff=staff))
     result = parse_tr_omr_output(output)
-    _override_note_pitches(staff, result)
+    # _override_note_pitches(staff, result)
     return result

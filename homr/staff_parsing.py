@@ -38,14 +38,16 @@ def _get_number_of_voices(staffs: list[MultiStaff]) -> int:
     return len(staffs[0].staffs)
 
 
-def add_image_into_tr_omr_canvas(
-    image: NDArray, margin_top: int = 0, margin_bottom: int = 0
-) -> tuple[NDArray, float]:
-    tr_omr_max_height = 128
-    tr_omr_max_width = 1280
+tr_omr_max_height = 128
+tr_omr_max_width = 1280
+
+
+def get_tr_omr_canvas_size(
+    image_shape: NDArray, margin_top: int = 0, margin_bottom: int = 0
+) -> NDArray:
     tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
     tr_omr_ratio = float(tr_omr_max_height_with_margin) / tr_omr_max_width
-    height, width = image.shape[:2]
+    height, width = image_shape[:2]
 
     # Calculate the new size such that it fits exactly into the
     # tr_omr_max_height and tr_omr_max_width
@@ -53,29 +55,42 @@ def add_image_into_tr_omr_canvas(
 
     if height / width > tr_omr_ratio:
         # The height is the limiting factor.
-        ratio = tr_omr_max_height / height
-        new_shape = (
+        new_shape = [
             int(width / height * tr_omr_max_height_with_margin),
             tr_omr_max_height_with_margin,
-        )
+        ]
     else:
         # The width is the limiting factor.
-        ratio = tr_omr_max_width / width
-        new_shape = (tr_omr_max_width, int(height / width * tr_omr_max_width))
+        new_shape = [tr_omr_max_width, int(height / width * tr_omr_max_width)]
+    return np.array(new_shape)
 
-    resized = cv2.resize(image, new_shape)
+
+def center_image_on_canvas(
+    image: NDArray, canvas_size: tuple[int, int], margin_top: int = 0, margin_bottom: int = 0
+) -> NDArray:
+
+    resized = cv2.resize(image, canvas_size)
 
     new_image = np.zeros((tr_omr_max_height, tr_omr_max_width, 3), np.uint8)
     new_image[:, :] = (255, 255, 255)
 
     # Copy the resized image into the center of the new image.
     x_offset = 0
+    tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
     y_offset = (tr_omr_max_height_with_margin - resized.shape[0]) // 2 + margin_top
     new_image[y_offset : y_offset + resized.shape[0], x_offset : x_offset + resized.shape[1]] = (
         resized
     )
 
-    return new_image, ratio
+    return new_image
+
+
+def add_image_into_tr_omr_canvas(
+    image: NDArray, margin_top: int = 0, margin_bottom: int = 0
+) -> NDArray:
+    new_shape = get_tr_omr_canvas_size(image.shape, margin_top, margin_bottom)
+    new_image = center_image_on_canvas(image, new_shape, margin_top, margin_bottom)
+    return new_image
 
 
 def copy_image_in_center_of_double_the_height_and_white_background(image: NDArray) -> NDArray:
@@ -107,7 +122,7 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
     return bgr
 
 
-def prepare_staff_image(
+def prepare_staff_image(  # noqa: PLR0915
     debug: Debug,
     index: int,
     ranges: list[float],
@@ -116,14 +131,18 @@ def prepare_staff_image(
     perform_dewarp: bool = True,
 ) -> tuple[str, Staff]:
     centers = [s.center for s in staff.symbols]
-    x_values = [c[0] for c in centers]
-    y_values = [c[1] for c in centers]
+    x_values = np.array([c[0] for c in centers])
+    y_values = np.array([c[1] for c in centers])
 
-    x_min = min(*x_values, staff.min_x)
-    x_max = max(*x_values, staff.max_x)
-    y_min = min(*y_values, staff.min_y - 5 * staff.average_unit_size)
-    y_max = max(*y_values, staff.max_y + 5 * staff.average_unit_size)
-    region = [int(x_min), int(y_min), int(x_max), int(y_max)]
+    x_min = min(*x_values, staff.min_x) - staff.average_unit_size
+    x_max = max(*x_values, staff.max_x) + staff.average_unit_size
+    y_min = min(
+        *(y_values - 0.5 * staff.average_unit_size), staff.min_y - 2.5 * staff.average_unit_size
+    )
+    y_max = max(
+        *(y_values + 0.5 * staff.average_unit_size), staff.max_y + 2.5 * staff.average_unit_size
+    )
+    region = np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
     staff_center = (staff.max_y + staff.min_y) // 2
     y_offsets = []
     staff_above = max([r for r in ranges if r < staff_center], default=-1)
@@ -140,23 +159,34 @@ def prepare_staff_image(
         ):
             region[1] = int(staff.min_y - min_y_offset)
             region[3] = int(staff.max_y + min_y_offset)
-    staff_image, top_left = crop_image_and_return_new_top(predictions.preprocessed, *region)
-    staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
+    staff_image = predictions.preprocessed
+    image_dimensions = get_tr_omr_canvas_size([region[3] - region[1], region[2] - region[0]])
+    scaling_factor = image_dimensions[1] / (region[3] - region[1])
+    staff_image = cv2.resize(
+        staff_image,
+        (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
+    )
+    region = np.round(region * scaling_factor)
     if perform_dewarp:
         eprint("Dewarping staff", index)
-        dewarp = dewarp_staff_image(staff_image, staff, list(top_left), index, debug)
+        region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
+        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step1)
+        region_step2 = np.array(region) - np.array([*top_left, *top_left])
+        top_left = top_left / scaling_factor
+        staff = _dewarp_staff(staff, None, top_left, scaling_factor)
+        dewarp = dewarp_staff_image(staff_image, staff, index, debug)
         staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
+        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
+        scaling_factor = 1
+
         eprint("Dewarping staff", index, "done")
     else:
-        dewarp = None
+        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region)
 
-    margin_top = 0
-    margin_bottom = 0
-    staff_image, ratio = add_image_into_tr_omr_canvas(
-        staff_image, max(0, margin_top), max(0, margin_bottom)
-    )
+    staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
+    staff_image = center_image_on_canvas(staff_image, image_dimensions)
     staff_file = debug.write_model_input_image(f"_staff-{index}_input.jpg", staff_image)
-    transformed_staff = _dewarp_staff(staff, dewarp, top_left, ratio)
+    transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
     if debug.debug:
         for symbol in transformed_staff.symbols:
             center = symbol.center
@@ -185,7 +215,6 @@ def _dewarp_staff(
     """
     Applies the same transformation on the staff coordinates as we did on the image.
     """
-    staff_copy = staff.copy()
 
     def transform_coordinates(point: tuple[float, float]) -> tuple[float, float]:
         x, y = point
@@ -197,10 +226,7 @@ def _dewarp_staff(
         y = y * scaling
         return x, y
 
-    staff_copy.symbols = [
-        symbol.transform_coordinates(transform_coordinates) for symbol in staff.symbols
-    ]
-    return staff_copy
+    return staff.transform_coordinates(transform_coordinates)
 
 
 def move_key_information(staff: Staff, destination: ResultStaff) -> None:

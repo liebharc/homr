@@ -1,3 +1,5 @@
+import numpy as np
+
 from homr.type_definitions import NDArray
 
 
@@ -25,5 +27,5 @@ def crop_image_and_return_new_top(
     y1_limited = _limit_y(image, y_min)
     x2_limited = _limit_x(image, x_max)
     y2_limited = _limit_y(image, y_max)
-    new_top_x = (x1_limited, y1_limited)
+    new_top_x = np.array([x1_limited, y1_limited])
     return image[y1_limited:y2_limited, x1_limited:x2_limited], new_top_x

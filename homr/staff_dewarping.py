@@ -40,7 +40,7 @@ def is_point_on_image(pts: tuple[int, int], image: NDArray) -> bool:
 
 
 def calculate_span_and_optimal_points(
-    staff: Staff, region: list[int], image: NDArray
+    staff: Staff, image: NDArray
 ) -> tuple[list[list[tuple[int, int]]], list[list[tuple[int, int]]]]:
     span_points: list[list[tuple[int, int]]] = []
     optimal_points: list[list[tuple[int, int]]] = []
@@ -51,9 +51,9 @@ def calculate_span_and_optimal_points(
     for y in range(2, image.shape[0] - 2, int(image.shape[0] / number_of_y_intervals)):
         line_points: list[tuple[int, int]] = []
         for x in range(2, image.shape[1], 80):
-            y_values = staff.get_at(x + region[0])
+            y_values = staff.get_at(x)
             if y_values is not None:
-                y_offset = y_values.y[2] - region[1]
+                y_offset = y_values.y[2]
                 if not first_y_offset:
                     first_y_offset = y_offset
                     y_delta = 0
@@ -103,11 +103,9 @@ def calculate_dewarp_transformation(
     return StaffDewarping(tform)
 
 
-def dewarp_staff_image(
-    image: NDArray, staff: Staff, region: list[int], index: int, debug: Debug
-) -> StaffDewarping:
+def dewarp_staff_image(image: NDArray, staff: Staff, index: int, debug: Debug) -> StaffDewarping:
     try:
-        span_points, optimal_points = calculate_span_and_optimal_points(staff, region, image)
+        span_points, optimal_points = calculate_span_and_optimal_points(staff, image)
         if debug.debug:
             debug_img = image.copy()
             for line in span_points:

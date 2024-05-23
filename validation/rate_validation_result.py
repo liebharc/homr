@@ -222,7 +222,7 @@ def rate_folder(foldername: str) -> tuple[float | None, int]:
         return None, sum_of_failures
 
     reference = [xml for xml in xmls if xml.is_reference]
-    folder_base_name = os.path.basename(foldername)
+    folder_base_name = os.path.basename(foldername.rstrip(os.path.sep))
     if len(reference) != 1:
         for xml in xmls:
             minimal_diff, minimal_diff_file = find_minimal_diff_against_all_other_files(xml, xmls)
@@ -253,8 +253,10 @@ def write_validation_result_for_folder(
         f.write("Failures: " + str(failures) + "\n")
 
 
-def rate_all_folders(foldername: str) -> None:
+def rate_all_folders(foldername: str) -> bool:
     folders = get_all_direct_subfolders(foldername)
+    if len(folders) == 0:
+        return False
     all_diffs = []
     sum_of_failures = 0
     lines = []
@@ -275,6 +277,7 @@ def rate_all_folders(foldername: str) -> None:
         print(line)
     print("Average diff:", average_diff)
     print("Sum of failures:", sum_of_failures)
+    return True
 
 
 if __name__ == "__main__":
@@ -284,4 +287,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    rate_all_folders(args.folder)
+    if not rate_all_folders(args.folder):
+        rate_folder(args.folder)

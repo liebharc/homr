@@ -1,3 +1,4 @@
+import glob
 import os
 from collections.abc import Sequence
 from itertools import chain
@@ -66,16 +67,13 @@ class Debug:
         self.written_files: list[str] = []
 
     def clean_debug_files_from_previous_runs(self) -> None:
-        if not self.debug:
-            return
-
         prefixes = (
             self.base_filename + "_debug_",
             self.base_filename + "_tesseract_input",
             self.base_filename + "_staff-",
         )
 
-        for file in os.listdir("."):
+        for file in glob.glob(self.base_filename + "*"):
             if file.startswith(prefixes) and file not in self.written_files:
                 os.remove(file)
 
