@@ -3,6 +3,7 @@ from typing import Any
 import xmltodict
 
 from homr.circle_of_fifths import KeyTransformation, circle_of_fifth_to_key_signature
+from homr.simple_logging import eprint
 
 
 def _translate_duration(duration: str) -> str:
@@ -113,7 +114,7 @@ def _music_part_to_semantic(part: Any) -> list[str]:
             key = key.reset_at_end_of_measure()
         return semantic
     except Exception as e:
-        print("Failure at ", part)
+        eprint("Failure at ", part)
         raise e
 
 

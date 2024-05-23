@@ -4,6 +4,7 @@ import sys
 
 import tensorflow as tf
 
+from homr.simple_logging import eprint
 from training import download
 from training.run_id import get_run_id
 from training.segmentation import train
@@ -39,7 +40,7 @@ if model_type == "segnet":
         "output_shape": list(model.output_shape),
     }
     save_model(model, meta, filename)
-    print("Model saved as " + filename)
+    eprint("Model saved as " + filename)
 elif model_type == "unet":
     dataset = download.download_cvs_musicma()
     model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=15)
@@ -49,7 +50,7 @@ elif model_type == "unet":
         "output_shape": list(model.output_shape),
     }
     save_model(model, meta, filename)
-    print("Model saved as " + filename)
+    eprint("Model saved as " + filename)
 elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
     model = tf.keras.models.load_model(
         "seg_unet.keras", custom_objects={"WarmUpLearningRate": train.WarmUpLearningRate}
@@ -61,9 +62,9 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
         "output_shape": list(model.output_shape),
     }
     save_model(model, meta, filename)
-    print("Model saved as " + filename)
+    eprint("Model saved as " + filename)
 elif model_type == "transformer":
     train_transformer(fast=args.fast)
 else:
-    print("Unknown model: " + model_type)
+    eprint("Unknown model: " + model_type)
     sys.exit(1)

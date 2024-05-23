@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
 from training.segmentation.dense_dataset_definitions import (
@@ -123,7 +124,7 @@ def close_lines(img: cv2.typing.MatLike) -> cv2.typing.MatLike:
             if is_horizontal:
                 cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), 255, 1)  # type: ignore
     else:
-        print("No lines found")
+        eprint("No lines found")
 
     return img
 
@@ -161,6 +162,6 @@ if __name__ == "__main__":
     color = int(sys.argv[1])
     with_background = find_example(seg_folder, color)
     if with_background is None:
-        print("Found no examples")
+        eprint("Found no examples")
     else:
         cv2.imwrite("example.png", 255 * with_background)

@@ -15,6 +15,7 @@ from torchvision import transforms as tr  # type: ignore
 from torchvision.transforms import Compose  # type: ignore
 
 from homr.download_utils import download_file, untar_file
+from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
@@ -28,19 +29,19 @@ grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")
 
 hum2xml = os.path.join(dataset_root, "hum2xml")
 if platform.system() == "Windows":
-    print("Transformer training is only implemented for Linux")
-    print("Feel free to submit a PR to support Windows")
-    print("The main work should be to download hum2xml.exe and change the calls")
-    print("to use the exe-file instead of the linux binary.")
+    eprint("Transformer training is only implemented for Linux")
+    eprint("Feel free to submit a PR to support Windows")
+    eprint("The main work should be to download hum2xml.exe and change the calls")
+    eprint("to use the exe-file instead of the linux binary.")
     sys.exit(1)
 if not os.path.exists(hum2xml):
-    print("Downloading hum2xml from https://extras.humdrum.org/man/hum2xml/")
+    eprint("Downloading hum2xml from https://extras.humdrum.org/man/hum2xml/")
     download_file("http://extras.humdrum.org/bin/linux/hum2xml", hum2xml)
     os.chmod(hum2xml, stat.S_IXUSR)
 
 
 if not os.path.exists(grandstaff_root):
-    print("Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets")
+    eprint("Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets")
     grandstaff_archive = os.path.join(dataset_root, "grandstaff.tgz")
     download_file("https://grfia.dlsi.ua.es/musicdocs/grandstaff.tgz", grandstaff_archive)
     untar_file(grandstaff_archive, grandstaff_root)
@@ -78,7 +79,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
             single_image = _prepare_image(predistorted_image)
             cv2.imwrite(basename + "_single-pre.jpg", single_image)
             return distort_image(basename + "_single-pre.jpg"), None
-        print(f"INFO: Couldn't find pre-distorted image {path}, using custom distortions")
+        eprint(f"INFO: Couldn't find pre-distorted image {path}, using custom distortions")
         cv2.imwrite(basename + "_upper-pre.jpg", upper)
         return distort_image(basename + "_upper-pre.jpg"), None
     elif len(centers) == 2 * lines_per_staff:
@@ -88,7 +89,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
 
     overlap = 10
     if middle < overlap or middle > image.shape[0] - overlap:
-        print(f"INFO: Failed to split {path}, middle is at {middle}")
+        eprint(f"INFO: Failed to split {path}, middle is at {middle}")
         return None, None
 
     upper = _prepare_image(image[: middle + overlap])
@@ -123,7 +124,7 @@ def _check_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     the image splitting.
     """
     if not os.path.exists(basename + "_upper.jpg"):
-        print(f"INFO: Failed to split {path}")
+        eprint(f"INFO: Failed to split {path}")
         return None, None
     return basename + "_upper.jpg", basename + "_lower.jpg"
 
@@ -178,7 +179,7 @@ def _convert_file(path: Path, ony_recreate_semantic_files: bool = False) -> list
     musicxml = str(path).replace(".krn", ".musicxml")
     result = os.system(f"{hum2xml} {path} > {musicxml}")  # noqa: S605
     if result != 0:
-        print(f"Failed to convert {path}")
+        eprint(f"Failed to convert {path}")
         return []
     if ony_recreate_semantic_files:
         upper, lower = _check_staff_image(image_file, basename)
@@ -188,7 +189,7 @@ def _convert_file(path: Path, ony_recreate_semantic_files: bool = False) -> list
         return []
     upper_semantic, lower_semantic = _music_xml_to_semantic(musicxml, basename)
     if upper_semantic is None or lower_semantic is None:
-        print(f"Failed to convert {musicxml}")
+        eprint(f"Failed to convert {musicxml}")
         return []
     if lower is None:
         return [
@@ -219,7 +220,7 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
     if only_recreate_semantic_files:
         _file_desc, index_file = tempfile.mkstemp()
 
-    print("Indexing Grandstaff dataset, this can up to an hour.")
+    eprint("Indexing Grandstaff dataset, this can up to an hour.")
     with open(index_file, "w") as f:
         file_number = 0
         skipped_files = 0
@@ -239,8 +240,8 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
                     skipped_files += 1
                 file_number += 1
                 if file_number % 1000 == 0:
-                    print(f"Processed {file_number} files, skipped {skipped_files} files")
-    print("Done indexing")
+                    eprint(f"Processed {file_number} files, skipped {skipped_files} files")
+    eprint("Done indexing")
 
 
 if __name__ == "__main__":

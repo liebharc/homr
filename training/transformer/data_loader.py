@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder import tokenize
 from homr.transformer.staff2score import readimg
@@ -108,7 +109,7 @@ class DataLoader:
             self[idx]
             return True
         except Exception as e:
-            print("ERROR: " + str(e))
+            eprint("ERROR: " + str(e))
             return False
 
     def check(self) -> bool:
@@ -122,7 +123,7 @@ class DataLoader:
             result = self._check_index(i)
             has_errors = has_errors or not result
             if i % 10000 == 0:
-                print("Checked " + str(i) + "/" + str(len(self)) + " entries")
+                eprint("Checked " + str(i) + "/" + str(len(self)) + " entries")
         return has_errors
 
     def _read_semantic(
@@ -178,7 +179,7 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
     training_list = samples[val_idx:]
     validation_list = samples[:val_idx]
 
-    print(
+    eprint(
         "Training with "
         + str(len(training_list))
         + " and validating with "

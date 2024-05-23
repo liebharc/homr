@@ -176,7 +176,7 @@ def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
         octave = int(note_name_with_octave[1])
         return -(_note_name_to_sortable(note_name) + octave * 7)
     except ValueError:
-        print(f"Error: {note_name_with_octave} in pitch_name_to_sortable")
+        eprint(f"Error: {note_name_with_octave} in pitch_name_to_sortable")
         return 0
 
 

@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageColor
 
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 from training.segmentation.build_label import build_label, close_lines
 from training.segmentation.constant_min import CHANNEL_NUM
@@ -487,7 +488,7 @@ def train_model(
     train_files = feat_files[split_idx:]
     val_files = feat_files[:split_idx]
 
-    print(f"Loading dataset. Train/validation: {len(train_files)}/{len(val_files)}")
+    eprint(f"Loading dataset. Train/validation: {len(train_files)}/{len(val_files)}")
     if data_model == "segnet":
         win_size = 288
         train_data = DsDataLoader(
@@ -507,7 +508,7 @@ def train_model(
         ).get_dataset(val_batch_size)
         model = semantic_segmentation(win_size=256, out_class=3)
 
-    print("Initializing model")
+    eprint("Initializing model")
     optim = tf.keras.optimizers.Adam(learning_rate=WarmUpLearningRate(learning_rate))
     loss = tf.keras.losses.CategoricalFocalCrossentropy()
     model.compile(optimizer=optim, loss=loss, metrics=["accuracy"])
@@ -519,7 +520,7 @@ def train_model(
         ),
     ]
 
-    print("Start training")
+    eprint("Start training")
     try:
         model.fit(
             train_data,
@@ -531,5 +532,5 @@ def train_model(
         )
         return model
     except Exception as e:
-        print(e)
+        eprint(e)
         return model

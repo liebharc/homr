@@ -3,6 +3,7 @@ from enum import Enum
 import numpy as np
 
 from homr import constants
+from homr.simple_logging import eprint
 
 
 class ResultSymbol:
@@ -165,7 +166,7 @@ def get_duration_name(duration: int) -> str:
     }
     result = duration_dict.get(duration, None)
     if result is None:
-        print("Unknown duration", duration)
+        eprint("Unknown duration", duration)
         return "quarter"
     return result
 

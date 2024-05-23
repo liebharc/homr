@@ -84,6 +84,7 @@ select = [
     "PIE", # flake8-pie
     "PL", # pylint
     "TID252", # flake8-tidy-imports
+    "T201",  # no-print
 ]
 ignore = [
     "UP015", # Unnecessary open mode parameters

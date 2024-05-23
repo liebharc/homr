@@ -8,6 +8,8 @@ import editdistance  # type: ignore
 import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 from musicxml.parser.parser import _parse_node  # type: ignore
 
+from homr.simple_logging import eprint
+
 
 class Note:
     def __init__(self, note: mxl.XMLNote) -> None:  # type: ignore
@@ -211,13 +213,13 @@ def rate_folder(foldername: str) -> tuple[float | None, int]:
         if not is_xml_or_musicxml(file):
             continue
         if is_file_is_empty(file):
-            print(">>> Found empty file, that means that the run failed", os.path.basename(file))
+            eprint(">>> Found empty file, that means that the run failed", os.path.basename(file))
             sum_of_failures += 1
             continue
         xmls.append(get_keys_and_notes_from_filename(file))
 
     if len(xmls) <= 1:
-        print("Not enough files found to compare", foldername)
+        eprint("Not enough files found to compare", foldername)
         sum_of_failures += len(xmls)
         return None, sum_of_failures
 
@@ -227,7 +229,7 @@ def rate_folder(foldername: str) -> tuple[float | None, int]:
         for xml in xmls:
             minimal_diff, minimal_diff_file = find_minimal_diff_against_all_other_files(xml, xmls)
             if minimal_diff is None or minimal_diff_file is None:
-                print("No minimal diff found for", xml.filename)
+                eprint("No minimal diff found for", xml.filename)
                 sum_of_failures += 1
                 continue
             all_diffs.append(minimal_diff)
@@ -239,7 +241,7 @@ def rate_folder(foldername: str) -> tuple[float | None, int]:
             all_diffs.append(diff)
 
     average_diff = sum(all_diffs) / len(all_diffs)
-    print("In folder", folder_base_name, ": Average diff is", average_diff)
+    eprint("In folder", folder_base_name, ": Average diff is", average_diff)
     return average_diff, sum_of_failures
 
 
@@ -268,15 +270,15 @@ def rate_all_folders(foldername: str) -> bool:
         lines.append(folder_base_name + ": " + str(diffs) + ", " + str(failures))
         sum_of_failures += failures
     if len(all_diffs) == 0:
-        print("Everything failed")
+        eprint("Everything failed")
         return True
     average_diff = sum(all_diffs) / len(all_diffs)
     write_validation_result_for_folder(foldername, average_diff, sum_of_failures, lines)
-    print()
+    eprint()
     for line in lines:
-        print(line)
-    print("Average diff:", average_diff)
-    print("Sum of failures:", sum_of_failures)
+        eprint(line)
+    eprint("Average diff:", average_diff)
+    eprint("Sum of failures:", sum_of_failures)
     return True
 
 

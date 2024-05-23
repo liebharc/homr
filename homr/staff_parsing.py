@@ -276,7 +276,7 @@ inference: Staff2Score | None = None
 
 def _parse_staff_tromr(staff: Staff, staff_file: str, debug: AttentionDebug | None) -> ResultStaff:
     global inference  # noqa: PLW0603
-    print("Running TrOmr inference on", staff_file)
+    eprint("Running TrOmr inference on", staff_file)
     if inference is None:
         inference = Staff2Score(default_config)
     output = str.join("", inference.predict(staff_file, debug=debug, staff=staff))

@@ -12,6 +12,7 @@ from homr.model import (
     StemDirection,
     SymbolOnStaff,
 )
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
@@ -229,7 +230,7 @@ def add_notes_to_staffs(
         _group_notes_on_staff(staff)
         number_of_notes += len(staff.get_notes())
         number_of_note_groups += len(staff.get_note_groups())
-    print(
+    eprint(
         "After grouping there are",
         number_of_notes,
         "notes and",

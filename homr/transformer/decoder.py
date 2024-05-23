@@ -15,6 +15,7 @@ from x_transformers.x_transformers import (  # type: ignore
 
 from homr.debug import AttentionDebug
 from homr.model import Staff
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.transformer.split_merge_symbols import SymbolMerger
 
@@ -394,6 +395,6 @@ def tokenize(symbols: list[str], vocab: Any, default_token: int, vocab_name: str
         if symbol in vocab:
             result.append(vocab[symbol])
         else:
-            print("Warning: " + symbol + " not in " + vocab_name + " vocabulary")
+            eprint("Warning: " + symbol + " not in " + vocab_name + " vocabulary")
             result.append(default_token)
     return result

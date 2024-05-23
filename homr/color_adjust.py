@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import scipy  # type: ignore
 
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
@@ -87,5 +88,5 @@ def color_adjust(image: NDArray, block_size: int) -> tuple[NDArray, NDArray]:
         image, background = remove_background_from_channel(image, block_size)
         return cv2.cvtColor(apply_clahe(image), cv2.COLOR_GRAY2BGR), background
     except Exception as e:
-        print(e)
+        eprint(e)
         return image, image

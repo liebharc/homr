@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
@@ -42,11 +43,11 @@ class InferenceModel:
         # Predict
         pred = []
         for idx in range(0, len(data), batch_size):
-            print(f"{idx+1}/{len(data)} (step: {batch_size})", end="\r")
+            eprint(f"{idx+1}/{len(data)} (step: {batch_size})", end="\r")
             batch = np.array(data[idx : idx + batch_size])
             out = self.model.serve(batch)
             pred.append(out)
-        print(f"{len(data)}/{len(data)} (step: {batch_size})")  # Add newline after progress
+        eprint(f"{len(data)}/{len(data)} (step: {batch_size})")  # Add newline after progress
 
         # Merge prediction patches
         output_shape = image.shape[:2] + (self.output_shape[-1],)

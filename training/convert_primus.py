@@ -7,6 +7,7 @@ from pathlib import Path
 import cv2
 
 from homr.download_utils import download_file, untar_file, unzip_file
+from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
 
@@ -20,13 +21,13 @@ primus_distorted_train_index = os.path.join(primus, "distored_index.txt")
 cpms_train_index = os.path.join(cpms, "index.txt")
 
 if not os.path.exists(primus):
-    print("Downloading Camera-PrIMuS from https://grfia.dlsi.ua.es/primus/")
+    eprint("Downloading Camera-PrIMuS from https://grfia.dlsi.ua.es/primus/")
     primus_archive = os.path.join(dataset_root, "CameraPrIMuS.tgz")
     download_file("https://grfia.dlsi.ua.es/primus/packages/CameraPrIMuS.tgz", primus_archive)
     untar_file(primus_archive, dataset_root)  # the archive contains already a Corpus folder
 
 if not os.path.exists(cpms):
-    print("Downloading CPMS from https://github.com/itec-hust/CPMS")
+    eprint("Downloading CPMS from https://github.com/itec-hust/CPMS")
     cpms_archive = os.path.join("cpms.zip")
     download_file("https://github.com/itec-hust/CPMS/archive/refs/heads/main.zip", cpms_archive)
     unzip_file(cpms_archive, dataset_root)  # the archive contains already a CPMS-main folder
@@ -56,21 +57,21 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:
         return []
     image = cv2.imread(str(path))
     if image is None:
-        print("Warning: Could not read image", path)
+        eprint("Warning: Could not read image", path)
         return []
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
     preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
     preprocessed_path = _replace_suffix(path, "-pre.jpg")
     if preprocessed_path is None:
-        print("Warning: Unknown extension", path)
+        eprint("Warning: Unknown extension", path)
         return []
     cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
     if distort:
         distort_image(str(preprocessed_path.absolute()))
     semantic_file = _find_semantic_file(path)
     if semantic_file is None:
-        print("Warning: No semantic file found for", path)
+        eprint("Warning: No semantic file found for", path)
         return []
     return [
         str(preprocessed_path.relative_to(git_root))
@@ -101,21 +102,21 @@ def _convert_dataset(
                 f.writelines(result)
                 file_number += 1
                 if file_number % 1000 == 0:
-                    print(f"Processed {file_number} files")
+                    eprint(f"Processed {file_number} files")
 
 
 def convert_primus_dataset() -> None:
-    print("Indexing PrIMuS dataset")
+    eprint("Indexing PrIMuS dataset")
     _convert_dataset(Path(primus).rglob("*.png"), primus_train_index, distort=True)
-    print("Indexing PrIMuS Distorted dataset")
+    eprint("Indexing PrIMuS Distorted dataset")
     _convert_dataset(Path(primus).rglob("*_distorted.jpg"), primus_distorted_train_index)
-    print("Done indexing")
+    eprint("Done indexing")
 
 
 def convert_cpms_dataset() -> None:
-    print("Indexing CPMS dataset")
+    eprint("Indexing CPMS dataset")
     _convert_dataset(Path(cpms).rglob("*.jpg"), cpms_train_index)
-    print("Done indexing")
+    eprint("Done indexing")
 
 
 if __name__ == "__main__":

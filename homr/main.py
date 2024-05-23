@@ -197,7 +197,7 @@ def process_image(  # noqa: PLR0915
             rest for rest in bar_lines_or_rests if not rest.is_overlapping_with_any(bar_line_boxes)
         ]
         rests = add_rests_to_staffs(staffs, possible_rests)
-        print("Found", len(rests), "rests")
+        eprint("Found", len(rests), "rests")
 
         all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
         brace_dot_img = prepare_brace_dot_image(
@@ -212,7 +212,7 @@ def process_image(  # noqa: PLR0915
             staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
         )
         accidentals = add_accidentals_to_staffs(staffs, symbols.accidentals)
-        print("Found", len(accidentals), "accidentals")
+        eprint("Found", len(accidentals), "accidentals")
 
         multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
         eprint(

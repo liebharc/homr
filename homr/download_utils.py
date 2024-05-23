@@ -4,6 +4,8 @@ import zipfile
 
 import requests
 
+from homr.simple_logging import eprint
+
 
 def download_file(url: str, filename: str) -> None:
     response = requests.get(url, stream=True, timeout=5)
@@ -21,17 +23,17 @@ def download_file(url: str, filename: str) -> None:
                 if total > 0:
                     progressPercent = complete * progress // total
                     if progressPercent != last_percent:
-                        print(
+                        eprint(
                             f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
                             end="",
                         )
                         last_percent = progressPercent
                 else:
-                    print(f"\rDownloaded {progressMb} MB", end="")
+                    eprint(f"\rDownloaded {progressMb} MB", end="")
     if total > 0 and last_percent != complete:
-        print(f"\rDownloaded {totalMb} of {totalMb} MB (100%)")
+        eprint(f"\rDownloaded {totalMb} of {totalMb} MB (100%)")
     else:
-        print()  # Add newline after download progress
+        eprint()  # Add newline after download progress
 
 
 def unzip_file(filename: str, output_folder: str) -> None:
@@ -39,7 +41,7 @@ def unzip_file(filename: str, output_folder: str) -> None:
         for member in zip_ref.namelist():
             # Ensure file path is safe
             if os.path.isabs(member) or ".." in member:
-                print(f"Skipping potentially unsafe file {member}")
+                eprint(f"Skipping potentially unsafe file {member}")
                 continue
 
             # Handle directories
@@ -64,7 +66,7 @@ def untar_file(filename: str, output_folder: str) -> None:
         for member in tar.getmembers():
             # Ensure file path is safe
             if os.path.isabs(member.name) or ".." in member.name:
-                print(f"Skipping potentially unsafe file {member.name}")
+                eprint(f"Skipping potentially unsafe file {member.name}")
                 continue
 
             # Handle directories

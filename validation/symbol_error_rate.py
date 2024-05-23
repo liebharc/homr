@@ -5,6 +5,7 @@ from pathlib import Path
 import editdistance  # type: ignore
 
 from homr import download_utils
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
 from training.transformer.split_merge_symbols import convert_alter_to_accidentals
@@ -34,12 +35,12 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         ser_avg = round(100 * sum(all_sers) / len(all_sers))
         i += 1
         if i % 10 == 0:
-            print("Expected:", expected)
-            print("Actual:", actual)
+            eprint("Expected:", expected)
+            eprint("Actual:", actual)
         percentage = round(i / total * 100)
-        print(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}%")
+        eprint(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}%")
     ser_avg = round(100 * sum(all_sers) / len(all_sers))
-    print(f"Done, SER avg: {ser_avg}%")
+    eprint(f"Done, SER avg: {ser_avg}%")
 
     with open(result_file, "w") as f:
         f.write(f"SER avg: {ser_avg}%\n")
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     download_url = "https://github.com/liebharc/homr/releases/download/datasets/validation.zip"
     if not os.path.exists(validation_data_set_location):
         try:
-            print("Downloading validation data set")
+            eprint("Downloading validation data set")
             download_utils.download_file(download_url, download_path)
             download_utils.unzip_file(download_path, data_set_location)
         finally:

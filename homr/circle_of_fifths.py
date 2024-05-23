@@ -1,6 +1,8 @@
 import abc
 from abc import ABC
 
+from homr.simple_logging import eprint
+
 circle_of_fifth_notes_positive = ["F", "C", "G", "D", "A", "E", "B"]
 circle_of_fifth_notes_negative = list(reversed(circle_of_fifth_notes_positive))
 
@@ -39,7 +41,7 @@ def circle_of_fifth_to_key_signature(circle: int) -> str:
 
 def key_signature_to_circle_of_fifth(key_signature: str) -> int:
     if key_signature not in inv_definition:
-        print("Warning: Unknown key signature", key_signature)
+        eprint("Warning: Unknown key signature", key_signature)
         return 0
     return inv_definition[key_signature]
 
