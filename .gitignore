@@ -11,6 +11,9 @@ __pycache__/
 # Docs
 _build/
 
+# Build
+/dist
+
 # Datasets
 /datasets/*
 !/datasets/*.py
