@@ -25,6 +25,7 @@ def download_file(url: str, filename: str) -> None:
                             f"\rDownloaded {progressMb} of {totalMb} MB ({progressPercent}%)",
                             end="",
                         )
+                        last_percent = progressPercent
                 else:
                     print(f"\rDownloaded {progressMb} MB", end="")
     if total > 0 and last_percent != complete:
