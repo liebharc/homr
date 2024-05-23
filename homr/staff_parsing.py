@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from homr import constants
-from homr.debug import Debug
+from homr.debug import AttentionDebug, Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.model import Clef, InputPredictions, MultiStaff, NoteGroup, Staff
 from homr.results import (
@@ -15,7 +15,9 @@ from homr.results import (
 )
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
-from homr.staff_parsing_tromr import parse_staff_tromr
+from homr.tr_omr_parser import parse_tr_omr_output
+from homr.transformer.configs import default_config
+from homr.transformer.staff2score import Staff2Score
 from homr.type_definitions import NDArray
 
 
@@ -43,7 +45,7 @@ tr_omr_max_width = 1280
 
 
 def get_tr_omr_canvas_size(
-    image_shape: NDArray, margin_top: int = 0, margin_bottom: int = 0
+    image_shape: tuple[int, ...], margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
     tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
     tr_omr_ratio = float(tr_omr_max_height_with_margin) / tr_omr_max_width
@@ -66,10 +68,10 @@ def get_tr_omr_canvas_size(
 
 
 def center_image_on_canvas(
-    image: NDArray, canvas_size: tuple[int, int], margin_top: int = 0, margin_bottom: int = 0
+    image: NDArray, canvas_size: NDArray, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
 
-    resized = cv2.resize(image, canvas_size)
+    resized = cv2.resize(image, canvas_size)  # type: ignore
 
     new_image = np.zeros((tr_omr_max_height, tr_omr_max_width, 3), np.uint8)
     new_image[:, :] = (255, 255, 255)
@@ -122,7 +124,43 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
     return bgr
 
 
-def prepare_staff_image(  # noqa: PLR0915
+def _calculate_region(staff: Staff, x_values: NDArray, y_values: NDArray) -> NDArray:
+    x_min = min(*x_values, staff.min_x) - staff.average_unit_size
+    x_max = max(*x_values, staff.max_x) + staff.average_unit_size
+    y_min = min(
+        *(y_values - 0.5 * staff.average_unit_size), staff.min_y - 2.5 * staff.average_unit_size
+    )
+    y_max = max(
+        *(y_values + 0.5 * staff.average_unit_size), staff.max_y + 2.5 * staff.average_unit_size
+    )
+    return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
+
+
+def _calculate_offsets(staff: Staff, ranges: list[float]) -> list[float]:
+    staff_center = (staff.max_y + staff.min_y) // 2
+    y_offsets = []
+    staff_above = max([r for r in ranges if r < staff_center], default=-1)
+    if staff_above >= 0:
+        y_offsets.append(staff.max_y - staff_above)
+    staff_below = min([r for r in ranges if r > staff_center], default=-1)
+    if staff_below >= 0:
+        y_offsets.append(staff_below - staff.min_y)
+    return y_offsets
+
+
+def _adjust_region(region: NDArray, y_offsets: list[float], staff: Staff) -> NDArray:
+    if len(y_offsets) > 0:
+        min_y_offset = min(y_offsets)
+        if (
+            min_y_offset > 3 * staff.average_unit_size
+            and min_y_offset < 8 * staff.average_unit_size
+        ):
+            region[1] = int(staff.min_y - min_y_offset)
+            region[3] = int(staff.max_y + min_y_offset)
+    return region
+
+
+def prepare_staff_image(
     debug: Debug,
     index: int,
     ranges: list[float],
@@ -134,33 +172,13 @@ def prepare_staff_image(  # noqa: PLR0915
     x_values = np.array([c[0] for c in centers])
     y_values = np.array([c[1] for c in centers])
 
-    x_min = min(*x_values, staff.min_x) - staff.average_unit_size
-    x_max = max(*x_values, staff.max_x) + staff.average_unit_size
-    y_min = min(
-        *(y_values - 0.5 * staff.average_unit_size), staff.min_y - 2.5 * staff.average_unit_size
-    )
-    y_max = max(
-        *(y_values + 0.5 * staff.average_unit_size), staff.max_y + 2.5 * staff.average_unit_size
-    )
-    region = np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
-    staff_center = (staff.max_y + staff.min_y) // 2
-    y_offsets = []
-    staff_above = max([r for r in ranges if r < staff_center], default=-1)
-    if staff_above >= 0:
-        y_offsets.append(staff.max_y - staff_above)
-    staff_below = min([r for r in ranges if r > staff_center], default=-1)
-    if staff_below >= 0:
-        y_offsets.append(staff_below - staff.min_y)
-    if len(y_offsets) > 0:
-        min_y_offset = min(y_offsets)
-        if (
-            min_y_offset > 3 * staff.average_unit_size
-            and min_y_offset < 8 * staff.average_unit_size
-        ):
-            region[1] = int(staff.min_y - min_y_offset)
-            region[3] = int(staff.max_y + min_y_offset)
+    region = _calculate_region(staff, x_values, y_values)
+    y_offsets = _calculate_offsets(staff, ranges)
+    region = _adjust_region(region, y_offsets, staff)
     staff_image = predictions.preprocessed
-    image_dimensions = get_tr_omr_canvas_size([region[3] - region[1], region[2] - region[0]])
+    image_dimensions = get_tr_omr_canvas_size(
+        (int(region[3] - region[1]), int(region[2] - region[0]))
+    )
     scaling_factor = image_dimensions[1] / (region[3] - region[1])
     staff_image = cv2.resize(
         staff_image,
@@ -210,7 +228,7 @@ def prepare_staff_image(  # noqa: PLR0915
 
 
 def _dewarp_staff(
-    staff: Staff, dewarp: StaffDewarping | None, region: tuple[int, int], scaling: float
+    staff: Staff, dewarp: StaffDewarping | None, region: NDArray, scaling: float
 ) -> Staff:
     """
     Applies the same transformation on the staff coordinates as we did on the image.
@@ -243,13 +261,26 @@ def parse_staff_image(
         debug, index, ranges, staff, predictions, perform_dewarp=True
     )
     attention_debug = debug.build_attention_debug(staff_file)
-    result = parse_staff_tromr(
+    result = _parse_staff_tromr(
         staff_file=staff_file,
         staff=transformed_staff,
         debug=attention_debug,
     )
     if attention_debug is not None:
         attention_debug.write()
+    return result
+
+
+inference: Staff2Score | None = None
+
+
+def _parse_staff_tromr(staff: Staff, staff_file: str, debug: AttentionDebug | None) -> ResultStaff:
+    global inference  # noqa: PLW0603
+    print("Running TrOmr inference on", staff_file)
+    if inference is None:
+        inference = Staff2Score(default_config)
+    output = str.join("", inference.predict(staff_file, debug=debug, staff=staff))
+    result = parse_tr_omr_output(output)
     return result
 
 

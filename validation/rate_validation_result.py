@@ -269,7 +269,7 @@ def rate_all_folders(foldername: str) -> bool:
         sum_of_failures += failures
     if len(all_diffs) == 0:
         print("Everything failed")
-        return
+        return True
     average_diff = sum(all_diffs) / len(all_diffs)
     write_validation_result_for_folder(foldername, average_diff, sum_of_failures, lines)
     print()

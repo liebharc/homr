@@ -503,10 +503,10 @@ class StaffPoint:
 
     def transform_coordinates(
         self, transformation: Callable[[tuple[float, float]], tuple[float, float]]
-    ) -> Self:
+    ) -> "StaffPoint":
         xy = [transformation((self.x, y_value)) for y_value in self.y]
         average_x = np.mean([x for x, _ in xy])
-        return StaffPoint(average_x, [y for _, y in xy], self.angle)
+        return StaffPoint(float(average_x), [y for _, y in xy], self.angle)
 
     def to_bounding_box(self) -> BoundingBox:
         return BoundingBox(
@@ -628,7 +628,7 @@ class Staff(DebugDrawable):
 
     def transform_coordinates(
         self, transformation: Callable[[tuple[float, float]], tuple[float, float]]
-    ) -> Self:
+    ) -> "Staff":
         copy = Staff([point.transform_coordinates(transformation) for point in self.grid])
         copy.symbols = [symbol.transform_coordinates(transformation) for symbol in self.symbols]
         return copy

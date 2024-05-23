@@ -18,7 +18,7 @@ def crop_image(image: NDArray, x1: float, y1: float, x2: float, y2: float) -> ND
 
 def crop_image_and_return_new_top(
     image: NDArray, x1: float, y1: float, x2: float, y2: float
-) -> tuple[NDArray, tuple[int, int]]:
+) -> tuple[NDArray, NDArray]:
     x_min = min(x1, x2)
     x_max = max(x1, x2)
     y_min = min(y1, y2)
