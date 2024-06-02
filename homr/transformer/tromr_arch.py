@@ -17,6 +17,10 @@ class TrOMR(nn.Module):
         self.decoder = get_decoder(config)
         self.config = config
 
+    def eval(self):
+        self.decoder.eval()
+        self.encoder.eval()
+
     def forward(
         self,
         inputs: torch.Tensor,

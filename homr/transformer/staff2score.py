@@ -18,6 +18,7 @@ class Staff2Score:
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = TrOMR(config)
+        self.model.eval()
         checkpoint_file_path = config.filepaths.checkpoint
         if not os.path.exists(checkpoint_file_path):
             raise RuntimeError("Please download the model first to " + checkpoint_file_path)

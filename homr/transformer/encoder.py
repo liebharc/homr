@@ -14,8 +14,6 @@ def get_encoder(config: Config) -> Any:
         num_classes=0,
         global_pool="",
         in_chans=config.channels,
-        drop_rate=0.1,
-        drop_path_rate=0.1,
         layers=backbone_layers,
         preact=True,
         stem_type="same",

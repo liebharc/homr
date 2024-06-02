@@ -79,7 +79,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
 
     checkpoint_folder = "current_training"
     if resume:
-        resume_from_checkpoint = resume
+        resume_from_checkpoint = os.path.join(git_root, checkpoint_folder, resume)
     elif os.path.exists(os.path.join(git_root, checkpoint_folder)):
         shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 

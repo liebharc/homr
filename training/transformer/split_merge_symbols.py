@@ -169,13 +169,13 @@ def _note_name_to_sortable(note_name: str) -> int:
 
 def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
     if note_name_with_octave.startswith("nonote"):
-        eprint("Warning: nonote in pitch_name_to_sortable")
+        eprint("Warning: nonote in pitch_name_to_sortable: ", note_name_with_octave)
         return 1000
     try:
         note_name = note_name_with_octave[0]
         octave = int(note_name_with_octave[1])
         return -(_note_name_to_sortable(note_name) + octave * 7)
-    except ValueError:
+    except (ValueError, IndexError):
         eprint(f"Error: {note_name_with_octave} in pitch_name_to_sortable")
         return 0
 
