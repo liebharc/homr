@@ -74,7 +74,7 @@ def _check_datasets_are_present() -> None:
 
 def train_transformer(fast: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 20
+    number_of_epochs = 10
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -92,7 +92,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     )
 
     config = Config()
-    datasets = load_dataset(train_index, config, val_split=0.1)
+    datasets = load_dataset(train_index, config, val_split=0.05)
 
     compile_threshold = 50000
     compile_model = (
