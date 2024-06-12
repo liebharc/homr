@@ -8,7 +8,7 @@ workspace = os.path.join(os.path.dirname(__file__))
 class FilePaths:
     def __init__(self) -> None:
         self.checkpoint = os.path.join(
-            workspace, "pytorch_model_31-6a288bc25c99a10cdcdf19982d5df79d65c82910.pth"
+            workspace, "pytorch_model_46-f00a627e030828844c45ecde762146db719d72aa.pth"
         )
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
@@ -69,26 +69,6 @@ class Config:
         self.lift_null = 0
         self.lift_sharp = 2
         self.lift_flat = 3
-        self.noteindexes = [
-            129,
-            130,
-            131,
-            132,
-            133,
-            134,
-            135,
-            136,
-            137,
-            138,
-            139,
-            140,
-            141,
-            142,
-            143,
-            144,
-            145,
-            146,
-        ]
         self.encoder_structure = "hybrid"
         self.encoder_depth = 4
         self.backbone_layers = [2, 3, 7]
@@ -103,6 +83,15 @@ class Config:
         self.pitch_vocab = json.load(open(self.filepaths.pitchtokenizer))["model"]["vocab"]
         self.note_vocab = json.load(open(self.filepaths.notetokenizer))["model"]["vocab"]
         self.rhythm_vocab = json.load(open(self.filepaths.rhythmtokenizer))["model"]["vocab"]
+        self.noteindexes = self._get_values_of_keys_starting_with("note-")
+        self.restindexes = self._get_values_of_keys_starting_with(
+            "rest-"
+        ) + self._get_values_of_keys_starting_with("multirest-")
+        self.chordindex = self.rhythm_vocab["|"]
+        self.barlineindex = self.rhythm_vocab["barline"]
+
+    def _get_values_of_keys_starting_with(self, prefix: str) -> list[int]:
+        return [value for key, value in self.rhythm_vocab.items() if key.startswith(prefix)]
 
     def to_dict(self) -> dict[str, Any]:
         return {
