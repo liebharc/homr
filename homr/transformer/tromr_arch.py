@@ -17,7 +17,7 @@ class TrOMR(nn.Module):
         self.decoder = get_decoder(config)
         self.config = config
 
-    def eval(self):
+    def eval_mode(self) -> None:
         self.decoder.eval()
         self.encoder.eval()
 
