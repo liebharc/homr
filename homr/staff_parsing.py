@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from homr import constants
-from homr.debug import AttentionDebug, Debug
+from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.model import Clef, InputPredictions, MultiStaff, NoteGroup, Staff
 from homr.results import (
@@ -15,9 +15,7 @@ from homr.results import (
 )
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
-from homr.tr_omr_parser import parse_tr_omr_output
-from homr.transformer.configs import default_config
-from homr.transformer.staff2score import Staff2Score
+from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.type_definitions import NDArray
 
 
@@ -167,7 +165,7 @@ def prepare_staff_image(
     staff: Staff,
     predictions: InputPredictions,
     perform_dewarp: bool = True,
-) -> tuple[str, Staff]:
+) -> tuple[NDArray, Staff]:
     centers = [s.center for s in staff.symbols]
     x_values = np.array([c[0] for c in centers])
     y_values = np.array([c[1] for c in centers])
@@ -203,19 +201,23 @@ def prepare_staff_image(
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
-    staff_file = debug.write_model_input_image(f"_staff-{index}_input.jpg", staff_image)
-    transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
+    debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
+        transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
+        transformed_staff_image = staff_image.copy()
         for symbol in transformed_staff.symbols:
             center = symbol.center
-            cv2.circle(staff_image, (int(center[0]), int(center[1])), 5, (0, 0, 255))
+            cv2.circle(transformed_staff_image, (int(center[0]), int(center[1])), 5, (0, 0, 255))
             if isinstance(symbol, NoteGroup):
                 for note in symbol.notes:
                     cv2.circle(
-                        staff_image, (int(note.center[0]), int(note.center[1])), 3, (255, 255, 0)
+                        transformed_staff_image,
+                        (int(note.center[0]), int(note.center[1])),
+                        3,
+                        (255, 255, 0),
                     )
             cv2.putText(
-                staff_image,
+                transformed_staff_image,
                 type(symbol).__name__,
                 (int(center[0]), int(center[1])),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -223,8 +225,8 @@ def prepare_staff_image(
                 (0, 0, 255),
                 1,
             )
-        debug.write_model_input_image(f"_staff-{index}_debug_annotated.jpg", staff_image)
-    return staff_file, transformed_staff
+        debug.write_image_with_fixed_suffix(f"_staff-{index}_debug_annotated.jpg", staff_image)
+    return staff_image, staff
 
 
 def _dewarp_staff(
@@ -257,30 +259,18 @@ def move_key_information(staff: Staff, destination: ResultStaff) -> None:
 def parse_staff_image(
     debug: Debug, ranges: list[float], index: int, staff: Staff, predictions: InputPredictions
 ) -> ResultStaff:
-    staff_file, transformed_staff = prepare_staff_image(
+    staff_image, transformed_staff = prepare_staff_image(
         debug, index, ranges, staff, predictions, perform_dewarp=True
     )
-    attention_debug = debug.build_attention_debug(staff_file)
-    result = _parse_staff_tromr(
-        staff_file=staff_file,
+    attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
+    eprint("Running TrOmr inference on staff image", index)
+    result = parse_staff_tromr(
+        staff_image=staff_image,
         staff=transformed_staff,
         debug=attention_debug,
     )
     if attention_debug is not None:
         attention_debug.write()
-    return result
-
-
-inference: Staff2Score | None = None
-
-
-def _parse_staff_tromr(staff: Staff, staff_file: str, debug: AttentionDebug | None) -> ResultStaff:
-    global inference  # noqa: PLW0603
-    eprint("Running TrOmr inference on", staff_file)
-    if inference is None:
-        inference = Staff2Score(default_config)
-    output = str.join("", inference.predict(staff_file, debug=debug, staff=staff))
-    result = parse_tr_omr_output(output)
     return result
 
 

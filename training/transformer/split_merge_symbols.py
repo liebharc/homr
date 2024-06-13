@@ -12,16 +12,17 @@ class SymbolMerger:
     def __init__(self) -> None:
         self.merge: list[str] = []
         self.chord: list[str] = []
+        self.last_clef: str = ""
 
     def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
         """
-        Adds a symbol to the merge list. Returns True if the symbol is a barline.
+        Adds a symbol to the merge list. Returns True if the symbol should be retried.
 
         If you done with adding symbols, call complete() to get the merged string.
         """
         if predrhythm == "|":
             self.chord = self.merge.pop().split("|")
-            return True
+            return False
         elif "note" in predrhythm:
             lift = ""
             if predlift in (
@@ -36,6 +37,14 @@ class SymbolMerger:
             self.chord = sorted(self.chord, key=pitch_name_to_sortable)
             self.merge.append(str.join("|", self.chord))
             self.chord.clear()
+            return False
+        elif "clef" in predrhythm:
+            # Two clefs in a the same staff are very unlikely
+            if self.last_clef and self.last_clef != predrhythm:
+                eprint("Warning: Two clefs in a staff")
+                return True
+            self.last_clef = predrhythm
+            self.merge.append(predrhythm)
             return False
         else:
             self.merge.append(predrhythm)

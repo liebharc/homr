@@ -7,7 +7,6 @@ import torch
 from albumentations.pytorch import ToTensorV2  # type: ignore
 
 from homr.debug import AttentionDebug
-from homr.model import Staff
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from homr.type_definitions import NDArray
@@ -39,20 +38,26 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(
-        self, imgpath: str, staff: Staff | None = None, debug: AttentionDebug | None = None
+    def predict(self, image: NDArray, debug: AttentionDebug | None = None) -> list[str]:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        imgs_tensor = self._image_to_tensor(image)
+        return self._generate(
+            imgs_tensor,
+            debug=debug,
+        )
+
+    def _image_to_tensor(self, image: NDArray) -> torch.Tensor:
+        transformed = _transform(image=image)["image"][:1]
+        imgs_tensor = transformed.float().unsqueeze(1)
+        return imgs_tensor.to(self.device)  # type: ignore
+
+    def _generate(
+        self,
+        imgs_tensor: torch.Tensor,
+        debug: AttentionDebug | None = None,
     ) -> list[str]:
-        imgs: list[NDArray] = []
-        if os.path.isdir(imgpath):
-            for item in os.listdir(imgpath):
-                imgs.append(readimg(self.config, os.path.join(imgpath, item)))
-        else:
-            imgs.append(readimg(self.config, imgpath))
-        imgs_tensor = torch.cat(imgs).float().unsqueeze(1)  # type: ignore
         return self.model.generate(
-            imgs_tensor.to(self.device),
-            temperature=self.config.temperature,
-            staff=staff,
+            imgs_tensor,
             debug=debug,
         )
 
