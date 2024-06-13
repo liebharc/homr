@@ -365,6 +365,12 @@ class Note(SymbolOnStaff):
             self.get_pitch().to_result(), ResultDuration(self.get_duration(), self.has_dot)
         )
 
+    def to_tr_omr_note(self, clef_type: ClefType) -> str:
+        pitch = self.get_pitch(clef_type=clef_type).to_result()
+        duration = ResultDuration(self.get_duration(), self.has_dot)
+
+        return "note-" + str(pitch) + "_" + str(duration)
+
     def __str__(self) -> str:
         return "Note(" + str(self.center) + ", " + str(self.position) + ")"
 
@@ -388,6 +394,9 @@ class NoteGroup(SymbolOnStaff):
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         for note in self.notes:
             note.draw_onto_image(img, color)
+
+    def to_tr_omr_note(self, clef_type: ClefType) -> str:
+        return "|".join([note.to_tr_omr_note(clef_type) for note in self.notes])
 
     def __str__(self) -> str:
         return "NoteGroup(" + str.join(",", [str(note) for note in self.notes]) + ")"
@@ -603,10 +612,24 @@ class Staff(DebugDrawable):
                 result.append(symbol)
         return result
 
+    def get_accidentals(self) -> list[Accidental]:
+        result = []
+        for symbol in self.symbols:
+            if isinstance(symbol, Accidental):
+                result.append(symbol)
+        return result
+
     def get_note_groups(self) -> list[NoteGroup]:
         result = []
         for symbol in self.symbols:
             if isinstance(symbol, NoteGroup):
+                result.append(symbol)
+        return result
+
+    def get_notes_and_groups(self) -> list[Note | NoteGroup]:
+        result = []
+        for symbol in self.symbols:
+            if isinstance(symbol, Note | NoteGroup):
                 result.append(symbol)
         return result
 

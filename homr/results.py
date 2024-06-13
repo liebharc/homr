@@ -240,6 +240,7 @@ class ResultNote(ResultSymbol):
 class ResultNoteGroup(ResultSymbol):
     def __init__(self, notes: list[ResultNote]):
         self.notes = notes
+        self.duration = notes[0].duration if len(notes) > 0 else ResultDuration(0, False)
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultNoteGroup):
@@ -295,6 +296,13 @@ class ResultMeasure:
 
     def __repr__(self) -> str:
         return str(self)
+
+    def length_in_quarters(self) -> float:
+        return sum(
+            symbol.duration.base_duration()
+            for symbol in self.symbols
+            if isinstance(symbol, ResultNote | ResultNoteGroup | ResultRest)
+        )
 
 
 class ResultStaff:

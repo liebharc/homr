@@ -11,9 +11,9 @@ from homr.type_definitions import NDArray
 
 
 class AttentionDebug:
-    def __init__(self, filename: str, parent: "Debug") -> None:
-        self.image = cv2.imread(filename)
-        self.destname = filename.replace("_input", "_output")
+    def __init__(self, filename: str, image: NDArray, parent: "Debug") -> None:
+        self.image = image
+        self.destname = filename
         self.attentions: list[NDArray] = []
         self.parent = parent
 
@@ -33,6 +33,9 @@ class AttentionDebug:
         cv2.circle(overlay, center_coordinates, radius, color, thickness)
 
         self.attentions.append(overlay)
+
+    def reset(self) -> None:
+        self.attentions = []
 
     def write(self) -> None:
         if not self.attentions:
@@ -148,7 +151,9 @@ class Debug:
         cv2.imwrite(filename, staff_image)
         return filename
 
-    def build_attention_debug(self, filename: str) -> AttentionDebug | None:
+    def build_attention_debug(self, image: NDArray, suffix: str) -> AttentionDebug | None:
         if not self.debug:
             return None
-        return AttentionDebug(filename, self)
+        filename = self.base_filename + suffix
+        self._remember_file_name(filename)
+        return AttentionDebug(filename, image, self)

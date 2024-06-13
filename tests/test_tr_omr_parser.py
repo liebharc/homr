@@ -13,7 +13,7 @@ from homr.results import (
     ResultStaff,
     ResultTimeSignature,
 )
-from homr.tr_omr_parser import parse_tr_omr_output
+from homr.tr_omr_parser import TrOMRParser
 
 
 class TestTrOmrParser(unittest.TestCase):
@@ -61,7 +61,8 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
 
-        actual = parse_tr_omr_output(data)
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)
 
     def test_parsing_no_final_bar_line(self) -> None:
@@ -105,7 +106,8 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
 
-        actual = parse_tr_omr_output(data)
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)
 
     def test_rest_parsing(self) -> None:
@@ -136,7 +138,8 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
 
-        actual = parse_tr_omr_output(data)
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)
 
     def test_note_group_parsing(self) -> None:
@@ -266,5 +269,7 @@ class TestTrOmrParser(unittest.TestCase):
                 ),
             ]
         )
-        actual = parse_tr_omr_output(data)
+
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)

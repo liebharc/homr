@@ -2,6 +2,7 @@ import argparse
 import os
 from pathlib import Path
 
+import cv2
 import editdistance  # type: ignore
 
 from homr import download_utils
@@ -21,7 +22,8 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
         expected_str = convert_alter_to_accidentals(_load_semantic_file(semantic_path))[0].strip()
-        actual = model.predict(img_path)[0].split("+")
+        image = cv2.imread(img_path)
+        actual = model.predict(image)[0].split("+")
         actual = [
             symbol for symbol in actual if not symbol.startswith("timeSignature")
         ]  # reference data has no time signature

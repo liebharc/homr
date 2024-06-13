@@ -14,7 +14,6 @@ from x_transformers.x_transformers import (  # type: ignore
 )
 
 from homr.debug import AttentionDebug
-from homr.model import Staff
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.transformer.split_merge_symbols import SymbolMerger
@@ -181,14 +180,14 @@ class ScoreDecoder(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     @torch.no_grad()
-    def generate(
+    def generate(  # noqa: PLR0915
         self,
         start_tokens: torch.Tensor,
         nonote_tokens: torch.Tensor,
         seq_len: int,
         eos_token: int | None = None,
         temperature: float = 1.0,
-        filter_thres: float = 0.9,
+        filter_thres: float = 0.7,
         **kwargs: Any,
     ) -> list[str]:
         was_training = self.net.training
@@ -205,12 +204,11 @@ class ScoreDecoder(nn.Module):
         out_lift = nonote_tokens
         mask = kwargs.pop("mask", None)
         merger = SymbolMerger()
-        staff: Staff | None = kwargs.pop("staff", None)  # noqa: F841
 
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
 
-        for _ in range(seq_len):
+        for _position_in_seq in range(seq_len):
             mask = mask[:, -self.max_seq_len :]
             x_lift = out_lift[:, -self.max_seq_len :]
             x_pitch = out_pitch[:, -self.max_seq_len :]
@@ -224,13 +222,28 @@ class ScoreDecoder(nn.Module):
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
 
-            lift_probs = F.softmax(filtered_lift_logits / temperature, dim=-1)
-            pitch_probs = F.softmax(filtered_pitch_logits / temperature, dim=-1)
-            rhythm_probs = F.softmax(filtered_rhythm_logits / temperature, dim=-1)
+            current_temperature = temperature
+            retry = True
+            attempt = 0
+            max_attempts = 5
+            while retry and attempt < max_attempts:
+                lift_probs = F.softmax(filtered_lift_logits / current_temperature, dim=-1)
+                pitch_probs = F.softmax(filtered_pitch_logits / current_temperature, dim=-1)
+                rhythm_probs = F.softmax(filtered_rhythm_logits / current_temperature, dim=-1)
 
-            lift_sample = torch.multinomial(lift_probs, 1)
-            pitch_sample = torch.multinomial(pitch_probs, 1)
-            rhythm_sample = torch.multinomial(rhythm_probs, 1)
+                lift_sample = torch.multinomial(lift_probs, 1)
+                pitch_sample = torch.multinomial(pitch_probs, 1)
+                rhythm_sample = torch.multinomial(rhythm_probs, 1)
+
+                lift_token = detokenize(lift_sample, self.lifttokenizer)
+                pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
+                rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
+                is_eos = len(rhythm_token[0])
+                if is_eos == 0:
+                    break
+                retry = merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
+                current_temperature *= 2
+                attempt += 1
 
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
@@ -242,11 +255,6 @@ class ScoreDecoder(nn.Module):
                 and (torch.cumsum(out_rhythm == eos_token, 1)[:, -1] >= 1).all()
             ):
                 break
-
-            lift_token = detokenize(lift_sample, self.lifttokenizer)
-            pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
-            rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
-            merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
 
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
