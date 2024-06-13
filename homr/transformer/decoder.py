@@ -242,7 +242,7 @@ class ScoreDecoder(nn.Module):
                 if is_eos == 0:
                     break
                 retry = merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
-                current_temperature *= 2
+                current_temperature *= 3.5
                 attempt += 1
 
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)

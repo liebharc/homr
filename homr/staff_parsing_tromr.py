@@ -30,7 +30,12 @@ def apply_clahe(staff_image: NDArray, clip_limit: float = 2.0, kernel_size: int 
 
 
 def build_image_options(staff_image: NDArray) -> list[NDArray]:
-    return [staff_image]
+    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 10, 10, 7, 21)
+    return [
+        staff_image,
+        denoised1,
+        apply_clahe(denoised1),
+    ]
 
 
 def predict_best(
