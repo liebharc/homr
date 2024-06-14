@@ -142,6 +142,7 @@ def _symbol_to_rhythm(symbol: str) -> str:
     if symbol.startswith(("note", "gracenote")):
         note = "note-" + _translate_duration(symbol.split("_")[1])
         return note + _add_dots(symbol)
+    symbol = symbol.replace("rest-double_whole", "multirest-2")
     symbol = symbol.replace("rest-quadruple_whole", "multirest-2")
     symbol = symbol.replace("_fermata", "")
     symbol = symbol.replace(".", "")  # We add dots later again
@@ -287,7 +288,7 @@ def split_symbols(  # noqa: C901
         predrhythm = []
         prednote = []
         key = KeyTransformation(0) if convert_to_modified_semantic else NoKeyTransformation()
-        for symbols in re.split("\\s+", merged[line].strip()):
+        for symbols in re.split("\\s+|\\+", merged[line].strip()):
             symbollift = []
             symbolpitch = []
             symbolrhythm = []

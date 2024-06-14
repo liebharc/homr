@@ -3,10 +3,61 @@ from typing import Any
 import xmltodict
 
 from homr.circle_of_fifths import KeyTransformation, circle_of_fifth_to_key_signature
-from homr.simple_logging import eprint
 
 
-def _translate_duration(duration: str) -> str:
+class SemanticPart:
+    def __init__(self) -> None:
+        self.staffs: list[list[str]] = []
+        self.chords: list[list[str]] = []
+
+    def append_clefs(self, clefs: list[str]) -> None:
+        if len(self.staffs) > 0:
+            return
+        for clef in clefs:
+            self.staffs.append([clef])
+            self.chords.append([])
+
+    def append_symbol(self, symbol: str) -> None:
+        if len(self.staffs) == 0:
+            raise ValueError("Expected to get clefs as first symbol")
+        if symbol.startswith("note"):
+            raise ValueError("Call append_note for notes")
+        else:
+            for staff in self.staffs:
+                staff.append(symbol)
+
+    def append_note(self, staff: int, symbol: str) -> None:
+        if len(self.staffs) == 0:
+            raise ValueError("Expected to get clefs as first symbol")
+        self.staffs[staff].append(symbol)
+
+    def append_chord(self, staff: int, symbol: str) -> None:
+        if len(self.staffs) == 0:
+            raise ValueError("Expected to get clefs as first symbol")
+        self.chords[staff].append(symbol)
+
+    def flush_chord(self, staff: int) -> None:
+        if len(self.staffs) == 0:
+            raise ValueError("Expected to get clefs as first symbol")
+        if len(self.chords[staff]) == 0:
+            return
+        self.staffs[staff].append("|".join(self.chords[staff]))
+        self.chords[staff].clear()
+
+    def flush_chords(self) -> None:
+        for staff in range(len(self.staffs)):
+            self.flush_chord(staff)
+
+    def get_staffs(self) -> list[list[str]]:
+        return self.staffs
+
+
+def _translate_duration(duration: str | dict[Any, Any]) -> str:
+    duration_text = ""
+    if isinstance(duration, dict):
+        duration_text = duration["#text"]
+    else:
+        duration_text = duration
     definition = {
         "breve": "double_whole",
         "whole": "whole",
@@ -17,7 +68,7 @@ def _translate_duration(duration: str) -> str:
         "32nd": "thirty_second",
         "64th": "sixty_fourth",
     }
-    return definition[duration]
+    return definition[duration_text]
 
 
 def _get_alter(note: dict[str, str]) -> str:
@@ -45,77 +96,72 @@ def _count_dots(note: Any) -> str:
 
 
 def _process_attributes(
-    semantic: list[str], attribute: dict[str, dict[str, str]], key: KeyTransformation
+    semantic: SemanticPart, attribute: dict[str, dict[str, str]], key: KeyTransformation
 ) -> KeyTransformation:
     if "clef" in attribute:
-        clef = _ensure_list(attribute["clef"])[0]
-        semantic.append("clef-" + clef["sign"] + clef["line"])
+        clefs = _ensure_list(attribute["clef"])
+        clefs = sorted(clefs, key=lambda c: int(c.get("number", "0")))
+        semantic.append_clefs(["clef-" + clef["sign"] + clef["line"] for clef in clefs])
     if "key" in attribute:
-        semantic.append(
+        semantic.append_symbol(
             "keySignature-" + circle_of_fifth_to_key_signature(int(attribute["key"]["fifths"]))
         )
         key = KeyTransformation(int(attribute["key"]["fifths"]))
     if "time" in attribute:
-        semantic.append(
+        semantic.append_symbol(
             "timeSignature-" + attribute["time"]["beats"] + "/" + attribute["time"]["beat-type"]
         )
     return key
 
 
-def _process_note(
-    semantic: list[str], note: Any, chord: Any, key: KeyTransformation
-) -> tuple[list[str], KeyTransformation]:
+def _process_note(semantic: SemanticPart, note: Any, key: KeyTransformation) -> KeyTransformation:
+    staff = int(note.get("staff", "1")) - 1
     if "chord" not in note:
-        if len(chord) > 0:
-            # Flush the previous chord
-            semantic.append("|".join(chord))
-            chord = []
+        # Flush the previous chord
+        semantic.flush_chord(staff)
     if "rest" in note:
         dot = _count_dots(note)
         if note["rest"] and "@measure" in note["rest"]:
-            semantic.append("rest-whole" + dot)
+            semantic.append_note(staff, "rest-whole" + dot)
         else:
-            semantic.append("rest-" + _translate_duration(note["type"]) + dot)
+            semantic.append_note(staff, "rest-" + _translate_duration(note["type"]) + dot)
     if "pitch" in note:
         alter = _get_alter(note["pitch"])
         key.add_accidental(
             note["pitch"]["step"] + alter + note["pitch"]["octave"],
             _get_alter(note["pitch"]),
         )
-        chord.append(
+        semantic.append_chord(
+            staff,
             "note-"
             + note["pitch"]["step"]
             + alter
             + note["pitch"]["octave"]
             + "_"
             + _translate_duration(note["type"])
-            + _count_dots(note)
+            + _count_dots(note),
         )
-    return chord, key
+    return key
 
 
-def _music_part_to_semantic(part: Any) -> list[str]:
-    try:
-        semantic: list[str] = []
-        for measure in _ensure_list(part["measure"]):
-            chord: list[str] = []
-            key = KeyTransformation(0)
-            if "attributes" in measure:
-                for attribute in _ensure_list(measure["attributes"]):
-                    key = _process_attributes(semantic, attribute, key)
-            if "note" in measure:
-                for note in _ensure_list(measure["note"]):
-                    chord, key = _process_note(semantic, note, chord, key)
+def _music_part_to_semantic(part: Any) -> list[list[str]]:
+    semantic = SemanticPart()
+    for measure in _ensure_list(part["measure"]):
+        key = KeyTransformation(0)
+        if "backup" in measure:
+            raise ValueError("Backup not supported")
+        if "attributes" in measure:
+            for attribute in _ensure_list(measure["attributes"]):
+                _process_attributes(semantic, attribute, key)
+        if "note" in measure:
+            for note in _ensure_list(measure["note"]):
+                _process_note(semantic, note, key)
 
-            if len(chord) > 0:
-                # Flush the last chord
-                semantic.append("|".join(chord))
-            semantic.append("barline")
-            key = key.reset_at_end_of_measure()
-        return semantic
-    except Exception as e:
-        eprint("Failure at ", part)
-        raise e
+        # Flush the last chord
+        semantic.flush_chords()
+        semantic.append_symbol("barline")
+        key = key.reset_at_end_of_measure()
+    return semantic.get_staffs()
 
 
 def music_xml_to_semantic(path: str) -> list[list[str]]:
@@ -125,5 +171,5 @@ def music_xml_to_semantic(path: str) -> list[list[str]]:
         parts = _ensure_list(musicxml["score-partwise"]["part"])
         for part in parts:
             semantic = _music_part_to_semantic(part)
-            result.append(semantic)
+            result.extend(semantic)
     return result

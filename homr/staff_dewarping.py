@@ -71,10 +71,32 @@ def calculate_span_and_optimal_points(
     return span_points, optimal_points
 
 
+class FastPiecewiseAffineTransform(transform.PiecewiseAffineTransform):
+    """
+    From https://github.com/scikit-image/scikit-image/pull/6963/files
+    """
+
+    def __call__(self, coords):  # type: ignore
+        coords = np.asarray(coords)
+
+        simplex = self._tesselation.find_simplex(coords)
+
+        affines = np.stack([affine.params for affine in self.affines])[simplex]
+
+        points = np.c_[coords, np.ones((coords.shape[0], 1))]
+
+        result = np.einsum("ikj,ij->ik", affines, points)
+        result[simplex == -1, :] = -1
+        result = result[:, :2]
+
+        return result
+
+
 def calculate_dewarp_transformation(
     image: NDArray,
     source: list[list[tuple[int, int]]],
     destination: list[list[tuple[int, int]]],
+    fast: bool = False,
 ) -> StaffDewarping:
     def add_image_edges_to_lines(
         lines: list[list[tuple[int, int]]],
@@ -98,7 +120,7 @@ def calculate_dewarp_transformation(
     source_conc = np.concatenate(source)
     destination_conc = np.concatenate(destination)
 
-    tform = transform.PiecewiseAffineTransform()  # type: ignore
+    tform = FastPiecewiseAffineTransform() if fast else transform.PiecewiseAffineTransform()  # type: ignore
     tform.estimate(source_conc, destination_conc)  # type: ignore
     return StaffDewarping(tform)
 
@@ -143,7 +165,7 @@ def warp_image_array_randomly(image: NDArray) -> NDArray:
         for i in range(num_points)
     ]
     result = calculate_dewarp_transformation(
-        image, [upper, source, lower], [upper, destination, lower]
+        image, [upper, source, lower], [upper, destination, lower], fast=True
     ).dewarp(image, order=3)
     return (255 * result).astype(np.uint8)
 

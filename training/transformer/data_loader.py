@@ -144,10 +144,26 @@ class DataLoader:
             sample_full_filepath
         )
 
-        rhythm = tokenize(rhythmsymbols[0], self.rhythm_vocab, self.config.pad_token, "rhythm")
-        lifts = tokenize(liftsymbols[0], self.lift_vocab, self.config.nonote_token, "lift")
-        pitch = tokenize(pitchsymbols[0], self.pitch_vocab, self.config.nonote_token, "pitch")
-        notes = tokenize(note_symbols[0], self.note_vocab, self.config.nonote_token, "note")
+        rhythm = tokenize(
+            rhythmsymbols[0],
+            self.rhythm_vocab,
+            self.config.pad_token,
+            "rhythm",
+            sample_full_filepath,
+        )
+        lifts = tokenize(
+            liftsymbols[0], self.lift_vocab, self.config.nonote_token, "lift", sample_full_filepath
+        )
+        pitch = tokenize(
+            pitchsymbols[0],
+            self.pitch_vocab,
+            self.config.nonote_token,
+            "pitch",
+            sample_full_filepath,
+        )
+        notes = tokenize(
+            note_symbols[0], self.note_vocab, self.config.nonote_token, "note", sample_full_filepath
+        )
         rhythm_seq = self._check_seq_values(self._pad_rhythm(rhythm), self.config.num_rhythm_tokens)
         mask = np.zeros(self.config.max_seq_len).astype(np.bool_)
         mask[: entry["mask_len"]] = 1

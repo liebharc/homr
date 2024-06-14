@@ -42,6 +42,7 @@ xmltodict = "^0.13.0"
 torchvision = "^0.17.1"
 types-xmltodict = "^0.13.0.3"
 transformers = {extras = ["torch"], version = "^4.40.2"}
+cairosvg = "^2.7.1"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]

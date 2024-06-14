@@ -103,7 +103,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
             return None, None
         middle = central_valley
 
-    overlap = 20
+    overlap = 10
     if middle < overlap or middle > image.shape[0] - overlap:
         eprint(f"INFO: Failed to split {path}, middle is at {middle}")
         return None, None
@@ -177,50 +177,72 @@ def _add_random_gray_tone(image: PIL.Image.Image) -> PIL.Image.Image:
     return PIL.Image.fromarray(image_arr)
 
 
+def contains_max_one_clef(semantic: str) -> bool:
+    """
+    hum2xml sometimes generates invalid musicxml which
+    we can detect by checking for multiple clefs, e.g.
+
+    scarlatti-d/keyboard-sonatas/L481K025/min3_up_m-79-82.krn
+
+    The issue here is likely that it uses two G2 clefs, and
+    overlays them on top of each other to indicate
+    multiple notes at the same time.
+    """
+    return semantic.count("clef-") <= 1
+
+
 def _music_xml_to_semantic(path: str, basename: str) -> tuple[str | None, str | None]:
     result = music_xml_to_semantic(path)
     staffs_in_grandstaff = 2
     if len(result) != staffs_in_grandstaff:
         return None, None
+    lines = [" ".join(staff) for staff in result]
+    if not all(contains_max_one_clef(line) for line in lines):
+        return None, None
+
     with open(basename + "_upper.semantic", "w") as f:
-        f.write(" ".join(result[0]))
+        f.write(lines[0])
     with open(basename + "_lower.semantic", "w") as f:
-        f.write(" ".join(result[1]))
+        f.write(lines[1])
     return basename + "_upper.semantic", basename + "_lower.semantic"
 
 
 def _convert_file(path: Path, ony_recreate_semantic_files: bool = False) -> list[str]:
-    basename = str(path).replace(".krn", "")
-    image_file = str(path).replace(".krn", ".jpg")
-    musicxml = str(path).replace(".krn", ".musicxml")
-    result = os.system(f"{hum2xml} {path} > {musicxml}")  # noqa: S605
-    if result != 0:
-        eprint(f"Failed to convert {path}")
-        return []
-    if ony_recreate_semantic_files:
-        upper, lower = _check_staff_image(image_file, basename)
-    else:
-        upper, lower = _split_staff_image(image_file, basename)
-    if upper is None:
-        return []
-    upper_semantic, lower_semantic = _music_xml_to_semantic(musicxml, basename)
-    if upper_semantic is None or lower_semantic is None:
-        eprint(f"Failed to convert {musicxml}")
-        return []
-    if lower is None:
+    try:
+        basename = str(path).replace(".krn", "")
+        image_file = str(path).replace(".krn", ".jpg")
+        musicxml = str(path).replace(".krn", ".musicxml")
+        result = os.system(f"{hum2xml} {path} > {musicxml}")  # noqa: S605
+        if result != 0:
+            eprint(f"Failed to convert {path}")
+            return []
+        upper_semantic, lower_semantic = _music_xml_to_semantic(musicxml, basename)
+        if upper_semantic is None or lower_semantic is None:
+            eprint(f"Failed to convert {musicxml}")
+            return []
+        if ony_recreate_semantic_files:
+            upper, lower = _check_staff_image(image_file, basename)
+        else:
+            upper, lower = _split_staff_image(image_file, basename)
+        if upper is None:
+            return []
+        if lower is None:
+            return [
+                str(Path(upper).relative_to(git_root))
+                + ","
+                + str(Path(upper_semantic).relative_to(git_root)),
+            ]
         return [
             str(Path(upper).relative_to(git_root))
             + ","
             + str(Path(upper_semantic).relative_to(git_root)),
+            str(Path(lower).relative_to(git_root))
+            + ","
+            + str(Path(lower_semantic).relative_to(git_root)),
         ]
-    return [
-        str(Path(upper).relative_to(git_root))
-        + ","
-        + str(Path(upper_semantic).relative_to(git_root)),
-        str(Path(lower).relative_to(git_root))
-        + ","
-        + str(Path(lower_semantic).relative_to(git_root)),
-    ]
+    except Exception as e:
+        eprint("Failed to convert ", path, e)
+        return []
 
 
 def _convert_file_only_semantic(path: Path) -> list[str]:
@@ -236,7 +258,7 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
     if only_recreate_semantic_files:
         _file_desc, index_file = tempfile.mkstemp()
 
-    eprint("Indexing Grandstaff dataset, this can up to an hour.")
+    eprint("Indexing Grandstaff dataset, this can up to several hours.")
     with open(index_file, "w") as f:
         file_number = 0
         skipped_files = 0

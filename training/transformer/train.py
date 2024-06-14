@@ -10,6 +10,7 @@ from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
+from training.convert_lieder import convert_lieder, lieder_train_index
 from training.convert_primus import (
     convert_cpms_dataset,
     convert_primus_dataset,
@@ -27,6 +28,23 @@ torch._dynamo.config.suppress_errors = True
 def load_training_index(file_path: str) -> list[str]:
     with open(file_path) as f:
         return f.readlines()
+
+
+def contains_supported_clef(semantic: str) -> bool:
+    return "clef-G2" in semantic or "clef-F4" in semantic
+
+
+def filter_for_clefs(file_paths: list[str]) -> list[str]:
+    result = []
+    for entry in file_paths:
+        semantic = entry.strip().split(",")[1]
+        if semantic == "nosymbols":
+            continue
+        with open(semantic) as f:
+            lines = f.readlines()
+            if all(contains_supported_clef(line) for line in lines):
+                result.append(entry)
+    return result
 
 
 def check_data_source(all_file_paths: list[str]) -> bool:
@@ -49,6 +67,7 @@ def load_and_mix_training_sets(
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
         sys.exit(1)
+    data_sources = [filter_for_clefs(data) for data in data_sources]
     eprint(
         "Total number of training files to choose from", sum([len(data) for data in data_sources])
     )
@@ -71,10 +90,13 @@ def _check_datasets_are_present() -> None:
     if not os.path.exists(grandstaff_train_index):
         convert_grandstaff()
 
+    if not os.path.exists(lieder_train_index):
+        convert_lieder()
+
 
 def train_transformer(fast: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 10
+    number_of_epochs = 15
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -86,8 +108,8 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, cpms_train_index, grandstaff_train_index],
-        [1.0, 1.0, 1.0],
+        [primus_train_index, cpms_train_index, lieder_train_index],
+        [1.0, 1.0, 1.0, 1.0],
         number_of_files,
     )
 

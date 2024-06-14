@@ -396,13 +396,15 @@ def detokenize(tokens: torch.Tensor, tokenizer: Any) -> list[list[str]]:
     return toks
 
 
-def tokenize(symbols: list[str], vocab: Any, default_token: int, vocab_name: str) -> list[int]:
+def tokenize(
+    symbols: list[str], vocab: Any, default_token: int, vocab_name: str, file_name: str
+) -> list[int]:
 
     result = []
     for symbol in symbols:
         if symbol in vocab:
             result.append(vocab[symbol])
         else:
-            eprint("Warning: " + symbol + " not in " + vocab_name + " vocabulary")
+            eprint("Warning " + file_name + ": " + symbol + " not in " + vocab_name + " vocabulary")
             result.append(default_token)
     return result

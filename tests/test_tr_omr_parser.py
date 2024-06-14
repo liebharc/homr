@@ -273,3 +273,47 @@ class TestTrOmrParser(unittest.TestCase):
         parser = TrOMRParser()
         actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)
+
+    def test_accidental_parsing(self) -> None:
+        data = "clef-G2+keySignature-DM+note-D4_quarter+note-E4_quarter+note-F4_quarter+note-G4_quarter+note-C5_quarter+note-C5#_quarter+note-A4#_quarter+barline"  # noqa: E501
+        expected = ResultStaff(
+            [
+                ResultMeasure(
+                    [
+                        ResultClef(ClefType.TREBLE, 2),
+                        ResultNote(
+                            ResultPitch("D", 4, None),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("E", 4, None),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("F", 4, None),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("G", 4, None),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("C", 5, None),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("C", 5, 1),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                        ResultNote(
+                            ResultPitch("A", 4, 1),
+                            ResultDuration(constants.duration_of_quarter, False),
+                        ),
+                    ]
+                ),
+            ]
+        )
+
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
+        self.assertEqual(actual, expected)
