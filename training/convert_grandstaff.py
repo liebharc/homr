@@ -98,9 +98,10 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     elif len(centers) == 2 * lines_per_staff:
         middle = np.int32(np.round((centers[4] + centers[5]) / 2))
     else:
-        middle = _find_central_valleys(image, dark_pixels_per_row)
-        if middle is None:
+        central_valley = _find_central_valleys(image, dark_pixels_per_row)
+        if central_valley is None:
             return None, None
+        middle = central_valley
 
     overlap = 20
     if middle < overlap or middle > image.shape[0] - overlap:
