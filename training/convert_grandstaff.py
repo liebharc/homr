@@ -58,6 +58,19 @@ def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
     return dark_pixels_per_row
 
 
+def _find_central_valleys(image: NDArray, dark_pixels_per_row: NDArray) -> np.int32 | None:
+    conv_len = image.shape[0] // 4 + 1
+    blurred = np.convolve(dark_pixels_per_row, np.ones(conv_len) / conv_len, mode="same")
+
+    # Find the central valley
+    peaks, _ = find_peaks(-blurred, distance=10, prominence=1)
+    if len(peaks) == 1:
+        peaks = [peaks[len(peaks) // 2]]
+        middle = peaks[0]
+        return np.int32(middle)
+    return None
+
+
 def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None]:
     """
     This algorithm is taken from `oemer` staffline extraction algorithm. In this simplified version
@@ -85,9 +98,11 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     elif len(centers) == 2 * lines_per_staff:
         middle = np.int32(np.round((centers[4] + centers[5]) / 2))
     else:
-        return None, None
+        middle = _find_central_valleys(image, dark_pixels_per_row)
+        if middle is None:
+            return None, None
 
-    overlap = 10
+    overlap = 20
     if middle < overlap or middle > image.shape[0] - overlap:
         eprint(f"INFO: Failed to split {path}, middle is at {middle}")
         return None, None
