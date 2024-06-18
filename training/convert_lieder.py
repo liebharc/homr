@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import os
 import platform
 import random
@@ -18,7 +19,7 @@ from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
-from training.music_xml import music_xml_to_semantic
+from training.music_xml import group_in_measures, music_xml_to_semantic
 from training.segmentation.model_utils import write_text_to_file
 
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -121,63 +122,48 @@ def _create_musicxml_and_svg_files() -> None:
     os.remove("job.json")
 
 
-def _group_in_measures(semantic: list[str]) -> tuple[str, list[list[str]]]:
-    result: list[list[str]] = []
-    clef = ""
-    key = ""
-    current_measure: list[str] = []
-    for symbol in semantic:
-        if symbol == "barline":
-            current_measure.append(symbol)
-            result.append(current_measure)
-            current_measure = []
-        else:
-            current_measure.append(symbol)
-            if symbol.startswith("clef"):
-                clef = symbol
-            elif symbol.startswith("keySignature"):
-                key = symbol
-    if len(current_measure) > 0:
-        result.append(current_measure)
-    prelude = clef + "+" + key + "+"
-    return prelude, result
-
-
-def _split_file_into_staffs(semantic: list[list[str]], svg_files: list[SvgMusicFile]) -> list[str]:
+def _split_file_into_staffs(
+    semantic: list[list[str]], svg_files: list[SvgMusicFile], just_semantic_files: bool
+) -> list[str]:
     voice = 0
-    measures = [_group_in_measures(voice) for voice in semantic]
+    measures = [group_in_measures(voice) for voice in semantic]
     result: list[str] = []
     for svg_file in svg_files:
         png_file = svg_file.filename.replace(".svg", ".png")
-        target_width = 1400
-        scale = target_width / svg_file.width
-        png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
-        pil_img = Image.open(BytesIO(png_data))
-        image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
+        if not just_semantic_files:
+            target_width = 1400
+            scale = target_width / svg_file.width
+            png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
+            pil_img = Image.open(BytesIO(png_data))
+            image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
         for staff_number, staff in enumerate(svg_file.staffs):
-            y_offset = staff.height
-            x_offset = 50
-            x = staff.x - x_offset
-            y = staff.y - y_offset
-            width = staff.width + 2 * x_offset
-            height = staff.height + 2 * y_offset
-            x = int(x * scale)
-            y = int(y * scale)
-            width = int(width * scale)
-            height = int(height * scale)
+            staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
+            if not just_semantic_files:
+                y_offset = staff.height
+                x_offset = 50
+                x = staff.x - x_offset
+                y = staff.y - y_offset
+                width = staff.width + 2 * x_offset
+                height = staff.height + 2 * y_offset
+                x = int(x * scale)
+                y = int(y * scale)
+                width = int(width * scale)
+                height = int(height * scale)
+
+                staff_image = image[y : y + height, x : x + width]
+                margin_top = random.randint(0, 10)
+                margin_bottom = random.randint(0, 10)
+                preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
+                cv2.imwrite(staff_image_file_name, preprocessed)
+                staff_image_file_name = distort_image(staff_image_file_name)
+            elif not os.path.exists(staff_image_file_name):
+                raise ValueError(f"File {staff_image_file_name} not found")
+
+            semantic_file_name = png_file.replace(".png", f"-{staff_number}.semantic")
+            prelude = measures[voice][0]
             selected_measures: list[str] = []
             for _ in range(staff.number_of_measures):
                 selected_measures.append(str.join("+", measures[voice][1].pop(0)))
-
-            staff_image = image[y : y + height, x : x + width]
-            staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
-            margin_top = random.randint(0, 10)
-            margin_bottom = random.randint(0, 10)
-            preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
-            cv2.imwrite(staff_image_file_name, preprocessed)
-            staff_image_file_name = distort_image(staff_image_file_name)
-            semantic_file_name = png_file.replace(".png", f"-{staff_number}.semantic")
-            prelude = measures[voice][0]
             semantic_content = str.join("+", selected_measures) + "\n"
             if not semantic_content.startswith("clef"):
                 semantic_content = prelude + semantic_content
@@ -190,50 +176,73 @@ def _split_file_into_staffs(semantic: list[list[str]], svg_files: list[SvgMusicF
     return result
 
 
-def convert_lieder() -> None:
+def _convert_file(file: Path, just_semantic_files: bool) -> list[str]:
+    try:
+        semantic = music_xml_to_semantic(str(file))
+        number_of_voices = len(semantic)
+        number_of_measures = semantic[0].count("barline")
+        svg_files = get_position_from_multiple_svg_files(str(file))
+        measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
+        sum_of_measures_in_xml = number_of_measures * number_of_voices
+        if sum(measures_in_svg) != sum_of_measures_in_xml:
+            eprint(
+                file,
+                "INFO: Number of measures in SVG files",
+                sum(measures_in_svg),
+                "does not match number of measures in XML",
+                sum_of_measures_in_xml,
+            )
+
+            return []
+        return _split_file_into_staffs(semantic, svg_files, just_semantic_files)
+
+    except Exception as e:
+        eprint("Error while processing", file, e)
+        return []
+
+
+def _convert_file_only_semantic(path: Path) -> list[str]:
+    return _convert_file(path, True)
+
+
+def _convert_semantic_and_image(path: Path) -> list[str]:
+    return _convert_file(path, False)
+
+
+def convert_lieder(only_recreate_semantic_files: bool = False) -> None:
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
-    failures = 0
     with open(lieder_train_index, "w") as f:
-        for file_number, file in enumerate(music_xml_files):
-            try:
-                semantic = music_xml_to_semantic(str(file))
-                number_of_voices = len(semantic)
-                number_of_measures = semantic[0].count("barline")
-                svg_files = get_position_from_multiple_svg_files(str(file))
-                measures_in_svg = [
-                    sum(s.number_of_measures for s in file.staffs) for file in svg_files
-                ]
-                sum_of_measures_in_xml = number_of_measures * number_of_voices
-                if sum(measures_in_svg) != sum_of_measures_in_xml:
-                    eprint(
-                        file,
-                        "Warning: Number of measures in SVG files",
-                        sum(measures_in_svg),
-                        "does not match number of measures in XML",
-                        sum_of_measures_in_xml,
-                    )
-
-                    failures += 1
-                else:
-                    f.writelines(_split_file_into_staffs(semantic, svg_files))
+        file_number = 0
+        skipped_files = 0
+        with multiprocessing.Pool() as p:
+            for result in p.imap_unordered(
+                (
+                    _convert_file_only_semantic
+                    if only_recreate_semantic_files
+                    else _convert_semantic_and_image
+                ),
+                music_xml_files,
+            ):
+                if len(result) > 0:
+                    for line in result:
+                        f.write(line)
                     f.flush()
+                else:
+                    skipped_files += 1
+                file_number += 1
+                if file_number % 10 == 0:
                     eprint(
-                        "Processed",
-                        file_number + 1,
-                        "/",
-                        len(music_xml_files),
-                        "files, with",
-                        failures,
-                        "failures so far",
+                        f"Processed {file_number}/{len(music_xml_files)} files,",
+                        f"skipped {skipped_files} files",
                     )
-
-            except Exception as e:
-                eprint("Error while processing", file, e)
-                failures += 1
     eprint("Done indexing")
 
 
 if __name__ == "__main__":
-    convert_lieder()
+    multiprocessing.set_start_method("spawn")
+    only_recreate_semantic_files = False
+    if "--only-semantic" in sys.argv:
+        only_recreate_semantic_files = True
+    convert_lieder(only_recreate_semantic_files)

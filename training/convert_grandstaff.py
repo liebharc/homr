@@ -139,10 +139,10 @@ def _check_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     This method helps with reprocessing a folder more quickly by skipping
     the image splitting.
     """
-    if not os.path.exists(basename + "_upper.jpg"):
-        eprint(f"INFO: Failed to split {path}")
+    if not os.path.exists(basename + "_upper-pre.jpg"):
+        eprint(f"INFO: Failed to split {basename}")
         return None, None
-    return basename + "_upper.jpg", basename + "_lower.jpg"
+    return basename + "_upper-pre.jpg", basename + "_lower-pre.jpg"
 
 
 def distort_image(path: str) -> str:
@@ -259,6 +259,7 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
         _file_desc, index_file = tempfile.mkstemp()
 
     eprint("Indexing Grandstaff dataset, this can up to several hours.")
+    krn_files = list(Path(grandstaff_root).rglob("*.krn"))
     with open(index_file, "w") as f:
         file_number = 0
         skipped_files = 0
@@ -269,7 +270,7 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
                     if only_recreate_semantic_files
                     else _convert_semantic_and_image
                 ),
-                Path(grandstaff_root).rglob("*.krn"),
+                krn_files,
             ):
                 if len(result) > 0:
                     for line in result:
@@ -278,13 +279,16 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
                     skipped_files += 1
                 file_number += 1
                 if file_number % 1000 == 0:
-                    eprint(f"Processed {file_number} files, skipped {skipped_files} files")
+                    eprint(
+                        f"Processed {file_number}/{len(krn_files)} files,",
+                        f"skipped {skipped_files} files",
+                    )
     eprint("Done indexing")
 
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
-    ony_recreate_semantic_files = False
+    only_recreate_semantic_files = False
     if "--only-semantic" in sys.argv:
-        ony_recreate_semantic_files = True
-    convert_grandstaff(ony_recreate_semantic_files)
+        only_recreate_semantic_files = True
+    convert_grandstaff(only_recreate_semantic_files)
