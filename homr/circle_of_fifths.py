@@ -120,7 +120,7 @@ class KeyTransformation(AbstractKeyTransformation):
             if note in self.flats:
                 self.flats.remove(note)
                 placed = True
-            return "0" if placed else ""
+            return "N" if placed else ""
 
     def reset_at_end_of_measure(self) -> "KeyTransformation":
         return KeyTransformation(self.circle_of_fifth)

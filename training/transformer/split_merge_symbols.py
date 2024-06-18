@@ -6,6 +6,7 @@ from homr.circle_of_fifths import (
     key_signature_to_circle_of_fifth,
 )
 from homr.simple_logging import eprint
+from homr.transformer.configs import default_config
 
 
 class SymbolMerger:
@@ -96,7 +97,7 @@ def _alter_to_lift(symbol: str) -> str:
         return "lift_#"
     elif symbol == "b":
         return "lift_b"
-    elif symbol == "0":
+    elif symbol == "N":
         return "lift_N"
     else:
         return "lift_null"
@@ -105,6 +106,7 @@ def _alter_to_lift(symbol: str) -> str:
 def _replace_accidentals(notename: str) -> str:
     notename = notename.replace("#", "")
     notename = notename.replace("b", "")
+    notename = notename.replace("N", "")
     return notename
 
 
@@ -170,28 +172,24 @@ def _symbol_to_note(symbol: str) -> str:
     return "nonote"
 
 
-note_to_number = {"C": 0, "D": 1, "E": 2, "F": 3, "G": 4, "A": 5, "B": 6}
-
-
-def _note_name_to_sortable(note_name: str) -> int:
-    return note_to_number.get(note_name, 7)
-
-
 def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
-    if note_name_with_octave.startswith("nonote"):
-        eprint("Warning: nonote in pitch_name_to_sortable: ", note_name_with_octave)
+    if note_name_with_octave not in default_config.pitch_vocab:
+        eprint("Warning: nonote in _note_name_and_octave_to_sortable: ", note_name_with_octave)
         return 1000
-    try:
-        note_name = note_name_with_octave[0]
-        octave = int(note_name_with_octave[1])
-        return -(_note_name_to_sortable(note_name) + octave * 7)
-    except (ValueError, IndexError):
-        eprint(f"Error: {note_name_with_octave} in pitch_name_to_sortable")
-        return 0
+    # minus to get the right order
+    return -int(default_config.pitch_vocab[note_name_with_octave])
 
 
-def pitch_name_to_sortable(pitch_name: str) -> int:
-    note_name = pitch_name.split("-")[-1]
+def pitch_name_to_sortable(pitch_or_rest_name: str) -> int:
+    if pitch_or_rest_name.startswith("rest"):
+        pitch_or_rest_name = pitch_or_rest_name.replace("rest_", "rest-")
+        if pitch_or_rest_name in default_config.rhythm_vocab:
+            return 1000 + int(default_config.rhythm_vocab[pitch_or_rest_name])
+        else:
+            eprint("Warning: rest not in rhythm_vocab", pitch_or_rest_name)
+            return 1000
+    note_name = pitch_or_rest_name.split("_")[0]
+    note_name = _replace_accidentals(note_name)
     return _note_name_and_octave_to_sortable(note_name)
 
 
@@ -210,13 +208,23 @@ def _sort_by_pitch(
         notes[i], notes[j] = notes[j], notes[i]
 
     for i in range(len(pitches)):
-        if pitches[i] == "nonote":
+        if not rhythms[i].startswith("note") and not rhythms[i].startswith("rest"):
             continue
+        expect_chord = True
         for j in range(i + 1, len(pitches)):
-            if pitches[j] == "nonote":
+            is_chord = rhythms[j] == "|"
+            if is_chord != expect_chord:
+                break
+            if is_chord:
+                expect_chord = False
                 continue
-            if pitch_name_to_sortable(pitches[i]) > pitch_name_to_sortable(pitches[j]):
+            if not rhythms[j].startswith("note") and not rhythms[j].startswith("rest"):
+                break
+            symbol_at_i = pitches[i] if pitches[i] != "nonote" else rhythms[i]
+            symbol_at_j = pitches[j] if pitches[j] != "nonote" else rhythms[j]
+            if pitch_name_to_sortable(symbol_at_i) > pitch_name_to_sortable(symbol_at_j):
                 swap(i, j)
+            expect_chord = True
     return lifts, pitches, rhythms, notes
 
 
@@ -242,7 +250,7 @@ def convert_alter_to_accidentals(merged: list[str]) -> list[str]:
                     pitch = _symbol_to_pitch(symbol)
                     alter = _get_alter(symbol)
                     note_name = pitch[5:7]
-                    accidental = key.add_accidental(note_name, alter).replace("0", "N")
+                    accidental = key.add_accidental(note_name, alter)
                     parts = symbol.split("_")
                     transformed_symbol = (
                         parts[0].replace("N", "").replace("#", "").replace("b", "")
@@ -263,9 +271,9 @@ def convert_alter_to_accidentals(merged: list[str]) -> list[str]:
 def split_semantic_file(
     file_path: str,
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
-    is_cpms = "CPMS" in file_path
+    is_primus = "Corpus" in file_path
     with open(file_path) as f:
-        return split_symbols(f.readlines(), convert_to_modified_semantic=not is_cpms)
+        return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
 
 
 def split_symbols(  # noqa: C901

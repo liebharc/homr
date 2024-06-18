@@ -38,9 +38,7 @@ augly = "^1.0.0"
 albumentations = "^1.4.0"
 timm = "^0.9.16"
 editdistance = "^0.8.1"
-xmltodict = "^0.13.0"
 torchvision = "^0.17.1"
-types-xmltodict = "^0.13.0.3"
 transformers = {extras = ["torch"], version = "^4.40.2"}
 cairosvg = "^2.7.1"
 

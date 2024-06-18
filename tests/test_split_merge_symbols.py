@@ -149,6 +149,50 @@ class TestMergeSymbols(unittest.TestCase):
             ],
         )
 
+    def test_split_sorts_notes_and_rests(self) -> None:
+        self.maxDiff = None
+        # Replace the + with \t as this is what the input provides
+        _actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
+            [
+                "note-E4#_eighth|rest_eighth|note-G4_eighth|rest_quarter|note-C5_eighth\trest_quarter|note-C5_eighth|rest_eighth|note-E4#_eighth|note-G4_eighth"
+            ]
+        )
+        pitch_and_rhythm = [
+            entry[0] if entry[0] != "nonote" else entry[1]
+            for entry in zip(actualpitch[0], actualrhythm[0], strict=True)
+        ]
+        self.assertEqual(
+            pitch_and_rhythm,
+            [
+                "note-C5",
+                "|",
+                "note-G4",
+                "|",
+                "note-E4",
+                "|",
+                "rest_eighth",
+                "|",
+                "rest_quarter",
+                "note-C5",
+                "|",
+                "note-G4",
+                "|",
+                "note-E4",
+                "|",
+                "rest_eighth",
+                "|",
+                "rest_quarter",
+            ],
+        )
+
+    def test_split_sorts_notes_and_rests_with_different_natural_designation(self) -> None:
+        self.maxDiff = None
+        # Replace the + with \t as this is what the input provides
+        actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
+            ["note-E#4_eighth|note-EN5_eighth"]
+        )
+        self.assertEqual(actualpitch, [["note-E5", "nonote", "note-E4"]])
+
     def test_split_restores_accidentals(self) -> None:
         """
         The semantic encoding doesn't tell us which accidentals are present in the image.

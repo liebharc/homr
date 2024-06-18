@@ -63,6 +63,9 @@ def check_data_source(all_file_paths: list[str]) -> bool:
 def load_and_mix_training_sets(
     index_paths: list[str], weights: list[float], number_of_files: int
 ) -> list[str]:
+    if len(index_paths) != len(weights):
+        eprint("Error: Number of index paths and weights do not match")
+        sys.exit(1)
     data_sources = [load_training_index(index) for index in index_paths]
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
@@ -108,7 +111,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, cpms_train_index, lieder_train_index],
+        [primus_train_index, cpms_train_index, grandstaff_train_index, lieder_train_index],
         [1.0, 1.0, 1.0, 1.0],
         number_of_files,
     )
