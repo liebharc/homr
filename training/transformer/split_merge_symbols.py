@@ -22,6 +22,9 @@ class SymbolMerger:
         If you done with adding symbols, call complete() to get the merged string.
         """
         if predrhythm == "|":
+            if len(self.merge) == 0:
+                eprint("Warning: Unexpected chord symbol")
+                return True
             self.chord = self.merge.pop().split("|")
             return False
         elif "note" in predrhythm:
