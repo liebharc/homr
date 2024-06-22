@@ -158,7 +158,6 @@ class TrOMRParser:
         parse_functions = {
             "clef": self.parse_clef,
             "timeSignature": self.parse_time_signature,
-            "note": self.parse_notes,
             "rest": self.parse_rest,
         }
 
@@ -173,6 +172,8 @@ class TrOMRParser:
                     self.parse_key_signature(part, current_measure.symbols[-1])
             elif part.startswith("multirest"):
                 eprint("Skipping over multirest")
+            elif part.startswith("note") or "|" in part:
+                current_measure.symbols.append(self.parse_notes(part))
             else:
                 for prefix, parse_function in parse_functions.items():
                     if part.startswith(prefix):

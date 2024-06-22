@@ -317,3 +317,47 @@ class TestTrOmrParser(unittest.TestCase):
         parser = TrOMRParser()
         actual = parser.parse_tr_omr_output(data)
         self.assertEqual(actual, expected)
+
+    def test_parsing_chords_with_rests(self) -> None:
+        data = "rest_quarter|note-A4_half|note-B4_half"
+        expected = ResultStaff(
+            [
+                ResultMeasure(
+                    [
+                        ResultNoteGroup(
+                            [
+                                ResultNote(
+                                    ResultPitch("A", 4, None),
+                                    ResultDuration(2 * constants.duration_of_quarter, False),
+                                ),
+                                ResultNote(
+                                    ResultPitch("B", 4, None),
+                                    ResultDuration(2 * constants.duration_of_quarter, False),
+                                ),
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
+        self.assertEqual(actual, expected)
+
+    def test_parse_chords_with_unexpected_symbols(self) -> None:
+        data = "note-A4_half|barline"
+        expected = ResultStaff(
+            [
+                ResultMeasure(
+                    [
+                        ResultNote(
+                            ResultPitch("A", 4, None),
+                            ResultDuration(2 * constants.duration_of_quarter, False),
+                        ),
+                    ]
+                )
+            ]
+        )
+        parser = TrOMRParser()
+        actual = parser.parse_tr_omr_output(data)
+        self.assertEqual(actual, expected)
