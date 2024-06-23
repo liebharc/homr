@@ -177,28 +177,12 @@ def _add_random_gray_tone(image: PIL.Image.Image) -> PIL.Image.Image:
     return PIL.Image.fromarray(image_arr)
 
 
-def contains_max_one_clef(semantic: str) -> bool:
-    """
-    hum2xml sometimes generates invalid musicxml which
-    we can detect by checking for multiple clefs, e.g.
-
-    scarlatti-d/keyboard-sonatas/L481K025/min3_up_m-79-82.krn
-
-    The issue here is likely that it uses two G2 clefs, and
-    overlays them on top of each other to indicate
-    multiple notes at the same time.
-    """
-    return semantic.count("clef-") <= 1
-
-
 def _music_xml_to_semantic(path: str, basename: str) -> tuple[str | None, str | None]:
     result = music_xml_to_semantic(path)
     staffs_in_grandstaff = 2
     if len(result) != staffs_in_grandstaff:
         return None, None
     lines = [" ".join(staff) for staff in result]
-    if not all(contains_max_one_clef(line) for line in lines):
-        return None, None
 
     with open(basename + "_upper.semantic", "w") as f:
         f.write(lines[0])
