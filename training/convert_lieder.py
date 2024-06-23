@@ -176,11 +176,18 @@ def _split_file_into_staffs(
     return result
 
 
+def _contains_max_one_clef(semantic: list[str]) -> bool:
+    return sum(1 for s in semantic if s.startswith("clef")) <= 1
+
+
 def _convert_file(file: Path, just_semantic_files: bool) -> list[str]:
     try:
         semantic = music_xml_to_semantic(str(file))
         number_of_voices = len(semantic)
         number_of_measures = semantic[0].count("barline")
+        if not all(_contains_max_one_clef(s) for s in semantic):
+            eprint(file, "contains more than one clef")
+            return []
         svg_files = get_position_from_multiple_svg_files(str(file))
         measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
         sum_of_measures_in_xml = number_of_measures * number_of_voices

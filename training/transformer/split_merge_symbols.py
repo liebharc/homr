@@ -177,7 +177,9 @@ def _symbol_to_note(symbol: str) -> str:
 
 def _note_name_and_octave_to_sortable(note_name_with_octave: str) -> int:
     if note_name_with_octave not in default_config.pitch_vocab:
-        eprint("Warning: nonote in _note_name_and_octave_to_sortable: ", note_name_with_octave)
+        eprint(
+            "Warning: unknown note in _note_name_and_octave_to_sortable: ", note_name_with_octave
+        )
         return 1000
     # minus to get the right order
     return -int(default_config.pitch_vocab[note_name_with_octave])
