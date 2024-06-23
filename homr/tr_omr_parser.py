@@ -130,9 +130,15 @@ class TrOMRParser:
                 ResultPitch("C", 4, 0), ResultDuration(constants.duration_of_quarter, False)
             )
 
-    def parse_notes(self, notes: str) -> ResultNote | ResultNoteGroup:
+    def parse_notes(self, notes: str) -> ResultNote | ResultNoteGroup | ResultRest | None:
         note_parts = notes.split("|")
         note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
+        rest_parts = [rest_part for rest_part in note_parts if rest_part.startswith("rest")]
+        if len(note_parts) == 0:
+            if len(rest_parts) == 0:
+                return None
+            else:
+                return self.parse_rest(rest_parts[0])
         if len(note_parts) == 1:
             return self.parse_note(note_parts[0])
         else:
@@ -150,7 +156,7 @@ class TrOMRParser:
             )
         )
 
-    def parse_tr_omr_output(self, output: str) -> ResultStaff:
+    def parse_tr_omr_output(self, output: str) -> ResultStaff:  # noqa: C901
         parts = output.split("+")
         measures = []
         current_measure = ResultMeasure([])
@@ -173,7 +179,9 @@ class TrOMRParser:
             elif part.startswith("multirest"):
                 eprint("Skipping over multirest")
             elif part.startswith("note") or "|" in part:
-                current_measure.symbols.append(self.parse_notes(part))
+                note_result = self.parse_notes(part)
+                if note_result is not None:
+                    current_measure.symbols.append(note_result)
             else:
                 for prefix, parse_function in parse_functions.items():
                     if part.startswith(prefix):

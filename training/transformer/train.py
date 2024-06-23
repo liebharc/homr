@@ -117,7 +117,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
     )
 
     config = Config()
-    datasets = load_dataset(train_index, config, val_split=0.05)
+    datasets = load_dataset(train_index, config, val_split=0.1)
 
     compile_threshold = 50000
     compile_model = (
