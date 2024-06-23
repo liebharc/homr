@@ -88,6 +88,11 @@ class SemanticPart:
 
     def append_clefs(self, clefs: list[str]) -> None:
         if self.current_measure is not None:
+            if len(self.current_measure.staffs) != len(clefs):
+                raise ValueError("Number of clefs changed")
+            for staff, clef in enumerate(clefs):
+                if not any(symbol.symbol == clef for symbol in self.current_measure.staffs[staff]):
+                    raise ValueError("Clef changed")
             return
         self.staffs = [[] for _ in range(len(clefs))]
         measure = SemanticMeasure(len(clefs))

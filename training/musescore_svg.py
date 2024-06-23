@@ -135,13 +135,17 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     lines = doc.getElementsByTagName("polyline")
     staff_lines: list[SvgRectangle] = []
     bar_lines: list[SvgRectangle] = []
-    number_of_clefs = 0
     for line in lines:
         class_name = line.getAttribute("class")
         if class_name == "StaffLines":
             staff_lines.append(_parse_paths(line.getAttribute("points")))
         if class_name == "BarLine":
             bar_lines.append(_parse_paths(line.getAttribute("points")))
+    paths = doc.getElementsByTagName("path")
+
+    number_of_clefs = 0
+    for path in paths:
+        class_name = path.getAttribute("class")
         if class_name == "Clef":
             number_of_clefs += 1
     combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)

@@ -34,23 +34,6 @@ def contains_supported_clef(semantic: str) -> bool:
     return "clef-G2" in semantic or "clef-F4" in semantic
 
 
-def contains_max_one_clef(semantic: str) -> bool:
-    """
-    hum2xml sometimes generates invalid musicxml which
-    we can detect by checking for multiple clefs, e.g.
-
-    scarlatti-d/keyboard-sonatas/L481K025/min3_up_m-79-82.krn
-
-    The issue here is likely that it uses two G2 clefs, and
-    overlays them on top of each other to indicate
-    multiple notes at the same time.
-
-    The Lieder data set has true changes of clefs, but
-    we don't want to train on that.
-    """
-    return semantic.count("clef-") <= 1
-
-
 def filter_for_clefs(file_paths: list[str]) -> list[str]:
     result = []
     for entry in file_paths:
@@ -59,9 +42,7 @@ def filter_for_clefs(file_paths: list[str]) -> list[str]:
             continue
         with open(semantic) as f:
             lines = f.readlines()
-            if all(contains_supported_clef(line) for line in lines) and all(
-                contains_max_one_clef(line) for line in lines
-            ):
+            if all(contains_supported_clef(line) for line in lines):
                 result.append(entry)
     return result
 
