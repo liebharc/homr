@@ -13,7 +13,12 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
-## Upcoming
+## Run 57
+
+Commit: e38ad001a548ffd9be89591ce68ed732565a38ae
+Date: 21 Jun 2024
+SER: 26%
+Validation result: 8.1
 
 Fixed an issue with parallel voices in the data set. Added `Lieder` dataset.
 
