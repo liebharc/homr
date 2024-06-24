@@ -139,7 +139,6 @@ def _check_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     the image splitting.
     """
     if not os.path.exists(basename + "_upper-pre.jpg"):
-        eprint(f"INFO: Failed to split {basename}")
         return None, None
     return basename + "_upper-pre.jpg", basename + "_lower-pre.jpg"
 

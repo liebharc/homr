@@ -62,7 +62,7 @@ class Config:
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 260
+        self.num_rhythm_tokens = 89
         self.num_note_tokens = 2
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
