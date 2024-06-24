@@ -123,6 +123,10 @@ class SemanticPart:
     def on_end_of_measure(self) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
+        if self.current_measure.current_position == 0:
+            # Measure was reset to start, likely to add a another voice
+            # to it
+            return
         for staff, result in enumerate(self.current_measure.complete_measure()):
             self.staffs[staff].extend(result)
         self.current_measure = SemanticMeasure(len(self.current_measure.staffs))

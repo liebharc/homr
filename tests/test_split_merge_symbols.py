@@ -58,7 +58,7 @@ predryhthm = [
     [
         "clef-G2",
         "keySignature-EM",
-        "timeSignature-6/8",
+        "timeSignature-/8",
         "note-half.",
         "barline",
         "note-half.",
@@ -112,6 +112,7 @@ class TestMergeSymbols(unittest.TestCase):
     def test_merge(self) -> None:
         actual = merge_symbols(predryhthm, predpitch, predlift)
         expected = convert_alter_to_accidentals(merged)
+        expected = [expected[0].replace("timeSignature-6/8", "timeSignature-/8")]
         self.assertEqual(actual, expected)
 
     def test_split(self) -> None:
@@ -237,8 +238,8 @@ class TestMergeSymbols(unittest.TestCase):
                     "rest-whole",
                     "multirest-2",
                     "multirest-3",
-                    "multirest-50",
-                    "multirest-50",
+                    "multirest-10",
+                    "multirest-10",
                     "multirest-2",
                 ]
             ],

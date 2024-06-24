@@ -31,6 +31,8 @@ def load_training_index(file_path: str) -> list[str]:
 
 
 def contains_supported_clef(semantic: str) -> bool:
+    if semantic.count("clef-") != 1:
+        return False
     return "clef-G2" in semantic or "clef-F4" in semantic
 
 

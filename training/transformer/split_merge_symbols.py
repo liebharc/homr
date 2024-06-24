@@ -158,14 +158,13 @@ def _symbol_to_rhythm(symbol: str) -> str:
         # for now it's good enough to just recognize them as any multirest
         if rest_length <= 1:
             return "rest-whole"
-        max_supported_multi_rest = 50
+        max_supported_multi_rest = 10
         if rest_length > max_supported_multi_rest:
-            return "multirest-50"
+            return "multirest-" + str(max_supported_multi_rest)
         symbol = "multirest-" + str(rest_length)
-    symbol = symbol.replace("timeSignature-2/3", "timeSignature-2/4")
-    symbol = symbol.replace("timeSignature-3/6", "timeSignature-3/8")
-    symbol = symbol.replace("timeSignature-8/12", "timeSignature-8/16")
-    symbol = symbol.replace("timeSignature-2/48", "timeSignature-2/32")
+    timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
+    if timesignature_match:
+        return "timeSignature-/" + timesignature_match[2]
     return symbol + _add_dots(symbol)
 
 
