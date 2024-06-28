@@ -163,6 +163,17 @@ def _get_alter(note: mxl.XMLPitch) -> str:  # type: ignore
     return ""
 
 
+def _get_alter_from_courtesey(accidental: mxl.XMLAccidental) -> str:  # type: ignore
+    value = accidental.value_
+    if value == "sharp":
+        return "#"
+    if value == "flat":
+        return "b"
+    if value == "natural":
+        return "N"
+    return ""
+
+
 def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
     dots = note.get_children_of_type(mxl.XMLDot)
     return "." * len(dots)
@@ -227,6 +238,10 @@ def _process_note(  # type: ignore
             step + str(octave),
             alter,
         )
+        courtesey_accidental = note.get_children_of_type(mxl.XMLAccidental)
+        if len(courtesey_accidental) > 0:
+            alter = _get_alter_from_courtesey(courtesey_accidental[0])
+
         semantic.append_note(
             staff,
             is_chord,
