@@ -13,6 +13,16 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 62
+
+Commit: 78ace9d99ff38cde0196e47ab2a04309037b1e91
+Date: 28 Jun 2024
+SER: 27%
+Validation result: 8.9
+
+Fixed another issue with backups in music xml. The poorer validation result seems to be
+mainly caused by one piece where it fails to detect the naturals.
+
 ## Run 57
 
 Commit: e38ad001a548ffd9be89591ce68ed732565a38ae
