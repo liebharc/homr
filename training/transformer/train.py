@@ -136,7 +136,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
         overwrite_output_dir=True,
         evaluation_strategy="epoch",
         # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
-        learning_rate=1e-4 if fast else 1e-3,
+        learning_rate=1e-4,
         optim="adamw_torch",  # TrOMR Paper page 3 species an Adam optimizer
         per_device_train_batch_size=16,  # TrOMR Paper page 3
         per_device_eval_batch_size=8,
