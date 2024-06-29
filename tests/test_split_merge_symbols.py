@@ -252,3 +252,21 @@ class TestMergeSymbols(unittest.TestCase):
             actualpitch[0][i] + lift for i, lift in enumerate(actuallift[0]) if lift != "nonote"
         ]
         self.assertEqual(readable_lift, ["note-F4lift_#", "note-F3lift_#"])
+
+    def test_merge_of_rests_in_chord(self) -> None:
+        actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
+            ["clef-G2|keySignature-GM|timeSignature-4/4|note-C4_sixteenth|rest_quarter"]
+        )
+        result = merge_symbols(actualrhythm, actualpitch, actuallift)
+        self.assertEqual(result, ["note-C4_sixteenth"])
+
+    def test_merge_of_rests_in_chord_keep_all_symbols(self) -> None:
+        actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
+            ["clef-G2|keySignature-GM|timeSignature-4/4|note-C4_sixteenth|rest_quarter"]
+        )
+        result = merge_symbols(
+            actualrhythm, actualpitch, actuallift, keep_all_symbols_in_chord=True
+        )
+        self.assertEqual(
+            result, ["note-C4_sixteenth|clef-G2|keySignature-GM|timeSignature-/4|rest_quarter"]
+        )

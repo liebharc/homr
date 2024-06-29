@@ -13,11 +13,17 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 67
+
+Commit: 57ebaad7a40222e601df52fd6a9979dcd4122d4e
+
+Fixed issue with courtesey accidentals in Lieder dataset. Removed CPMS dataset as it seems impossible to reliably tell if a natural is in an image.
+
 ## Run 62
 
 Commit: 78ace9d99ff38cde0196e47ab2a04309037b1e91
 Date: 28 Jun 2024
-SER: 27%
+SER: 23%
 Validation result: 8.9
 
 Fixed another issue with backups in music xml. The poorer validation result seems to be

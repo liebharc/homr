@@ -7,7 +7,6 @@
         "**/Corpus/**": true,
         "**/CPMS/**": true,
         "**/diw/**": true,
-        "**/validation/**": true,
         "**/CPMS-main/**": true,
         "**/grandstaff/**": true,
         "**/Lieder-main/**": true,

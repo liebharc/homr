@@ -37,7 +37,9 @@ class TrOMR(nn.Module):
         return loss
 
     @torch.no_grad()
-    def generate(self, x: torch.Tensor, debug: AttentionDebug | None = None) -> list[str]:
+    def generate(
+        self, x: torch.Tensor, keep_all_symbols_in_chord: bool, debug: AttentionDebug | None
+    ) -> list[str]:
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 
@@ -48,5 +50,6 @@ class TrOMR(nn.Module):
             self.config.max_seq_len,
             eos_token=self.config.eos_token,
             context=context,
+            keep_all_symbols_in_chord=keep_all_symbols_in_chord,
             debug=debug,
         )
