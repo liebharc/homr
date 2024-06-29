@@ -15,7 +15,7 @@ from training.transformer.split_merge_symbols import convert_alter_to_accidental
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
-    model = Staff2Score(config)
+    model = Staff2Score(config, keep_all_symbols_in_chord=True)
     checkpoint_file = Path(config.filepaths.checkpoint).resolve()
     result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
     all_sers = []

@@ -10,10 +10,21 @@ from homr.transformer.configs import default_config
 
 
 class SymbolMerger:
-    def __init__(self) -> None:
-        self.merge: list[str] = []
-        self.chord: list[str] = []
+    def __init__(self, keep_all_symbols_in_chord: bool) -> None:
+        self._keep_all_symbols_in_chord = keep_all_symbols_in_chord
+        self.merge: list[list[str]] = []
+        self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
+
+    def _append_symbol(self, symbol: str) -> None:
+        if self.next_symbol_is_chord:
+            if len(self.merge) == 0:
+                eprint("Warning: Unexpected chord symbol")
+                return
+            self.merge[-1].append(symbol)
+            self.next_symbol_is_chord = False
+        else:
+            self.merge.append([symbol])
 
     def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
         """
@@ -22,10 +33,10 @@ class SymbolMerger:
         If you done with adding symbols, call complete() to get the merged string.
         """
         if predrhythm == "|":
+            self.next_symbol_is_chord = True
             if len(self.merge) == 0:
                 eprint("Warning: Unexpected chord symbol")
                 return True
-            self.chord = self.merge.pop().split("|")
             return False
         elif "note" in predrhythm:
             lift = ""
@@ -37,10 +48,7 @@ class SymbolMerger:
                 "lift_N",
             ):
                 lift = predlift.split("_")[-1]
-            self.chord.append(predpitch + lift + "_" + predrhythm.split("note-")[-1])
-            self.chord = sorted(self.chord, key=pitch_name_to_sortable)
-            self.merge.append(str.join("|", self.chord))
-            self.chord.clear()
+            self._append_symbol(predpitch + lift + "_" + predrhythm.split("note-")[-1])
             return False
         elif "clef" in predrhythm:
             # Two clefs in a the same staff are very unlikely
@@ -48,18 +56,32 @@ class SymbolMerger:
                 eprint("Warning: Two clefs in a staff")
                 return True
             self.last_clef = predrhythm
-            self.merge.append(predrhythm)
+            self._append_symbol(predrhythm)
             return False
         else:
-            self.merge.append(predrhythm)
+            self._append_symbol(predrhythm)
             return False
 
+    def _clean_and_sort_chord(self, chord: list[str]) -> list[str]:
+        if len(chord) == 1:
+            return chord
+        if not self._keep_all_symbols_in_chord:
+            chord = [symbol for symbol in chord if symbol.startswith("note")]
+        chord = sorted(chord, key=pitch_name_to_sortable)
+        return chord
+
     def complete(self) -> str:
-        return str.join("+", self.merge)
+        merged = [str.join("|", self._clean_and_sort_chord(symbols)) for symbols in self.merge]
+        return str.join("+", merged)
 
 
-def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: list[str]) -> str:
-    merger = SymbolMerger()
+def merge_single_line(
+    predrhythm: list[str],
+    predpitch: list[str],
+    predlift: list[str],
+    keep_all_symbols_in_chord: bool,
+) -> str:
+    merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
 
     for j in range(len(predrhythm)):
         merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
@@ -68,14 +90,19 @@ def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: lis
 
 
 def merge_symbols(
-    predrhythms: list[list[str]], predpitchs: list[list[str]], predlifts: list[list[str]]
+    predrhythms: list[list[str]],
+    predpitchs: list[list[str]],
+    predlifts: list[list[str]],
+    keep_all_symbols_in_chord: bool = False,
 ) -> list[str]:
     merges = []
     for i in range(len(predrhythms)):
         predrhythm = predrhythms[i]
         predlift = predlifts[i]
         predpitch = predpitchs[i]
-        merge = merge_single_line(predrhythm, predpitch, predlift)
+        merge = merge_single_line(
+            predrhythm, predpitch, predlift, keep_all_symbols_in_chord=keep_all_symbols_in_chord
+        )
         merges.append(merge)
     return merges
 
