@@ -70,57 +70,66 @@ class AbstractKeyTransformation(ABC):
 
 class NoKeyTransformation(AbstractKeyTransformation):
 
-    def add_accidental(self, _note: str, accidental: str) -> str:
-        return accidental
+    def __init__(self) -> None:
+        self.current_accidentals: dict[str, str] = {}
+
+    def add_accidental(self, note: str, accidental: str) -> str:
+        if accidental != "" and (
+            note not in self.current_accidentals or self.current_accidentals[note] != accidental
+        ):
+            self.current_accidentals[note] = accidental
+            return accidental
+        else:
+            return ""
 
     def reset_at_end_of_measure(self) -> "NoKeyTransformation":
-        return self
+        return NoKeyTransformation()
 
 
 class KeyTransformation(AbstractKeyTransformation):
 
     def __init__(self, circle_of_fifth: int):
         self.circle_of_fifth = circle_of_fifth
-        self.sharps = []
-        self.flats = []
+        self.sharps: set[str] = set()
+        self.flats: set[str] = set()
         if circle_of_fifth > 0:
-            self.sharps = repeat_note_for_all_octaves(
-                circle_of_fifth_notes_positive[0:circle_of_fifth]
+            self.sharps = set(
+                repeat_note_for_all_octaves(circle_of_fifth_notes_positive[0:circle_of_fifth])
             )
         elif circle_of_fifth < 0:
-            self.flats = repeat_note_for_all_octaves(
-                circle_of_fifth_notes_negative[0 : abs(circle_of_fifth)]
+            self.flats = set(
+                repeat_note_for_all_octaves(
+                    circle_of_fifth_notes_negative[0 : abs(circle_of_fifth)]
+                )
             )
 
     def add_accidental(self, note: str, accidental: str | None) -> str:
         """
         Returns the accidental if it wasn't placed before.
         """
-        if accidental == "#":
-            if note in self.flats:
-                self.flats.remove(note)
-
-            if note not in self.sharps:
-                self.sharps.append(note)
-                return accidental
-            return ""
-        elif accidental == "b":
+        if accidental in ["#", "b", "N"]:
+            previous_accidental = "N"
             if note in self.sharps:
                 self.sharps.remove(note)
+                previous_accidental = "#"
+            if note in self.flats:
+                self.flats.remove(note)
+                previous_accidental = "b"
 
-            if note not in self.flats:
-                self.flats.append(note)
-                return accidental
-            return ""
+            if accidental == "#":
+                self.sharps.add(note)
+            elif accidental == "b":
+                self.flats.add(note)
+
+            return accidental if accidental != previous_accidental else ""
         else:
-            placed = False
             if note in self.sharps:
                 self.sharps.remove(note)
-                placed = True
+                return "N"
             if note in self.flats:
                 self.flats.remove(note)
-                placed = True
-            return "N" if placed else ""
+                return "N"
+            return ""
 
     def reset_at_end_of_measure(self) -> "KeyTransformation":
         return KeyTransformation(self.circle_of_fifth)

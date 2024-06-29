@@ -13,11 +13,12 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
-## Run 67
+## Run Upcoming
 
-Commit: 57ebaad7a40222e601df52fd6a9979dcd4122d4e
+Commit:
 
-Fixed issue with courtesey accidentals in Lieder dataset. Removed CPMS dataset as it seems impossible to reliably tell if a natural is in an image.
+Fixed issue with courtesey accidentals in Lieder dataset and in splitting naturals into tokens.
+Removed CPMS dataset as it seems impossible to reliably tell if a natural is in an image.
 
 ## Run 62
 

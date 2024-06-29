@@ -189,7 +189,7 @@ class TestMergeSymbols(unittest.TestCase):
     def test_split_sorts_notes_and_rests_with_different_natural_designation(self) -> None:
         self.maxDiff = None
         # Replace the + with \t as this is what the input provides
-        actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
+        _actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
             ["note-E#4_eighth|note-EN5_eighth"]
         )
         self.assertEqual(actualpitch, [["note-E5", "nonote", "note-E4"]])
@@ -269,4 +269,39 @@ class TestMergeSymbols(unittest.TestCase):
         )
         self.assertEqual(
             result, ["note-C4_sixteenth|clef-G2|keySignature-GM|timeSignature-/4|rest_quarter"]
+        )
+
+    def test_split_with_naturals(self) -> None:
+        # The second natural (F5N) is a courtesey accidental
+        actuallift, actualpitch, _actualrhythm, _actualnotes = split_symbols(
+            [
+                "clef-G2 keySignature-GM note-F5N_eighth. note-F5N_eighth. note-F5_eighth. note-F5#_eighth. note-F5_eighth. note-F5N_eighth."  # noqa: E501
+            ]
+        )
+        readable_lift = [
+            actualpitch[0][i] + lift
+            for i, lift in enumerate(actuallift[0])
+            if lift not in ("nonote", "lift_null")
+        ]
+        self.assertEqual(
+            readable_lift,
+            ["note-F5lift_N", "note-F5lift_#", "note-F5lift_N"],
+        )
+
+    def test_split_with_naturals_no_conversion(self) -> None:
+        # The second natural (F5N) is a courtesey accidental
+        actuallift, actualpitch, _actualrhythm, _actualnotes = split_symbols(
+            [
+                "clef-G2 keySignature-GM note-F5N_eighth. note-F5N_eighth. note-F5_eighth. note-F5#_eighth. note-F5_eighth. note-F5N_eighth."  # noqa: E501
+            ],
+            convert_to_modified_semantic=False,
+        )
+        readable_lift = [
+            actualpitch[0][i] + lift
+            for i, lift in enumerate(actuallift[0])
+            if lift not in ("nonote", "lift_null")
+        ]
+        self.assertEqual(
+            readable_lift,
+            ["note-F5lift_N", "note-F5lift_#", "note-F5lift_N"],
         )

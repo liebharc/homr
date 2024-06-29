@@ -110,14 +110,11 @@ def merge_symbols(
 def _get_alter(symbol: str) -> str | None:
     if symbol.startswith(("note", "gracenote")):
         note = symbol.split("_")[0]
-        if "##" in note:
-            return "#"  # We have no support for double accidentals right now
-        elif "#" in note:
-            return "#"
-        elif "bb" in note:
-            return "b"  # We have no support for double accidentals right now
-        elif "b" in note:
-            return "b"
+        # We have no support for double accidentals right now
+        alterations = {"##": "#", "#": "#", "bb": "b", "b": "b", "N": "N"}
+        for alteration, return_value in alterations.items():
+            if alteration in note:
+                return return_value
         return ""
     return None
 
