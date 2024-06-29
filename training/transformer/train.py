@@ -99,7 +99,7 @@ def _check_datasets_are_present() -> None:
         convert_lieder()
 
 
-def train_transformer(fast: bool = False, pretrained: bool = False, resume: str = "") -> None:
+def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
     number_of_epochs = 15
     resume_from_checkpoint = None
@@ -147,7 +147,7 @@ def train_transformer(fast: bool = False, pretrained: bool = False, resume: str 
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
         label_names=["rhythms_seq", "note_seq", "lifts_seq", "pitchs_seq"],
-        fp16=fast,
+        fp16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
     )

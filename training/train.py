@@ -23,9 +23,9 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 parser = argparse.ArgumentParser(description="Train a model")
 parser.add_argument("model_name", type=str, help="The name of the model to train")
 parser.add_argument(
-    "--fast",
+    "--fp32",
     action="store_true",
-    help="Only applicable for the transformer: Trains with fp16 accuracy",
+    help="Only applicable for the transformer: Trains with fp32 accuracy",
 )
 args = parser.parse_args()
 
@@ -64,7 +64,7 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
     save_model(model, meta, filename)
     eprint("Model saved as " + filename)
 elif model_type == "transformer":
-    train_transformer(fast=args.fast)
+    train_transformer(fp32=args.fp32)
 else:
     eprint("Unknown model: " + model_type)
     sys.exit(1)

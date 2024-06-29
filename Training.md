@@ -6,7 +6,7 @@ SER failues shown here should be taken with a grain of salt. The SER is calculat
 
 ## How to train
 
-Run `training/train.py transformer --fast`. The script will guide you by asking you to install a few things manually and will then continue to download the datasets, convert the datasets and run the training process.
+Run `training/train.py transformer`. The script will guide you by asking you to install a few things manually and will then continue to download the datasets, convert the datasets and run the training process.
 
 Converting the datasets on itself already takes around 8 hours. This is only required once at the beginning and everytime
 an improvement or fix was done to the conversion.
