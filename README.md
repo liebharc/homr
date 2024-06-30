@@ -21,7 +21,7 @@ The example below provides an overview of the current performance of the impleme
 
 |                                          Original Image                                           |                homr Result                |
 | :-----------------------------------------------------------------------------------------------: | :---------------------------------------: |
-| <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="figures/tabi.svg" width="400" > |
+| <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="https://github.com/liebharc/homr/blob/main/figures/tabi.svg?raw=true" alt="Go to https://github.com/liebharc/homr if this image isn't displayed" width="400" > |
 
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
 
