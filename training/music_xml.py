@@ -248,8 +248,8 @@ def _process_note(  # type: ignore
             duration,
             "note-"
             + step
-            + alter
             + str(octave)
+            + alter
             + "_"
             + _translate_duration(duration_type)
             + _count_dots(note),
