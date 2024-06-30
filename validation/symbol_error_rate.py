@@ -11,7 +11,6 @@ from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
-from training.transformer.split_merge_symbols import convert_alter_to_accidentals
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
@@ -24,7 +23,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     interesting_results: list[tuple[str, str]] = []
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
-        expected_str = convert_alter_to_accidentals(_load_semantic_file(semantic_path))[0].strip()
+        expected_str = _load_semantic_file(semantic_path)[0].strip()
         image = cv2.imread(img_path)
         actual = model.predict(image)[0].split("+")
         actual = [
