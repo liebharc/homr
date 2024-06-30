@@ -12,9 +12,7 @@ from homr.transformer.tromr_arch import TrOMR
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
 from training.convert_lieder import convert_lieder, lieder_train_index
 from training.convert_primus import (
-    convert_cpms_dataset,
     convert_primus_dataset,
-    cpms_train_index,
     primus_distorted_train_index,
     primus_train_index,
 )
@@ -88,9 +86,6 @@ git_root = os.path.join(script_location, "..", "..")
 def _check_datasets_are_present() -> None:
     if not os.path.exists(primus_train_index) or not os.path.exists(primus_distorted_train_index):
         convert_primus_dataset()
-
-    if not os.path.exists(cpms_train_index):
-        convert_cpms_dataset()
 
     if not os.path.exists(grandstaff_train_index):
         convert_grandstaff()

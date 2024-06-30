@@ -6,7 +6,7 @@ from pathlib import Path
 
 import cv2
 
-from homr.download_utils import download_file, untar_file, unzip_file
+from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
@@ -15,22 +15,14 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 primus = os.path.join(dataset_root, "Corpus")
-cpms = os.path.join(dataset_root, "CPMS-main")
 primus_train_index = os.path.join(primus, "index.txt")
 primus_distorted_train_index = os.path.join(primus, "distored_index.txt")
-cpms_train_index = os.path.join(cpms, "index.txt")
 
 if not os.path.exists(primus):
     eprint("Downloading Camera-PrIMuS from https://grfia.dlsi.ua.es/primus/")
     primus_archive = os.path.join(dataset_root, "CameraPrIMuS.tgz")
     download_file("https://grfia.dlsi.ua.es/primus/packages/CameraPrIMuS.tgz", primus_archive)
     untar_file(primus_archive, dataset_root)  # the archive contains already a Corpus folder
-
-if not os.path.exists(cpms):
-    eprint("Downloading CPMS from https://github.com/itec-hust/CPMS")
-    cpms_archive = os.path.join("cpms.zip")
-    download_file("https://github.com/itec-hust/CPMS/archive/refs/heads/main.zip", cpms_archive)
-    unzip_file(cpms_archive, dataset_root)  # the archive contains already a CPMS-main folder
 
 
 def _replace_suffix(path: Path, suffix: str) -> Path | None:
@@ -113,13 +105,6 @@ def convert_primus_dataset() -> None:
     eprint("Done indexing")
 
 
-def convert_cpms_dataset() -> None:
-    eprint("Indexing CPMS dataset")
-    _convert_dataset(Path(cpms).rglob("*.jpg"), cpms_train_index)
-    eprint("Done indexing")
-
-
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
     convert_primus_dataset()
-    convert_cpms_dataset()
