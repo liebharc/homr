@@ -258,7 +258,7 @@ def move_key_information(staff: Staff, destination: ResultStaff) -> None:
 
 def parse_staff_image(
     debug: Debug, ranges: list[float], index: int, staff: Staff, predictions: InputPredictions
-) -> ResultStaff:
+) -> ResultStaff | None:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, ranges, staff, predictions, perform_dewarp=True
     )
@@ -393,6 +393,10 @@ def parse_staffs(
             if len(staff.symbols) == 0:
                 continue
             result_staff = parse_staff_image(debug, ranges, i, staff, predictions)
+            if result_staff is None:
+                eprint("Staff was filtered out", i)
+                i += 1
+                continue
             if result_staff.is_empty():
                 eprint("Skipping empty staff", i)
                 i += 1

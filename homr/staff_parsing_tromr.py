@@ -3,6 +3,7 @@ from collections import Counter
 import cv2
 import numpy as np
 
+from homr import constants
 from homr.debug import AttentionDebug
 from homr.model import Staff
 from homr.results import ClefType, ResultStaff
@@ -17,7 +18,7 @@ inference: Staff2Score | None = None
 
 def parse_staff_tromr(
     staff: Staff, staff_image: NDArray, debug: AttentionDebug | None
-) -> ResultStaff:
+) -> ResultStaff | None:
     return predict_best(staff_image, debug=debug, staff=staff)
 
 
@@ -40,7 +41,7 @@ def build_image_options(staff_image: NDArray) -> list[NDArray]:
 
 def predict_best(
     org_image: NDArray, staff: Staff, debug: AttentionDebug | None = None
-) -> ResultStaff:
+) -> ResultStaff | None:
     global inference  # noqa: PLW0603
     if inference is None:
         inference = Staff2Score(default_config)
@@ -83,14 +84,18 @@ def predict_best(
         )
         total_rating = (
             distance + diff_accidentals + measure_length_variance + number_of_structural_elements
-        )
+        ) / max(min(len(expected), len(actual)), 1)
 
         if best_result.is_empty() or total_rating < best_distance:
             best_distance = total_rating
             best_result = result_staff
             best_attempt = attempt
 
-    eprint("Taking attempt", best_attempt + 1, "with distance", best_distance)
+    if best_distance > constants.max_distance_before_giving_up:
+        eprint("Failed to find a good result with distance", best_distance)
+        return None
+
+    eprint("Taking attempt", best_attempt + 1, "with distance", best_distance, best_result)
     return best_result
 
 

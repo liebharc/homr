@@ -67,7 +67,7 @@ staff_line_segment_x_tolerance = 10
 
 notehead_type_threshold = 0.8
 
-maxColorDistanceOfStaffs = 0.3
+max_color_distance_of_staffs = 0.25
 
 # We don't have to worried about mis-detections,
 # because if not all staffs group the same way then we break the staffs up again
@@ -75,7 +75,7 @@ minimum_connections_to_form_combined_staff = 1
 
 duration_of_quarter = 16
 
-image_noise_limit = 40
+image_noise_limit = 50
 
 staff_position_tolerance = 50
 
@@ -99,3 +99,7 @@ def minimum_accidental_width_or_height(unit_size: float) -> float:
 
 def maximum_accidental_width_or_height(unit_size: float) -> float:
     return 3 * unit_size
+
+
+# The distance in symbol error rate
+max_distance_before_giving_up = 5.0

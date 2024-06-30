@@ -12,7 +12,6 @@ from homr.bounding_boxes import (
     create_rotated_bounding_box,
 )
 from homr.debug import Debug
-from homr.image_utils import crop_image
 from homr.model import Staff, StaffPoint
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
@@ -640,54 +639,12 @@ def break_wide_fragments(
     return result
 
 
-def filter_raw_staffs_by_color(staffs: list[RawStaff], original: NDArray) -> list[RawStaff]:
-    """
-    Assuming that most of the image contains the sheet music
-    we can use the overall color of the image to filter out staffs
-    which are not on the sheet music.
-
-    In a 2nd step we then compare the staffs and filter them
-    out if they are too different from the average color.
-    """
-    histograms = []
-    staffs_matching_common_color = []
-    overall_hist = cv2.calcHist([original], [0], None, [256], [0, 256])
-    for staff in staffs:
-        croped = crop_image(
-            original,
-            staff.top_left[0],
-            staff.top_left[1],
-            staff.bottom_right[0],
-            staff.bottom_right[1],
-        )
-        hist = cv2.calcHist([croped], [0], None, [256], [0, 256])
-        diff = cv2.compareHist(hist, overall_hist, cv2.HISTCMP_CORREL)
-        if abs(diff) > constants.maxColorDistanceOfStaffs // 2:
-            histograms.append(hist)
-            staffs_matching_common_color.append(staff)
-        else:
-            eprint("Removed staff with color distance " + str(diff))
-    if len(histograms) == 0:
-        return staffs
-    mean_histogram = np.mean(histograms, axis=0)  # type: ignore
-    result = []
-    for i, staff in enumerate(staffs_matching_common_color):
-        hist = histograms[i]
-        diff = cv2.compareHist(hist, mean_histogram, cv2.HISTCMP_CORREL)
-        if abs(diff) > constants.maxColorDistanceOfStaffs:
-            result.append(staff)
-        else:
-            eprint("Removed staff with color distance " + str(diff))
-    return result
-
-
 def detect_staff(
     debug: Debug,
     image: NDArray,
     staff_fragments: list[RotatedBoundingBox],
     clefs_keys: list[RotatedBoundingBox],
     likely_bar_or_rests_lines: list[RotatedBoundingBox],
-    original: NDArray,
 ) -> list[Staff]:
     """
     Detect staffs on the image. Staffs can be warped, have gaps and can be interrupted by symbols.
@@ -710,16 +667,6 @@ def detect_staff(
     raw_staffs_with_possible_duplicates = find_raw_staffs_by_connecting_line_fragments(
         staff_anchors, staff_fragments
     )
-    raw_staff_after_color_filtering = filter_raw_staffs_by_color(
-        raw_staffs_with_possible_duplicates, original
-    )
-    if len(raw_staffs_with_possible_duplicates) != len(raw_staff_after_color_filtering):
-        eprint(
-            "Removed "
-            + str(len(raw_staffs_with_possible_duplicates) - len(raw_staff_after_color_filtering))
-            + " due to color differences"
-        )
-        raw_staffs_with_possible_duplicates = raw_staff_after_color_filtering
     eprint("Found " + str(len(raw_staffs_with_possible_duplicates)) + " staffs")
     raw_staffs = remove_duplicate_staffs(raw_staffs_with_possible_duplicates)
     if len(raw_staffs_with_possible_duplicates) != len(raw_staffs):

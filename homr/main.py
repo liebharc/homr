@@ -177,12 +177,7 @@ def process_image(  # noqa: PLR0915
             "anchor_input", symbols.staff_fragments + bar_line_boxes + symbols.clefs_keys
         )
         staffs = detect_staff(
-            debug,
-            predictions.staff,
-            symbols.staff_fragments,
-            symbols.clefs_keys,
-            bar_line_boxes,
-            predictions.original,
+            debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
         )
         if len(staffs) == 0:
             raise Exception("No staffs found")
