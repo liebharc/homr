@@ -41,7 +41,7 @@ class TrOMRParser:
     def parse_clef(self, clef: str) -> ResultClef:
         parts = clef.split("-")
         clef_type_str = parts[1]
-        clef_type = ClefType.TREBLE if clef_type_str.startswith("G") else ClefType.BASS
+        clef_type = ClefType(clef_type_str[0], int(clef_type_str[1]))
         self._clefs.append(clef_type)
         return ResultClef(clef_type, 0)
 

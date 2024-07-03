@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 
 import cv2
@@ -111,15 +112,10 @@ def _number_of_accidentals_in_model(staff: Staff) -> int:
 
 
 def _get_clef_type(result: str) -> ClefType | None:
-    g2_index = result.find("clef-G2")
-    f4_index = result.find("clef-F4")
-
-    if g2_index == -1 and f4_index == -1:
+    match = re.search(r"clef-([A-G])([0-9])", result)
+    if match is None:
         return None
-    elif g2_index != -1 and (f4_index == -1 or g2_index < f4_index):
-        return ClefType.TREBLE
-    else:
-        return ClefType.BASS
+    return ClefType(match.group(1), int(match.group(2)))
 
 
 def _flatten_result(result: list[str]) -> list[str]:

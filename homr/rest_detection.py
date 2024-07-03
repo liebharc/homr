@@ -2,7 +2,7 @@ import numpy as np
 
 from homr import constants
 from homr.bounding_boxes import RotatedBoundingBox
-from homr.model import Prediction, Rest, Staff
+from homr.model import Rest, Staff
 
 
 def add_rests_to_staffs(staffs: list[Staff], rests: list[RotatedBoundingBox]) -> list[Rest]:
@@ -36,8 +36,7 @@ def add_rests_to_staffs(staffs: list[Staff], rests: list[RotatedBoundingBox]) ->
                 continue
 
             bbox = rest.to_bounding_box()
-            prediction = Prediction({}, 0)
-            rest_symbol = Rest(bbox, prediction)
+            rest_symbol = Rest(bbox)
             staff.add_symbol(rest_symbol)
             result.append(rest_symbol)
     return result

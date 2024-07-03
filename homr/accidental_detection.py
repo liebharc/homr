@@ -1,6 +1,6 @@
 from homr import constants
 from homr.bounding_boxes import RotatedBoundingBox
-from homr.model import Accidental, Prediction, Staff
+from homr.model import Accidental, Staff
 
 
 def add_accidentals_to_staffs(
@@ -32,8 +32,7 @@ def add_accidentals_to_staffs(
 
             position = point.find_position_in_unit_sizes(accidental)
             accidental_bbox = accidental.to_bounding_box()
-            prediction = Prediction({}, 0)
-            clef_symbol = Accidental(accidental_bbox, prediction, position)
+            clef_symbol = Accidental(accidental_bbox, position)
             staff.add_symbol(clef_symbol)
             result.append(clef_symbol)
     return result

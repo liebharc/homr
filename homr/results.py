@@ -1,5 +1,3 @@
-from enum import Enum
-
 import numpy as np
 
 from homr import constants
@@ -11,20 +9,78 @@ class ResultSymbol:
         pass
 
 
-class ClefType(Enum):
-    TREBLE = 1
-    BASS = 2
+class ClefType:
+    @staticmethod
+    def treble() -> "ClefType":
+        return ClefType(sign="G", line=2)
+
+    @staticmethod
+    def bass() -> "ClefType":
+        return ClefType(sign="F", line=4)
+
+    def __init__(self, sign: str, line: int) -> None:
+        """
+        Why we don't support more clef types, e.g. the other examples given in
+        https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/clef/:
+
+        Since the other clef types share the same symbol with one of the ones we support,
+        we have to expect that the there is a lot of misdetections and this would degrade the
+        performance.
+
+        E.g. if the treble and french violin (https://en.wikipedia.org/wiki/Clef)
+        are easily confused. If support french violin then we will have cases where #
+        the treble clef is detected as french violin and then the pitch will be wrong.
+
+        If we get more training data and a reliable detecton of the rarer clef types,
+        we can add them here.
+        """
+        self.sign = sign.upper()
+
+        if self.sign not in ["G", "F", "C"]:
+            raise Exception("Unknown clef sign " + sign)
+
+        # Extend get_reference_pitch if you add more clef types
+        treble_clef_line = 2
+        bass_clef_line = 4
+        alto_clef_line = 3
+        if sign == "G" and line != treble_clef_line:
+            eprint("Unsupported treble clef line", line)
+            self.line = treble_clef_line
+        elif sign == "F" and line != bass_clef_line:
+            eprint("Unsupported bass clef line", line)
+            self.line = bass_clef_line
+        elif sign == "C" and line != alto_clef_line:
+            eprint("Unsupported alto clef line", line)
+            self.line = alto_clef_line
+        else:
+            self.line = line
+
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, ClefType):
+            return self.sign == __value.sign and self.line == __value.line
+        else:
+            return False
+
+    def __hash__(self) -> int:
+        return hash((self.sign, self.line))
 
     def __str__(self) -> str:
-        if self == ClefType.TREBLE:
-            return "G"
-        elif self == ClefType.BASS:
-            return "F"
-        else:
-            raise Exception("Unknown ClefType")
+        return f"{self.sign}{self.line}"
 
     def __repr__(self) -> str:
         return str(self)
+
+    def get_reference_pitch(self) -> "ResultPitch":
+        if self.sign == "G":
+            g2 = ResultPitch("C", 4, None)
+            return g2.move_by(2 * (self.line - 2), None)
+        elif self.sign == "F":
+            e2 = ResultPitch("E", 2, None)
+            return e2.move_by(2 * (self.line - 4), None)
+        elif self.sign == "C":
+            c3 = ResultPitch("C", 3, None)
+            return c3.move_by(2 * (self.line - 3), None)
+        raise ValueError("Unknown clef sign " + str(self))
 
 
 class ResultTimeSignature(ResultSymbol):
@@ -92,6 +148,12 @@ class ResultPitch:
             - note_names.index(other.step)
         )
 
+    def move_by(self, steps: int, alter: int | None) -> "ResultPitch":
+        step_index = (note_names.index(self.step) + steps) % 7
+        step = note_names[step_index]
+        octave = self.octave + abs(steps - step_index) // 6 * np.sign(steps)
+        return ResultPitch(step, octave, alter)
+
 
 def get_pitch_from_relative_position(
     reference_pitch: ResultPitch, relative_position: int, alter: int | None
@@ -129,12 +191,7 @@ class ResultClef(ResultSymbol):
         return str(self)
 
     def get_reference_pitch(self) -> ResultPitch:
-        if self.clef_type == ClefType.TREBLE:
-            return ResultPitch("D", 4, None)
-        elif self.clef_type == ClefType.BASS:
-            return ResultPitch("F", 2, None)
-        else:
-            raise Exception("Unknown ClefType " + str(self.clef_type))
+        return self.clef_type.get_reference_pitch()
 
 
 def move_pitch_to_clef(

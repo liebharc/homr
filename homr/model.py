@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from collections.abc import Callable
 from enum import Enum
-from typing import Any
 
 import cv2
 import numpy as np
@@ -16,26 +15,8 @@ from homr.bounding_boxes import (
     RotatedBoundingBox,
 )
 from homr.circle_of_fifths import get_circle_of_fifth_notes
-from homr.results import (
-    ClefType,
-    ResultClef,
-    ResultDuration,
-    ResultNote,
-    ResultNoteGroup,
-    ResultPitch,
-    ResultRest,
-    ResultSymbol,
-)
+from homr.results import ClefType, ResultPitch
 from homr.type_definitions import NDArray
-
-
-class Prediction:
-    def __init__(self, result: dict[Any, Any], best: Any) -> None:
-        self.result = result
-        self.best = best
-
-    def __str__(self) -> str:
-        return str(self.result)
 
 
 class InputPredictions:
@@ -63,10 +44,6 @@ class SymbolOnStaff(DebugDrawable):
         self.center = center
 
     @abstractmethod
-    def to_result(self) -> ResultSymbol | None:
-        pass
-
-    @abstractmethod
     def copy(self) -> Self:
         pass
 
@@ -84,54 +61,17 @@ class SymbolOnStaff(DebugDrawable):
         return abs(self.center[0] - point[0])
 
 
-class AccidentalType(Enum):
-    SHARP = 1
-    FLAT = 2
-    NATURAL = 3
-
-    def __str__(self) -> str:
-        if self == AccidentalType.SHARP:
-            return "#"
-        elif self == AccidentalType.FLAT:
-            return "b"
-        elif self == AccidentalType.NATURAL:
-            return "n"
-        else:
-            raise Exception("Unknown AccidentalType")
-
-    def to_alter(self) -> int:
-        if self == AccidentalType.SHARP:
-            return 1
-        elif self == AccidentalType.FLAT:
-            return -1
-        elif self == AccidentalType.NATURAL:
-            return 0
-        else:
-            raise Exception("Unknown AccidentalType")
-
-
 class Accidental(SymbolOnStaff):
-    def __init__(self, box: BoundingBox, prediction: Prediction, position: int) -> None:
+    def __init__(self, box: BoundingBox, position: int) -> None:
         super().__init__(box.center)
         self.box = box
-        self.prediction = prediction
         self.position = position
-
-    def get_accidental_type(self) -> AccidentalType:
-        if self.prediction.best == "sharp":
-            return AccidentalType.SHARP
-        elif self.prediction.best == "flat":
-            return AccidentalType.FLAT
-        elif self.prediction.best == "natural":
-            return AccidentalType.NATURAL
-        else:
-            raise Exception("Unknown accidental type " + self.prediction.best)
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         self.box.draw_onto_image(img, color)
         cv2.putText(
             img,
-            str(self.prediction.best) + "-" + str(self.position),
+            "accidental-" + str(self.position),
             (int(self.box.box[0]), int(self.box.box[1])),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -139,9 +79,6 @@ class Accidental(SymbolOnStaff):
             2,
             cv2.LINE_AA,
         )
-
-    def to_result(self) -> None:
-        return None
 
     def __str__(self) -> str:
         return "Accidental(" + str(self.center) + ")"
@@ -150,21 +87,20 @@ class Accidental(SymbolOnStaff):
         return str(self)
 
     def copy(self) -> "Accidental":
-        return Accidental(self.box, self.prediction, self.position)
+        return Accidental(self.box, self.position)
 
 
 class Rest(SymbolOnStaff):
-    def __init__(self, box: BoundingBox, prediction: Prediction) -> None:
+    def __init__(self, box: BoundingBox) -> None:
         super().__init__(box.center)
         self.box = box
-        self.prediction = prediction
         self.has_dot = False
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         self.box.draw_onto_image(img, color)
         cv2.putText(
             img,
-            str(self.prediction.best),
+            "rest",
             (int(self.box.box[0]), int(self.box.box[1])),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -173,22 +109,6 @@ class Rest(SymbolOnStaff):
             cv2.LINE_AA,
         )
 
-    def get_duration(self) -> int:
-        text = self.prediction.best
-        duration_dict = {
-            "rest_whole": 4 * constants.duration_of_quarter,
-            "rest_half": 2 * constants.duration_of_quarter,
-            "rest_quarter": constants.duration_of_quarter,
-            "rest_8th": constants.duration_of_quarter // 2,
-            "rest_16th": constants.duration_of_quarter // 4,
-            "rest_32nd": constants.duration_of_quarter // 8,
-            "rest_64th": constants.duration_of_quarter // 16,
-        }
-        return duration_dict.get(text, 0)  # returns 0 if text is not found in the dictionary
-
-    def to_result(self) -> ResultRest:
-        return ResultRest(ResultDuration(self.get_duration(), self.has_dot))
-
     def __str__(self) -> str:
         return "Rest(" + str(self.center) + ")"
 
@@ -196,7 +116,7 @@ class Rest(SymbolOnStaff):
         return str(self)
 
     def copy(self) -> "Rest":
-        return Rest(self.box, self.prediction)
+        return Rest(self.box)
 
 
 class StemDirection(Enum):
@@ -230,9 +150,7 @@ class Pitch:
             self.alter = None
         self.octave = int(octave)
 
-    def move_by_position(
-        self, position: int, accidental: Accidental | None, circle_of_fifth: int
-    ) -> "Pitch":
+    def move_by_position(self, position: int, circle_of_fifth: int) -> "Pitch":
         # Find the current position of the note in the scale
         current_position = note_names.index(self.step)
 
@@ -252,15 +170,6 @@ class Pitch:
             else:
                 alter = 1
 
-        if accidental is not None:
-            accidental_type = accidental.get_accidental_type()
-            if accidental_type == AccidentalType.SHARP:
-                alter = 1
-            elif accidental_type == AccidentalType.FLAT:
-                alter = -1
-            elif accidental_type == AccidentalType.NATURAL:
-                alter = 0
-
         return Pitch(new_step, alter, new_octave)
 
     def to_result(self) -> ResultPitch:
@@ -270,16 +179,11 @@ class Pitch:
         return Pitch(self.step, self.alter, self.octave)
 
 
-reference_pitch_f_clef = Pitch("F", 0, 2)
-reference_pitch_g_clef = Pitch("D", 0, 4)
-
-
 class Note(SymbolOnStaff):
     def __init__(
         self,
         box: BoundingEllipse,
         position: int,
-        notehead_type: Prediction,
         stem: RotatedBoundingBox | None,
         stem_direction: StemDirection | None,
     ):
@@ -288,9 +192,8 @@ class Note(SymbolOnStaff):
         self.position = position
         self.has_dot = False
         self.beam_count = 0
-        self.notehead_type = notehead_type
         self.stem = stem
-        self.clef_type = ClefType.TREBLE
+        self.clef_type = ClefType.treble()
         self.circle_of_fifth = 0
         self.accidental: Accidental | None = None
         self.stem_direction = stem_direction
@@ -302,7 +205,7 @@ class Note(SymbolOnStaff):
         dot_string = "." if self.has_dot else ""
         cv2.putText(
             img,
-            str(self.notehead_type.best) + dot_string + str(self.position),
+            "note" + dot_string + str(self.position),
             (int(self.box.center[0]), int(self.box.center[1])),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -322,54 +225,16 @@ class Note(SymbolOnStaff):
     ) -> Pitch:
         clef_type = self.clef_type if clef_type is None else clef_type
         circle_of_fifth = self.circle_of_fifth if circle_of_fifth is None else circle_of_fifth
-        reference = (
-            reference_pitch_g_clef if clef_type == ClefType.TREBLE else reference_pitch_f_clef
-        )
-        return reference.move_by_position(self.position, self.accidental, circle_of_fifth)
-
-    def _adjust_duration_with_dot(self, duration: int) -> int:
-        if self.has_dot:
-            return duration * 3 // 2
-        else:
-            return duration
-
-    def _get_base_duration(self) -> int:
-        if self.notehead_type.best == NoteHeadType.HOLLOW:
-            if self.stem is None:
-                return 4 * constants.duration_of_quarter
-            else:
-                return 2 * constants.duration_of_quarter
-        if self.notehead_type.best == NoteHeadType.SOLID:
-            if self.stem is None:
-                # TODO that would be an odd result, return a quarter note
-                return constants.duration_of_quarter
-            elif self.beam_count == 0:
-                return constants.duration_of_quarter
-            elif self.beam_count > 0:
-                # TODO take the note count into account
-                return constants.duration_of_quarter // 2
-        raise Exception(
-            "Unknown notehead type "
-            + str(self.notehead_type.best)
-            + " "
-            + str(self.stem)
-            + " "
-            + str(self.beam_count)
-        )
-
-    def get_duration(self) -> int:
-        return self._adjust_duration_with_dot(self._get_base_duration())
-
-    def to_result(self) -> ResultNote:
-        return ResultNote(
-            self.get_pitch().to_result(), ResultDuration(self.get_duration(), self.has_dot)
-        )
+        reference = clef_type.get_reference_pitch()
+        reference_pitch = Pitch(reference.step, reference.alter, reference.octave)
+        # Position + 1 as the model uses a higher reference point on the staff
+        return reference_pitch.move_by_position(self.position + 1, circle_of_fifth)
 
     def to_tr_omr_note(self, clef_type: ClefType) -> str:
         pitch = self.get_pitch(clef_type=clef_type).to_result()
-        duration = ResultDuration(self.get_duration(), self.has_dot)
 
-        return "note-" + str(pitch) + "_" + str(duration)
+        # We have no information about the duration here and default to quarter
+        return "note-" + str(pitch) + "_quarter"
 
     def __str__(self) -> str:
         return "Note(" + str(self.center) + ", " + str(self.position) + ")"
@@ -378,7 +243,7 @@ class Note(SymbolOnStaff):
         return str(self)
 
     def copy(self) -> "Note":
-        return Note(self.box, self.position, self.notehead_type, self.stem, self.stem_direction)
+        return Note(self.box, self.position, self.stem, self.stem_direction)
 
 
 class NoteGroup(SymbolOnStaff):
@@ -387,9 +252,6 @@ class NoteGroup(SymbolOnStaff):
         super().__init__(average_center)
         # sort notes by pitch, highest position first
         self.notes = sorted(notes, key=lambda note: note.position, reverse=True)
-
-    def to_result(self) -> ResultNoteGroup:
-        return ResultNoteGroup([note.to_result() for note in self.notes])
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         for note in self.notes:
@@ -421,9 +283,6 @@ class BarLine(SymbolOnStaff):
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         self.box.draw_onto_image(img, color)
 
-    def to_result(self) -> None:
-        return None
-
     def __str__(self) -> str:
         return "BarLine(" + str(self.center) + ")"
 
@@ -435,17 +294,16 @@ class BarLine(SymbolOnStaff):
 
 
 class Clef(SymbolOnStaff):
-    def __init__(self, box: BoundingBox, prediction: Prediction):
+    def __init__(self, box: BoundingBox):
         super().__init__(box.center)
         self.box = box
-        self.prediction = prediction
         self.accidentals: list[Accidental] = []
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         self.box.draw_onto_image(img, color)
         cv2.putText(
             img,
-            str(self.prediction.best),
+            "clef",
             (self.box.box[0], self.box.box[1]),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -454,31 +312,6 @@ class Clef(SymbolOnStaff):
             cv2.LINE_AA,
         )
 
-    def get_clef_type(self) -> ClefType:
-        if self.prediction.best == "gclef":
-            return ClefType.TREBLE
-        elif self.prediction.best == "fclef":
-            return ClefType.BASS
-        else:
-            raise Exception("Unknown clef type " + self.prediction.best)
-
-    def get_circle_of_fifth(self) -> int:
-        if len(self.accidentals) == 0:
-            return 0
-        accidental_types = [accidental.get_accidental_type() for accidental in self.accidentals]
-        max_accidental = max(accidental_types, key=accidental_types.count)
-        if max_accidental == AccidentalType.SHARP:
-            return len(self.accidentals)
-        elif max_accidental == AccidentalType.FLAT:
-            return -len(self.accidentals)
-        else:
-            # TODO we could likely work with this as it implies that there
-            # are wrong detections, might be that naturals more look like sharps
-            return 0
-
-    def to_result(self) -> ResultClef:
-        return ResultClef(self.get_clef_type(), self.get_circle_of_fifth())
-
     def __str__(self) -> str:
         return "Clef(" + str(self.center) + ")"
 
@@ -486,7 +319,7 @@ class Clef(SymbolOnStaff):
         return str(self)
 
     def copy(self) -> "Clef":
-        return Clef(self.box, self.prediction)
+        return Clef(self.box)
 
 
 class StaffPoint:

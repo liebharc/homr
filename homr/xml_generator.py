@@ -2,7 +2,6 @@ import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 
 from homr import constants
 from homr.results import (
-    ClefType,
     ResultClef,
     ResultMeasure,
     ResultNote,
@@ -73,12 +72,8 @@ def build_clef(model_clef: ResultClef) -> mxl.XMLAttributes:  # type: ignore
     key.add_child(fifth)
     clef = mxl.XMLClef()
     attributes.add_child(clef)
-    if model_clef.clef_type == ClefType.TREBLE:
-        clef.add_child(mxl.XMLSign(value_="G"))
-        clef.add_child(mxl.XMLLine(value_=2))
-    else:
-        clef.add_child(mxl.XMLSign(value_="F"))
-        clef.add_child(mxl.XMLLine(value_=4))
+    clef.add_child(mxl.XMLSign(value_=model_clef.clef_type.sign))
+    clef.add_child(mxl.XMLLine(value_=model_clef.clef_type.line))
     return attributes
 
 

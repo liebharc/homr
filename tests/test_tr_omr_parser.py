@@ -26,7 +26,7 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultClef(ClefType.TREBLE, -1),
+                        ResultClef(ClefType.treble(), -1),
                         ResultTimeSignature("4/4"),
                         ResultNote(
                             ResultPitch("A", 4, None),
@@ -71,7 +71,7 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultClef(ClefType.TREBLE, -1),
+                        ResultClef(ClefType.treble(), -1),
                         ResultTimeSignature("4/4"),
                         ResultNote(
                             ResultPitch("A", 4, None),
@@ -148,7 +148,7 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultClef(ClefType.TREBLE, 0),
+                        ResultClef(ClefType.treble(), 0),
                         ResultNote(
                             ResultPitch("D", 4, None),
                             ResultDuration(constants.duration_of_quarter, False),
@@ -280,7 +280,7 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultClef(ClefType.TREBLE, 2),
+                        ResultClef(ClefType.treble(), 2),
                         ResultNote(
                             ResultPitch("D", 4, None),
                             ResultDuration(constants.duration_of_quarter, False),

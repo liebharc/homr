@@ -3,15 +3,7 @@ import numpy as np
 
 from homr import constants
 from homr.bounding_boxes import BoundingEllipse, DebugDrawable, RotatedBoundingBox
-from homr.model import (
-    Note,
-    NoteGroup,
-    NoteHeadType,
-    Prediction,
-    Staff,
-    StemDirection,
-    SymbolOnStaff,
-)
+from homr.model import Note, NoteGroup, Staff, StemDirection, SymbolOnStaff
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
@@ -221,7 +213,7 @@ def add_notes_to_staffs(
                 ):
                     continue
                 position = point.find_position_in_unit_sizes(notehead.notehead)
-                note = create_detailed_note(notehead, symbols, position)
+                note = Note(notehead.notehead, position, notehead.stem, notehead.stem_direction)
                 result.append(note)
                 staff.add_symbol(note)
     number_of_notes = 0
@@ -238,18 +230,3 @@ def add_notes_to_staffs(
         "note groups",
     )
     return result
-
-
-def create_detailed_note(note: NoteheadWithStem, symbols: NDArray, position: int) -> Note:
-    ratio = note.notehead.get_color_ratio(symbols)
-    notehead_type = (
-        NoteHeadType.HOLLOW if ratio < constants.notehead_type_threshold else NoteHeadType.SOLID
-    )
-    ratio_as_prediction = Prediction(
-        {
-            NoteHeadType.HOLLOW: ratio,
-            NoteHeadType.SOLID: 1 - ratio,
-        },
-        notehead_type,
-    )
-    return Note(note.notehead, position, ratio_as_prediction, note.stem, note.stem_direction)

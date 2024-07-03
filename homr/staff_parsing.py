@@ -4,7 +4,7 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
-from homr.model import Clef, InputPredictions, MultiStaff, NoteGroup, Staff
+from homr.model import InputPredictions, MultiStaff, NoteGroup, Staff
 from homr.results import (
     ResultClef,
     ResultMeasure,
@@ -247,13 +247,6 @@ def _dewarp_staff(
         return x, y
 
     return staff.transform_coordinates(transform_coordinates)
-
-
-def move_key_information(staff: Staff, destination: ResultStaff) -> None:
-    source = [clef for clef in staff.symbols if isinstance(clef, Clef)]
-    dest = [clef for clef in destination.get_symbols() if isinstance(clef, ResultClef)]
-    for i in range(min(len(source), len(dest))):
-        dest[i].circle_of_fifth = source[i].get_circle_of_fifth()
 
 
 def parse_staff_image(
