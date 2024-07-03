@@ -2,11 +2,11 @@ import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 
 from homr import constants
 from homr.results import (
+    DurationModifier,
+    ResultChord,
     ResultClef,
     ResultMeasure,
     ResultNote,
-    ResultNoteGroup,
-    ResultRest,
     ResultStaff,
 )
 
@@ -77,7 +77,7 @@ def build_clef(model_clef: ResultClef) -> mxl.XMLAttributes:  # type: ignore
     return attributes
 
 
-def build_rest(model_rest: ResultRest) -> mxl.XMLNote:  # type: ignore
+def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
     note = mxl.XMLNote()
     note.add_child(mxl.XMLRest(measure="yes"))
     note.add_child(mxl.XMLDuration(value_=model_rest.duration.duration))
@@ -104,18 +104,29 @@ def build_note(model_note: ResultNote, is_chord=False) -> mxl.XMLNote:  # type: 
     note.add_child(mxl.XMLDuration(value_=model_duration.duration))
     note.add_child(mxl.XMLStaff(value_=1))
     note.add_child(mxl.XMLVoice(value_="1"))
-    if model_duration.has_dot:
+    if model_duration.modifier == DurationModifier.DOT:
         note.add_child(mxl.XMLDot())
+    elif model_duration.modifier == DurationModifier.TRIPLET:
+        time_modification = mxl.XMLTimeModification()
+        time_modification.add_child(mxl.XMLActualNotes(value_=3))
+        time_modification.add_child(mxl.XMLNormalNotes(value_=2))
+        note.add_child(time_modification)
     return note
 
 
-def build_note_group(note_group: ResultNoteGroup) -> mxl.XMLNote:  # type: ignore
+def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
     result = []
     is_first = True
     for note in note_group.notes:
         result.append(build_note(note, not is_first))
         is_first = False
     return result
+
+
+def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
+    if chord.is_rest:
+        return [build_rest(chord)]
+    return build_note_group(chord)
 
 
 def build_measure(measure: ResultMeasure, measure_number: int) -> mxl.XMLMeasure:  # type: ignore
@@ -125,12 +136,8 @@ def build_measure(measure: ResultMeasure, measure_number: int) -> mxl.XMLMeasure
     for symbol in measure.symbols:
         if isinstance(symbol, ResultClef):
             result.add_child(build_clef(symbol))
-        elif isinstance(symbol, ResultRest):
-            result.add_child(build_rest(symbol))
-        elif isinstance(symbol, ResultNote):
-            result.add_child(build_note(symbol))
-        elif isinstance(symbol, ResultNoteGroup):
-            for element in build_note_group(symbol):
+        elif isinstance(symbol, ResultChord):
+            for element in build_chord(symbol):
                 result.add_child(element)
     return result
 

@@ -1,11 +1,5 @@
 from homr.circle_of_fifths import get_circle_of_fifth_notes
-from homr.results import (
-    ResultClef,
-    ResultNote,
-    ResultNoteGroup,
-    ResultPitch,
-    ResultStaff,
-)
+from homr.results import ResultChord, ResultClef, ResultNote, ResultPitch, ResultStaff
 
 
 def _keep_accidentals_until_cancelled(staff: ResultStaff) -> None:
@@ -18,9 +12,7 @@ def _keep_accidentals_until_cancelled(staff: ResultStaff) -> None:
         for symbol in measure.symbols:
             if isinstance(symbol, ResultClef):
                 accidentals = {}
-            elif isinstance(symbol, ResultNote):
-                _process_note(symbol, accidentals)
-            elif isinstance(symbol, ResultNoteGroup):
+            elif isinstance(symbol, ResultChord):
                 for note in symbol.notes:
                     _process_note(note, accidentals)
 
@@ -49,9 +41,7 @@ def _apply_key_signature(staff: ResultStaff) -> None:
             if isinstance(symbol, ResultClef):
                 circle_of_fifth = symbol.circle_of_fifth
                 circle_of_fifth_notes = get_circle_of_fifth_notes(circle_of_fifth)
-            elif isinstance(symbol, ResultNote):
-                _apply_key_to_pitch(symbol.pitch, circle_of_fifth, circle_of_fifth_notes)
-            elif isinstance(symbol, ResultNoteGroup):
+            elif isinstance(symbol, ResultChord):
                 for note in symbol.notes:
                     _apply_key_to_pitch(note.pitch, circle_of_fifth, circle_of_fifth_notes)
 

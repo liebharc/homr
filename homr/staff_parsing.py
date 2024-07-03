@@ -6,10 +6,9 @@ from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.model import InputPredictions, MultiStaff, NoteGroup, Staff
 from homr.results import (
+    ResultChord,
     ResultClef,
     ResultMeasure,
-    ResultNote,
-    ResultNoteGroup,
     ResultStaff,
     move_pitch_to_clef,
 )
@@ -284,11 +283,7 @@ def _pick_most_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, 
         if isinstance(symbol, ResultClef):
             last_clef_was_originally = ResultClef(symbol.clef_type, 0)
             symbol.clef_type = most_frequent_clef_type
-        elif isinstance(symbol, ResultNote):
-            symbol.pitch = move_pitch_to_clef(
-                symbol.pitch, last_clef_was_originally, most_frequent_clef
-            )
-        elif isinstance(symbol, ResultNoteGroup):
+        elif isinstance(symbol, ResultChord):
             for note in symbol.notes:
                 note.pitch = move_pitch_to_clef(
                     note.pitch, last_clef_was_originally, most_frequent_clef
@@ -298,11 +293,7 @@ def _pick_most_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, 
                 if isinstance(symbol, ResultClef):
                     last_clef_was_originally = ResultClef(symbol.clef_type, 0)
                     symbol.clef_type = most_frequent_clef_type
-                elif isinstance(measure_symbol, ResultNote):
-                    measure_symbol.pitch = move_pitch_to_clef(
-                        measure_symbol.pitch, last_clef_was_originally, most_frequent_clef
-                    )
-                elif isinstance(measure_symbol, ResultNoteGroup):
+                elif isinstance(measure_symbol, ResultChord):
                     for note in measure_symbol.notes:
                         note.pitch = move_pitch_to_clef(
                             note.pitch, last_clef_was_originally, most_frequent_clef

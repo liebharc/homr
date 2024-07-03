@@ -3,17 +3,34 @@ import unittest
 from homr import constants
 from homr.results import (
     ClefType,
+    DurationModifier,
+    ResultChord,
     ResultClef,
     ResultDuration,
     ResultMeasure,
     ResultNote,
-    ResultNoteGroup,
     ResultPitch,
-    ResultRest,
     ResultStaff,
     ResultTimeSignature,
 )
 from homr.tr_omr_parser import TrOMRParser
+
+
+def single_note(pitch: ResultPitch, duration: ResultDuration) -> ResultChord:
+
+    return ResultChord(
+        duration,
+        [
+            ResultNote(
+                pitch,
+                duration,
+            )
+        ],
+    )
+
+
+def note_chord(notes: list[ResultNote]) -> ResultChord:
+    return ResultChord(notes[0].duration, notes)
 
 
 class TestTrOmrParser(unittest.TestCase):
@@ -28,33 +45,35 @@ class TestTrOmrParser(unittest.TestCase):
                     [
                         ResultClef(ClefType.treble(), -1),
                         ResultTimeSignature("4/4"),
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(2 * constants.duration_of_quarter, False),
+                            ResultDuration(2 * constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("B", 4, None),
-                            ResultDuration(2 * constants.duration_of_quarter, False),
+                            ResultDuration(2 * constants.duration_of_quarter),
                         ),
                     ]
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(int(constants.duration_of_quarter * 1.5), True),
+                            ResultDuration(
+                                int(constants.duration_of_quarter), DurationModifier.DOT
+                            ),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter // 2, False),
+                            ResultDuration(constants.duration_of_quarter // 2),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
@@ -73,33 +92,33 @@ class TestTrOmrParser(unittest.TestCase):
                     [
                         ResultClef(ClefType.treble(), -1),
                         ResultTimeSignature("4/4"),
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(2 * constants.duration_of_quarter, False),
+                            ResultDuration(2 * constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("B", 4, None),
-                            ResultDuration(2 * constants.duration_of_quarter, False),
+                            ResultDuration(2 * constants.duration_of_quarter),
                         ),
                     ]
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(int(constants.duration_of_quarter * 1.5), True),
+                            ResultDuration(constants.duration_of_quarter, DurationModifier.DOT),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter // 2, False),
+                            ResultDuration(constants.duration_of_quarter // 2),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
@@ -116,23 +135,23 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("E", 5, None),
-                            ResultDuration(constants.duration_of_quarter // 4, False),
+                            ResultDuration(constants.duration_of_quarter // 4),
                         ),
-                        ResultNoteGroup(
+                        note_chord(
                             [
                                 ResultNote(
                                     ResultPitch("A", 2, None),
-                                    ResultDuration(constants.duration_of_quarter // 2, False),
+                                    ResultDuration(constants.duration_of_quarter // 2),
                                 ),
                                 ResultNote(
                                     ResultPitch("E", 4, None),
-                                    ResultDuration(constants.duration_of_quarter // 2, False),
+                                    ResultDuration(constants.duration_of_quarter // 2),
                                 ),
                             ]
                         ),
-                        ResultRest(ResultDuration(constants.duration_of_quarter // 2, False)),
+                        ResultChord(ResultDuration(constants.duration_of_quarter // 2), []),
                     ]
                 ),
             ]
@@ -149,39 +168,41 @@ class TestTrOmrParser(unittest.TestCase):
                 ResultMeasure(
                     [
                         ResultClef(ClefType.treble(), 0),
-                        ResultNote(
+                        single_note(
                             ResultPitch("D", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("E", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("D", 4, None),
-                            ResultDuration(constants.duration_of_quarter * 2, False),
+                            ResultDuration(
+                                constants.duration_of_quarter * 2,
+                            ),
                         ),
-                        ResultNoteGroup(
+                        note_chord(
                             [
                                 ResultNote(
                                     ResultPitch("D", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                                 ResultNote(
                                     ResultPitch("G", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                             ]
                         ),
@@ -189,39 +210,39 @@ class TestTrOmrParser(unittest.TestCase):
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("E", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("E", 4, None),
-                            ResultDuration(constants.duration_of_quarter * 2, False),
+                            ResultDuration(constants.duration_of_quarter * 2),
                         ),
-                        ResultNoteGroup(
+                        note_chord(
                             [
                                 ResultNote(
                                     ResultPitch("E", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                                 ResultNote(
                                     ResultPitch("A", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                             ]
                         ),
@@ -229,39 +250,39 @@ class TestTrOmrParser(unittest.TestCase):
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("B", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter * 2, False),
+                            ResultDuration(constants.duration_of_quarter * 2),
                         ),
-                        ResultNoteGroup(
+                        note_chord(
                             [
                                 ResultNote(
                                     ResultPitch("F", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                                 ResultNote(
                                     ResultPitch("B", 4, None),
-                                    ResultDuration(constants.duration_of_quarter * 2, False),
+                                    ResultDuration(constants.duration_of_quarter * 2),
                                 ),
                             ]
                         ),
@@ -281,33 +302,33 @@ class TestTrOmrParser(unittest.TestCase):
                 ResultMeasure(
                     [
                         ResultClef(ClefType.treble(), 2),
-                        ResultNote(
+                        single_note(
                             ResultPitch("D", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("E", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("F", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("G", 4, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("C", 5, None),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("C", 5, 1),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, 1),
-                            ResultDuration(constants.duration_of_quarter, False),
+                            ResultDuration(constants.duration_of_quarter),
                         ),
                     ]
                 ),
@@ -324,15 +345,15 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultNoteGroup(
+                        note_chord(
                             [
                                 ResultNote(
                                     ResultPitch("A", 4, None),
-                                    ResultDuration(2 * constants.duration_of_quarter, False),
+                                    ResultDuration(2 * constants.duration_of_quarter),
                                 ),
                                 ResultNote(
                                     ResultPitch("B", 4, None),
-                                    ResultDuration(2 * constants.duration_of_quarter, False),
+                                    ResultDuration(2 * constants.duration_of_quarter),
                                 ),
                             ]
                         )
@@ -350,9 +371,9 @@ class TestTrOmrParser(unittest.TestCase):
             [
                 ResultMeasure(
                     [
-                        ResultNote(
+                        single_note(
                             ResultPitch("A", 4, None),
-                            ResultDuration(2 * constants.duration_of_quarter, False),
+                            ResultDuration(2 * constants.duration_of_quarter),
                         ),
                     ]
                 )

@@ -1,13 +1,13 @@
 from homr import constants
 from homr.results import (
     ClefType,
+    DurationModifier,
+    ResultChord,
     ResultClef,
     ResultDuration,
     ResultMeasure,
     ResultNote,
-    ResultNoteGroup,
     ResultPitch,
-    ResultRest,
     ResultStaff,
     ResultTimeSignature,
 )
@@ -87,11 +87,23 @@ class TrOMRParser:
         }
         return duration_mapping.get(duration_name, constants.duration_of_quarter // 16)
 
-    def _adjust_duration_with_dot(self, duration: int, has_dot: bool) -> int:
+    def parse_duration(self, duration: str) -> ResultDuration:
+        has_dot = duration.endswith(".")
+        # We use ³ as triplet indicator as it's not a valid duration name
+        # or note name and thus we have no risk of confusion
+        is_triplet = duration.endswith("³")
+
+        modifier = DurationModifier.NONE
         if has_dot:
-            return duration * 3 // 2
-        else:
-            return duration
+            duration = duration[:-1]
+            modifier = DurationModifier.DOT
+        elif is_triplet:
+            duration = duration[:-1]
+            modifier = DurationModifier.TRIPLET
+        return ResultDuration(
+            self.parse_duration_name(duration),
+            modifier,
+        )
 
     def parse_note(self, note: str) -> ResultNote:
         try:
@@ -99,8 +111,6 @@ class TrOMRParser:
             pitch_and_duration = note_details.split("_")
             pitch = pitch_and_duration[0]
             duration = pitch_and_duration[1]
-            has_dot = duration.endswith(".")
-            duration_name = duration[:-1] if has_dot else duration
             note_name = pitch[0]
             octave = int(pitch[1])
             alter = None
@@ -115,22 +125,12 @@ class TrOMRParser:
                 else:
                     alter = 0
 
-            return ResultNote(
-                ResultPitch(note_name, octave, alter),
-                ResultDuration(
-                    self._adjust_duration_with_dot(
-                        self.parse_duration_name(duration_name), has_dot
-                    ),
-                    has_dot,
-                ),
-            )
+            return ResultNote(ResultPitch(note_name, octave, alter), self.parse_duration(duration))
         except Exception:
             eprint("Failed to parse note: " + note)
-            return ResultNote(
-                ResultPitch("C", 4, 0), ResultDuration(constants.duration_of_quarter, False)
-            )
+            return ResultNote(ResultPitch("C", 4, 0), ResultDuration(constants.duration_of_quarter))
 
-    def parse_notes(self, notes: str) -> ResultNote | ResultNoteGroup | ResultRest | None:
+    def parse_notes(self, notes: str) -> ResultChord | None:
         note_parts = notes.split("|")
         note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
         rest_parts = [rest_part for rest_part in note_parts if rest_part.startswith("rest")]
@@ -139,21 +139,15 @@ class TrOMRParser:
                 return None
             else:
                 return self.parse_rest(rest_parts[0])
-        if len(note_parts) == 1:
-            return self.parse_note(note_parts[0])
-        else:
-            return ResultNoteGroup([self.parse_note(note_part) for note_part in note_parts])
+        result_notes = [self.parse_note(note_part) for note_part in note_parts]
+        return ResultChord(result_notes[0].duration, result_notes)
 
-    def parse_rest(self, rest: str) -> ResultRest:
+    def parse_rest(self, rest: str) -> ResultChord:
         rest = rest.split("|")[0]
         duration = rest.split("-")[1]
-        has_dot = duration.endswith(".")
-        duration_name = duration[:-1] if has_dot else duration
-        return ResultRest(
-            ResultDuration(
-                self._adjust_duration_with_dot(self.parse_duration_name(duration_name), has_dot),
-                has_dot,
-            )
+        return ResultChord(
+            self.parse_duration(duration),
+            [],
         )
 
     def parse_tr_omr_output(self, output: str) -> ResultStaff:  # noqa: C901

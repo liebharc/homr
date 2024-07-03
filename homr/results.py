@@ -1,3 +1,5 @@
+from enum import Enum
+
 import numpy as np
 
 from homr import constants
@@ -228,52 +230,57 @@ def get_duration_name(duration: int) -> str:
     return result
 
 
-class ResultDuration:
-    def __init__(self, duration: int, has_dot: bool):
-        self.duration = duration
-        self.has_dot = has_dot
-        self.duration_name = get_duration_name(self.base_duration())
+class DurationModifier(Enum):
+    NONE = 0
+    DOT = 1
+    TRIPLET = 2
 
-    def base_duration(self) -> int:
-        return self.duration * 2 // 3 if self.has_dot else self.duration
+    def __init__(self, duration: int) -> None:
+        self.duration = duration
+
+    def __str__(self) -> str:
+        if self.duration == self.NONE:
+            return ""
+        elif self.duration == self.DOT:
+            return "."
+        elif self.duration == self.TRIPLET:
+            return "³"
+        else:
+            return "Invalid duration"
+
+
+def _adjust_duration(duration: int, modifier: DurationModifier) -> int:
+    if modifier == DurationModifier.DOT:
+        return duration * 3 // 2
+    elif modifier == DurationModifier.TRIPLET:
+        return duration * 2 // 3
+    else:
+        return duration
+
+
+class ResultDuration:
+    def __init__(self, base_duration: int, modifier: DurationModifier = DurationModifier.NONE):
+        self.duration = _adjust_duration(base_duration, modifier)
+        self.modifier = modifier
+        self.duration_name = get_duration_name(base_duration)
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultDuration):
-            return self.duration == __value.duration and self.has_dot == __value.has_dot
+            return self.duration == __value.duration and self.modifier == __value.modifier
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash((self.duration, self.has_dot))
+        return hash((self.duration, self.modifier))
 
     def __str__(self) -> str:
-        return f"{self.duration_name}{'.' if self.has_dot else ''}"
+        return f"{self.duration_name}{str(self.modifier)}"
 
     def __repr__(self) -> str:
         return str(self)
 
 
-class ResultRest(ResultSymbol):
-    def __init__(self, duration: ResultDuration):
-        self.duration = duration
-
-    def __eq__(self, __value: object) -> bool:
-        if isinstance(__value, ResultRest):
-            return self.duration == __value.duration
-        else:
-            return False
-
-    def __hash__(self) -> int:
-        return hash(self.duration)
-
-    def __str__(self) -> str:
-        return f"R_{self.duration}"
-
-    def __repr__(self) -> str:
-        return str(self)
-
-
-class ResultNote(ResultSymbol):
+class ResultNote:
     def __init__(self, pitch: ResultPitch, duration: ResultDuration):
         self.pitch = pitch
         self.duration = duration
@@ -294,24 +301,30 @@ class ResultNote(ResultSymbol):
         return str(self)
 
 
-class ResultNoteGroup(ResultSymbol):
-    def __init__(self, notes: list[ResultNote]):
+class ResultChord(ResultSymbol):
+    """
+    A chord which contains 0 to many pitches. 0 pitches indicates that this is a rest.
+
+    The duration of the chord is the distance to the next chord. The individual pitches
+    my have a different duration.
+    """
+
+    def __init__(self, duration: ResultDuration, notes: list[ResultNote]):
         self.notes = notes
-        self.duration = notes[0].duration if len(notes) > 0 else ResultDuration(0, False)
+        self.duration = duration
+
+    @property
+    def is_rest(self) -> bool:
+        return len(self.notes) == 0
 
     def __eq__(self, __value: object) -> bool:
-        if isinstance(__value, ResultNoteGroup):
-            if len(self.notes) != len(__value.notes):
-                return False
-            for i in range(len(self.notes)):
-                if self.notes[i] != __value.notes[i]:
-                    return False
-            return True
+        if isinstance(__value, ResultChord):
+            return self.duration == __value.duration and self.notes == __value.notes
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash(tuple(self.notes))
+        return hash((self.notes, self.duration))
 
     def __str__(self) -> str:
         return f"{'&'.join(map(str, self.notes))}"
@@ -356,9 +369,7 @@ class ResultMeasure:
 
     def length_in_quarters(self) -> float:
         return sum(
-            symbol.duration.base_duration()
-            for symbol in self.symbols
-            if isinstance(symbol, ResultNote | ResultNoteGroup | ResultRest)
+            symbol.duration.duration for symbol in self.symbols if isinstance(symbol, ResultChord)
         )
 
 

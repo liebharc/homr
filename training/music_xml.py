@@ -180,7 +180,7 @@ def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
 
 
 def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
-    time_modification = note.get_children_of_type(mxl.XSDComplexTypeTimeModification)
+    time_modification = note.get_children_of_type(mxl.XMLTimeModification)
     if len(time_modification) == 0:
         return ""
     actual_notes = time_modification[0].get_children_of_type(mxl.XMLActualNotes)
@@ -196,7 +196,7 @@ def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
         int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
     )
     if is_triplet or is_sixtuplet:
-        return "3"
+        return "³"
     return ""
 
 
@@ -273,8 +273,8 @@ def _process_note(  # type: ignore
             + alter
             + "_"
             + _translate_duration(duration_type)
-            + _count_dots(note),
-            # + _get_triplet_mark(note),
+            + _count_dots(note)
+            + _get_triplet_mark(note),
         )
     return key
 
