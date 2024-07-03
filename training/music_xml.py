@@ -7,6 +7,10 @@ from homr.circle_of_fifths import KeyTransformation, circle_of_fifth_to_key_sign
 from homr.simple_logging import eprint
 
 
+class MusicXmlValidationError(Exception):
+    pass
+
+
 class SymbolWithPosition:
     def __init__(self, position: int, symbol: str) -> None:
         self.position = position
@@ -92,7 +96,7 @@ class SemanticPart:
                 raise ValueError("Number of clefs changed")
             for staff, clef in enumerate(clefs):
                 if not any(symbol.symbol == clef for symbol in self.current_measure.staffs[staff]):
-                    raise ValueError("Clef changed")
+                    raise MusicXmlValidationError("Clef changed")
             return
         self.staffs = [[] for _ in range(len(clefs))]
         measure = SemanticMeasure(len(clefs))

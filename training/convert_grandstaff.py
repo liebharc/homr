@@ -18,7 +18,8 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
-from training.music_xml import music_xml_to_semantic
+from training.musescore_svg import SvgValidationError
+from training.music_xml import MusicXmlValidationError, music_xml_to_semantic
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -205,7 +206,9 @@ def _music_xml_to_semantic(path: str, basename: str) -> tuple[str | None, str | 
     return basename + "_upper.semantic", basename + "_lower.semantic"
 
 
-def _convert_file(path: Path, ony_recreate_semantic_files: bool = False) -> list[str]:
+def _convert_file(  # noqa: PLR0911
+    path: Path, ony_recreate_semantic_files: bool = False
+) -> list[str]:
     try:
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
@@ -238,6 +241,8 @@ def _convert_file(path: Path, ony_recreate_semantic_files: bool = False) -> list
             + ","
             + str(Path(lower_semantic).relative_to(git_root)),
         ]
+    except (SvgValidationError, MusicXmlValidationError):
+        return []
     except Exception as e:
         eprint("Failed to convert ", path, e)
         return []

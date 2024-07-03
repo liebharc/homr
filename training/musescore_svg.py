@@ -6,6 +6,10 @@ from homr import constants
 from homr.simple_logging import eprint
 
 
+class SvgValidationError(Exception):
+    pass
+
+
 class SvgRectangle:
     def __init__(self, x: int, y: int, width: int, height: int):
         self.x = x
@@ -150,7 +154,7 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
             number_of_clefs += 1
     combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
     if len(combined) != number_of_clefs:
-        raise ValueError(
+        raise SvgValidationError(
             f"Number of clefs {number_of_clefs} does not match the number of staffs {len(combined)}"
         )
     return SvgMusicFile(svg_file, width, height, combined)
