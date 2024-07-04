@@ -8,6 +8,7 @@ from homr.results import (
     ResultMeasure,
     ResultNote,
     ResultStaff,
+    ResultTimeSignature,
 )
 
 
@@ -63,8 +64,16 @@ def build_part_list(staffs: int) -> mxl.XMLPartList:  # type: ignore
     return part_list
 
 
-def build_clef(model_clef: ResultClef) -> mxl.XMLAttributes:  # type: ignore
+def build_or_get_attributes(measure: mxl.XMLMeasure) -> mxl.XMLAttributes:  # type: ignore
+    for child in measure.get_children_of_type(mxl.XMLAttributes):
+        return child
+
     attributes = mxl.XMLAttributes()
+    measure.add_child(attributes)
+    return attributes
+
+
+def build_clef(model_clef: ResultClef, attributes: mxl.XMLAttributes) -> None:  # type: ignore
     attributes.add_child(mxl.XMLDivisions(value_=constants.duration_of_quarter))
     key = mxl.XMLKey()
     fifth = mxl.XMLFifths(value_=model_clef.circle_of_fifth)
@@ -74,7 +83,15 @@ def build_clef(model_clef: ResultClef) -> mxl.XMLAttributes:  # type: ignore
     attributes.add_child(clef)
     clef.add_child(mxl.XMLSign(value_=model_clef.clef_type.sign))
     clef.add_child(mxl.XMLLine(value_=model_clef.clef_type.line))
-    return attributes
+
+
+def build_time_signature(  # type: ignore
+    model_time_signature: ResultTimeSignature, attributes: mxl.XMLAttributes
+) -> None:
+    time = mxl.XMLTime()
+    attributes.add_child(time)
+    time.add_child(mxl.XMLBeats(value_=str(model_time_signature.numerator)))
+    time.add_child(mxl.XMLBeatType(value_=str(model_time_signature.denominator)))
 
 
 def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
@@ -135,7 +152,11 @@ def build_measure(measure: ResultMeasure, measure_number: int) -> mxl.XMLMeasure
         result.add_child(mxl.XMLPrint(new_system="yes"))
     for symbol in measure.symbols:
         if isinstance(symbol, ResultClef):
-            result.add_child(build_clef(symbol))
+            attributes = build_or_get_attributes(result)
+            build_clef(symbol, attributes)
+        elif isinstance(symbol, ResultTimeSignature):
+            attributes = build_or_get_attributes(result)
+            build_time_signature(symbol, attributes)
         elif isinstance(symbol, ResultChord):
             for element in build_chord(symbol):
                 result.add_child(element)

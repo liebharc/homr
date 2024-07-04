@@ -86,20 +86,21 @@ class ClefType:
 
 
 class ResultTimeSignature(ResultSymbol):
-    def __init__(self, time_signature: str) -> None:
-        self.time_signature = time_signature
+    def __init__(self, numerator: int, denominator: int) -> None:
+        self.numerator = numerator
+        self.denominator = denominator
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultTimeSignature):
-            return self.time_signature == __value.time_signature
+            return self.numerator == __value.numerator and self.denominator == __value.denominator
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash(self.time_signature)
+        return hash((self.numerator, self.denominator))
 
     def __str__(self) -> str:
-        return self.time_signature
+        return f"{self.numerator}/{self.denominator}"
 
     def __repr__(self) -> str:
         return str(self)

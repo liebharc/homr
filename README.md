@@ -25,6 +25,10 @@ The example below provides an overview of the current performance of the impleme
 
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
 
+## Limitations
+
+The current implementation focuses on pitch and rhtyhm information, neglecting dynamics, articulation, and other musical symbols.
+
 ## Technical Details
 
 homr employs segmentation techniques outlined in [oemer](https://github.com/BreezeWhite/oemer) to identify staff lines, clefs, bar lines, and note heads in an image. These components are combined to determine the position of staffs within the picture.

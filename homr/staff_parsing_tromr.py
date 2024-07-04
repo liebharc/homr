@@ -7,7 +7,7 @@ import numpy as np
 from homr import constants
 from homr.debug import AttentionDebug
 from homr.model import Staff
-from homr.results import ClefType, ResultStaff
+from homr.results import ClefType, ResultStaff, ResultTimeSignature
 from homr.simple_logging import eprint
 from homr.tr_omr_parser import TrOMRParser
 from homr.transformer.configs import default_config
@@ -38,6 +38,14 @@ def build_image_options(staff_image: NDArray) -> list[NDArray]:
         denoised1,
         apply_clahe(denoised1),
     ]
+
+
+def _fill_in_time_signature(staff: ResultStaff) -> None:
+    average_measure_length = np.mean([m.length_in_quarters() for m in staff.measures])
+    for symbol in staff.get_symbols():
+        if isinstance(symbol, ResultTimeSignature):
+            beat_duration = 4 / symbol.denominator * constants.duration_of_quarter
+            symbol.numerator = round(average_measure_length / beat_duration)
 
 
 def predict_best(
@@ -96,6 +104,7 @@ def predict_best(
         eprint("Failed to find a good result with distance", best_distance)
         return None
 
+    _fill_in_time_signature(best_result)
     eprint("Taking attempt", best_attempt + 1, "with distance", best_distance, best_result)
     return best_result
 

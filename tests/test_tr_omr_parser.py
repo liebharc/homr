@@ -38,13 +38,13 @@ class TestTrOmrParser(unittest.TestCase):
     unit_size = 3
 
     def test_parsing(self) -> None:
-        data = "clef-G2+keySignature-FM+timeSignature-4/4+note-A4_half+note-B4_half+barline+note-A4_quarter.+note-G4_eighth+note-F4_quarter+note-G4_quarter+barline"  # noqa: E501
+        data = "clef-G2+keySignature-FM+timeSignature-/4+note-A4_half+note-B4_half+barline+note-A4_quarter.+note-G4_eighth+note-F4_quarter+note-G4_quarter+barline"  # noqa: E501
         expected = ResultStaff(
             [
                 ResultMeasure(
                     [
                         ResultClef(ClefType.treble(), -1),
-                        ResultTimeSignature("4/4"),
+                        ResultTimeSignature(1, 4),
                         single_note(
                             ResultPitch("A", 4, None),
                             ResultDuration(2 * constants.duration_of_quarter),
@@ -85,13 +85,13 @@ class TestTrOmrParser(unittest.TestCase):
         self.assertEqual(actual, expected)
 
     def test_parsing_no_final_bar_line(self) -> None:
-        data = "clef-G2+keySignature-FM+timeSignature-4/4+note-A4_half+note-B4_half+barline+note-A4_quarter.+note-G4_eighth+note-F4_quarter+note-G4_quarter"  # noqa: E501
+        data = "clef-G2+keySignature-FM+timeSignature-/4+note-A4_half+note-B4_half+barline+note-A4_quarter.+note-G4_eighth+note-F4_quarter+note-G4_quarter"  # noqa: E501
         expected = ResultStaff(
             [
                 ResultMeasure(
                     [
                         ResultClef(ClefType.treble(), -1),
-                        ResultTimeSignature("4/4"),
+                        ResultTimeSignature(1, 4),
                         single_note(
                             ResultPitch("A", 4, None),
                             ResultDuration(2 * constants.duration_of_quarter),
