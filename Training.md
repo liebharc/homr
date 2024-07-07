@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 84
+
+Commit: 9c7479d092458cc8d70d9ea5a1b24ca8ac278cd7
+Date: 5 Jul 2024
+SER: 19%
+Validation result: 11.4
+
+Adding support for triplets degrades the overall performance. A possible cause could be that triplets are very prominent in certain examples such as lc5126774 (Lieder dataset).
+
 ## Run 70
 
 Commit: 11c1eeaf5760d617f09678e276866d31253a5ace
