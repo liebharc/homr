@@ -98,7 +98,10 @@ class StaffAnchor(DebugDrawable):
         )
         y_deltas = [abs(y_positions[i] - y_positions[i - 1]) for i in range(1, len(y_positions))]
         self.unit_sizes = y_deltas
-        self.average_unit_size = float(np.mean(y_deltas))
+        if len(y_deltas) == 0:
+            self.average_unit_size = 0
+        else:
+            self.average_unit_size = float(np.mean(y_deltas))
         self.symbol = symbol
         self.max_y = max([line.max_y for line in staff_lines])
         self.min_y = min([line.min_y for line in staff_lines])
@@ -269,6 +272,8 @@ def are_lines_parallel(lines: list[StaffLineSegment], unit_size: float) -> bool:
         for fragment in line.staff_fragments:
             all_angles.append(fragment.angle)
             all_fragments.append(fragment)
+    if len(all_angles) == 0:
+        return False
     average_angle = np.mean(all_angles)
     for fragment in all_fragments:
         if abs(
@@ -588,6 +593,8 @@ def find_horizontal_lines(
 def predict_other_anchors_from_clefs(
     clef_anchors: list[StaffAnchor], image: NDArray
 ) -> list[RotatedBoundingBox]:
+    if len(clef_anchors) == 0:
+        return []
     average_unit_size = float(np.mean([anchor.average_unit_size for anchor in clef_anchors]))
     anchor_symbols = [anchor.symbol for anchor in clef_anchors]
     clef_zones = init_zone(clef_anchors, image.shape)

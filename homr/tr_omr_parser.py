@@ -70,11 +70,21 @@ class TrOMRParser:
         else:
             eprint("WARNING: Unrecognized key signature: " + signature_name)
 
-    def parse_time_signature(self, clef: str) -> ResultTimeSignature:
-        parts = clef.split("-")
-        clef_type = parts[1]
-        self._time_signatures.append(clef_type)
-        return ResultTimeSignature(clef_type)
+    def parse_time_signature(self, time_signature: str) -> ResultTimeSignature:
+        parts = time_signature.split("-")
+        time_abbreviation = parts[1]
+        numerator = 1
+        denominator = 1
+        if time_abbreviation == "C":
+            numerator = 4
+            denominator = 4
+        elif time_abbreviation == "C/":
+            numerator = 2
+            denominator = 2
+        else:
+            denominator = int(time_abbreviation[1:])
+        self._time_signatures.append(time_abbreviation)
+        return ResultTimeSignature(numerator, denominator)
 
     def parse_duration_name(self, duration_name: str) -> int:
         duration_mapping = {

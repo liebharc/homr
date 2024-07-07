@@ -152,5 +152,13 @@ if __name__ == "__main__":
     with open(index_file) as f:
         index = f.readlines()
     config = Config()
-    config.filepaths.checkpoint = args.checkpoint_file
-    calc_symbol_error_rate_for_list(index, config)
+    is_dir = os.path.isdir(args.checkpoint_file)
+    if is_dir:
+        # glob recursive for all model.safetensors file in the directory
+        checkpoint_files = list(Path(args.checkpoint_file).rglob("model.safetensors"))
+    else:
+        checkpoint_files = [Path(args.checkpoint_file)]
+
+    for checkpoint_file in checkpoint_files:
+        config.filepaths.checkpoint = str(checkpoint_file)
+        calc_symbol_error_rate_for_list(index, config)
