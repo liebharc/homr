@@ -99,7 +99,7 @@ class StaffAnchor(DebugDrawable):
         y_deltas = [abs(y_positions[i] - y_positions[i - 1]) for i in range(1, len(y_positions))]
         self.unit_sizes = y_deltas
         if len(y_deltas) == 0:
-            self.average_unit_size = 0
+            self.average_unit_size = 0.0
         else:
             self.average_unit_size = float(np.mean(y_deltas))
         self.symbol = symbol

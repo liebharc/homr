@@ -240,11 +240,11 @@ class DurationModifier(Enum):
         self.duration = duration
 
     def __str__(self) -> str:
-        if self == self.NONE:
+        if self == DurationModifier.NONE:
             return ""
-        elif self == self.DOT:
+        elif self == DurationModifier.DOT:
             return "."
-        elif self == self.TRIPLET:
+        elif self == DurationModifier.TRIPLET:
             return "³"
         else:
             return "Invalid duration"
