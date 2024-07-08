@@ -179,6 +179,15 @@ class ScoreDecoder(nn.Module):
         # Weight the actual lift tokens (so neither nonote nor null) higher
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.rhythm_weights = self._build_rhythm_weights(config).to(self.device)
+
+    def _build_rhythm_weights(self, config: Config) -> torch.Tensor:
+        mask = torch.ones(config.num_rhythm_tokens).float()
+        for i, vobac in enumerate(config.rhythm_vocab):
+            if "³" in vobac:
+                mask[i] /= 3
+        return mask
+
     @torch.no_grad()
     def generate(  # noqa: PLR0915
         self,
@@ -290,7 +299,9 @@ class ScoreDecoder(nn.Module):
         )  # this calls ScoreTransformerWrapper.forward
 
         loss_consist = self.calConsistencyLoss(rhythmsp, pitchsp, liftsp, notesp, mask)
-        loss_rhythm = self.masked_logits_cross_entropy(rhythmsp, rhythmso, mask)
+        loss_rhythm = self.masked_logits_cross_entropy(
+            rhythmsp, rhythmso, mask, weights=self.rhythm_weights
+        )
         loss_pitch = self.masked_logits_cross_entropy(pitchsp, pitchso, mask)
         loss_lift = self.masked_logits_cross_entropy(liftsp, liftso, mask)
         loss_note = self.masked_logits_cross_entropy(notesp, noteso, mask)
