@@ -266,7 +266,7 @@ def parse_staff_image(
     return result
 
 
-def _pick_most_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, PLR0912
+def _pick_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, PLR0912
     clefs = [clef for clef in staff.get_symbols() if isinstance(clef, ResultClef)]
     clef_types = [clef.clef_type for clef in clefs]
     if len(clef_types) == 0:
@@ -302,7 +302,7 @@ def _pick_most_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, 
     return staff
 
 
-def _pick_most_dominant_key_signature(staff: ResultStaff) -> ResultStaff:
+def _pick_dominant_key_signature(staff: ResultStaff) -> ResultStaff:
     clefs = [clef for clef in staff.get_symbols() if isinstance(clef, ResultClef)]
     key_signatures = [clef.circle_of_fifth for clef in clefs]
     if len(key_signatures) == 0:
@@ -335,8 +335,8 @@ def merge_and_clean(staffs: list[ResultStaff]) -> ResultStaff:
     result = ResultStaff([])
     for staff in staffs:
         result = result.merge(staff)
-    _pick_most_dominant_clef(result)
-    _pick_most_dominant_key_signature(result)
+    _pick_dominant_clef(result)
+    _pick_dominant_key_signature(result)
     _remove_redundant_clefs(result.measures)
     result.measures = [measure for measure in result.measures if not measure.is_empty()]
     return result
