@@ -13,6 +13,7 @@ from x_transformers.x_transformers import (  # type: ignore
     TokenEmbedding,
 )
 
+from homr import constants
 from homr.debug import AttentionDebug
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -184,7 +185,7 @@ class ScoreDecoder(nn.Module):
     def _build_rhythm_weights(self, config: Config) -> torch.Tensor:
         mask = torch.ones(config.num_rhythm_tokens).float()
         for i, vobac in enumerate(config.rhythm_vocab):
-            if "³" in vobac:
+            if constants.triplet_symbol in vobac:
                 mask[i] /= 3
         return mask
 

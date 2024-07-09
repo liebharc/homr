@@ -1,5 +1,6 @@
 import re
 
+from homr import constants
 from homr.circle_of_fifths import (
     KeyTransformation,
     NoKeyTransformation,
@@ -151,8 +152,8 @@ def _add_duration_modifier(duration: str) -> str:
     # TrOMR only allows one dot
     if "." in duration:
         return "."
-    if "³" in duration:
-        return "³"
+    if constants.triplet_symbol in duration:
+        return constants.triplet_symbol
     return ""
 
 
@@ -166,7 +167,7 @@ def _translate_duration(duration: str) -> str:
 
     # We add duration modifiers later again
     duration = duration.replace(".", "")
-    duration = duration.replace("³", "")
+    duration = duration.replace(constants.triplet_symbol, "")
     return duration
 
 
