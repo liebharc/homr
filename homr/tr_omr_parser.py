@@ -99,9 +99,7 @@ class TrOMRParser:
 
     def parse_duration(self, duration: str) -> ResultDuration:
         has_dot = duration.endswith(".")
-        # We use ³ as triplet indicator as it's not a valid duration name
-        # or note name and thus we have no risk of confusion
-        is_triplet = duration.endswith("³")
+        is_triplet = duration.endswith(constants.triplet_symbol)
 
         modifier = DurationModifier.NONE
         if has_dot:

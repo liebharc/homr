@@ -245,7 +245,7 @@ class DurationModifier(Enum):
         elif self == DurationModifier.DOT:
             return "."
         elif self == DurationModifier.TRIPLET:
-            return "³"
+            return constants.triplet_symbol
         else:
             return "Invalid duration"
 

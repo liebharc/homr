@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 from musicxml.parser.parser import _parse_node  # type: ignore
 
+from homr import constants
 from homr.circle_of_fifths import KeyTransformation, circle_of_fifth_to_key_signature
 from homr.simple_logging import eprint
 
@@ -200,7 +201,7 @@ def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
         int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
     )
     if is_triplet or is_sixtuplet:
-        return "³"
+        return constants.triplet_symbol
     return ""
 
 
