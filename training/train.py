@@ -33,7 +33,7 @@ model_type = args.model_name
 
 if model_type == "segnet":
     dataset = download.download_deep_scores()
-    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=15)
+    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=10)
     filename = get_segmentation_model_path(model_type)
     meta = {
         "input_shape": list(model.input_shape),
@@ -43,7 +43,7 @@ if model_type == "segnet":
     eprint("Model saved as " + filename)
 elif model_type == "unet":
     dataset = download.download_cvs_musicma()
-    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=15)
+    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=10)
     filename = get_segmentation_model_path(model_type)
     meta = {
         "input_shape": list(model.input_shape),

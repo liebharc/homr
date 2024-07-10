@@ -226,9 +226,13 @@ class DataLoader(MultiprocessingDataLoader):
                 # Random perspective transform
                 seed = random.randint(0, 1000)
                 monkey_patch_float_for_imaugs()
+                random_rotation = random.uniform(-5, 5)
 
-                def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
-                    return imaugs.perspective_transform(img, seed=seed, sigma=70)
+                def perspect_trans(
+                    img: Image.Image, seed: int = seed, random_rotation: float = random_rotation
+                ) -> Any:
+                    rotated = img.rotate(random_rotation)
+                    return imaugs.perspective_transform(rotated, seed=seed, sigma=70)
 
                 image_trans = np.array(perspect_trans(image))  # RGB image
                 staff_img_trans = np.array(perspect_trans(staff_img))  # 1-bit mask
@@ -356,9 +360,13 @@ class DsDataLoader(MultiprocessingDataLoader):
                 # Random perspective transform
                 seed = random.randint(0, 1000)
                 monkey_patch_float_for_imaugs()
+                random_rotation = random.uniform(-5, 5)
 
-                def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
-                    return imaugs.perspective_transform(img, seed=seed, sigma=70)
+                def perspect_trans(
+                    img: Image.Image, seed: int = seed, random_rotation: float = random_rotation
+                ) -> Any:
+                    rotated = img.rotate(random_rotation)
+                    return imaugs.perspective_transform(rotated, seed=seed, sigma=70)
 
                 image_arr = np.array(batch_transform(image_trans, perspect_trans))  # RGB image
                 label_arr = np.array(batch_transform(label_trans, perspect_trans))
