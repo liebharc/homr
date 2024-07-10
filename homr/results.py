@@ -188,7 +188,7 @@ class ResultClef(ResultSymbol):
         return hash((self.clef_type, self.circle_of_fifth))
 
     def __str__(self) -> str:
-        return f"{self.clef_type}{self.circle_of_fifth}"
+        return f"{self.clef_type}/{self.circle_of_fifth}"
 
     def __repr__(self) -> str:
         return str(self)
@@ -386,6 +386,9 @@ class ResultStaff:
         for measure in self.measures:
             symbols.extend(measure.symbols)
         return symbols
+
+    def number_of_new_lines(self) -> int:
+        return sum(1 for measure in self.measures if measure.is_new_line)
 
     def replace_symbol(self, old_symbol: ResultSymbol, new_symbol: ResultSymbol) -> None:
         for measure in self.measures:

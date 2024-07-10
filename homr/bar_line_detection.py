@@ -1,6 +1,16 @@
+import cv2
+import numpy as np
+
 from homr import constants
 from homr.bounding_boxes import RotatedBoundingBox
 from homr.model import BarLine, Staff
+from homr.type_definitions import NDArray
+
+
+def prepare_bar_line_image(image: NDArray) -> NDArray:
+    kernel = np.ones((7, 1), np.uint8)
+    result = cv2.dilate(image, kernel, iterations=1)
+    return result
 
 
 def detect_bar_lines(

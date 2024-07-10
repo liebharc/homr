@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 
 from homr import constants
 from homr.bounding_boxes import RotatedBoundingBox
@@ -11,13 +10,9 @@ from homr.type_definitions import NDArray
 def prepare_brace_dot_image(
     symbols: NDArray, staff: NDArray, all_other: NDArray, unit_size: float
 ) -> NDArray:
-    kernel_size = int(round(0.5 * unit_size))
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    all_other = cv2.dilate(all_other, kernel, iterations=1)
-    all_other = cv2.threshold(all_other, 0.1, 1, cv2.THRESH_BINARY)[1].astype(np.uint8)
-    brace_dot = symbols - all_other - staff
-    brace_dot = cv2.subtract(cv2.subtract(symbols, all_other), staff)
-    return brace_dot  # type: ignore
+    brace_dot = cv2.subtract(symbols, staff)
+
+    return brace_dot
 
 
 def _filter_for_tall_elements(
