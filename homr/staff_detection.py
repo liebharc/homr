@@ -23,6 +23,7 @@ def prepare_staff_image(img: NDArray) -> NDArray:
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 3))
     out = cv2.erode(img.astype(np.uint8), kernel)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 3))
     return cv2.dilate(out, kernel)
 
 

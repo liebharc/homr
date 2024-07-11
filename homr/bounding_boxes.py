@@ -153,7 +153,7 @@ class AngledBoundingBox(AnyPolygon):
         self.debug_id = debug_id
         self.contours = contours
         angle = box[2]
-        self.box: tuple[tuple[float, float], tuple[int, int], float]
+        self.box: cvt.RotatedRect
         if angle > 135:  # noqa: PLR2004
             angle = angle - 180
             self.box = ((box[0][0], box[0][1]), (box[1][0], box[1][1]), angle)
@@ -196,8 +196,8 @@ class AngledBoundingBox(AnyPolygon):
 
         # Get the centers and major axes of the rectangles
         center1, axes1, _ = self.box
-        center2: tuple[float, float]
-        axes2: tuple[int, int]
+        center2: Sequence[float]
+        axes2: Sequence[float]
         if isinstance(other, BoundingBox):
             center2, axes2, _ = (
                 other.rotated_box
@@ -536,7 +536,6 @@ def _merge_groups_recursive(
     if step > step_limit:
         eprint("Too many steps in _merge_groups_recursive, giving back current results")
         return groups
-    eprint("Merging symbol groups " + str(len(groups)))
     number_of_changes = 0
     merged: list[list[AngledBoundingBox]] = []
     used_groups = set()

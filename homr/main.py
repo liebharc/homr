@@ -10,7 +10,11 @@ from homr import color_adjust, download_utils
 from homr.accidental_detection import add_accidentals_to_staffs
 from homr.accidental_rules import maintain_accidentals
 from homr.autocrop import autocrop
-from homr.bar_line_detection import add_bar_lines_to_staffs, detect_bar_lines
+from homr.bar_line_detection import (
+    add_bar_lines_to_staffs,
+    detect_bar_lines,
+    prepare_bar_line_image,
+)
 from homr.bounding_boxes import (
     BoundingEllipse,
     RotatedBoundingBox,
@@ -124,7 +128,7 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     eprint("Creating bounds for stems_rest")
     stems_rest = create_rotated_bounding_boxes(predictions.stems_rest)
     eprint("Creating bounds for bar_lines")
-    bar_line_img = predictions.stems_rest
+    bar_line_img = prepare_bar_line_image(predictions.stems_rest)
     debug.write_threshold_image("bar_line_img", bar_line_img)
     bar_lines = create_rotated_bounding_boxes(bar_line_img, skip_merging=True, min_size=(1, 5))
 
@@ -157,7 +161,7 @@ def process_image(  # noqa: PLR0915
             raise Exception("No noteheads found")
 
         average_note_head_height = float(
-            np.mean([notehead.notehead.size[1] for notehead in noteheads_with_stems])
+            np.median([notehead.notehead.size[1] for notehead in noteheads_with_stems])
         )
         eprint("Average note head height: " + str(average_note_head_height))
 
@@ -232,7 +236,13 @@ def process_image(  # noqa: PLR0915
         xml = generate_xml(result_staffs, title)
         xml.write(xml_file)
 
-        eprint("Finished parsing " + str(len(staffs)) + " staffs")
+        eprint(
+            "Finished parsing "
+            + str(len(result_staffs))
+            + " voices over "
+            + str(sum(staff.number_of_new_lines() for staff in result_staffs))
+            + " staves"
+        )
         teaser_file = replace_extension(image_path, "_teaser.png")
         debug.write_teaser(teaser_file, staffs)
         debug.clean_debug_files_from_previous_runs()

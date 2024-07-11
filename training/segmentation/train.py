@@ -8,7 +8,7 @@ import augly.image as imaugs  # type: ignore
 import cv2
 import numpy as np
 import tensorflow as tf
-from PIL import Image, ImageColor
+from PIL import Image, ImageColor, ImageEnhance
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
@@ -73,6 +73,25 @@ def get_deep_score_data_paths(dataset_path: str) -> list[list[str]]:
     return paths
 
 
+def apply_gradient_contrast(
+    image: Image, start_contrast: float = 1.0, end_contrast: float = 0.7
+) -> Image:
+    width, height = image.size
+    gradient = np.linspace(start_contrast, end_contrast, num=width * height).reshape(
+        (height, width)
+    )
+    gradient = Image.fromarray((gradient * 255).astype(np.uint8), mode="L")
+
+    # Apply uniform contrast reduction
+    contrast_factor = end_contrast
+    enhancer = ImageEnhance.Contrast(image)
+    contrast_reduced_image = enhancer.enhance(contrast_factor)
+
+    # Blend the original image with the contrast-reduced image using the gradient mask
+    blended_image = Image.composite(image, contrast_reduced_image, gradient)
+    return blended_image
+
+
 def preprocess_image(img_path: str) -> Image.Image:
     image = Image.open(img_path).convert("1")
 
@@ -91,12 +110,19 @@ def preprocess_image(img_path: str) -> Image.Image:
         out[bg_idx[0], bg_idx[1]] = color
         image = Image.fromarray(out)
 
+    aug_image = image
+
+    # Reduce contrast randomly
+    aug_image = apply_gradient_contrast(
+        aug_image, random.uniform(0.3, 1.0), random.uniform(0.3, 1.0)
+    )
+
     # Color jitter
     bright = (7 + random.randint(0, 6)) / 10  # 0.7~1.3
     saturation = (5 + random.randint(0, 7)) / 10  # 0.5~1.2
     contrast = (5 + random.randint(0, 10)) / 10  # 0.5~1.5
     aug_image = imaugs.color_jitter(
-        image, brightness_factor=bright, saturation_factor=saturation, contrast_factor=contrast
+        aug_image, brightness_factor=bright, saturation_factor=saturation, contrast_factor=contrast
     )
 
     # Blur
@@ -226,9 +252,13 @@ class DataLoader(MultiprocessingDataLoader):
                 # Random perspective transform
                 seed = random.randint(0, 1000)
                 monkey_patch_float_for_imaugs()
+                random_rotation = random.uniform(-5, 5)
 
-                def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
-                    return imaugs.perspective_transform(img, seed=seed, sigma=70)
+                def perspect_trans(
+                    img: Image.Image, seed: int = seed, random_rotation: float = random_rotation
+                ) -> Any:
+                    rotated = img.rotate(random_rotation)
+                    return imaugs.perspective_transform(rotated, seed=seed, sigma=70)
 
                 image_trans = np.array(perspect_trans(image))  # RGB image
                 staff_img_trans = np.array(perspect_trans(staff_img))  # 1-bit mask
@@ -356,9 +386,13 @@ class DsDataLoader(MultiprocessingDataLoader):
                 # Random perspective transform
                 seed = random.randint(0, 1000)
                 monkey_patch_float_for_imaugs()
+                random_rotation = random.uniform(-5, 5)
 
-                def perspect_trans(img: Image.Image, seed: int = seed) -> Any:
-                    return imaugs.perspective_transform(img, seed=seed, sigma=70)
+                def perspect_trans(
+                    img: Image.Image, seed: int = seed, random_rotation: float = random_rotation
+                ) -> Any:
+                    rotated = img.rotate(random_rotation)
+                    return imaugs.perspective_transform(rotated, seed=seed, sigma=70)
 
                 image_arr = np.array(batch_transform(image_trans, perspect_trans))  # RGB image
                 label_arr = np.array(batch_transform(label_trans, perspect_trans))
