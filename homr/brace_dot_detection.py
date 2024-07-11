@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 from homr import constants
 from homr.bounding_boxes import RotatedBoundingBox
@@ -11,8 +12,13 @@ def prepare_brace_dot_image(
     symbols: NDArray, staff: NDArray, all_other: NDArray, unit_size: float
 ) -> NDArray:
     brace_dot = cv2.subtract(symbols, staff)
-
-    return brace_dot
+    """
+    Remove horizontal lines.
+    """
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 5))
+    out = cv2.erode(brace_dot.astype(np.uint8), kernel)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 5))
+    return cv2.dilate(out, kernel)
 
 
 def _filter_for_tall_elements(

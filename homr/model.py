@@ -363,7 +363,7 @@ class Staff(DebugDrawable):
         self.max_x = grid[-1].x
         self.min_y = min([min(p.y) for p in grid])
         self.max_y = max([max(p.y) for p in grid])
-        self.average_unit_size = np.mean([p.average_unit_size for p in grid])
+        self.average_unit_size = np.median([p.average_unit_size for p in grid])
         self.ledger_lines: list[RotatedBoundingBox] = []
         self.symbols: list[SymbolOnStaff] = []
         self._y_tolerance = constants.max_number_of_ledger_lines * self.average_unit_size

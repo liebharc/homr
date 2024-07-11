@@ -145,8 +145,8 @@ def _get_min_max_y_position_of_notes(staff: Staff) -> tuple[float, float]:
 
 
 def _calculate_region(staff: Staff, x_values: NDArray, y_values: NDArray) -> NDArray:
-    x_min = min(*x_values, staff.min_x) - staff.average_unit_size
-    x_max = max(*x_values, staff.max_x) + staff.average_unit_size
+    x_min = min(*x_values, staff.min_x) - 2 * staff.average_unit_size
+    x_max = max(*x_values, staff.max_x) + 2 * staff.average_unit_size
     staff_min_y, staff_max_y = _get_min_max_y_position_of_notes(staff)
     y_min = min(*(y_values - 0.5 * staff.average_unit_size), staff_min_y)
     y_max = max(*(y_values + 0.5 * staff.average_unit_size), staff_max_y)
@@ -366,7 +366,7 @@ def merge_and_clean(staffs: list[ResultStaff]) -> ResultStaff:
     result = ResultStaff([])
     for staff in staffs:
         result = result.merge(staff)
-    _pick_dominant_clef(result)
+    # _pick_dominant_clef(result)
     _pick_dominant_key_signature(result)
     _remove_redundant_clefs(result.measures)
     _remove_redundant_time_signatures(result.measures)

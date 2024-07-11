@@ -8,7 +8,7 @@ from homr.type_definitions import NDArray
 
 
 def prepare_bar_line_image(image: NDArray) -> NDArray:
-    kernel = np.ones((7, 1), np.uint8)
+    kernel = np.ones((5, 3), np.uint8)
     result = cv2.dilate(image, kernel, iterations=1)
     return result
 
