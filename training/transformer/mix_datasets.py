@@ -42,6 +42,9 @@ def _take_all_training_sets(indexes: list[list[str]]) -> list[str]:
 def mix_training_sets(
     data_sources: list[list[str]], weights: list[float], number_of_files: int
 ) -> list[str]:
+    # We want the training and validation sets to be the same for each run
+    # if the input hasn't changed and therefore set the seed here.
+    np.random.seed(1720697007)
     for data_source in data_sources:
         np.random.shuffle(data_source)
     if number_of_files < 0:
