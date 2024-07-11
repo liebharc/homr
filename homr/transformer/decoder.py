@@ -186,7 +186,7 @@ class ScoreDecoder(nn.Module):
         mask = torch.ones(config.num_rhythm_tokens).float()
         for i, vobac in enumerate(config.rhythm_vocab):
             if constants.triplet_symbol in vobac:
-                mask[i] /= 3
+                mask[i] /= 2
         return mask
 
     @torch.no_grad()

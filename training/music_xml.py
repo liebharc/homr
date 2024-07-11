@@ -197,10 +197,7 @@ def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
     is_triplet = (
         int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2  # noqa: PLR2004
     )
-    is_sixtuplet = (
-        int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
-    )
-    if is_triplet or is_sixtuplet:
+    if is_triplet:
         return constants.triplet_symbol
     return ""
 
