@@ -92,7 +92,7 @@ def apply_gradient_contrast(
     return blended_image
 
 
-def preprocess_image(img_path: str) -> Image.Image:
+def preprocess_image(img_path: str, reduce_contrast: bool = False) -> Image.Image:
     image = Image.open(img_path).convert("1")
 
     if image.mode == "1":
@@ -112,10 +112,11 @@ def preprocess_image(img_path: str) -> Image.Image:
 
     aug_image = image
 
-    # Reduce contrast randomly
-    aug_image = apply_gradient_contrast(
-        aug_image, random.uniform(0.5, 1.0), random.uniform(0.5, 1.0)
-    )
+    if reduce_contrast:
+        # Reduce contrast randomly
+        aug_image = apply_gradient_contrast(
+            aug_image, random.uniform(0.3, 1.0), random.uniform(0.3, 1.0)
+        )
 
     # Color jitter
     bright = (7 + random.randint(0, 6)) / 10  # 0.7~1.3
@@ -234,7 +235,7 @@ class DataLoader(MultiprocessingDataLoader):
                 inp_img_path, staff_img_path, symbol_img_path = self._dist_queue.get()
 
                 # Preprocess image with transformations that won't change view.
-                image = preprocess_image(inp_img_path)
+                image = preprocess_image(inp_img_path, reduce_contrast=True)
 
                 # Random resize
                 ratio = random.choice(np.arange(0.2, 1.21, 0.1))
