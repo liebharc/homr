@@ -114,7 +114,7 @@ def preprocess_image(img_path: str) -> Image.Image:
 
     # Reduce contrast randomly
     aug_image = apply_gradient_contrast(
-        aug_image, random.uniform(0.3, 1.0), random.uniform(0.3, 1.0)
+        aug_image, random.uniform(0.5, 1.0), random.uniform(0.5, 1.0)
     )
 
     # Color jitter
