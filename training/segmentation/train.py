@@ -74,13 +74,13 @@ def get_deep_score_data_paths(dataset_path: str) -> list[list[str]]:
 
 
 def apply_gradient_contrast(
-    image: Image, start_contrast: float = 1.0, end_contrast: float = 0.7
-) -> Image:
+    image: Image.Image, start_contrast: float = 1.0, end_contrast: float = 0.7
+) -> Image.Image:
     width, height = image.size
-    gradient = np.linspace(start_contrast, end_contrast, num=width * height).reshape(
+    gradient_array = np.linspace(start_contrast, end_contrast, num=width * height).reshape(
         (height, width)
     )
-    gradient = Image.fromarray((gradient * 255).astype(np.uint8), mode="L")
+    gradient = Image.fromarray((gradient_array * 255).astype(np.uint8), mode="L")
 
     # Apply uniform contrast reduction
     contrast_factor = end_contrast
@@ -142,7 +142,7 @@ def preprocess_image(img_path: str, reduce_contrast: bool = False) -> Image.Imag
     rat = random.randint(3, 10) / 10
     aug_image = imaugs.pixelization(aug_image, ratio=rat)
 
-    return cast(Image.Image, aug_image)
+    return aug_image
 
 
 def batch_transform(
