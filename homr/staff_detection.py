@@ -327,9 +327,11 @@ def find_staff_anchors(
             ]
         else:
             adjacent = [
+                center_symbol.move_to_x_horizontal_by(-10),
                 center_symbol.move_to_x_horizontal_by(-5),
                 center_symbol,
                 center_symbol.move_to_x_horizontal_by(5),
+                center_symbol.move_to_x_horizontal_by(10),
             ]
         for symbol in adjacent:
             estimated_unit_size = round(symbol.size[1] / (constants.number_of_lines_on_a_staff - 1))
