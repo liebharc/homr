@@ -12,6 +12,13 @@ from homr.results import (
 )
 
 
+class XmlGeneratorArguments:
+    def __init__(self, large_page: bool | None, metronome: int | None, tempo: int | None):
+        self.large_page = large_page
+        self.metronome = metronome
+        self.tempo = tempo
+
+
 def build_work(f_name: str) -> mxl.XMLWork:  # type: ignore
     work = mxl.XMLWork()
     title = mxl.XMLWorkTitle()
@@ -20,7 +27,9 @@ def build_work(f_name: str) -> mxl.XMLWork:  # type: ignore
     return work
 
 
-def build_defaults() -> mxl.XMLDefaults:  # type: ignore
+def build_defaults(args: XmlGeneratorArguments) -> mxl.XMLDefaults:  # type: ignore
+    if not args.large_page:
+        return mxl.XMLDefaults()
     # These values are larger than a letter or A4 format so that
     # we only have to break staffs with every new detected staff
     # This works well for electronic formats, if the results are supposed
@@ -146,9 +155,33 @@ def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
     return build_note_group(chord)
 
 
-def build_measure(measure: ResultMeasure, measure_number: int) -> mxl.XMLMeasure:  # type: ignore
+def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection:  # type: ignore
+    if not args.metronome:
+        return mxl.XMLDirection()
+    direction = mxl.XMLDirection()
+    direction_type = mxl.XMLDirectionType()
+    direction.add_child(direction_type)
+    metronome = mxl.XMLMetronome()
+    direction_type.add_child(metronome)
+    beat_unit = mxl.XMLBeatUnit(value_="quarter")
+    metronome.add_child(beat_unit)
+    per_minute = mxl.XMLPerMinute(value_=str(args.metronome))
+    metronome.add_child(per_minute)
+    if args.tempo:
+        direction.add_child(mxl.XMLSound(tempo=args.tempo))
+    else:
+        direction.add_child(mxl.XMLSound(tempo=args.metronome))
+    return direction
+
+
+def build_measure(  # type: ignore
+    args: XmlGeneratorArguments, measure: ResultMeasure, is_first_part: bool, measure_number: int
+) -> mxl.XMLMeasure:
     result = mxl.XMLMeasure(number=str(measure_number))
-    if measure.is_new_line:
+    is_first_measure = measure_number == 1
+    if is_first_measure and is_first_part:
+        result.add_child(build_add_time_direction(args))
+    if measure.is_new_line and not is_first_measure:
         result.add_child(mxl.XMLPrint(new_system="yes"))
     for symbol in measure.symbols:
         if isinstance(symbol, ResultClef):
@@ -163,20 +196,25 @@ def build_measure(measure: ResultMeasure, measure_number: int) -> mxl.XMLMeasure
     return result
 
 
-def build_part(staff: ResultStaff, index: int) -> mxl.XMLPart:  # type: ignore
+def build_part(  # type: ignore
+    args: XmlGeneratorArguments, staff: ResultStaff, index: int
+) -> mxl.XMLPart:
     part = mxl.XMLPart(id=get_part_id(index))
     measure_number = 1
+    is_first_part = index == 0
     for measure in staff.measures:
-        part.add_child(build_measure(measure, measure_number))
+        part.add_child(build_measure(args, measure, is_first_part, measure_number))
         measure_number += 1
     return part
 
 
-def generate_xml(staffs: list[ResultStaff], title: str) -> mxl.XMLElement:  # type: ignore
+def generate_xml(  # type: ignore
+    args: XmlGeneratorArguments, staffs: list[ResultStaff], title: str
+) -> mxl.XMLElement:
     root = mxl.XMLScorePartwise()
     root.add_child(build_work(title))
-    root.add_child(build_defaults())
+    root.add_child(build_defaults(args))
     root.add_child(build_part_list(len(staffs)))
     for index, staff in enumerate(staffs):
-        root.add_child(build_part(staff, index))
+        root.add_child(build_part(args, staff, index))
     return root

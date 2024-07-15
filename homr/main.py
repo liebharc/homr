@@ -39,7 +39,7 @@ from homr.staff_parsing import parse_staffs
 from homr.title_detection import detect_title
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
-from homr.xml_generator import generate_xml
+from homr.xml_generator import XmlGeneratorArguments, generate_xml
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -138,7 +138,10 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
 
 
 def process_image(  # noqa: PLR0915
-    image_path: str, enable_debug: bool, enable_cache: bool
+    image_path: str,
+    enable_debug: bool,
+    enable_cache: bool,
+    xml_generator_args: XmlGeneratorArguments,
 ) -> tuple[str, str, str]:
     eprint("Processing " + image_path)
     predictions, debug = load_and_preprocess_predictions(image_path, enable_debug, enable_cache)
@@ -233,7 +236,7 @@ def process_image(  # noqa: PLR0915
         result_staffs = maintain_accidentals(result_staffs)
 
         eprint("Writing XML")
-        xml = generate_xml(result_staffs, title)
+        xml = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
 
         eprint(
@@ -314,6 +317,17 @@ def main() -> None:
     parser.add_argument(
         "--cache", action="store_true", help="Read an existing cache file or create a new one"
     )
+    parser.add_argument(
+        "--output-large-page",
+        action="store_true",
+        help="Adds instructions to the musicxml so that it gets rendered on larger pages",
+    )
+    parser.add_argument(
+        "--output-metronome", type=int, help="Adds a metronome to the musicxml with the given bpm"
+    )
+    parser.add_argument(
+        "--output-tempo", type=int, help="Adds a tempo to the musicxml with the given bpm"
+    )
     args = parser.parse_args()
 
     download_weights()
@@ -321,12 +335,16 @@ def main() -> None:
         eprint("Init finished")
         return
 
+    xml_generator_args = XmlGeneratorArguments(
+        args.output_large_page, args.output_metronome, args.output_tempo
+    )
+
     if not args.image:
         eprint("No image provided")
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
-        process_image(args.image, args.debug, args.cache)
+        process_image(args.image, args.debug, args.cache, xml_generator_args)
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
@@ -334,7 +352,7 @@ def main() -> None:
         for image_file in image_files:
             eprint("=========================================")
             try:
-                process_image(image_file, args.debug, args.cache)
+                process_image(image_file, args.debug, args.cache, xml_generator_args)
                 eprint("Finished", image_file)
             except Exception as e:
                 eprint(f"An error occurred while processing {image_file}: {e}")
