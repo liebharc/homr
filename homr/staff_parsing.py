@@ -26,14 +26,28 @@ def _have_all_the_same_number_of_staffs(staffs: list[MultiStaff]) -> bool:
     return True
 
 
-def _ensure_same_number_of_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
+def _is_close_to_image_top_or_bottom(staff: MultiStaff, predictions: InputPredictions) -> bool:
+    tolerance = 50
+    closest_distance_to_top_or_bottom = [
+        min(s.min_x, predictions.preprocessed.shape[0] - s.max_x) for s in staff.staffs
+    ]
+    return min(closest_distance_to_top_or_bottom) < tolerance
+
+
+def _ensure_same_number_of_staffs(
+    staffs: list[MultiStaff], predictions: InputPredictions
+) -> list[MultiStaff]:
     if _have_all_the_same_number_of_staffs(staffs):
         return staffs
     if len(staffs) > 2:  # noqa: PLR2004
-        if _have_all_the_same_number_of_staffs(staffs[1:]):
+        if _is_close_to_image_top_or_bottom(
+            staffs[0], predictions
+        ) and _have_all_the_same_number_of_staffs(staffs[1:]):
             eprint("Removing first system from all voices, as it has a different number of staffs")
             return staffs[1:]
-        if _have_all_the_same_number_of_staffs(staffs[:-1]):
+        if _is_close_to_image_top_or_bottom(
+            staffs[-1], predictions
+        ) and _have_all_the_same_number_of_staffs(staffs[:-1]):
             eprint("Removing last system from all voices, as it has a different number of staffs")
             return staffs[:-1]
     result: list[MultiStaff] = []
@@ -395,7 +409,7 @@ def parse_staffs(
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
     """
-    staffs = _ensure_same_number_of_staffs(staffs)
+    staffs = _ensure_same_number_of_staffs(staffs, predictions)
     # For simplicity we call every staff in a multi staff a voice,
     # even if it's part of a grand staff.
     number_of_voices = _get_number_of_voices(staffs)

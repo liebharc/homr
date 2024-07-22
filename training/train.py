@@ -33,7 +33,7 @@ model_type = args.model_name
 
 if model_type == "segnet":
     dataset = download.download_deep_scores()
-    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=10)
+    model = train.train_model(dataset, data_model=model_type, steps=1500, epochs=15)
     filename = get_segmentation_model_path(model_type)
     meta = {
         "input_shape": list(model.input_shape),

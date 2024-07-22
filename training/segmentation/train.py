@@ -74,13 +74,13 @@ def get_deep_score_data_paths(dataset_path: str) -> list[list[str]]:
 
 
 def apply_gradient_contrast(
-    image: Image, start_contrast: float = 1.0, end_contrast: float = 0.7
-) -> Image:
+    image: Image.Image, start_contrast: float = 1.0, end_contrast: float = 0.7
+) -> Image.Image:
     width, height = image.size
-    gradient = np.linspace(start_contrast, end_contrast, num=width * height).reshape(
+    gradient_array = np.linspace(start_contrast, end_contrast, num=width * height).reshape(
         (height, width)
     )
-    gradient = Image.fromarray((gradient * 255).astype(np.uint8), mode="L")
+    gradient = Image.fromarray((gradient_array * 255).astype(np.uint8), mode="L")
 
     # Apply uniform contrast reduction
     contrast_factor = end_contrast
@@ -92,7 +92,7 @@ def apply_gradient_contrast(
     return blended_image
 
 
-def preprocess_image(img_path: str) -> Image.Image:
+def preprocess_image(img_path: str, reduce_contrast: bool = False) -> Image.Image:
     image = Image.open(img_path).convert("1")
 
     if image.mode == "1":
@@ -112,10 +112,11 @@ def preprocess_image(img_path: str) -> Image.Image:
 
     aug_image = image
 
-    # Reduce contrast randomly
-    aug_image = apply_gradient_contrast(
-        aug_image, random.uniform(0.3, 1.0), random.uniform(0.3, 1.0)
-    )
+    if reduce_contrast:
+        # Reduce contrast randomly
+        aug_image = apply_gradient_contrast(
+            aug_image, random.uniform(0.3, 1.0), random.uniform(0.3, 1.0)
+        )
 
     # Color jitter
     bright = (7 + random.randint(0, 6)) / 10  # 0.7~1.3
@@ -141,7 +142,7 @@ def preprocess_image(img_path: str) -> Image.Image:
     rat = random.randint(3, 10) / 10
     aug_image = imaugs.pixelization(aug_image, ratio=rat)
 
-    return cast(Image.Image, aug_image)
+    return aug_image
 
 
 def batch_transform(
@@ -234,7 +235,7 @@ class DataLoader(MultiprocessingDataLoader):
                 inp_img_path, staff_img_path, symbol_img_path = self._dist_queue.get()
 
                 # Preprocess image with transformations that won't change view.
-                image = preprocess_image(inp_img_path)
+                image = preprocess_image(inp_img_path, reduce_contrast=True)
 
                 # Random resize
                 ratio = random.choice(np.arange(0.2, 1.21, 0.1))

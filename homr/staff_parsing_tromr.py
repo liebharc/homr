@@ -41,7 +41,7 @@ def build_image_options(staff_image: NDArray) -> list[NDArray]:
 
 
 def _fill_in_time_signature(staff: ResultStaff) -> None:
-    average_measure_length = np.mean([m.length_in_quarters() for m in staff.measures])
+    average_measure_length = np.median([m.length_in_quarters() for m in staff.measures])
     for symbol in staff.get_symbols():
         if isinstance(symbol, ResultTimeSignature):
             beat_duration = 4 / symbol.denominator * constants.duration_of_quarter
