@@ -19,10 +19,10 @@ class XmlGeneratorArguments:
         self.tempo = tempo
 
 
-def build_work(f_name: str) -> mxl.XMLWork:  # type: ignore
+def build_work(title_text: str) -> mxl.XMLWork:  # type: ignore
     work = mxl.XMLWork()
     title = mxl.XMLWorkTitle()
-    title._value = f_name
+    title._value = title_text
     work.add_child(title)
     return work
 
