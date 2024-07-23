@@ -214,7 +214,7 @@ def move_pitch_to_clef(
     )
 
 
-def get_duration_name(duration: int) -> str:
+def _get_duration_name(duration: int) -> str:
     duration_dict = {
         4 * constants.duration_of_quarter: "whole",
         2 * constants.duration_of_quarter: "half",
@@ -263,7 +263,7 @@ class ResultDuration:
     def __init__(self, base_duration: int, modifier: DurationModifier = DurationModifier.NONE):
         self.duration = _adjust_duration(base_duration, modifier)
         self.modifier = modifier
-        self.duration_name = get_duration_name(base_duration)
+        self.duration_name = _get_duration_name(base_duration)
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultDuration):
@@ -300,6 +300,12 @@ class ResultNote:
 
     def __repr__(self) -> str:
         return str(self)
+
+
+def get_min_duration(notes: list[ResultNote]) -> ResultDuration:
+    if len(notes) == 0:
+        return ResultDuration(constants.duration_of_quarter)
+    return min([note.duration for note in notes], key=lambda x: x.duration)
 
 
 class ResultChord(ResultSymbol):
