@@ -10,6 +10,7 @@ from homr.results import (
     ResultPitch,
     ResultStaff,
     ResultTimeSignature,
+    get_min_duration,
 )
 from homr.simple_logging import eprint
 
@@ -148,7 +149,7 @@ class TrOMRParser:
             else:
                 return self.parse_rest(rest_parts[0])
         result_notes = [self.parse_note(note_part) for note_part in note_parts]
-        return ResultChord(result_notes[0].duration, result_notes)
+        return ResultChord(get_min_duration(result_notes), result_notes)
 
     def parse_rest(self, rest: str) -> ResultChord:
         rest = rest.split("|")[0]

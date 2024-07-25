@@ -155,9 +155,9 @@ def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
     return build_note_group(chord)
 
 
-def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection:  # type: ignore
+def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection | None:  # type: ignore
     if not args.metronome:
-        return mxl.XMLDirection()
+        return None
     direction = mxl.XMLDirection()
     direction_type = mxl.XMLDirectionType()
     direction.add_child(direction_type)
@@ -180,7 +180,9 @@ def build_measure(  # type: ignore
     result = mxl.XMLMeasure(number=str(measure_number))
     is_first_measure = measure_number == 1
     if is_first_measure and is_first_part:
-        result.add_child(build_add_time_direction(args))
+        direction = build_add_time_direction(args)
+        if direction:
+            result.add_child(direction)
     if measure.is_new_line and not is_first_measure:
         result.add_child(mxl.XMLPrint(new_system="yes"))
     for symbol in measure.symbols:

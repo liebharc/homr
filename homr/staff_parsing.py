@@ -362,28 +362,33 @@ def _remove_redundant_clefs(measures: list[ResultMeasure]) -> None:
                     last_clef = symbol
 
 
-def _remove_redundant_time_signatures(measures: list[ResultMeasure]) -> None:
+def _remove_all_but_first_time_signature(measures: list[ResultMeasure]) -> None:
+    """
+    The transformer tends to hallucinate time signatures. In most cases there is only one
+    time signature at the beginning, so we remove all others.
+    """
     last_sig = None
     for measure in measures:
         for symbol in measure.symbols:
             if isinstance(symbol, ResultTimeSignature):
-                if last_sig is not None and last_sig == symbol:
+                if last_sig is not None:
                     measure.remove_symbol(symbol)
                 else:
                     last_sig = symbol
 
 
-def merge_and_clean(staffs: list[ResultStaff]) -> ResultStaff:
+def merge_and_clean(staffs: list[ResultStaff], force_single_clef_type: bool) -> ResultStaff:
     """
     Merge all staffs of a voice into a single staff.
     """
     result = ResultStaff([])
     for staff in staffs:
         result = result.merge(staff)
-    # _pick_dominant_clef(result)
+    if force_single_clef_type:
+        _pick_dominant_clef(result)
     _pick_dominant_key_signature(result)
     _remove_redundant_clefs(result.measures)
-    _remove_redundant_time_signatures(result.measures)
+    _remove_all_but_first_time_signature(result.measures)
     result.measures = [measure for measure in result.measures if not measure.is_empty()]
     return result
 
@@ -434,5 +439,10 @@ def parse_staffs(
             remember_new_line(result_staff.measures)
             result_for_voice.append(result_staff)
             i += 1
-        voices.append(merge_and_clean(result_for_voice))
+
+        # Piano music can have a change of clef, while for other instruments
+        # we assume that the clef is the same for all staffs.
+        # The number of voices is the only way we can distinguish between the two.
+        force_single_clef_type = number_of_voices == 1
+        voices.append(merge_and_clean(result_for_voice, force_single_clef_type))
     return voices
