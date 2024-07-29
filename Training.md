@@ -13,6 +13,13 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 115
+
+Commit: d4aa8e5cafd35049cf34db05ce976765ed7e4d96
+Date: 28 Jul 2024
+SER: 15.0%
+Validation result: 10.9
+
 ## Run 84
 
 Commit: 9c7479d092458cc8d70d9ea5a1b24ca8ac278cd7
@@ -75,7 +82,6 @@ Date: 12 May 2024
 SER: 53%
 
 First training run within the `homr` repo.
-
 
 ## Previous runs
 
