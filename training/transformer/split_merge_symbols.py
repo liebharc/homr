@@ -1,5 +1,6 @@
 import re
 
+from homr import constants
 from homr.circle_of_fifths import (
     KeyTransformation,
     NoKeyTransformation,
@@ -147,12 +148,14 @@ def _symbol_to_pitch(symbol: str) -> str:
     return "nonote"
 
 
-def _add_dots(duration: str) -> str:
+def _add_duration_modifier(duration: str) -> str:
     # TrOMR only allows one dot
-    # number_of_dots_in_duration = duration.count(".")
-    # return "".join(["." for _ in range(number_of_dots_in_duration)])
     if "." in duration:
         return "."
+    if constants.triplet_symbol in duration:
+        # Ignore triplets for now
+        # return constants.triplet_symbol
+        return ""
     return ""
 
 
@@ -163,18 +166,24 @@ def _translate_duration(duration: str) -> str:
     duration = duration.replace("thirty", "thirty_second")
     duration = duration.replace("sixty", "sixty_fourth")
     duration = duration.replace("hundred", "hundred_twenty_eighth")
-    duration = duration.replace(".", "")  # We add dots later again
+
+    # We add duration modifiers later again
+    duration = duration.replace(".", "")
+    duration = duration.replace(constants.triplet_symbol, "")
     return duration
 
 
 def _symbol_to_rhythm(symbol: str) -> str:
     if symbol.startswith(("note", "gracenote")):
         note = "note-" + _translate_duration(symbol.split("_")[1])
-        return note + _add_dots(symbol)
+        return note + _add_duration_modifier(symbol)
     symbol = symbol.replace("rest-double_whole", "multirest-2")
     symbol = symbol.replace("rest-quadruple_whole", "multirest-2")
     symbol = symbol.replace("_fermata", "")
-    symbol = symbol.replace(".", "")  # We add dots later again
+
+    # We add duration modifiers later again
+    symbol = symbol.replace(".", "")
+    symbol = symbol.replace(constants.triplet_symbol, "")
     multirest_match = re.match(r"(rest-whole|multirest-)(\d+)", symbol)
     if multirest_match:
         rest_length = int(multirest_match[2])
@@ -189,7 +198,7 @@ def _symbol_to_rhythm(symbol: str) -> str:
     timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
     if timesignature_match:
         return "timeSignature-/" + timesignature_match[2]
-    return symbol + _add_dots(symbol)
+    return symbol + _add_duration_modifier(symbol)
 
 
 def _symbol_to_note(symbol: str) -> str:
