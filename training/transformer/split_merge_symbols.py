@@ -187,12 +187,12 @@ def _symbol_to_rhythm(symbol: str) -> list[str]:
     if constants.triplet_symbol in symbol:
         rhythms.append(constants.triplet_symbol)
         symbol = symbol.replace(constants.triplet_symbol, "")
-    if symbol.startswith("gracenote"):
+    if symbol.startswith("gracenote") or constants.grace_note_symbol in symbol:
         rhythms.append(constants.grace_note_symbol)
-        symbol = symbol.replace("gracenote", "note")
-    if "_fermata" in symbol:
+        symbol = symbol.replace("gracenote", "note").replace(constants.grace_note_symbol, "")
+    if "_fermata" in symbol or constants.fermata_symbol in symbol:
         rhythms.append(constants.fermata_symbol)
-        symbol = symbol.replace("_fermata", "")
+        symbol = symbol.replace("_fermata", "").replace(constants.fermata_symbol, "")
     if symbol.startswith("note"):
         note = "note-" + _translate_duration(symbol.split("_")[1])
         rhythms.append(note + _add_duration_modifier(symbol))

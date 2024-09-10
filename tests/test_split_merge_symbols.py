@@ -309,7 +309,7 @@ class TestMergeSymbols(unittest.TestCase):
     def test_triplets(self) -> None:
         actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
             [
-                "clef-G2 keySignature-GM gracenote-A4_eighth note-E5_quarter³_fermata note-F5_quarter³ note-G5_quarter³ note-A5_quarter³"  # noqa: E501
+                "clef-G2 keySignature-GM gracenote-A4_eighth note-E5_quartertriplet³_fermata note-F5_quartertriplet³ note-G5_quartertriplet³ note-A5_quartertriplet³"  # noqa: E501
             ],
             convert_to_modified_semantic=False,
         )
@@ -319,6 +319,6 @@ class TestMergeSymbols(unittest.TestCase):
         self.assertEqual(
             result,
             [
-                "clef-G2+keySignature-GM+note-A4_eighthgrace𝆔+note-E5_quarterfermata𝄐³+note-F5_quarter³+note-G5_quarter³+note-A5_quarter³"
+                "clef-G2+keySignature-GM+note-A4_eighthgrace𝆔+note-E5_quarterfermata𝄐triplet³+note-F5_quartertriplet³+note-G5_quartertriplet³+note-A5_quartertriplet³"
             ],
         )

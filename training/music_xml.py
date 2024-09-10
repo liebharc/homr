@@ -184,7 +184,7 @@ def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
     return "." * len(dots)
 
 
-def _get_triplet_mark(note: mxl.XMLNote) -> str:  # noqa: PLR0911 type: ignore
+def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore # noqa: PLR0911
     time_modification = note.get_children_of_type(mxl.XMLTimeModification)
     if len(time_modification) == 0:
         return ""
