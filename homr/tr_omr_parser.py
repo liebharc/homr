@@ -101,14 +101,22 @@ class TrOMRParser:
     def parse_duration(self, duration: str) -> ResultDuration:
         has_dot = duration.endswith(".")
         is_triplet = duration.endswith(constants.triplet_symbol)
+        has_fermata = duration.endswith(constants.fermata_symbol)
+        has_grace = duration.endswith(constants.grace_note_symbol)
 
         modifier = DurationModifier.NONE
         if has_dot:
             duration = duration[:-1]
             modifier = DurationModifier.DOT
         elif is_triplet:
-            duration = duration[:-1]
+            duration = duration.replace(constants.triplet_symbol, "")
             modifier = DurationModifier.TRIPLET
+        elif has_fermata:
+            duration = duration.replace(constants.fermata_symbol, "")
+            modifier = DurationModifier.FERMATA
+        elif has_grace:
+            duration = duration.replace(constants.grace_note_symbol, "")
+            modifier = DurationModifier.GRACE
         return ResultDuration(
             self.parse_duration_name(duration),
             modifier,

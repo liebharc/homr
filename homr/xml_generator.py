@@ -137,6 +137,12 @@ def build_note(model_note: ResultNote, is_chord=False) -> mxl.XMLNote:  # type: 
         time_modification.add_child(mxl.XMLActualNotes(value_=3))
         time_modification.add_child(mxl.XMLNormalNotes(value_=2))
         note.add_child(time_modification)
+    elif model_duration.modifier == DurationModifier.FERMATA:
+        notations = mxl.XMLNotations()
+        notations.add_child(mxl.XMLFermata())
+        note.add_child(notations)
+    elif model_duration.modifier == DurationModifier.GRACE:
+        note.add_child(mxl.XMLGrace())
     return note
 
 

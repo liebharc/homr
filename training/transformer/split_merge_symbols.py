@@ -16,6 +16,8 @@ class SymbolMerger:
         self.merge: list[list[str]] = []
         self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
+        self.triplet_count: int = 0
+        self.modifiers_for_next_note: list[str] = []
 
     def _append_symbol(self, symbol: str) -> None:
         if self.next_symbol_is_chord:
@@ -27,7 +29,7 @@ class SymbolMerger:
         else:
             self.merge.append([symbol])
 
-    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
+    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:  # noqa: PLR0911
         """
         Adds a symbol to the merge list. Returns True if the symbol should be retried.
 
@@ -39,6 +41,12 @@ class SymbolMerger:
                 eprint("Warning: Unexpected chord symbol")
                 return True
             return False
+        elif predrhythm == constants.triplet_symbol:
+            self.triplet_count = 3
+            return False
+        elif predrhythm in (constants.fermata_symbol, constants.grace_note_symbol):
+            self.modifiers_for_next_note.append(predrhythm)
+            return False
         elif "note" in predrhythm:
             lift = ""
             if predlift in (
@@ -49,7 +57,12 @@ class SymbolMerger:
                 "lift_N",
             ):
                 lift = predlift.split("_")[-1]
-            self._append_symbol(predpitch + lift + "_" + predrhythm.split("note-")[-1])
+            duration = predrhythm.split("note-")[-1] + str.join("", self.modifiers_for_next_note)
+            self.modifiers_for_next_note = []
+            if self.triplet_count > 0:
+                self.triplet_count -= 1
+                duration = duration + constants.triplet_symbol
+            self._append_symbol(predpitch + lift + "_" + duration)
             return False
         elif "clef" in predrhythm:
             # Two clefs in a the same staff are very unlikely
@@ -152,10 +165,6 @@ def _add_duration_modifier(duration: str) -> str:
     # TrOMR only allows one dot
     if "." in duration:
         return "."
-    if constants.triplet_symbol in duration:
-        # Ignore triplets for now
-        # return constants.triplet_symbol
-        return ""
     return ""
 
 
@@ -173,32 +182,45 @@ def _translate_duration(duration: str) -> str:
     return duration
 
 
-def _symbol_to_rhythm(symbol: str) -> str:
-    if symbol.startswith(("note", "gracenote")):
+def _symbol_to_rhythm(symbol: str) -> list[str]:
+    rhythms = []
+    if constants.triplet_symbol in symbol:
+        rhythms.append(constants.triplet_symbol)
+        symbol = symbol.replace(constants.triplet_symbol, "")
+    if symbol.startswith("gracenote"):
+        rhythms.append(constants.grace_note_symbol)
+        symbol = symbol.replace("gracenote", "note")
+    if "_fermata" in symbol:
+        rhythms.append(constants.fermata_symbol)
+        symbol = symbol.replace("_fermata", "")
+    if symbol.startswith("note"):
         note = "note-" + _translate_duration(symbol.split("_")[1])
-        return note + _add_duration_modifier(symbol)
+        rhythms.append(note + _add_duration_modifier(symbol))
+        return rhythms
     symbol = symbol.replace("rest-double_whole", "multirest-2")
     symbol = symbol.replace("rest-quadruple_whole", "multirest-2")
-    symbol = symbol.replace("_fermata", "")
 
     # We add duration modifiers later again
     symbol = symbol.replace(".", "")
-    symbol = symbol.replace(constants.triplet_symbol, "")
     multirest_match = re.match(r"(rest-whole|multirest-)(\d+)", symbol)
     if multirest_match:
         rest_length = int(multirest_match[2])
         # Some multirests don't exist in the rhtythm tokenizer,
         # for now it's good enough to just recognize them as any multirest
         if rest_length <= 1:
-            return "rest-whole"
+            rhythms.append("rest-whole")
+            return rhythms
         max_supported_multi_rest = 10
         if rest_length > max_supported_multi_rest:
-            return "multirest-" + str(max_supported_multi_rest)
+            rhythms.append("multirest-" + str(max_supported_multi_rest))
+            return rhythms
         symbol = "multirest-" + str(rest_length)
     timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
     if timesignature_match:
-        return "timeSignature-/" + timesignature_match[2]
-    return symbol + _add_duration_modifier(symbol)
+        rhythms.append("timeSignature-/" + timesignature_match[2])
+        return rhythms
+    rhythms.append(symbol + _add_duration_modifier(symbol))
+    return rhythms
 
 
 def _symbol_to_note(symbol: str) -> str:
@@ -313,7 +335,7 @@ def split_semantic_file(
         return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
 
 
-def split_symbols(  # noqa: C901
+def split_symbols(  # noqa: C901, PLR0915, PLR0912
     merged: list[str], convert_to_modified_semantic: bool = True
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     """
@@ -333,6 +355,7 @@ def split_symbols(  # noqa: C901
         predrhythm = []
         prednote = []
         key = KeyTransformation(0) if convert_to_modified_semantic else NoKeyTransformation()
+        triplet_count = 0
         for symbols in re.split("\\s+|\\+", merged[line].strip()):
             symbollift = []
             symbolpitch = []
@@ -355,9 +378,22 @@ def split_symbols(  # noqa: C901
                     symbollift.append("nonote")
                     symbolnote.append("nonote")
                 else:
+                    rhythms = _symbol_to_rhythm(symbol)
+                    for ri in range(len(rhythms) - 1):
+                        if rhythms[ri] == constants.triplet_symbol:
+                            # Only create one triplet token for every triplet
+                            # and not for every note in the triplet
+                            if triplet_count > 0:
+                                triplet_count -= 1
+                                continue
+                            triplet_count = 2
+                        symbolrhythm.append(rhythms[ri])
+                        symbolpitch.append("nonote")
+                        symbollift.append("nonote")
+                        symbolnote.append("nonote")
                     pitch = _symbol_to_pitch(symbol)
                     symbolpitch.append(pitch)
-                    symbolrhythm.append(_symbol_to_rhythm(symbol))
+                    symbolrhythm.append(rhythms[-1])
                     symbolnote.append(_symbol_to_note(symbol))
                     alter = _get_alter(symbol)
                     if alter is not None:

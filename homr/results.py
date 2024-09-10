@@ -235,6 +235,8 @@ class DurationModifier(Enum):
     NONE = 0
     DOT = 1
     TRIPLET = 2
+    GRACE = 3
+    FERMATA = 4
 
     def __init__(self, duration: int) -> None:
         self.duration = duration
@@ -246,6 +248,10 @@ class DurationModifier(Enum):
             return "."
         elif self == DurationModifier.TRIPLET:
             return constants.triplet_symbol
+        elif self == DurationModifier.GRACE:
+            return constants.grace_note_symbol
+        elif self == DurationModifier.FERMATA:
+            return constants.fermata_symbol
         else:
             return "Invalid duration"
 

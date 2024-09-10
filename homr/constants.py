@@ -107,3 +107,7 @@ max_distance_before_giving_up = 5.0
 # We use ³ as triplet indicator as it's not a valid duration name
 # or note name and thus we have no risk of confusion
 triplet_symbol = "³"
+
+grace_note_symbol = "grace𝆔"
+
+fermata_symbol = "fermata𝄐"
