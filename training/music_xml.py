@@ -184,7 +184,7 @@ def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
     return "." * len(dots)
 
 
-def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
+def _get_triplet_mark(note: mxl.XMLNote) -> str:  # noqa: PLR0911 type: ignore
     time_modification = note.get_children_of_type(mxl.XMLTimeModification)
     if len(time_modification) == 0:
         return ""
@@ -194,6 +194,11 @@ def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
     normal_notes = time_modification[0].get_children_of_type(mxl.XMLNormalNotes)
     if len(normal_notes) == 0:
         return ""
+    is_grace = len(note.get_children_of_type(mxl.XMLGrace)) > 0
+    is_fermata = False
+    for notations in note.get_children_of_type(mxl.XMLNotations):
+        if len(notations.get_children_of_type(mxl.XMLFermata)) > 0:
+            is_fermata = True
     is_triplet = (
         int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2  # noqa: PLR2004
     )
@@ -202,6 +207,10 @@ def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
     )
     if is_triplet or is_sixtuplet:
         return constants.triplet_symbol
+    if is_grace:
+        return constants.grace_note_symbol
+    if is_fermata:
+        return constants.fermata_symbol
     return ""
 
 
