@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 
+import safetensors
 import torch
 import torch._dynamo
 from transformers import Trainer, TrainingArguments  # type: ignore
@@ -150,8 +151,15 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     if pretrained:
         eprint("Loading pretrained model")
         model = TrOMR(config)
-        tr_omr_pretrained = config.filepaths.checkpoint
-        model.load_state_dict(torch.load(tr_omr_pretrained), strict=False)
+        checkpoint_file_path = config.filepaths.checkpoint
+        if ".safetensors" in checkpoint_file_path:
+            tensors = {}
+            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:  # type: ignore
+                for k in f.keys():
+                    tensors[k] = f.get_tensor(k)
+            model.load_state_dict(tensors, strict=False)
+        else:
+            model.load_state_dict(torch.load(checkpoint_file_path), strict=False)
     else:
         model = TrOMR(config)
 

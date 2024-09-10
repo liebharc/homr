@@ -13,6 +13,24 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 101
+
+Commit: ba12ebef4606948816a06f4a011248d07a6f06da
+Date: 10 Sep 2024
+SER: 9%
+Validation result: 6.4
+
+Training runs now also pick the last iteration and not the one with the lowest validation loss.
+
+## Run 100
+
+Commit: e317d1ba4452798036d2b24a20f37061b8441bae
+Date: 10 Sep 2024
+SER: 14%
+Validation result: 7.6
+
+Increased model depth from 4 to 8.
+
 ## Run 70
 
 Commit: 11c1eeaf5760d617f09678e276866d31253a5ace
@@ -66,7 +84,6 @@ Date: 12 May 2024
 SER: 53%
 
 First training run within the `homr` repo.
-
 
 ## Previous runs
 
