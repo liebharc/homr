@@ -311,7 +311,7 @@ def main() -> None:
         action="store_true",
         help="Downloads the models if they are missing and then exits. "
         + "You don't have to call init before processing images, "
-        + "it's only useful if you want to prepare for example a Docker image.",
+        + "it's useful if you want to prepare for example a Docker image.",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument(

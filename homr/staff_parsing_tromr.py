@@ -91,8 +91,17 @@ def predict_best(
             + _superfluous_number(parser.number_of_key_signatures())
             + _superfluous_number(parser.number_of_time_signatures())
         )
+
+        number_of_triplets = result[0].count(constants.triplet_symbol)
+        sane_number_of_triplets = number_of_triplets % 3 == 0
+        triplet_penalty = 0 if sane_number_of_triplets else 5
+
         total_rating = (
-            distance + diff_accidentals + measure_length_variance + number_of_structural_elements
+            distance
+            + diff_accidentals
+            + measure_length_variance
+            + number_of_structural_elements
+            + triplet_penalty
         ) / max(min(len(expected), len(actual)), 1)
 
         if best_result.is_empty() or total_rating < best_distance:
