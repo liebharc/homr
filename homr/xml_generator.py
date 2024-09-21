@@ -207,6 +207,8 @@ def build_part(  # type: ignore
     for measure in staff.measures:
         part.add_child(build_measure(args, measure, is_first_part, measure_number))
         measure_number += 1
+    if len(staff.measures) == 0:
+        part.add_child(build_measure(args, ResultMeasure([]), is_first_part, measure_number))
     return part
 
 
