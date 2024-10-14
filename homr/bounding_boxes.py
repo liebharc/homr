@@ -441,8 +441,11 @@ def create_rotated_bounding_boxes(
         box = RotatedBoundingBox(fitBox, countour, debug_id=i)
         if min_size is not None and (box.size[0] < min_size[0] or box.size[1] < min_size[1]):
             continue
-        if max_size is not None and (box.size[0] > max_size[0] or box.size[1] > max_size[1]):
-            continue
+        if max_size is not None:
+            if max_size[0] > 0 and box.size[0] > max_size[0]:
+                continue
+            if max_size[1] > 0 and box.size[1] > max_size[1]:
+                continue
         boxes.append(box)
     if skip_merging:
         return boxes

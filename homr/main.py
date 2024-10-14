@@ -207,7 +207,7 @@ def process_image(  # noqa: PLR0915
         )
         debug.write_threshold_image("brace_dot", brace_dot_img)
         brace_dot = create_rotated_bounding_boxes(
-            brace_dot_img, skip_merging=True, max_size=(100, 1000)
+            brace_dot_img, skip_merging=True, max_size=(100, -1)
         )
 
         notes = add_notes_to_staffs(

@@ -100,10 +100,6 @@ def predict_best(
             best_result = result_staff
             best_attempt = attempt
 
-    if best_distance > constants.max_distance_before_giving_up:
-        eprint("Failed to find a good result with distance", best_distance)
-        return None
-
     _fill_in_time_signature(best_result)
     eprint("Taking attempt", best_attempt + 1, "with distance", best_distance, best_result)
     return best_result
