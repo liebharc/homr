@@ -242,7 +242,9 @@ class ScoreDecoder(nn.Module):
                 is_eos = len(rhythm_token[0])
                 if is_eos == 0:
                     break
-                retry = merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
+                retry = merger.add_symbol(
+                    rhythm_token[0][0], pitch_token[0][0], lift_token[0][0], center_of_attention
+                )
                 current_temperature *= 3.5
                 attempt += 1
 
@@ -262,7 +264,7 @@ class ScoreDecoder(nn.Module):
         out_rhythm = out_rhythm[:, t:]
 
         self.net.train(was_training)
-        return [merger.complete()]
+        return merger.complete()
 
     def forward(
         self,

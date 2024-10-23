@@ -10,6 +10,7 @@ from homr.debug import AttentionDebug
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from homr.type_definitions import NDArray
+from training.transformer.split_merge_symbols import MergerResult
 
 
 class Staff2Score:
@@ -39,7 +40,7 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(self, image: NDArray, debug: AttentionDebug | None = None) -> list[str]:
+    def predict(self, image: NDArray, debug: AttentionDebug | None = None) -> MergerResult:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         imgs_tensor = self._image_to_tensor(image)
         return self._generate(

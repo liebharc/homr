@@ -341,8 +341,9 @@ class ResultChord(ResultSymbol):
 
 
 class ResultMeasure:
-    def __init__(self, symbols: list[ResultSymbol]):
+    def __init__(self, symbols: list[ResultSymbol], center: tuple[float, float] | None = None):
         self.symbols = symbols
+        self.center = center
         self.is_new_line = False
 
     def is_empty(self) -> bool:

@@ -68,16 +68,16 @@ def predict_best(
             debug=debug,
         )
         parser = TrOMRParser()
-        result_staff = parser.parse_tr_omr_output(str.join("", result))
+        result_staff = parser.parse_tr_omr_output(result.symbols, result.centers)
 
-        clef_type = _get_clef_type(result[0])
+        clef_type = _get_clef_type(result.merged)
         if clef_type is None:
             # Returning early is no clef is found is not optimal,
             # but it makes sure that we get a result and it's a corner case,
             # which is not worth the effort to handle right now.
             eprint("Failed to find clef type in", result)
             return result_staff
-        actual = [symbol for symbol in result[0].split("+") if symbol.startswith("note")]
+        actual = [symbol for symbol in result.symbols if symbol.startswith("note")]
         expected = [note.to_tr_omr_note(clef_type) for note in notes]
         actual = _flatten_result(actual)
         expected = _flatten_result(expected)

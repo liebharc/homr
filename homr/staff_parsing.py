@@ -295,6 +295,11 @@ def parse_staff_image(
         staff=transformed_staff,
         debug=attention_debug,
     )
+    # prepare_staff_image perform several transformations of coordinates: crop, scale and dewarp
+    # crop and scale should be easy to apply
+    # depending on how what accuracy is needed, we might even need to
+    # look into calculate_dewarp_transformation
+    # and apply the dewarp transformation on the center coordinates
     if attention_debug is not None:
         attention_debug.write()
     return result

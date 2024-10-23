@@ -5,7 +5,7 @@ from training.transformer.split_merge_symbols import merge_symbols, split_symbol
 
 def split_merge(merged: str) -> list[str]:
     actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols([merged.replace("+", "\t")])
-    merged_again = merge_symbols(actualrhythm, actualpitch, actuallift)
+    merged_again = merge_symbols(actualrhythm, actualpitch, actuallift).merged
     return merged_again
 
 

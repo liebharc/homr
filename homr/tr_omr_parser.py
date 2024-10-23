@@ -159,10 +159,11 @@ class TrOMRParser:
             [],
         )
 
-    def parse_tr_omr_output(self, output: str) -> ResultStaff:  # noqa: C901
-        parts = output.split("+")
+    def parse_tr_omr_output(  # noqa: C901
+        self, parts: list[str], centers: list[tuple, tuple]
+    ) -> ResultStaff:
         measures = []
-        current_measure = ResultMeasure([])
+        current_measure = ResultMeasure([], centers[0])
 
         parse_functions = {
             "clef": self.parse_clef,
@@ -170,10 +171,12 @@ class TrOMRParser:
             "rest": self.parse_rest,
         }
 
-        for part in parts:
+        for part_idx in range(len(parts)):
+            part = parts[part_idx]
+            center = centers[part_idx]
             if part == "barline":
                 measures.append(current_measure)
-                current_measure = ResultMeasure([])
+                current_measure = ResultMeasure([], center)
             elif part.startswith("keySignature"):
                 if len(current_measure.symbols) > 0 and isinstance(
                     current_measure.symbols[-1], ResultClef

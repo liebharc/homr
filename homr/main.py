@@ -89,12 +89,12 @@ def replace_extension(path: str, new_extension: str) -> str:
 
 def load_and_preprocess_predictions(
     image_path: str, enable_debug: bool, enable_cache: bool
-) -> tuple[InputPredictions, Debug]:
+) -> tuple[InputPredictions, Debug, float]:
     image = cv2.imread(image_path)
     image = autocrop(image)
-    image = resize_image(image)
-    preprocessed, _background = color_adjust.color_adjust(image, 40)
-    predictions = get_predictions(image, preprocessed, image_path, enable_cache)
+    resized_image = resize_image(image)
+    preprocessed, _background = color_adjust.color_adjust(resized_image, 40)
+    predictions = get_predictions(resized_image, preprocessed, image_path, enable_cache)
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
 
@@ -106,7 +106,7 @@ def load_and_preprocess_predictions(
     debug.write_threshold_image("stems_rest", predictions.stems_rest)
     debug.write_threshold_image("notehead", predictions.notehead)
     debug.write_threshold_image("clefs_keys", predictions.clefs_keys)
-    return predictions, debug
+    return predictions, debug, resized_image.shape[0] / image.shape[0]
 
 
 def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSymbols:
@@ -144,7 +144,9 @@ def process_image(  # noqa: PLR0915
     xml_generator_args: XmlGeneratorArguments,
 ) -> tuple[str, str, str]:
     eprint("Processing " + image_path)
-    predictions, debug = load_and_preprocess_predictions(image_path, enable_debug, enable_cache)
+    predictions, debug, image_scaling = load_and_preprocess_predictions(
+        image_path, enable_debug, enable_cache
+    )
     xml_file = replace_extension(image_path, ".musicxml")
     try:
         eprint("Loaded segmentation")
@@ -231,6 +233,9 @@ def process_image(  # noqa: PLR0915
         title = detect_title(debug, staffs[0])
         eprint("Found title: " + title)
 
+        # image_scaling contains the the scaling transformation from the
+        # original image to the resized image
+        # we would need to apply this for each ResultMeasure in result staffs
         result_staffs = parse_staffs(debug, multi_staffs, predictions)
 
         result_staffs = maintain_accidentals(result_staffs)

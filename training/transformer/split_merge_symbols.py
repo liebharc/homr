@@ -10,24 +10,40 @@ from homr.simple_logging import eprint
 from homr.transformer.configs import default_config
 
 
+class MergerResult:
+    def __init__(self, symbols: str, centers: list[tuple[float, float]]):
+        self.symbols = symbols
+        self.merged = str.join("+", symbols)
+        self.centers = centers
+
+
 class SymbolMerger:
     def __init__(self, keep_all_symbols_in_chord: bool) -> None:
         self._keep_all_symbols_in_chord = keep_all_symbols_in_chord
         self.merge: list[list[str]] = []
+        self.centers: list[tuple[float, float]] = []
         self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
 
-    def _append_symbol(self, symbol: str) -> None:
+    def _append_symbol(self, symbol: str, center_of_attention: tuple[float, float]) -> None:
         if self.next_symbol_is_chord:
             if len(self.merge) == 0:
                 eprint("Warning: Unexpected chord symbol")
                 return
             self.merge[-1].append(symbol)
+            self.centers[-1] = center_of_attention
             self.next_symbol_is_chord = False
         else:
             self.merge.append([symbol])
+            self.centers.append(center_of_attention)
 
-    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
+    def add_symbol(
+        self,
+        predrhythm: str,
+        predpitch: str,
+        predlift: str,
+        center_of_attention: tuple[float, float],
+    ) -> bool:
         """
         Adds a symbol to the merge list. Returns True if the symbol should be retried.
 
@@ -49,7 +65,9 @@ class SymbolMerger:
                 "lift_N",
             ):
                 lift = predlift.split("_")[-1]
-            self._append_symbol(predpitch + lift + "_" + predrhythm.split("note-")[-1])
+            self._append_symbol(
+                predpitch + lift + "_" + predrhythm.split("note-")[-1], center_of_attention
+            )
             return False
         elif "clef" in predrhythm:
             # Two clefs in a the same staff are very unlikely
@@ -57,10 +75,10 @@ class SymbolMerger:
                 eprint("Warning: Two clefs in a staff")
                 return True
             self.last_clef = predrhythm
-            self._append_symbol(predrhythm)
+            self._append_symbol(predrhythm, center_of_attention)
             return False
         else:
-            self._append_symbol(predrhythm)
+            self._append_symbol(predrhythm, center_of_attention)
             return False
 
     def _clean_and_sort_chord(self, chord: list[str]) -> list[str]:
@@ -71,9 +89,9 @@ class SymbolMerger:
         chord = sorted(chord, key=pitch_name_to_sortable)
         return chord
 
-    def complete(self) -> str:
+    def complete(self) -> MergerResult:
         merged = [str.join("|", self._clean_and_sort_chord(symbols)) for symbols in self.merge]
-        return str.join("+", merged)
+        return MergerResult(merged, self.centers)
 
 
 def merge_single_line(
@@ -81,7 +99,7 @@ def merge_single_line(
     predpitch: list[str],
     predlift: list[str],
     keep_all_symbols_in_chord: bool,
-) -> str:
+) -> MergerResult:
     merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
 
     for j in range(len(predrhythm)):
@@ -95,8 +113,9 @@ def merge_symbols(
     predpitchs: list[list[str]],
     predlifts: list[list[str]],
     keep_all_symbols_in_chord: bool = False,
-) -> list[str]:
-    merges = []
+) -> MergerResult:
+    if len(predrhythms) > 1:
+        raise ValueError("Only one line is supported")
     for i in range(len(predrhythms)):
         predrhythm = predrhythms[i]
         predlift = predlifts[i]
@@ -104,8 +123,8 @@ def merge_symbols(
         merge = merge_single_line(
             predrhythm, predpitch, predlift, keep_all_symbols_in_chord=keep_all_symbols_in_chord
         )
-        merges.append(merge)
-    return merges
+        return merge
+    raise ValueError("Missing predictions")
 
 
 def _get_alter(symbol: str) -> str | None:
