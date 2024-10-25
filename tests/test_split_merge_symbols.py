@@ -1,6 +1,6 @@
 import unittest
 
-from training.transformer.split_merge_symbols import (
+from homr.transformer.split_merge_symbols import (
     convert_alter_to_accidentals,
     merge_symbols,
     split_symbols,

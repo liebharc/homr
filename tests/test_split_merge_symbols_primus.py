@@ -1,6 +1,6 @@
 import unittest
 
-from training.transformer.split_merge_symbols import merge_symbols, split_symbols
+from homr.transformer.split_merge_symbols import merge_symbols, split_symbols
 
 
 def split_merge(merged: str) -> list[str]:
