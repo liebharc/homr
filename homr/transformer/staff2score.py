@@ -8,9 +8,9 @@ from albumentations.pytorch import ToTensorV2  # type: ignore
 
 from homr.debug import AttentionDebug
 from homr.transformer.configs import Config
+from homr.transformer.split_merge_symbols import MergerResult
 from homr.transformer.tromr_arch import TrOMR
 from homr.type_definitions import NDArray
-from training.transformer.split_merge_symbols import MergerResult
 
 
 class Staff2Score:
