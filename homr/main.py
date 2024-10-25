@@ -31,6 +31,7 @@ from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
+from homr.results import ResultStaff
 from homr.segmentation.config import segnet_path, unet_path
 from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
@@ -233,10 +234,8 @@ def process_image(  # noqa: PLR0915
         title = detect_title(debug, staffs[0])
         eprint("Found title: " + title)
 
-        # image_scaling contains the the scaling transformation from the
-        # original image to the resized image
-        # we would need to apply this for each ResultMeasure in result staffs
         result_staffs = parse_staffs(debug, multi_staffs, predictions)
+        apply_image_scaling(result_staffs, image_scaling)
 
         result_staffs = maintain_accidentals(result_staffs)
 
@@ -304,6 +303,16 @@ def download_weights() -> None:
             finally:
                 if os.path.exists(downloaded_zip):
                     os.remove(downloaded_zip)
+
+
+def apply_image_scaling(result_staffs: list[ResultStaff], image_scaling: float) -> None:
+    for staff in result_staffs:
+        for symbol in staff.get_symbols():
+            if symbol.position is not None:
+                symbol.position = (
+                    int(symbol.position[0] / image_scaling),
+                    int(symbol.position[1] / image_scaling),
+                )
 
 
 def main() -> None:

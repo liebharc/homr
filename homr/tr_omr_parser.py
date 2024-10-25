@@ -159,11 +159,11 @@ class TrOMRParser:
             [],
         )
 
-    def parse_tr_omr_output(  # noqa: C901
-        self, parts: list[str], centers: list[tuple, tuple]
+    def parse_tr_omr_output(  # noqa: C901, PLR0912
+        self, parts: list[str], centers: list[tuple[float, float] | None]
     ) -> ResultStaff:
         measures = []
-        current_measure = ResultMeasure([], centers[0])
+        current_measure = ResultMeasure([])
 
         parse_functions = {
             "clef": self.parse_clef,
@@ -173,10 +173,14 @@ class TrOMRParser:
 
         for part_idx in range(len(parts)):
             part = parts[part_idx]
-            center = centers[part_idx]
+            if part_idx < len(centers):
+                center = centers[part_idx]
+            else:
+                center = None
+
             if part == "barline":
                 measures.append(current_measure)
-                current_measure = ResultMeasure([], center)
+                current_measure = ResultMeasure([])
             elif part.startswith("keySignature"):
                 if len(current_measure.symbols) > 0 and isinstance(
                     current_measure.symbols[-1], ResultClef
@@ -187,6 +191,7 @@ class TrOMRParser:
             elif part.startswith("note") or "|" in part:
                 note_result = self.parse_notes(part)
                 if note_result is not None:
+                    note_result.position = center
                     current_measure.symbols.append(note_result)
             else:
                 for prefix, parse_function in parse_functions.items():

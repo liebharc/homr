@@ -3,7 +3,7 @@ import unittest
 from homr.transformer.split_merge_symbols import merge_symbols, split_symbols
 
 
-def split_merge(merged: str) -> list[str]:
+def split_merge(merged: str) -> str:
     actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols([merged.replace("+", "\t")])
     merged_again = merge_symbols(actualrhythm, actualpitch, actuallift).merged
     return merged_again
@@ -17,7 +17,5 @@ class TestMergeSymbolsPrimus(unittest.TestCase):
         )
         self.assertEqual(
             actual,
-            [
-                "clef-C1+timeSignature-C/+note-G4_breve+note-G4_whole+note-A4_whole.+note-G4_half+note-G4_half+note-F4#_half+note-G4_breve+note-G4_half"
-            ],
+            "clef-C1+timeSignature-C/+note-G4_breve+note-G4_whole+note-A4_whole.+note-G4_half+note-G4_half+note-F4#_half+note-G4_breve+note-G4_half",
         )

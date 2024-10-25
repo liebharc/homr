@@ -81,7 +81,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_parsing_no_final_bar_line(self) -> None:
@@ -126,7 +126,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_rest_parsing(self) -> None:
@@ -158,7 +158,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_note_group_parsing(self) -> None:
@@ -292,7 +292,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_accidental_parsing(self) -> None:
@@ -336,7 +336,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_parsing_chords_with_rests(self) -> None:
@@ -362,7 +362,7 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)
 
     def test_parse_chords_with_unexpected_symbols(self) -> None:
@@ -380,5 +380,5 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data, [])
+        actual = parser.parse_tr_omr_output(data.split("+"), [])
         self.assertEqual(actual, expected)

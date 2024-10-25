@@ -1,3 +1,5 @@
+import xml.etree.ElementTree as ET
+
 import musicxml.xmlelement.xmlelement as mxl  # type: ignore
 
 from homr import constants
@@ -144,7 +146,11 @@ def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ign
     result = []
     is_first = True
     for note in note_group.notes:
-        result.append(build_note(note, not is_first))
+        note_result = build_note(note, not is_first)
+        if note_group.position is not None:
+            comments = ET.Comment(f"Position: {note_group.position}")
+            note_result.add_child(comments)
+        result.append(note_result)
         is_first = False
     return result
 

@@ -14,7 +14,11 @@ from homr.results import (
     move_pitch_to_clef,
 )
 from homr.simple_logging import eprint
-from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
+from homr.staff_dewarping import (
+    InverseStaffDewarping,
+    StaffDewarping,
+    dewarp_staff_image,
+)
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.type_definitions import NDArray
 
@@ -198,7 +202,7 @@ def prepare_staff_image(
     staff: Staff,
     predictions: InputPredictions,
     perform_dewarp: bool = True,
-) -> tuple[NDArray, Staff]:
+) -> tuple[NDArray, Staff, InverseStaffDewarping]:
     centers = [s.center for s in staff.symbols]
     x_values = np.array([c[0] for c in centers])
     y_values = np.array([c[1] for c in centers])
@@ -261,7 +265,7 @@ def prepare_staff_image(
         debug.write_image_with_fixed_suffix(
             f"_staff-{index}_debug_annotated.jpg", transformed_staff_image
         )
-    return staff_image, staff
+    return staff_image, staff, InverseStaffDewarping(dewarp.tform, region, scaling_factor)
 
 
 def _dewarp_staff(
@@ -287,7 +291,7 @@ def _dewarp_staff(
 def parse_staff_image(
     debug: Debug, ranges: list[float], index: int, staff: Staff, predictions: InputPredictions
 ) -> ResultStaff | None:
-    staff_image, transformed_staff = prepare_staff_image(
+    staff_image, transformed_staff, inverse_dewarp = prepare_staff_image(
         debug, index, ranges, staff, predictions, perform_dewarp=True
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
@@ -297,11 +301,12 @@ def parse_staff_image(
         staff=transformed_staff,
         debug=attention_debug,
     )
-    # prepare_staff_image perform several transformations of coordinates: crop, scale and dewarp
-    # crop and scale should be easy to apply
-    # depending on how what accuracy is needed, we might even need to
-    # look into calculate_dewarp_transformation
-    # and apply the dewarp transformation on the center coordinates
+
+    if result is not None:
+        for symbol in result.get_symbols():
+            if symbol.position is not None:
+                symbol.position = inverse_dewarp(symbol.position)
+
     if attention_debug is not None:
         attention_debug.write()
     return result

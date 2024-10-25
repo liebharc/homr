@@ -111,8 +111,8 @@ class TestMergeSymbols(unittest.TestCase):
 
     def test_merge(self) -> None:
         actual = merge_symbols(predryhthm, predpitch, predlift).merged
-        expected = convert_alter_to_accidentals(merged)
-        expected = [expected[0].replace("timeSignature-6/8", "timeSignature-/8")]
+        expected = convert_alter_to_accidentals(merged)[0]
+        expected = expected.replace("timeSignature-6/8", "timeSignature-/8")
         self.assertEqual(actual, expected)
 
     def test_split(self) -> None:
@@ -258,7 +258,7 @@ class TestMergeSymbols(unittest.TestCase):
             ["clef-G2|keySignature-GM|timeSignature-4/4|note-C4_sixteenth|rest_quarter"]
         )
         result = merge_symbols(actualrhythm, actualpitch, actuallift).merged
-        self.assertEqual(result, ["note-C4_sixteenth"])
+        self.assertEqual(result, "note-C4_sixteenth")
 
     def test_merge_of_rests_in_chord_keep_all_symbols(self) -> None:
         actuallift, actualpitch, actualrhythm, _actualnotes = split_symbols(
@@ -268,7 +268,7 @@ class TestMergeSymbols(unittest.TestCase):
             actualrhythm, actualpitch, actuallift, keep_all_symbols_in_chord=True
         ).merged
         self.assertEqual(
-            result, ["note-C4_sixteenth|clef-G2|keySignature-GM|timeSignature-/4|rest_quarter"]
+            result, "note-C4_sixteenth|clef-G2|keySignature-GM|timeSignature-/4|rest_quarter"
         )
 
     def test_split_with_naturals(self) -> None:

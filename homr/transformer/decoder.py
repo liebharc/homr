@@ -16,7 +16,7 @@ from x_transformers.x_transformers import (  # type: ignore
 from homr.debug import AttentionDebug
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.split_merge_symbols import SymbolMerger
+from homr.transformer.split_merge_symbols import MergerResult, SymbolMerger
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -190,7 +190,7 @@ class ScoreDecoder(nn.Module):
         filter_thres: float = 0.7,
         keep_all_symbols_in_chord: bool = False,
         **kwargs: Any,
-    ) -> list[str]:
+    ) -> MergerResult:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 

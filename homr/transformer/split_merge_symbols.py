@@ -11,7 +11,7 @@ from homr.transformer.configs import default_config
 
 
 class MergerResult:
-    def __init__(self, symbols: str, centers: list[tuple[float, float]]):
+    def __init__(self, symbols: list[str], centers: list[tuple[float, float] | None]):
         self.symbols = symbols
         self.merged = str.join("+", symbols)
         self.centers = centers
@@ -21,11 +21,11 @@ class SymbolMerger:
     def __init__(self, keep_all_symbols_in_chord: bool) -> None:
         self._keep_all_symbols_in_chord = keep_all_symbols_in_chord
         self.merge: list[list[str]] = []
-        self.centers: list[tuple[float, float]] = []
+        self.centers: list[tuple[float, float] | None] = []
         self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
 
-    def _append_symbol(self, symbol: str, center_of_attention: tuple[float, float]) -> None:
+    def _append_symbol(self, symbol: str, center_of_attention: tuple[float, float] | None) -> None:
         if self.next_symbol_is_chord:
             if len(self.merge) == 0:
                 eprint("Warning: Unexpected chord symbol")
@@ -42,7 +42,7 @@ class SymbolMerger:
         predrhythm: str,
         predpitch: str,
         predlift: str,
-        center_of_attention: tuple[float, float],
+        center_of_attention: tuple[float, float] | None,
     ) -> bool:
         """
         Adds a symbol to the merge list. Returns True if the symbol should be retried.
@@ -103,7 +103,7 @@ def merge_single_line(
     merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
 
     for j in range(len(predrhythm)):
-        merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
+        merger.add_symbol(predrhythm[j], predpitch[j], predlift[j], None)
 
     return merger.complete()
 

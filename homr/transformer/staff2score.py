@@ -57,7 +57,7 @@ class Staff2Score:
         self,
         imgs_tensor: torch.Tensor,
         debug: AttentionDebug | None = None,
-    ) -> list[str]:
+    ) -> MergerResult:
         return self.model.generate(
             imgs_tensor,
             keep_all_symbols_in_chord=self.keep_all_symbols_in_chord,

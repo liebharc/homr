@@ -8,7 +8,15 @@ from homr.simple_logging import eprint
 
 class ResultSymbol:
     def __init__(self) -> None:
-        pass
+        self._position: tuple[float, float] | None = None
+
+    @property
+    def position(self) -> tuple[float, float] | None:
+        return self._position
+
+    @position.setter
+    def position(self, value: tuple[float, float] | None) -> None:
+        self._position = value
 
 
 class ClefType:
@@ -87,6 +95,7 @@ class ClefType:
 
 class ResultTimeSignature(ResultSymbol):
     def __init__(self, numerator: int, denominator: int) -> None:
+        super().__init__()
         self.numerator = numerator
         self.denominator = denominator
 
@@ -172,6 +181,7 @@ def get_pitch_from_relative_position(
 
 class ResultClef(ResultSymbol):
     def __init__(self, clef_type: ClefType, circle_of_fifth: int) -> None:
+        super().__init__()
         self.clef_type = clef_type
         self.circle_of_fifth = circle_of_fifth
 
@@ -317,6 +327,7 @@ class ResultChord(ResultSymbol):
     """
 
     def __init__(self, duration: ResultDuration, notes: list[ResultNote]):
+        super().__init__()
         self.notes = notes
         self.duration = duration
 
@@ -341,9 +352,8 @@ class ResultChord(ResultSymbol):
 
 
 class ResultMeasure:
-    def __init__(self, symbols: list[ResultSymbol], center: tuple[float, float] | None = None):
+    def __init__(self, symbols: list[ResultSymbol]):
         self.symbols = symbols
-        self.center = center
         self.is_new_line = False
 
     def is_empty(self) -> bool:

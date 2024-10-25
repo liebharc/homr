@@ -31,6 +31,24 @@ class StaffDewarping:
         return self.tform(point)  # type: ignore
 
 
+class InverseStaffDewarping:
+    def __init__(
+        self, tform: transform.PiecewiseAffineTransform | None, region: NDArray, scaling: float
+    ):
+        self.tform = tform
+        self.region = region
+        self.scaling = scaling
+
+    def __call__(self, coords: tuple[float, float]) -> tuple[float, float]:
+        if self.tform is None:
+            warp_applied = np.asarray(coords)
+        else:
+            warp_applied = self.tform.inverse(np.asarray(coords))
+        crop_undone = np.array([warp_applied[0] + self.region[0], warp_applied[1] + self.region[1]])
+        scaling_undone = crop_undone / self.scaling
+        return (scaling_undone[0], scaling_undone[1])
+
+
 def is_point_on_image(pts: tuple[int, int], image: NDArray) -> bool:
     height, width = image.shape[:2]
     margin = 10
