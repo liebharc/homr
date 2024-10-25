@@ -258,7 +258,9 @@ def prepare_staff_image(
                 (0, 0, 255),
                 1,
             )
-        debug.write_image_with_fixed_suffix(f"_staff-{index}_debug_annotated.jpg", staff_image)
+        debug.write_image_with_fixed_suffix(
+            f"_staff-{index}_debug_annotated.jpg", transformed_staff_image
+        )
     return staff_image, staff
 
 
