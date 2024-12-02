@@ -14,13 +14,14 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 - Install dependencies using `poetry install`
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
+- To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
 
 ## Example
 
 The example below provides an overview of the current performance of the implementation. While some errors are present in the output, the overall structure remains accurate.
 
-|                                          Original Image                                           |                homr Result                |
-| :-----------------------------------------------------------------------------------------------: | :---------------------------------------: |
+|                                          Original Image                                           |                                                                               homr Result                                                                                |
+| :-----------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="https://github.com/liebharc/homr/blob/main/figures/tabi.svg?raw=true" alt="Go to https://github.com/liebharc/homr if this image isn't displayed" width="400" > |
 
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it with [musescore](https://musescore.com/).
