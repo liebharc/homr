@@ -44,7 +44,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], result_file: str, config
             added_symbols = "+".join(set(actual) - set(expected))
             missing_symbols = "+".join(set(expected) - set(actual))
             result.write(
-                f"{img_path},{ser},{len_expected},{len_actual},{added_symbols},{missing_symbols},{"+".join(expected)},{"+".join(actual)}\n"
+                f"{img_path},{ser},{len_expected},{len_actual},{added_symbols},{missing_symbols},{'+'.join(expected)},{'+'.join(actual)}\n"
             )
             eprint(f"Progress: {percentage}%, SER: {ser}%")
 
