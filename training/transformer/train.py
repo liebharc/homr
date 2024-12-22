@@ -19,6 +19,7 @@ from training.convert_primus import (
 )
 from training.run_id import get_run_id
 from training.transformer.data_loader import load_dataset
+from training.transformer.data_set_filters import contains_supported_clef
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
@@ -27,12 +28,6 @@ torch._dynamo.config.suppress_errors = True
 def load_training_index(file_path: str) -> list[str]:
     with open(file_path) as f:
         return f.readlines()
-
-
-def contains_supported_clef(semantic: str) -> bool:
-    if semantic.count("clef-") != 1:
-        return False
-    return "clef-G2" in semantic or "clef-F4" in semantic
 
 
 def filter_for_clefs(file_paths: list[str]) -> list[str]:
