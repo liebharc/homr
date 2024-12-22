@@ -14,6 +14,8 @@ def download_file(url: str, filename: str) -> None:
     last_percent = -1
     complete = 100
 
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
     with open(filename, "wb") as f:
         for chunk in response.iter_content(chunk_size=1024):
             if chunk:  # filter out keep-alive new chunks
