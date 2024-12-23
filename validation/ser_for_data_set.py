@@ -17,9 +17,6 @@ def calc_symbol_error_rate_for_list(dataset: list[str], result_file: str, config
     total = len(dataset)
 
     with open(result_file, "w") as result:
-        result.write(
-            "img_path,ser,len_expected,len_actual,added_symbols,missing_symbols,expected,actual\n"
-        )
         for sample in dataset:
             img_path, semantic_path = sample.strip().split(",")
             expected_str = _load_semantic_file(semantic_path)[0].strip()
