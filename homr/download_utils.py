@@ -38,21 +38,34 @@ def download_file(url: str, filename: str) -> None:
         eprint()  # Add newline after download progress
 
 
-def unzip_file(filename: str, output_folder: str) -> None:
+def unzip_file(filename: str, output_folder: str, flatten_root_entry: bool = False) -> None:
     with zipfile.ZipFile(filename, "r") as zip_ref:
-        for member in zip_ref.namelist():
+        zip_contents = zip_ref.namelist()
+
+        if flatten_root_entry:
+            common_prefix = os.path.commonprefix(zip_contents)
+            if common_prefix and common_prefix.endswith("/"):
+                zip_contents_dict = {
+                    file: os.path.relpath(file, common_prefix) for file in zip_contents
+                }
+            else:
+                zip_contents_dict = {file: file for file in zip_contents}
+        else:
+            zip_contents_dict = {file: file for file in zip_contents}
+
+        for original, member in zip_contents_dict.items():
             # Ensure file path is safe
             if os.path.isabs(member) or ".." in member:
                 eprint(f"Skipping potentially unsafe file {member}")
                 continue
 
             # Handle directories
-            if member.endswith("/"):
+            if original.endswith("/"):
                 os.makedirs(os.path.join(output_folder, member), exist_ok=True)
                 continue
 
             # Extract file
-            source = zip_ref.open(member)
+            source = zip_ref.open(original)
             target = open(os.path.join(output_folder, member), "wb")
 
             with source, target:
