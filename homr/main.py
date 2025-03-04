@@ -80,11 +80,7 @@ def get_predictions(
 
 
 def replace_extension(path: str, new_extension: str) -> str:
-    return (
-        path.replace(".png", new_extension)
-        .replace(".jpg", new_extension)
-        .replace(".jpeg", new_extension)
-    )
+    return os.path.splitext(path)[0] + new_extension
 
 
 def load_and_preprocess_predictions(
