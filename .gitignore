@@ -29,6 +29,10 @@ _build/
 /seg_unet.keras
 /logs
 /current_training
+/segnet.onnx
+/segnet.pkl
+/unet.onnx
+/unet.pkl
 
 # Testdata
 /*.jpeg

@@ -7,7 +7,7 @@ import tensorflow as tf
 from homr.simple_logging import eprint
 from training import download
 from training.run_id import get_run_id
-from training.segmentation import train
+from training.segmentation import train_fastai as train
 from training.segmentation.model_utils import save_model
 from training.transformer.train import train_transformer
 

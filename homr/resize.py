@@ -1,7 +1,6 @@
 import numpy as np
 from PIL import Image
 
-from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
@@ -26,10 +25,6 @@ def resize_image(image_arr: NDArray) -> NDArray:
     image = Image.fromarray(image_arr)
     tar_w, tar_h = calc_target_image_size(image)
     if tar_w == image_arr.shape[1] and tar_h == image_arr.shape[0]:
-        eprint("Keeping original size of", tar_w, "x", tar_h)
         return image_arr
 
-    eprint(
-        "Resizing input from", image_arr.shape[1], "x", image_arr.shape[0], "to", tar_w, "x", tar_h
-    )
     return np.array(image.resize((tar_w, tar_h)))
