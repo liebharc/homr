@@ -9,6 +9,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from homr.resize import calc_target_image_size
+from homr.simple_logging import eprint
 from training.download import download_cvs_musicma, download_deep_scores
 from training.segmentation.dense_dataset_definitions import (
     DENSE_DATASET_DEFINITIONS as DEF,
@@ -155,44 +156,61 @@ def split_image_into_patches(image: np.array, patch_size=512) -> list:
 
 def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
     """Process one CVC dataset entry and save patches."""
-    image = 255 - read_image_and_resize(image_path)
-    staff_lines = read_image_and_resize(staff_path)
-    symbol = read_image_and_resize(symbol_path)
-    staff_mask = create_staff_mask(staff_lines)
-    brackets_mask = extract_narrow_tall_objects(symbol)
-    total_mask = np.zeros_like(staff_mask)
-    total_mask[staff_mask > 0] = 128
-    total_mask[brackets_mask > 0] = 255
+    try:
+        image = 255 - read_image_and_resize(image_path)
+        staff_lines = read_image_and_resize(staff_path)
+        symbol = read_image_and_resize(symbol_path)
+        staff_mask = create_staff_mask(staff_lines)
+        brackets_mask = extract_narrow_tall_objects(symbol)
+        total_mask = np.zeros_like(staff_mask)
+        total_mask[staff_mask > 0] = 128
+        total_mask[brackets_mask > 0] = 255
 
-    image_patches = split_image_into_patches(image)
-    mask_patches = split_image_into_patches(total_mask)
+        image_patches = split_image_into_patches(image)
+        mask_patches = split_image_into_patches(total_mask)
 
-    for j, (image_patch, mask_patch) in enumerate(zip(image_patches, mask_patches, strict=False)):
-        cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
-        cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_mask.png"), mask_patch)
+        for j, (image_patch, mask_patch) in enumerate(
+            zip(image_patches, mask_patches, strict=False)
+        ):
+            cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
+            cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_mask.png"), mask_patch)
+    except Exception as e:
+        eprint("Error at ", image_path, e)
 
 
 def process_deep_score_data(i, image_path, masks_path, staff_dataset):
     """Process one deep score dataset entry and save patches."""
-    image = read_image_and_resize(image_path)
-    masks_color_encoded = read_image_and_resize(masks_path, gray=False)
-    staff_lines = np.zeros_like(masks_color_encoded, np.uint8)
-    staff_lines[masks_color_encoded == DEF.STAFF] = 255
-    brackets_mask = extract_narrow_tall_objects(remove_small_horizontal_elements(255 - image))
-    staff_mask = create_staff_mask(staff_lines)
-    total_mask = np.zeros_like(staff_mask)
-    total_mask[staff_mask > 0] = 128
-    total_mask[brackets_mask > 0] = 255
+    try:
+        image = read_image_and_resize(image_path)
+        masks_color_encoded = read_image_and_resize(masks_path, gray=False)
+        staff_lines = np.zeros_like(masks_color_encoded, np.uint8)
+        staff_lines[masks_color_encoded == DEF.STAFF] = 255
+        brackets_mask = extract_narrow_tall_objects(remove_small_horizontal_elements(255 - image))
+        staff_mask = create_staff_mask(staff_lines)
+        total_mask = np.zeros_like(staff_mask)
+        total_mask[staff_mask > 0] = 128
+        total_mask[brackets_mask > 0] = 255
 
-    image_patches = split_image_into_patches(image)
-    mask_patches = split_image_into_patches(total_mask)
+        image_patches = split_image_into_patches(image)
+        mask_patches = split_image_into_patches(total_mask)
 
-    for j, (image_patch, mask_patch) in enumerate(zip(image_patches, mask_patches, strict=False)):
-        cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)
-        cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_mask.png"), mask_patch)
+        for j, (image_patch, mask_patch) in enumerate(
+            zip(image_patches, mask_patches, strict=False)
+        ):
+            cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)
+            cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_mask.png"), mask_patch)
+    except Exception as e:
+        eprint("Error at ", image_path, e)
 
 
-def main():
+def build_dataset():
+    if os.path.exists(staff_dataset):
+        return staff_dataset
+    recreate_dataset()
+    return staff_dataset
+
+
+def recreate_dataset():
     cvc = get_cvc_data_paths(download_cvs_musicma())
     d2 = get_deep_score_data_paths(download_deep_scores())
 
@@ -220,4 +238,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    recreate_dataset()
