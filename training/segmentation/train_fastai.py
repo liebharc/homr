@@ -12,8 +12,7 @@ from training.segmentation.build_dataset import build_dataset
 image_patch_size = 512
 
 
-def get_data_paths(_ignored: str) -> list[list[str]]:
-    dataset_path = build_dataset()
+def get_data_paths(dataset_path: str) -> list[list[str]]:
     if not os.path.exists(dataset_path):
         raise FileNotFoundError(f"{dataset_path} not found, download the dataset first.")
     image_files = glob.glob(os.path.join(dataset_path, "*_img.png"))
@@ -43,9 +42,7 @@ def get_y_fn(x):
     return create_mask(x[1])
 
 
-def export_onnx(
-    model, filename="model.onnx", input_shape=(1, 3, image_patch_size, image_patch_size)
-):
+def export_onnx(model, filename, input_shape=(1, 3, image_patch_size, image_patch_size)):
     model.cpu().eval()
     dummy_input = torch.randn(input_shape)
 
@@ -56,10 +53,10 @@ def export_onnx(
         input_names=["input"],
         output_names=["output"],
     )
-    eprint(f"Model exported to {filename}")
 
 
-def train_segnet():
+def train_segnet(filename: str):
+    dataset_path = build_dataset()
     dblock = fai.DataBlock(
         blocks=(fai.ImageBlock, fai.MaskBlock(codes=["background", "staff", "brackets"])),
         get_items=get_data_paths,
@@ -85,7 +82,7 @@ def train_segnet():
         ],
     )
 
-    dls = dblock.dataloaders("", bs=12, num_workers=4)
+    dls = dblock.dataloaders(dataset_path, bs=12, num_workers=4)
 
     # squeezenet1_1, resnet34, resnet18
 
@@ -94,8 +91,10 @@ def train_segnet():
     )
     learn = learn.to_fp16()
     learn.fine_tune(5)
-    export_onnx(learn.model, filename="segnet.onnx")
+    export_onnx(learn.model, filename)
 
 
 if __name__ == "__main__":
-    train_segnet()
+    filename = "segnet.onnx"
+    train_segnet(filename)
+    eprint(f"Model exported to {filename}")

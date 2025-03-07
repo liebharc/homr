@@ -63,6 +63,10 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
     }
     save_model(model, meta, filename)
     eprint("Model saved as " + filename)
+elif model_type == "fastai":
+    filename = get_segmentation_model_path(model_type)
+    train.train_segnet(filename)
+    eprint("Model saved as " + filename)
 elif model_type == "transformer":
     train_transformer(fp32=args.fp32)
 else:
