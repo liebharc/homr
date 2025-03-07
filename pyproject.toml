@@ -28,6 +28,7 @@ easyocr = "^1.7.1"
 fastai = "^2.7.18"
 onnx = "^1.17.0"
 onnxruntime = "^1.20.1"
+tqdm = "^4.67.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"

@@ -1,23 +1,40 @@
 import numpy as np
 from PIL import Image
 
+from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
 def calc_target_image_size(image: Image.Image) -> tuple[int, int]:
     # Estimate target size with number of pixels.
-    # Best number would be 3M~4.35M pixels.
+    # Best number would be 3M ~ 4.35M pixels.
+    # The image size will be a multple of 256
+    # so that we can easily divide it into patches.
     w, h = image.size
     pixels = w * h
     target_size_min = 3.0 * 1000 * 1000
     target_size_max = 4.35 * 1000 * 1000
-    if target_size_min <= pixels <= target_size_max:
-        return w, h
+
     lb = target_size_min / pixels
     ub = target_size_max / pixels
     ratio = pow((lb + ub) / 2, 0.5)
+
     tar_w = round(ratio * w)
     tar_h = round(ratio * h)
+
+    patch_size = 512
+
+    tar_w = round(tar_w / patch_size) * patch_size
+    tar_h = round(tar_h / patch_size) * patch_size
+
+    def best_multiple(val, base):
+        lower = (val // base) * base
+        upper = lower + base
+        return lower if abs(val - lower) <= abs(val - upper) else upper
+
+    tar_w = best_multiple(tar_w, patch_size)
+    tar_h = best_multiple(tar_h, patch_size)
+
     return tar_w, tar_h
 
 
@@ -25,6 +42,10 @@ def resize_image(image_arr: NDArray) -> NDArray:
     image = Image.fromarray(image_arr)
     tar_w, tar_h = calc_target_image_size(image)
     if tar_w == image_arr.shape[1] and tar_h == image_arr.shape[0]:
+        eprint("Keeping original size of", tar_w, "x", tar_h)
         return image_arr
 
+    eprint(
+        "Resizing input from", image_arr.shape[1], "x", image_arr.shape[0], "to", tar_w, "x", tar_h
+    )
     return np.array(image.resize((tar_w, tar_h)))
