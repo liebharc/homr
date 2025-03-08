@@ -4,6 +4,7 @@
         "**/logs/**": true,
         "**/CvcMuscima-Distortions/**": true,
         "**/ds2_dense/**": true,
+        "**/staffs_segmentation/**": true,
         "**/Corpus/**": true,
         "**/CPMS/**": true,
         "**/diw/**": true,

@@ -20,6 +20,8 @@ git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 staff_dataset = os.path.join(dataset_root, "staffs_segmentation")
 
+min_number_of_non_background_pixels = 20
+
 
 def get_cvc_data_paths(dataset_path: str) -> list[list[str]]:
     """Returns: [image, staff, symbol]"""
@@ -172,7 +174,7 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
         for j, (image_patch, mask_patch) in enumerate(
             zip(image_patches, mask_patches, strict=False)
         ):
-            contains_only_background = np.all(mask_patch == 0)
+            contains_only_background = np.sum(mask_patch != 0) < min_number_of_non_background_pixels
             if contains_only_background:
                 continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
@@ -200,7 +202,7 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
         for j, (image_patch, mask_patch) in enumerate(
             zip(image_patches, mask_patches, strict=False)
         ):
-            contains_only_background = np.all(mask_patch == 0)
+            contains_only_background = np.sum(mask_patch != 0) < min_number_of_non_background_pixels
             if contains_only_background:
                 continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)

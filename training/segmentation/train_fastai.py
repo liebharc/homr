@@ -11,7 +11,7 @@ from PIL import Image
 from homr.simple_logging import eprint
 from training.segmentation.build_dataset import build_dataset
 
-file_limit = 1000
+file_limit = 100000
 image_patch_size = 512
 
 
@@ -54,7 +54,7 @@ def export_onnx(model, filename, input_shape=(1, 3, image_patch_size, image_patc
     torch.onnx.export(
         model,
         dummy_input,
-        filename + "onnx",
+        filename,
         input_names=["input"],
         output_names=["output"],
     )
@@ -106,6 +106,6 @@ def train_segnet(filename: str):
 
 
 if __name__ == "__main__":
-    filename = "segnet"
+    filename = "segnet.onnx"
     train_segnet(filename)
     eprint(f"Model exported to {filename}")
