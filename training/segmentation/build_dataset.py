@@ -172,6 +172,9 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
         for j, (image_patch, mask_patch) in enumerate(
             zip(image_patches, mask_patches, strict=False)
         ):
+            contains_only_background = np.all(mask_patch == 0)
+            if contains_only_background:
+                continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_mask.png"), mask_patch)
     except Exception as e:
@@ -197,6 +200,9 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
         for j, (image_patch, mask_patch) in enumerate(
             zip(image_patches, mask_patches, strict=False)
         ):
+            contains_only_background = np.all(mask_patch == 0)
+            if contains_only_background:
+                continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_mask.png"), mask_patch)
     except Exception as e:

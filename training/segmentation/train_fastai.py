@@ -4,11 +4,14 @@ import os
 import fastai.vision.all as fai
 import numpy as np
 import torch
+from fastai.losses import FocalLoss
+from fastai.vision.augment import RandomErasing
 from PIL import Image
 
 from homr.simple_logging import eprint
 from training.segmentation.build_dataset import build_dataset
 
+file_limit = 1000
 image_patch_size = 512
 
 
@@ -19,6 +22,8 @@ def get_data_paths(dataset_path: str) -> list[list[str]]:
     image_files_and_mask = []
     for image_file in image_files:
         image_files_and_mask.append([image_file, image_file.replace("_img.png", "_mask.png")])
+        if file_limit and len(image_files_and_mask) >= file_limit:
+            return image_files_and_mask
     return image_files_and_mask
 
 
@@ -63,7 +68,6 @@ def train_segnet(filename: str):
         get_x=get_x_fn,
         get_y=get_y_fn,
         splitter=fai.RandomSplitter(),
-        item_tfms=[fai.Resize(image_patch_size)],
         batch_tfms=[
             *fai.aug_transforms(
                 size=(image_patch_size, image_patch_size),
@@ -78,6 +82,7 @@ def train_segnet(filename: str):
             fai.Contrast(),
             fai.Saturation(),
             fai.Hue(max_hue=0.1),
+            RandomErasing(0.2),
             fai.Normalize.from_stats(*fai.imagenet_stats),
         ],
     )
@@ -87,7 +92,13 @@ def train_segnet(filename: str):
     # squeezenet1_1, resnet34, resnet18
 
     learn = fai.unet_learner(
-        dls, fai.resnet34, metrics=fai.DiceMulti, self_attention=True, act_cls=fai.Mish, n_out=3
+        dls,
+        fai.resnet34,
+        metrics=fai.DiceMulti,
+        loss_func=FocalLoss(),
+        self_attention=True,
+        act_cls=fai.Mish,
+        n_out=3,
     )
     learn = learn.to_fp16()
     learn.fine_tune(3)
