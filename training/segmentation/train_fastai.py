@@ -49,7 +49,7 @@ def export_onnx(model, filename, input_shape=(1, 3, image_patch_size, image_patc
     torch.onnx.export(
         model,
         dummy_input,
-        filename,
+        filename + "onnx",
         input_names=["input"],
         output_names=["output"],
     )
@@ -90,11 +90,11 @@ def train_segnet(filename: str):
         dls, fai.resnet34, metrics=fai.DiceMulti, self_attention=True, act_cls=fai.Mish, n_out=3
     )
     learn = learn.to_fp16()
-    learn.fine_tune(5)
+    learn.fine_tune(3)
     export_onnx(learn.model, filename)
 
 
 if __name__ == "__main__":
-    filename = "segnet.onnx"
+    filename = "segnet"
     train_segnet(filename)
     eprint(f"Model exported to {filename}")

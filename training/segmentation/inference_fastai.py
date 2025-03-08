@@ -5,6 +5,8 @@ import onnxruntime as ort
 import torchvision.transforms as T
 from PIL import Image
 
+from homr.simple_logging import eprint
+
 COLORS = {
     0: (255, 255, 255),  # background
     1: (0, 0, 0),  # staff
@@ -37,7 +39,8 @@ def preprocess_image(image_path: str, size=(512, 512)):
 
 def postprocess_output(output, original_size):
     """Postprocess the model's output and resize back to original size."""
-    if len(output.shape) == 4:  # (batch_size, num_classes, height, width)
+    shape_with_batch = 4  # (batch_size, num_classes, height, width)
+    if len(output.shape) == shape_with_batch:
         output = output.squeeze(0)  # Remove the batch dimension
 
     output = np.argmax(output, axis=0)
@@ -58,7 +61,7 @@ def apply_color_map(mask):
 
     missing_values = set(COLORS.keys()) - set(unique_values)
     if missing_values:
-        print("WARN: Didn't find these values in the result", missing_values)
+        eprint("WARN: Didn't find these values in the result", missing_values)
 
     color_mask = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
     for label, color in COLORS.items():
@@ -89,12 +92,12 @@ def inference(image_path: str, onnx_model_path: str, output_path: str):
 
     # Save the final output
     save_output_image(colored_mask, output_path)
-    print(f"Output saved to {output_path}")
+    eprint(f"Output saved to {output_path}")
 
 
 if __name__ == "__main__":
     image_path = sys.argv[1]
-    onnx_model_path = "segnet.onnx"
+    onnx_model_path = "homr/segmentation/fastai_119-7f5c6607f2ecbe9b699d016aea96524a46c3b2aa"
     output_path = "segmentation_output.png"
 
     # Perform inference

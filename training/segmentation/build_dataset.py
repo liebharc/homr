@@ -95,7 +95,7 @@ def create_staff_mask(img):
         kernel = np.ones((kernel_size, kernel_size), np.uint8)
         closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
         num_labels, _ = cv2.connectedComponents(closed, connectivity=8)
-        if num_labels < initial_number_of_labels / 5 and last_num_labels == num_labels:
+        if num_labels <= initial_number_of_labels / 5 and last_num_labels == num_labels:
             stable_count += 1
         else:
             stable_count = 0
