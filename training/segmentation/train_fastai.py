@@ -93,7 +93,7 @@ def train_segnet(filename: str):
 
     learn = fai.unet_learner(
         dls,
-        fai.squeezenet1_1,
+        fai.resnet18,
         metrics=fai.DiceMulti,
         loss_func=FocalLoss(),
         self_attention=True,

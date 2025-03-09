@@ -167,30 +167,52 @@ def read_image_and_resize(path: str, offset: list[int], gray: bool = True, mask:
     return background
 
 
+def flood_fill(img):
+    im_floodfill = img.copy()
+    h, w = img.shape
+    mask = np.zeros((h + 2, w + 2), np.uint8)
+
+    # Flood fill from point (0,0)
+    cv2.floodFill(im_floodfill, mask, (0, 0), 255)
+
+    # Invert flood filled image
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+
+    # Combine original image with inverted flood-filled image
+    filled_image = img | im_floodfill_inv
+    return filled_image
+
+
 def create_staff_mask(img):
     """Morph close a staff image until a number of components remain which likely are the staffs"""
-    kernel_size = 2
-    kernel_increment = 2
-    stable_count = 0
+    kernel_size = 1
+    kernel_increment = 1
     max_iterations = 20
     initial_number_of_labels, _ = cv2.connectedComponents(img, connectivity=8)
-    last_num_labels = -1
+    best_number_of_labels = -1
 
     for _ in range(max_iterations):
         kernel = np.ones((kernel_size, kernel_size), np.uint8)
         closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
         num_labels, _ = cv2.connectedComponents(closed, connectivity=8)
-        if num_labels <= initial_number_of_labels / 5 and last_num_labels == num_labels:
-            stable_count += 1
-        else:
-            stable_count = 0
+        if best_number_of_labels > 0 and best_number_of_labels != num_labels:
+            # We are now at the point where increasing the kernel merges too many elements
+            # so we go back by one step
+            kernel_size -= kernel_increment
 
-        if stable_count > 1:
+            kernel = np.ones((kernel_size, kernel_size), np.uint8)
+            closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
+            kernel = np.ones((20, 20), np.uint8)
+            closed = cv2.morphologyEx(closed, cv2.MORPH_DILATE, kernel)
+            closed = flood_fill(closed)
             return closed
+        elif num_labels <= initial_number_of_labels / 5 and best_number_of_labels < 0:
+            best_number_of_labels = num_labels
         kernel_size += kernel_increment
-        last_num_labels = num_labels
 
-    raise ValueError("Failed to create mask")
+    raise ValueError(
+        "Failed to create mask, starting from initial labels " + str(initial_number_of_labels)
+    )
 
 
 def extract_narrow_tall_objects(binary_img, max_width=30, min_height=100):
@@ -227,12 +249,7 @@ def split_image_into_patches(image: np.array, patch_size=512) -> list:
             patch = image[i : i + patch_size, j : j + patch_size]
 
             if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
-                patch = np.pad(
-                    patch,
-                    ((0, patch_size - patch.shape[0]), (0, patch_size - patch.shape[1]), (0, 0)),
-                    mode="constant",
-                    constant_values=256,
-                )
+                raise ValueError("Image has an invalid size " + str(image.shape))
 
             patches.append(patch)
 
@@ -264,7 +281,7 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_mask.png"), mask_patch)
     except Exception as e:
-        eprint("Error at ", image_path, e)
+        eprint("Error at ", image_path, symbol_path, e)
 
 
 def process_deep_score_data(i, image_path, masks_path, staff_dataset):
@@ -293,7 +310,7 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_mask.png"), mask_patch)
     except Exception as e:
-        eprint("Error at ", image_path, e)
+        eprint("Error at ", image_path, masks_path, e)
 
 
 def get_random_offsets() -> list[int]:
@@ -302,10 +319,10 @@ def get_random_offsets() -> list[int]:
         return [0, 0, 0, 0]
 
     return [
-        random.randint(0, 200),
-        random.randint(0, 200),
-        random.randint(0, 200),
-        random.randint(0, 200),
+        random.randint(0, 50),
+        random.randint(0, 50),
+        random.randint(0, 50),
+        random.randint(0, 50),
     ]
 
 
@@ -317,8 +334,8 @@ def build_dataset():
 
 
 def recreate_dataset():
-    cvc = get_cvc_data_paths(download_cvs_musicma())[0:100]
-    d2 = get_deep_score_data_paths(download_deep_scores())[0:100]
+    cvc = get_cvc_data_paths(download_cvs_musicma())
+    d2 = get_deep_score_data_paths(download_deep_scores())
 
     if os.path.exists(staff_dataset):
         shutil.rmtree(staff_dataset)

@@ -8,7 +8,6 @@ import torchvision.transforms as T
 from PIL import Image
 from tqdm import tqdm
 
-from homr.resize import calc_target_image_size
 from homr.simple_logging import eprint
 
 COLORS = {
@@ -29,8 +28,7 @@ def preprocess_image(image_path: str, patch_size=512):
     """Preprocess the image: resize it using calc_target_image_size,
     normalize, and split into patches."""
     image = Image.open(image_path).convert("RGB")
-    target_size = calc_target_image_size(image)
-    image = image.resize(target_size, Image.NEAREST)
+    image = image.resize((1024, 1024), Image.NEAREST)
 
     transform = T.Compose(
         [T.ToTensor(), T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
@@ -50,11 +48,8 @@ def split_image_into_patches(image_tensor: torch.Tensor, patch_size=512):
         for j in range(0, w, patch_size):
             patch = image_tensor[:, i : i + patch_size, j : j + patch_size]
 
-            # Padding if the patch is smaller than required
             if patch.shape[1] < patch_size or patch.shape[2] < patch_size:
-                pad_h = patch_size - patch.shape[1]
-                pad_w = patch_size - patch.shape[2]
-                patch = T.Pad((0, 0, pad_w, pad_h), fill=0)(patch)
+                raise ValueError("Image has an invalid size " + str(image_tensor.shape))
 
             patches.append(patch)
 
@@ -151,7 +146,7 @@ def inference(image_path: str, onnx_model_path: str, output_path: str):
 
 if __name__ == "__main__":
     image_path = sys.argv[1]
-    onnx_model_path = "homr/segmentation/fastai_122-6026f4b9aab27d8b4bd44cd02d381a81712e256c.onnx"
+    onnx_model_path = "homr/segmentation/fastai_124-cd8752cb706e8dc36143bcf4ec49b829743d7356.onnx"
     output_path = "segmentation_output.png"
 
     # Perform inference
