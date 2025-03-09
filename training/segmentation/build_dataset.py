@@ -1,4 +1,5 @@
 import os
+import random
 import shutil
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -8,9 +9,12 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-from homr.resize import calc_target_image_size
 from homr.simple_logging import eprint
-from training.download import download_cvs_musicma, download_deep_scores
+from training.download import (
+    download_backgrounds,
+    download_cvs_musicma,
+    download_deep_scores,
+)
 from training.segmentation.dense_dataset_definitions import (
     DENSE_DATASET_DEFINITIONS as DEF,
 )
@@ -74,20 +78,99 @@ def get_deep_score_data_paths(dataset_path: str) -> list[list[str]]:
     return paths
 
 
-def read_image_and_resize(path: str, gray: bool = True):
+def get_background_paths(dataset_path: str) -> list[str]:
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(f"{dataset_path} not found, download the dataset first.")
+
+    imgs = os.listdir(os.path.join(dataset_path, "OriginalImages"))
+    paths = []
+    for img in imgs:
+        image_path = os.path.join(dataset_path, "OriginalImages", img)
+        paths.append(image_path)
+
+    return paths
+
+
+def create_noisy_canvas(width, height, gray=True):
+    """Creates a noisy canvas with uniform noise."""
+    if gray:
+        return np.random.randint(0, 256, (height, width), dtype=np.uint8)
+    return np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+
+
+def create_blank_canvas(width, height, gray=True):
+    """Creates a blank."""
+    if gray:
+        return np.zeros((height, width), dtype=np.uint8)
+    return np.zeros((height, width, 3), dtype=np.uint8)
+
+
+backgrounds = get_background_paths(download_backgrounds())
+
+
+def pick_random_background(width=1024, height=1024):
+    """Selects a random background image, resizes it, and crops a 1024x1024 region."""
+    bg_path = random.choice(backgrounds)
+    bg_image = Image.open(bg_path).convert("L")
+
+    # Resize to a random value between 1024 and 4096
+    random_size = random.randint(1024, 4096)
+    bg_image = bg_image.resize((random_size, random_size), Image.BILINEAR)
+
+    # Crop a random 1024x1024 segment
+    x_start = random.randint(0, random_size - width)
+    y_start = random.randint(0, random_size - height)
+    bg_image = bg_image.crop((x_start, y_start, x_start + width, y_start + height))
+
+    return np.array(bg_image)
+
+
+def read_image_and_resize(path: str, offset: list[int], gray: bool = True, mask: bool = False):
     image = Image.open(path)
     if gray:
         image = image.convert("L")
-    tar_w, tar_h = calc_target_image_size(image)
-    if tar_w == image.size[0] and tar_h == image.size[1]:
-        return np.array(image)
-    return np.array(image.resize((tar_w, tar_h), Image.NEAREST))
+
+    # Define target size
+    tar_w, tar_h = 1024, 1024
+    image = image.resize((tar_w, tar_h), Image.NEAREST)
+    image = np.array(image)
+
+    # Decide whether to use a background (20% chance)
+    chance_for_random_background = 0.2
+    if mask:
+        background = create_blank_canvas(tar_w, tar_h)
+    elif random.random() < chance_for_random_background:
+        background = pick_random_background(tar_w, tar_h)
+        if background is None:
+            background = create_noisy_canvas(tar_w, tar_h, gray)
+    else:
+        background = create_noisy_canvas(tar_w, tar_h, gray)
+
+    # Compute new image position
+    top = offset[0]
+    left = offset[1]
+    bottom = offset[2]
+    right = offset[3]
+
+    new_h = tar_h - top - bottom
+    new_w = tar_w - left - right
+
+    # Ensure new dimensions are valid
+    new_h = max(1, new_h)
+    new_w = max(1, new_w)
+    image = Image.fromarray(image).resize((new_w, new_h), Image.NEAREST)
+    image = np.array(image)
+
+    # Place image onto background
+    background[top : top + new_h, left : left + new_w] = image
+
+    return background
 
 
 def create_staff_mask(img):
     """Morph close a staff image until a number of components remain which likely are the staffs"""
-    kernel_size = 5
-    kernel_increment = 5
+    kernel_size = 2
+    kernel_increment = 2
     stable_count = 0
     max_iterations = 20
     initial_number_of_labels, _ = cv2.connectedComponents(img, connectivity=8)
@@ -159,9 +242,10 @@ def split_image_into_patches(image: np.array, patch_size=512) -> list:
 def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
     """Process one CVC dataset entry and save patches."""
     try:
-        image = 255 - read_image_and_resize(image_path)
-        staff_lines = read_image_and_resize(staff_path)
-        symbol = read_image_and_resize(symbol_path)
+        offset = get_random_offsets()
+        image = 255 - read_image_and_resize(image_path, offset)
+        staff_lines = read_image_and_resize(staff_path, offset, mask=True)
+        symbol = read_image_and_resize(symbol_path, offset, mask=True)
         staff_mask = create_staff_mask(staff_lines)
         brackets_mask = extract_narrow_tall_objects(symbol)
         total_mask = np.zeros_like(staff_mask)
@@ -186,8 +270,9 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
 def process_deep_score_data(i, image_path, masks_path, staff_dataset):
     """Process one deep score dataset entry and save patches."""
     try:
-        image = read_image_and_resize(image_path)
-        masks_color_encoded = read_image_and_resize(masks_path, gray=False)
+        offset = get_random_offsets()
+        image = read_image_and_resize(image_path, offset)
+        masks_color_encoded = read_image_and_resize(masks_path, offset, gray=False, mask=True)
         staff_lines = np.zeros_like(masks_color_encoded, np.uint8)
         staff_lines[masks_color_encoded == DEF.STAFF] = 255
         brackets_mask = extract_narrow_tall_objects(remove_small_horizontal_elements(255 - image))
@@ -211,6 +296,19 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
         eprint("Error at ", image_path, e)
 
 
+def get_random_offsets() -> list[int]:
+    chance_for_no_offsets = 0.2
+    if random.random() < chance_for_no_offsets:
+        return [0, 0, 0, 0]
+
+    return [
+        random.randint(0, 200),
+        random.randint(0, 200),
+        random.randint(0, 200),
+        random.randint(0, 200),
+    ]
+
+
 def build_dataset():
     if os.path.exists(staff_dataset):
         return staff_dataset
@@ -219,8 +317,8 @@ def build_dataset():
 
 
 def recreate_dataset():
-    cvc = get_cvc_data_paths(download_cvs_musicma())
-    d2 = get_deep_score_data_paths(download_deep_scores())
+    cvc = get_cvc_data_paths(download_cvs_musicma())[0:100]
+    d2 = get_deep_score_data_paths(download_deep_scores())[0:100]
 
     if os.path.exists(staff_dataset):
         shutil.rmtree(staff_dataset)

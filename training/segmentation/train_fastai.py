@@ -11,7 +11,7 @@ from PIL import Image
 from homr.simple_logging import eprint
 from training.segmentation.build_dataset import build_dataset
 
-file_limit = 100000
+file_limit = -1
 image_patch_size = 512
 
 
@@ -93,7 +93,7 @@ def train_segnet(filename: str):
 
     learn = fai.unet_learner(
         dls,
-        fai.resnet34,
+        fai.squeezenet1_1,
         metrics=fai.DiceMulti,
         loss_func=FocalLoss(),
         self_attention=True,
@@ -101,7 +101,7 @@ def train_segnet(filename: str):
         n_out=3,
     )
     learn = learn.to_fp16()
-    learn.fine_tune(3)
+    learn.fine_tune(5)
     export_onnx(learn.model, filename)
 
 

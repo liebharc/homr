@@ -37,3 +37,17 @@ def download_deep_scores() -> str:
     untar_file(download_path, dataset_root)
     eprint("Download complete")
     return dataset_path
+
+
+def download_backgrounds() -> str:
+    dataset_path = os.path.join(dataset_root, "backgrounds")
+    if os.path.exists(dataset_path):
+        return dataset_path
+
+    backgrounds_download = os.path.join(dataset_root, "backgrounds.zip")
+    download_file(
+        "https://github.com/csjunxu/PolyU-Real-World-Noisy-Images-Dataset/archive/refs/heads/master.zip",
+        backgrounds_download,
+    )
+    unzip_file(backgrounds_download, dataset_path, flatten_root_entry=True)
+    return dataset_path

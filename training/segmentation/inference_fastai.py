@@ -151,7 +151,7 @@ def inference(image_path: str, onnx_model_path: str, output_path: str):
 
 if __name__ == "__main__":
     image_path = sys.argv[1]
-    onnx_model_path = "homr/segmentation/fastai_121-2062225c9553e375cc4b3e9839f5c6549a7b3e0eonnx"
+    onnx_model_path = "homr/segmentation/fastai_122-6026f4b9aab27d8b4bd44cd02d381a81712e256c.onnx"
     output_path = "segmentation_output.png"
 
     # Perform inference
