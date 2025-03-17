@@ -13,6 +13,14 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 125
+
+Commit: 88db0936cc3e47b02d5b344e930e3d9030674130
+Date: 13 Mar 2025
+SER: 16%
+
+Decoder/encoder depth to 2, which results in a model size of 60M (instead of 127M for run 101).
+
 ## Run 101
 
 Commit: ba12ebef4606948816a06f4a011248d07a6f06da

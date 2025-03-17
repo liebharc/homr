@@ -7,7 +7,7 @@ import tensorflow as tf
 from homr.simple_logging import eprint
 from training import download
 from training.run_id import get_run_id
-from training.segmentation import train
+from training.segmentation import train, train_staff_segmentation
 from training.segmentation.model_utils import save_model
 from training.transformer.train import train_transformer
 
@@ -63,8 +63,12 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
     }
     save_model(model, meta, filename)
     eprint("Model saved as " + filename)
+elif model_type == "staff":
+    filename = get_segmentation_model_path(model_type) + ".onnx"
+    train_staff_segmentation.train_segnet(filename)
+    eprint("Model saved as " + filename)
 elif model_type == "transformer":
-    train_transformer(fp32=args.fp32)
+    train_transformer(fp32=args.fp32, resume="checkpoint-225850")
 else:
     eprint("Unknown model: " + model_type)
     sys.exit(1)
