@@ -6,6 +6,7 @@ import torch
 import torchvision.transforms as T
 from PIL import Image
 
+from homr.segmentation import config
 from homr.simple_logging import eprint
 
 COLORS = {
@@ -142,8 +143,7 @@ def inference(image_path: str, onnx_model_path: str, output_path: str):
 
 if __name__ == "__main__":
     image_path = sys.argv[1]
-    onnx_model_path = "homr/segmentation/fastai_130-9372f8492a655eb824d1114c978547e901ee9d5f.onnx"
     output_path = "segmentation_output.png"
 
     # Perform inference
-    inference(image_path, onnx_model_path, output_path)
+    inference(image_path, config.staffs_path, output_path)

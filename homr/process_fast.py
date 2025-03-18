@@ -33,7 +33,7 @@ def process_fast(  # noqa: PLR0915
 ) -> str:
     image_original_colors = resize_image(image)
     image, _background = color_adjust.color_adjust(image_original_colors, 40)
-    debug = Debug(image, "input.png", enable_debug)
+    debug = Debug(image, "homr_input.png", enable_debug)
     eprint("Running segmentation")
     start = time.time()
     [staff_mask, bracket_mask] = staff_detection.inference(image)
@@ -66,7 +66,7 @@ def process_fast(  # noqa: PLR0915
 
     eprint("Writing XML")
     xml = generate_xml(xml_generator_args, merged_staffs, "Score")
-    xml.write("result.musicxml")
+    xml.write("homr_result.musicxml")
 
     return ""  # xml.to_string()
 

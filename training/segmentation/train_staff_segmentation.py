@@ -94,14 +94,14 @@ def train_segnet(filename: str):
         ],
     )
 
-    dls = dblock.dataloaders(dataset_path, bs=12, num_workers=4)
+    dls = dblock.dataloaders(dataset_path, bs=8, num_workers=4)
 
-    # squeezenet1_1, resnet34, resnet18
+    # squeezenet1_1, resnet34, resnet18, alexnet
 
     class_weights = torch.tensor([1.0, 5.0, 5.0]).cuda()  # Adjust weights as needed
     learn = fai.unet_learner(
         dls,
-        fai.resnet34,
+        fai.alexnet,
         metrics=fai.DiceMulti,
         loss_func=torch.nn.CrossEntropyLoss(weight=class_weights),
         # loss_func=FocalLoss(),
