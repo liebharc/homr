@@ -119,7 +119,7 @@ class TrOMRParser:
             note_details = note.split("-")[1]
             pitch_and_duration = note_details.split("_")
             pitch = pitch_and_duration[0]
-            duration = pitch_and_duration[1]
+            duration = str.join("_", pitch_and_duration[1:])
             note_name = pitch[0]
             octave = int(pitch[1])
             alter = None
