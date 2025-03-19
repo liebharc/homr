@@ -3,12 +3,13 @@ import time
 import cv2
 import numpy as np
 
-from homr import color_adjust
+from homr import color_adjust, constants
 from homr.accidental_rules import maintain_accidentals
 from homr.bounding_boxes import RotatedBoundingBox, create_rotated_bounding_boxes
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.resize import resize_image
+from homr.results import DurationModifier, ResultChord, ResultClef, ResultStaff
 from homr.segmentation import staff_detection
 from homr.simple_logging import eprint
 from homr.staff_parsing import (
@@ -27,9 +28,7 @@ inference: Staff2Score | None = None
 
 
 def process_fast(  # noqa: PLR0915
-    image: NDArray,
-    enable_debug: bool,
-    xml_generator_args: XmlGeneratorArguments,
+    image: NDArray, enable_debug: bool, target_area: RotatedBoundingBox | None = None
 ) -> str:
     image_original_colors = resize_image(image)
     image, _background = color_adjust.color_adjust(image_original_colors, 40)
@@ -47,6 +46,10 @@ def process_fast(  # noqa: PLR0915
     eprint("Found", len(staffs), "staffs")
     debug.write_bounding_boxes("staffs", staffs)
 
+    if target_area is not None:
+        staffs = [staff for staff in staffs if staff.is_overlapping(target_area)]
+        eprint("Remaining ", len(staffs), "staffs after filtering for target area", target_area)
+
     result_staffs = []
     parser = TrOMRParser()
     for i, staff in enumerate(staffs):
@@ -56,16 +59,56 @@ def process_fast(  # noqa: PLR0915
         staff_result = str.join("+", get_score(staff_img))
         eprint("Processing staff", (i + 1), "done in [s]:", time.time() - start)
         eprint(staff_result)
-
         staff_parsed = parser.parse_tr_omr_output(staff_result)
         result_staffs.append(staff_parsed)
 
     merged_staffs = [merge_and_clean(result_staffs, True)]
 
     merged_staffs = maintain_accidentals(merged_staffs)
+    return merged_staffs
+
+
+def notes_to_tonal_notation(staffs: list[ResultStaff]) -> list[str]:
+    """Converts the notes and rests in the staff to tonal notation.
+    Tonal notation is useful if you need something short and easy to read to understand
+    quickly what has been detected.
+
+    The tonal notation has been extended with clef information and markings for measures and chords.
+    """
+    results: list[str] = []
+    for staff in staffs:
+        measures: list[str] = []
+        for measure in staff.measures:
+            measure_results: list[str] = []
+            for symbol in measure.symbols:
+                if isinstance(symbol, ResultClef):
+                    measure_results.append("clef" + str(symbol.clef_type))
+                if isinstance(symbol, ResultChord):
+                    chord: list[str] = []
+                    for note in symbol.notes:
+                        duration_modifier = ""
+                        if note.duration.modifier == DurationModifier.DOT:
+                            duration_modifier = "."
+                        chord.append(
+                            str(note.pitch)
+                            + "-"
+                            + str(note.duration.base_duration / constants.duration_of_quarter / 4)
+                            + duration_modifier
+                        )
+                    measure_results.append(str.join("&", chord))
+            measures.append(str.join("+", measure_results))
+        results.append(str.join("|", measures))
+
+    return results
+
+
+def write_to_xml(
+    staffs: list[ResultStaff],
+    xml_generator_args: XmlGeneratorArguments,
+) -> None:
 
     eprint("Writing XML")
-    xml = generate_xml(xml_generator_args, merged_staffs, "Score")
+    xml = generate_xml(xml_generator_args, staffs, "Score")
     xml.write("homr_result.musicxml")
 
     return ""  # xml.to_string()
@@ -132,4 +175,5 @@ if __name__ == "__main__":
     image_path = sys.argv[1]
     image = cv2.imread(image_path)
 
-    print(process_fast(image, True, XmlGeneratorArguments(None, None, None)))  # noqa: T201
+    staffs = process_fast(image, True)
+    print(notes_to_tonal_notation(staffs))  # noqa: T201

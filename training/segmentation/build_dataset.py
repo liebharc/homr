@@ -267,6 +267,7 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
         brackets_mask = extract_narrow_tall_objects(symbol)
         total_mask = np.zeros_like(staff_mask)
         total_mask[staff_mask > 0] = 128
+        total_mask[staff_lines > 0] = 196
         total_mask[brackets_mask > 0] = 255
 
         image_patches = split_image_into_patches(image)
@@ -298,6 +299,7 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
         staff_mask = create_staff_mask(staff_lines)
         total_mask = np.zeros_like(staff_mask)
         total_mask[staff_mask > 0] = 128
+        total_mask[staff_lines > 0] = 196
         total_mask[brackets_mask > 0] = 255
 
         image_patches = split_image_into_patches(image)

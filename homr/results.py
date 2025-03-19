@@ -261,6 +261,7 @@ def _adjust_duration(duration: int, modifier: DurationModifier) -> int:
 
 class ResultDuration:
     def __init__(self, base_duration: int, modifier: DurationModifier = DurationModifier.NONE):
+        self.base_duration = base_duration
         self.duration = _adjust_duration(base_duration, modifier)
         self.modifier = modifier
         self.duration_name = _get_duration_name(base_duration)

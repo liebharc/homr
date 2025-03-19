@@ -90,7 +90,7 @@ def reconstruct_from_patches(
     h, w = original_size
     patch_size = patches[0].shape[-1]
 
-    result = torch.zeros((3, h, w))
+    result = torch.zeros((4, h, w))
     index = 0
 
     for i in range(0, h, patch_size):
@@ -118,8 +118,11 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray]:
 
     postprocessed = postprocess_output(output)
     postprocessed = cv2.resize(postprocessed, [image.shape[1], image.shape[0]])
-    staff_class = 1
-    staffs = np.where(postprocessed == staff_class, 1, 0).astype(np.uint8)
+    staff_area_class = 1
+    staff_line_class = 1
+    staffs = np.where(
+        (postprocessed == staff_area_class) | (postprocessed == staff_line_class), 1, 0
+    ).astype(np.uint8)
     brackets_class = 2
     brackets = np.where(postprocessed == brackets_class, 1, 0).astype(np.uint8)
     return (staffs, brackets)

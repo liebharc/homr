@@ -35,8 +35,9 @@ def get_image(path):
 def create_mask(mask_path):
     mask_img = Image.open(mask_path).convert("L")
     mask = np.zeros_like(mask_img, np.uint8)  # Initialize mask with zeros (background)
-    mask[np.isin(mask_img, [128])] = 1  # Staff pixels → Class 1
+    mask[np.isin(mask_img, [128])] = 1  # Staff region → Class 1
     mask[np.isin(mask_img, [255])] = 2  # Bracket pixels → Class 2
+    mask[np.isin(mask_img, [196])] = 3  # Staff lines → Class 3
     return mask
 
 
@@ -98,7 +99,7 @@ def train_segnet(filename: str):
 
     # squeezenet1_1, resnet34, resnet18, alexnet
 
-    class_weights = torch.tensor([1.0, 5.0, 5.0]).cuda()  # Adjust weights as needed
+    class_weights = torch.tensor([1.0, 5.0, 5.0, 5.0]).cuda()
     learn = fai.unet_learner(
         dls,
         fai.alexnet,
@@ -107,7 +108,7 @@ def train_segnet(filename: str):
         # loss_func=FocalLoss(),
         self_attention=True,
         act_cls=fai.Mish,
-        n_out=3,
+        n_out=4,
     )
     learn = learn.to_fp16()
     learn.fine_tune(5)
