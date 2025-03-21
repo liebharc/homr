@@ -119,7 +119,7 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray]:
     postprocessed = postprocess_output(output)
     postprocessed = cv2.resize(postprocessed, [image.shape[1], image.shape[0]])
     staff_area_class = 1
-    staff_line_class = 1
+    staff_line_class = 3
     staffs = np.where(
         (postprocessed == staff_area_class) | (postprocessed == staff_line_class), 1, 0
     ).astype(np.uint8)

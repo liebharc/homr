@@ -5,7 +5,12 @@ import numpy as np
 
 from homr import color_adjust, constants
 from homr.accidental_rules import maintain_accidentals
-from homr.bounding_boxes import RotatedBoundingBox, create_rotated_bounding_boxes
+from homr.autocrop import autocrop
+from homr.bounding_boxes import (
+    BoundingBox,
+    RotatedBoundingBox,
+    create_rotated_bounding_boxes,
+)
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.resize import resize_image
@@ -28,9 +33,10 @@ inference: Staff2Score | None = None
 
 
 def process_fast(  # noqa: PLR0915
-    image: NDArray, enable_debug: bool, target_area: RotatedBoundingBox | None = None
+    image: NDArray, enable_debug: bool, target_area: BoundingBox | None = None
 ) -> str:
     image_original_colors = resize_image(image)
+    image_original_colors = autocrop(image_original_colors)
     image, _background = color_adjust.color_adjust(image_original_colors, 40)
     debug = Debug(image, "homr_input.png", enable_debug)
     eprint("Running segmentation")
@@ -46,9 +52,28 @@ def process_fast(  # noqa: PLR0915
     eprint("Found", len(staffs), "staffs")
     debug.write_bounding_boxes("staffs", staffs)
 
+    if len(staffs) == 0:
+        raise ValueError("No staffs found")
+
     if target_area is not None:
-        staffs = [staff for staff in staffs if staff.is_overlapping(target_area)]
-        eprint("Remaining ", len(staffs), "staffs after filtering for target area", target_area)
+        overlapping_staffs = [staff for staff in staffs if staff.is_overlapping(target_area)]
+        eprint(
+            "Remaining ",
+            len(overlapping_staffs),
+            "staffs after filtering for target area",
+            target_area.box,
+        )
+
+        if overlapping_staffs:
+            staff_with_largest_overlap = max(
+                overlapping_staffs,
+                key=lambda staff: staff.to_bounding_box().get_overlapping_area_size(target_area),
+            )
+            staffs = [staff_with_largest_overlap]
+            eprint("Using staff with the largest target area")
+        else:
+            staffs = [staffs[0]]
+            eprint("Using first staff in the image")
 
     result_staffs = []
     parser = TrOMRParser()
@@ -120,13 +145,12 @@ def prepare_staff_image(
     staff: RotatedBoundingBox,
     debug: Debug,
 ) -> NDArray:
-
     height = staff.bottom_right[1] - staff.top_left[1]
     region = [
         staff.top_left[0],
-        staff.top_left[1] - height / 2,
+        staff.top_left[1] - height / 4,
         staff.bottom_right[0],
-        staff.bottom_right[1] + height / 2,
+        staff.bottom_right[1] + height / 4,
     ]
     staff_image, _ignored = crop_image_and_return_new_top(
         staff_image, region[0], region[1], region[2], region[3]
@@ -147,7 +171,7 @@ def prepare_staff_image(
     if debug.debug:
         debug.write_image_with_fixed_suffix(f"_staff-{index}_rotated.jpg", staff_image)
 
-    staff_image = remove_black_contours_at_edges_of_image(staff_image, 5)
+    staff_image = remove_black_contours_at_edges_of_image(staff_image, 8)
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
 
     if debug.debug:
@@ -175,5 +199,5 @@ if __name__ == "__main__":
     image_path = sys.argv[1]
     image = cv2.imread(image_path)
 
-    staffs = process_fast(image, True)
+    staffs = process_fast(image, True, BoundingBox((10, 10, 50, 50), contours=None))
     print(notes_to_tonal_notation(staffs))  # noqa: T201

@@ -110,6 +110,21 @@ class BoundingBox(AnyPolygon):
             self.debug_id,
         )
 
+    def get_overlapping_area_size(self, other: "BoundingBox") -> float:
+        x1_min, y1_min, x1_max, y1_max = self.box
+        x2_min, y2_min, x2_max, y2_max = other.box
+
+        inter_x_min = max(x1_min, x2_min)
+        inter_y_min = max(y1_min, y2_min)
+        inter_x_max = min(x1_max, x2_max)
+        inter_y_max = min(y1_max, y2_max)
+
+        inter_width = max(0, inter_x_max - inter_x_min)
+        inter_height = max(0, inter_y_max - inter_y_min)
+        overlap_area = inter_width * inter_height
+
+        return overlap_area
+
     def increase_width(self, x_left: int, x_right: int) -> "BoundingBox":
         return BoundingBox(
             (
