@@ -1,8 +1,8 @@
 import sys
 
 import numpy as np
-import onnxruntime as ort
-import torchvision.transforms as T
+import onnxruntime as ort  # type: ignore
+import torchvision.transforms as T  # type: ignore
 from PIL import Image
 
 from homr.simple_logging import eprint

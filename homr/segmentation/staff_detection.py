@@ -111,7 +111,7 @@ def postprocess_output(output: torch.Tensor) -> NDArray:
     return np.array(output).astype(np.uint8)
 
 
-def inference(image: NDArray) -> tuple[NDArray, NDArray]:
+def inference(image: NDArray) -> tuple[NDArray, NDArray, NDArray]:
     """Perform inference on the input image and save the segmented output."""
     ort_session = load_model(config.staffs_path)
     output = run_inference(image, ort_session)
@@ -125,4 +125,5 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray]:
     ).astype(np.uint8)
     brackets_class = 2
     brackets = np.where(postprocessed == brackets_class, 1, 0).astype(np.uint8)
-    return (staffs, brackets)
+    staff_lines = np.where(postprocessed == staff_line_class, 1, 0).astype(np.uint8)
+    return (staffs, brackets, staff_lines)

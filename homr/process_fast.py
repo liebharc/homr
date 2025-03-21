@@ -17,6 +17,8 @@ from homr.resize import resize_image
 from homr.results import DurationModifier, ResultChord, ResultClef, ResultStaff
 from homr.segmentation import staff_detection
 from homr.simple_logging import eprint
+from homr.staff_dewarping import dewarp_staff_image
+from homr.staff_extraction_fast import construct_staff_from_lines
 from homr.staff_parsing import (
     center_image_on_canvas,
     get_tr_omr_canvas_size,
@@ -34,16 +36,17 @@ inference: Staff2Score | None = None
 
 def process_fast(  # noqa: PLR0915
     image: NDArray, enable_debug: bool, target_area: BoundingBox | None = None
-) -> str:
+) -> list[ResultStaff]:
     image_original_colors = resize_image(image)
     image_original_colors = autocrop(image_original_colors)
     image, _background = color_adjust.color_adjust(image_original_colors, 40)
     debug = Debug(image, "homr_input.png", enable_debug)
     eprint("Running segmentation")
     start = time.time()
-    [staff_mask, bracket_mask] = staff_detection.inference(image)
+    [staff_mask, bracket_mask, staff_lines] = staff_detection.inference(image)
     debug.write_threshold_image("staff_mask", staff_mask)
     debug.write_threshold_image("bracket_mask", bracket_mask)
+    debug.write_threshold_image("staff_lines", staff_lines)
     eprint("Running segmentation - Done in [s]:", time.time() - start)
 
     eprint("Gettings staffs")
@@ -79,7 +82,7 @@ def process_fast(  # noqa: PLR0915
     parser = TrOMRParser()
     for i, staff in enumerate(staffs):
         eprint("Processing staff", (i + 1))
-        staff_img = prepare_staff_image(i + 1, image, staff, debug)
+        staff_img = prepare_staff_image(i + 1, image, staff_lines, staff, debug)
         start = time.time()
         staff_result = str.join("+", get_score(staff_img))
         eprint("Processing staff", (i + 1), "done in [s]:", time.time() - start)
@@ -136,12 +139,11 @@ def write_to_xml(
     xml = generate_xml(xml_generator_args, staffs, "Score")
     xml.write("homr_result.musicxml")
 
-    return ""  # xml.to_string()
-
 
 def prepare_staff_image(
     index: int,
     staff_image: NDArray,
+    staff_lines: NDArray,
     staff: RotatedBoundingBox,
     debug: Debug,
 ) -> NDArray:
@@ -155,6 +157,9 @@ def prepare_staff_image(
     staff_image, _ignored = crop_image_and_return_new_top(
         staff_image, region[0], region[1], region[2], region[3]
     )
+    staff_lines, _ignored = crop_image_and_return_new_top(
+        staff_lines, region[0], region[1], region[2], region[3]
+    )
     if debug.debug:
         debug.write_image_with_fixed_suffix(f"_staff-{index}_cropped.jpg", staff_image)
     image_dimensions = get_tr_omr_canvas_size(
@@ -165,11 +170,16 @@ def prepare_staff_image(
         staff_image,
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
+    staff_lines = cv2.resize(
+        staff_lines,
+        (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
+    )
 
     staff_image = rotate_image(staff_image, staff.angle)
-
-    if debug.debug:
-        debug.write_image_with_fixed_suffix(f"_staff-{index}_rotated.jpg", staff_image)
+    staff_lines = rotate_image(staff_lines, staff.angle)
+    staff_from_lines = construct_staff_from_lines(staff_lines)
+    dewarp = dewarp_staff_image(staff_image, staff_from_lines, index, debug)
+    staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, 8)
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
@@ -199,5 +209,5 @@ if __name__ == "__main__":
     image_path = sys.argv[1]
     image = cv2.imread(image_path)
 
-    staffs = process_fast(image, True, BoundingBox((10, 10, 50, 50), contours=None))
+    staffs = process_fast(image, True)
     print(notes_to_tonal_notation(staffs))  # noqa: T201
