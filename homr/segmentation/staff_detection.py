@@ -117,7 +117,6 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray, NDArray]:
     output = run_inference(image, ort_session)
 
     postprocessed = postprocess_output(output)
-    postprocessed = cv2.resize(postprocessed, [image.shape[1], image.shape[0]])
     staff_area_class = 1
     staff_line_class = 3
     staffs = np.where(
@@ -126,4 +125,7 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray, NDArray]:
     brackets_class = 2
     brackets = np.where(postprocessed == brackets_class, 1, 0).astype(np.uint8)
     staff_lines = np.where(postprocessed == staff_line_class, 1, 0).astype(np.uint8)
-    return (staffs, brackets, staff_lines)
+    staffs_resized = cv2.resize(staffs, [image.shape[1], image.shape[0]])
+    brackets_resized = cv2.resize(brackets, [image.shape[1], image.shape[0]])
+    staff_lines_resized = cv2.resize(staff_lines, [image.shape[1], image.shape[0]])
+    return (staffs_resized, brackets_resized, staff_lines_resized)

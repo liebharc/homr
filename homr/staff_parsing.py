@@ -4,7 +4,7 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
-from homr.model import InputPredictions, MultiStaff, Note, NoteGroup, Staff
+from homr.model import MultiStaff, Note, NoteGroup, Staff
 from homr.results import (
     ResultChord,
     ResultClef,
@@ -26,27 +26,25 @@ def _have_all_the_same_number_of_staffs(staffs: list[MultiStaff]) -> bool:
     return True
 
 
-def _is_close_to_image_top_or_bottom(staff: MultiStaff, predictions: InputPredictions) -> bool:
+def _is_close_to_image_top_or_bottom(staff: MultiStaff, image: NDArray) -> bool:
     tolerance = 50
     closest_distance_to_top_or_bottom = [
-        min(s.min_x, predictions.preprocessed.shape[0] - s.max_x) for s in staff.staffs
+        min(s.min_x, image.shape[0] - s.max_x) for s in staff.staffs
     ]
     return min(closest_distance_to_top_or_bottom) < tolerance
 
 
-def _ensure_same_number_of_staffs(
-    staffs: list[MultiStaff], predictions: InputPredictions
-) -> list[MultiStaff]:
+def _ensure_same_number_of_staffs(staffs: list[MultiStaff], image: NDArray) -> list[MultiStaff]:
     if _have_all_the_same_number_of_staffs(staffs):
         return staffs
     if len(staffs) > 2:  # noqa: PLR2004
         if _is_close_to_image_top_or_bottom(
-            staffs[0], predictions
+            staffs[0], image
         ) and _have_all_the_same_number_of_staffs(staffs[1:]):
             eprint("Removing first system from all voices, as it has a different number of staffs")
             return staffs[1:]
         if _is_close_to_image_top_or_bottom(
-            staffs[-1], predictions
+            staffs[-1], image
         ) and _have_all_the_same_number_of_staffs(staffs[:-1]):
             eprint("Removing last system from all voices, as it has a different number of staffs")
             return staffs[:-1]
@@ -145,6 +143,10 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
 
 
 def _get_min_max_y_position_of_notes(staff: Staff) -> tuple[float, float]:
+    if len(staff.symbols) == 0:
+        min_y = staff.min_y - 3.5 * staff.average_unit_size
+        max_y = staff.max_y + 3.5 * staff.average_unit_size
+        return min_y, max_y
     min_y = staff.min_y - 2.5 * staff.average_unit_size
     max_y = staff.max_y + 2.5 * staff.average_unit_size
     for symbol in staff.symbols:
@@ -159,11 +161,16 @@ def _get_min_max_y_position_of_notes(staff: Staff) -> tuple[float, float]:
 
 
 def _calculate_region(staff: Staff, x_values: NDArray, y_values: NDArray) -> NDArray:
-    x_min = min(*x_values, staff.min_x) - 2 * staff.average_unit_size
-    x_max = max(*x_values, staff.max_x) + 2 * staff.average_unit_size
-    staff_min_y, staff_max_y = _get_min_max_y_position_of_notes(staff)
-    y_min = min(*(y_values - 0.5 * staff.average_unit_size), staff_min_y)
-    y_max = max(*(y_values + 0.5 * staff.average_unit_size), staff_max_y)
+    if len(x_values) == 0 or len(y_values) == 0:
+        x_min = staff.min_x - 2 * staff.average_unit_size
+        x_max = staff.max_x + 2 * staff.average_unit_size
+        y_min, y_max = _get_min_max_y_position_of_notes(staff)
+    else:
+        x_min = min(*x_values, staff.min_x) - 2 * staff.average_unit_size
+        x_max = max(*x_values, staff.max_x) + 2 * staff.average_unit_size
+        staff_min_y, staff_max_y = _get_min_max_y_position_of_notes(staff)
+        y_min = min(*(y_values - 0.5 * staff.average_unit_size), staff_min_y)
+        y_max = max(*(y_values + 0.5 * staff.average_unit_size), staff_max_y)
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
@@ -196,7 +203,7 @@ def prepare_staff_image(
     index: int,
     ranges: list[float],
     staff: Staff,
-    predictions: InputPredictions,
+    staff_image: NDArray,
     perform_dewarp: bool = True,
 ) -> tuple[NDArray, Staff]:
     centers = [s.center for s in staff.symbols]
@@ -206,7 +213,6 @@ def prepare_staff_image(
     region = _calculate_region(staff, x_values, y_values)
     y_offsets = _calculate_offsets(staff, ranges)
     region = _adjust_region(region, y_offsets, staff)
-    staff_image = predictions.preprocessed
     image_dimensions = get_tr_omr_canvas_size(
         (int(region[3] - region[1]), int(region[2] - region[0]))
     )
@@ -285,10 +291,10 @@ def _dewarp_staff(
 
 
 def parse_staff_image(
-    debug: Debug, ranges: list[float], index: int, staff: Staff, predictions: InputPredictions
+    debug: Debug, ranges: list[float], index: int, staff: Staff, image: NDArray
 ) -> ResultStaff | None:
     staff_image, transformed_staff = prepare_staff_image(
-        debug, index, ranges, staff, predictions, perform_dewarp=True
+        debug, index, ranges, staff, image, perform_dewarp=True
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
@@ -409,14 +415,12 @@ def remember_new_line(measures: list[ResultMeasure]) -> None:
         measures[0].is_new_line = True
 
 
-def parse_staffs(
-    debug: Debug, staffs: list[MultiStaff], predictions: InputPredictions
-) -> list[ResultStaff]:
+def parse_staffs(debug: Debug, staffs: list[MultiStaff], image: NDArray) -> list[ResultStaff]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
     """
-    staffs = _ensure_same_number_of_staffs(staffs, predictions)
+    staffs = _ensure_same_number_of_staffs(staffs, image)
     # For simplicity we call every staff in a multi staff a voice,
     # even if it's part of a grand staff.
     number_of_voices = _get_number_of_voices(staffs)
@@ -427,9 +431,7 @@ def parse_staffs(
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
         result_for_voice = []
         for staff in staffs_for_voice:
-            if len(staff.symbols) == 0:
-                continue
-            result_staff = parse_staff_image(debug, ranges, i, staff, predictions)
+            result_staff = parse_staff_image(debug, ranges, i, staff, image)
             if result_staff is None:
                 eprint("Staff was filtered out", i)
                 i += 1

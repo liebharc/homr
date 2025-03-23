@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from scipy.signal import medfilt  # type: ignore
 
+from homr.bounding_boxes import RotatedBoundingBox
 from homr.model import Staff, StaffPoint
 from homr.type_definitions import NDArray
 
@@ -48,5 +49,20 @@ def construct_staff_from_lines(staff_image: NDArray) -> Staff:
         y_positions = [float(refined_lines[i][x]) for i in range(5)]
         angle = 0.0  # Can be estimated if needed
         staff_grid.append(StaffPoint(float(x), y_positions, angle))
+
+    return Staff(staff_grid)
+
+
+def construct_staff_from_lines_in_area(staff_image: NDArray, area: RotatedBoundingBox) -> Staff:
+    x1, y1, x2, y2 = area.to_bounding_box().box
+    cropped_image = staff_image[y1:y2, x1:x2]
+
+    staff = construct_staff_from_lines(cropped_image)
+
+    staff_grid = []
+    for staff_point in staff.grid:
+        staff_grid.append(
+            StaffPoint(staff_point.x + x1, [y + y1 for y in staff_point.y], staff_point.angle)
+        )
 
     return Staff(staff_grid)

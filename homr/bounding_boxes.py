@@ -110,6 +110,20 @@ class BoundingBox(AnyPolygon):
             self.debug_id,
         )
 
+    def increase_size_in_each_dimension(
+        self, increase: int, image_size: tuple[int, ...]
+    ) -> "BoundingBox":
+        return BoundingBox(
+            (
+                max(self.box[0] - increase, 0),
+                max(self.box[1] - increase, 0),
+                min(self.box[2] + increase, image_size[1]),
+                min(self.box[3] + increase, image_size[0]),
+            ),
+            self.contours,
+            self.debug_id,
+        )
+
     def get_overlapping_area_size(self, other: "BoundingBox") -> float:
         x1_min, y1_min, x1_max, y1_max = self.box
         x2_min, y2_min, x2_max, y2_max = other.box
@@ -271,6 +285,8 @@ class RotatedBoundingBox(AngledBoundingBox):
         cv2.drawContours(img, [box], 0, color, 2)
 
     def is_intersecting(self, other: "RotatedBoundingBox") -> bool:
+        if not self._can_shapes_possibly_touch(other):
+            return False
         # TODO: How is this different from is_overlapping?
         return cv2.rotatedRectangleIntersection(self.box, other.box)[0] != cv2.INTERSECT_NONE
 

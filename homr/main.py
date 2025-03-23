@@ -227,7 +227,7 @@ def process_image(  # noqa: PLR0915
         title = detect_title(debug, staffs[0])
         eprint("Found title: " + title)
 
-        result_staffs = parse_staffs(debug, multi_staffs, predictions)
+        result_staffs = parse_staffs(debug, multi_staffs, predictions.preprocessed)
 
         result_staffs = maintain_accidentals(result_staffs)
 

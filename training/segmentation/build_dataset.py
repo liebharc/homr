@@ -26,6 +26,8 @@ staff_dataset = os.path.join(dataset_root, "staffs_segmentation")
 
 min_number_of_non_background_pixels = 20
 
+file_limit = -1
+
 
 def get_cvc_data_paths(dataset_path: str) -> list[list[str]]:
     """Returns: [image, staff, symbol]"""
@@ -215,12 +217,25 @@ def create_staff_mask(img):
     )
 
 
-def extract_narrow_tall_objects(binary_img, max_width=30, min_height=60):
+def create_staff_line_masks(img):
+    """
+    Expands the items in the binary image:
+    - 4 pixels wider (2 pixels to the left, 2 pixels to the right)
+    - 2 pixels thicker (1 pixel up, 1 pixel down)
+    """
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
+    expanded_img = cv2.dilate(img, kernel, iterations=1)
+    return expanded_img
+
+
+def extract_narrow_tall_objects(binary_img, max_width=5, min_height=20):
     """
     Find braces and brackets, which are usually tall items.
     """
 
     binary_img = (binary_img > 0).astype(np.uint8) * 255
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+    binary_img = cv2.erode(binary_img, kernel, iterations=1)
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_img, connectivity=8)
     filtered_img = np.zeros_like(binary_img)
 
@@ -230,7 +245,33 @@ def extract_narrow_tall_objects(binary_img, max_width=30, min_height=60):
         if w <= max_width and h >= min_height:
             filtered_img[labels == i] = 255
 
-    return filtered_img
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    expanded_img = cv2.dilate(filtered_img, kernel, iterations=1)
+    return expanded_img
+
+
+def overlay_mask_on_image(grayscale_img, mask_img):
+    """
+    Creates an RGB image from the grayscale image and overlays the mask as a transparent red layer.
+    The intensity of the red corresponds to the mask value.
+    """
+    # Convert grayscale image to RGB
+    rgb_image = cv2.cvtColor(grayscale_img, cv2.COLOR_GRAY2RGB)
+
+    # Normalize the mask to range [0, 255] if needed
+    mask_normalized = cv2.normalize(mask_img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # Create a red channel overlay with transparency
+    red_overlay = np.zeros_like(rgb_image, dtype=np.uint8)
+    red_overlay[:, :, 2] = mask_normalized  # Assign mask intensity to red channel
+
+    # Blend the original image and the red overlay (alpha blending)
+    alpha = mask_normalized.astype(float) / 255.0  # Convert mask to transparency values [0,1]
+    blended_image = (rgb_image * (1 - alpha[:, :, None]) + red_overlay * alpha[:, :, None]).astype(
+        np.uint8
+    )
+
+    return blended_image
 
 
 def remove_small_horizontal_elements(binary_img, max_horizontal_length=10):
@@ -264,6 +305,7 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
         staff_lines = read_image_and_resize(staff_path, offset, mask=True)
         symbol = read_image_and_resize(symbol_path, offset, mask=True)
         staff_mask = create_staff_mask(staff_lines)
+        staff_lines = create_staff_line_masks(staff_lines)
         brackets_mask = extract_narrow_tall_objects(symbol)
         total_mask = np.zeros_like(staff_mask)
         total_mask[staff_mask > 0] = 128
@@ -283,6 +325,11 @@ def process_cvc_data(i, image_path, staff_path, symbol_path, staff_dataset):
                 continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_cvc_mask.png"), mask_patch)
+            if file_limit > 0:
+                cv2.imwrite(
+                    os.path.join(staff_dataset, "debug", f"{i}_{j}_cvc_debug.png"),
+                    overlay_mask_on_image(image_patch, mask_patch),
+                )
     except Exception as e:
         eprint("Error at ", image_path, symbol_path, e)
 
@@ -297,6 +344,7 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
         staff_lines[masks_color_encoded == DEF.STAFF] = 255
         brackets_mask = extract_narrow_tall_objects(remove_small_horizontal_elements(255 - image))
         staff_mask = create_staff_mask(staff_lines)
+        staff_lines = create_staff_line_masks(staff_lines)
         total_mask = np.zeros_like(staff_mask)
         total_mask[staff_mask > 0] = 128
         total_mask[staff_lines > 0] = 196
@@ -313,6 +361,11 @@ def process_deep_score_data(i, image_path, masks_path, staff_dataset):
                 continue
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_img.png"), image_patch)
             cv2.imwrite(os.path.join(staff_dataset, f"{i}_{j}_d2_mask.png"), mask_patch)
+            if file_limit > 0:
+                cv2.imwrite(
+                    os.path.join(staff_dataset, "debug", f"{i}_{j}_d2_debug.png"),
+                    overlay_mask_on_image(image_patch, mask_patch),
+                )
     except Exception as e:
         eprint("Error at ", image_path, masks_path, e)
 
@@ -340,10 +393,15 @@ def build_dataset():
 def recreate_dataset():
     cvc = get_cvc_data_paths(download_cvs_musicma())
     d2 = get_deep_score_data_paths(download_deep_scores())
+    if file_limit > 0:
+        cvc = cvc[0:100]
+        d2 = d2[0:100]
 
     if os.path.exists(staff_dataset):
         shutil.rmtree(staff_dataset)
     os.makedirs(staff_dataset)
+    if file_limit > 0:
+        os.makedirs(os.path.join(staff_dataset, "debug"))
 
     with ProcessPoolExecutor() as executor:
         futures = []
