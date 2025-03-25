@@ -14,6 +14,8 @@ def calc_target_image_size(image: Image.Image) -> tuple[int, int]:
     pixels = w * h
     target_size_min = 3.0 * 1000 * 1000
     target_size_max = 4.35 * 1000 * 1000
+    if target_size_min <= pixels <= target_size_max:
+        return w, h
 
     lb = target_size_min / pixels
     ub = target_size_max / pixels
@@ -21,19 +23,6 @@ def calc_target_image_size(image: Image.Image) -> tuple[int, int]:
 
     tar_w = round(ratio * w)
     tar_h = round(ratio * h)
-
-    patch_size = 512
-
-    tar_w = round(tar_w / patch_size) * patch_size
-    tar_h = round(tar_h / patch_size) * patch_size
-
-    def best_multiple(val: int, base: int) -> int:
-        lower = (val // base) * base
-        upper = lower + base
-        return lower if abs(val - lower) <= abs(val - upper) else upper
-
-    tar_w = best_multiple(tar_w, patch_size)
-    tar_h = best_multiple(tar_h, patch_size)
 
     return tar_w, tar_h
 

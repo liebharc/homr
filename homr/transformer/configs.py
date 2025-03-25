@@ -70,12 +70,12 @@ class Config:
         self.lift_sharp = 2
         self.lift_flat = 3
         self.encoder_structure = "hybrid"
-        self.encoder_depth = 4
+        self.encoder_depth = 8
         self.backbone_layers = [2, 3, 7]
         self.encoder_dim = 256
         self.encoder_heads = 8
         self.decoder_dim = 256
-        self.decoder_depth = 4
+        self.decoder_depth = 8
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()

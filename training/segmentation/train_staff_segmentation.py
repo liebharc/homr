@@ -11,7 +11,7 @@ from PIL import Image
 from homr.simple_logging import eprint
 from training.segmentation.build_dataset import build_dataset
 
-file_limit = 5000
+file_limit = 50000
 image_patch_size = 512
 
 
@@ -111,7 +111,7 @@ def train_segnet(filename: str):
         n_out=4,
     )
     learn = learn.to_fp16()
-    learn.fine_tune(1)
+    learn.fine_tune(5)
     export_onnx(learn.model, filename)
 
 

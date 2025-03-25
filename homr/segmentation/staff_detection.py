@@ -8,17 +8,10 @@ from PIL import Image
 from homr.segmentation import config
 from homr.type_definitions import NDArray
 
-loaded_model: ort.InferenceSession | None = None  # type: ignore
-
 
 def load_model(onnx_model_path: str) -> ort.InferenceSession:  # type: ignore
     """Load the ONNX model."""
-    global loaded_model  # noqa: PLW0603
-    if loaded_model is not None:
-        return loaded_model
-    ort_session = ort.InferenceSession(onnx_model_path, providers=["CUDAExecutionProvider"])
-    loaded_model = ort_session
-    return ort_session
+    return ort.InferenceSession(onnx_model_path, providers=["CUDAExecutionProvider"])
 
 
 def preprocess_image(
@@ -117,11 +110,12 @@ def inference(image: NDArray) -> tuple[NDArray, NDArray, NDArray]:
     output = run_inference(image, ort_session)
 
     postprocessed = postprocess_output(output)
-    staff_area_class = 1
     staff_line_class = 3
-    staffs = np.where(
-        (postprocessed == staff_area_class) | (postprocessed == staff_line_class), 1, 0
-    ).astype(np.uint8)
+    staffs = np.where(postprocessed > 0, 1, 0).astype(np.uint8)
+
+    eroded = cv2.erode(staffs, np.ones((10, 100), np.uint8), iterations=1)
+    staffs = cv2.dilate(eroded, np.ones((10, 10), np.uint8), iterations=1)
+
     brackets_class = 2
     brackets = np.where(postprocessed == brackets_class, 1, 0).astype(np.uint8)
     staff_lines = np.where(postprocessed == staff_line_class, 1, 0).astype(np.uint8)

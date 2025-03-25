@@ -15,9 +15,11 @@ def estimate_noise(gray: NDArray) -> int:
     return sigma  # type: ignore
 
 
-def create_noise_grid(gray: NDArray, debug: Debug) -> NDArray | None:  # noqa: C901, PLR0912
+def create_noise_grid(
+    gray: NDArray, debug: Debug, grid_size: int = 20
+) -> NDArray | None:  # noqa: C901, PLR0912
     imgheight, imgwidth = gray.shape
-    M, N = imgheight // 20, imgwidth // 20
+    M, N = imgheight // grid_size, imgwidth // grid_size
 
     debug_image = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     mask = np.zeros(gray.shape, dtype=np.uint8)

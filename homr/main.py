@@ -6,7 +6,7 @@ import sys
 import cv2
 import numpy as np
 
-from homr import color_adjust, download_utils
+from homr import color_adjust, download_utils, process_fast
 from homr.accidental_detection import add_accidentals_to_staffs
 from homr.accidental_rules import maintain_accidentals
 from homr.autocrop import autocrop
@@ -297,6 +297,18 @@ def download_weights() -> None:
                     os.remove(downloaded_zip)
 
 
+def process_experimental(  # noqa: PLR0915
+    image_path: str,
+    enable_debug: bool,
+    xml_generator_args: XmlGeneratorArguments,
+) -> None:
+    staffs = process_fast.process_fast2(2, image_path, enable_debug)
+    xml = generate_xml(xml_generator_args, staffs, "")
+    xml_file = replace_extension(image_path, ".musicxml")
+    xml.write(xml_file)
+
+
+# ruff: noqa: PLR0912
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="homer", description="An optical music recognition (OMR) system"
@@ -324,6 +336,12 @@ def main() -> None:
     parser.add_argument(
         "--output-tempo", type=int, help="Adds a tempo to the musicxml with the given bpm"
     )
+    parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="Use the experimental possible next version of the detection."
+        + "The detection is faster but at the moment less accurate.",
+    )
     args = parser.parse_args()
 
     download_weights()
@@ -340,7 +358,10 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
-        process_image(args.image, args.debug, args.cache, xml_generator_args)
+        if args.experimental:
+            process_experimental(args.image, args.debug, xml_generator_args)
+        else:
+            process_image(args.image, args.debug, args.cache, xml_generator_args)
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
@@ -348,7 +369,10 @@ def main() -> None:
         for image_file in image_files:
             eprint("=========================================")
             try:
-                process_image(image_file, args.debug, args.cache, xml_generator_args)
+                if args.experimental:
+                    process_experimental(image_file, args.debug, xml_generator_args)
+                else:
+                    process_image(image_file, args.debug, args.cache, xml_generator_args)
                 eprint("Finished", image_file)
             except Exception as e:
                 eprint(f"An error occurred while processing {image_file}: {e}")

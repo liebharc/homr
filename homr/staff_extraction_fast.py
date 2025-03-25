@@ -53,9 +53,13 @@ def construct_staff_from_lines(staff_image: NDArray) -> Staff:
     return Staff(staff_grid)
 
 
-def construct_staff_from_lines_in_area(staff_image: NDArray, area: RotatedBoundingBox) -> Staff:
+def construct_staff_from_lines_in_area(
+    staff_image: NDArray, area: RotatedBoundingBox
+) -> Staff | None:
     x1, y1, x2, y2 = area.to_bounding_box().box
     cropped_image = staff_image[y1:y2, x1:x2]
+    if cropped_image.shape[0] == 0 or cropped_image.shape[1] == 0:
+        return None
 
     staff = construct_staff_from_lines(cropped_image)
 

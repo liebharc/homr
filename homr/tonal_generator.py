@@ -1,4 +1,3 @@
-from homr import constants
 from homr.results import DurationModifier, ResultChord, ResultClef, ResultStaff
 
 
@@ -9,6 +8,15 @@ def notes_to_tonal_notation(staffs: list[ResultStaff]) -> list[str]:
 
     The tonal notation has been extended with clef information and markings for measures and chords.
     """
+    duration_dict = {
+        "whole": "w",
+        "half": "h",
+        "quarter": "q",
+        "eighth": "e",
+        "16th": "s",
+        "32nd": "t",
+        "64th": "sf",
+    }
     results: list[str] = []
     for staff in staffs:
         measures: list[str] = []
@@ -19,14 +27,22 @@ def notes_to_tonal_notation(staffs: list[ResultStaff]) -> list[str]:
                     measure_results.append("clef" + str(symbol.clef_type))
                 if isinstance(symbol, ResultChord):
                     chord: list[str] = []
+                    if symbol.is_rest:
+                        if symbol.duration.modifier == DurationModifier.DOT:
+                            duration_modifier = "."
+                        chord.append(
+                            "r-"
+                            + duration_dict.get(symbol.duration.duration_name, "q")
+                            + duration_modifier
+                        )
                     for note in symbol.notes:
                         duration_modifier = ""
                         if note.duration.modifier == DurationModifier.DOT:
                             duration_modifier = "."
                         chord.append(
-                            str(note.pitch)
+                            f"{note.pitch.step}{note.pitch.alter_str()}{note.pitch.octave}"
                             + "-"
-                            + str(note.duration.base_duration / constants.duration_of_quarter / 4)
+                            + duration_dict.get(note.duration.duration_name, "q")
                             + duration_modifier
                         )
                     measure_results.append(str.join("&", chord))

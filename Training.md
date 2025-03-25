@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 101 but without dewarp
+
+Commit: ba12ebef4606948816a06f4a011248d07a6f06da
+Date: 24 Mar 2025
+Validation result: 8.3
+
+We re-run 101 but disable the dewarp parameter in prepare_staff_image.
+Note that SER doesn't change as the SER calculation has no dewarp algorithm.
+
 ## Run 125
 
 Commit: 88db0936cc3e47b02d5b344e930e3d9030674130

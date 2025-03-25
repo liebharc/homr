@@ -1,3 +1,4 @@
+import os
 import time
 
 import cv2
@@ -14,11 +15,14 @@ from homr.bounding_boxes import (
 )
 from homr.brace_dot_detection import find_braces_brackets_and_grand_staff_lines
 from homr.debug import Debug
+from homr.model import Staff, StaffPoint
+from homr.noise_filtering import create_noise_grid
 from homr.resize import resize_image
 from homr.results import ResultStaff
 from homr.segmentation import staff_detection
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff
+from homr.staff_extraction_fast import construct_staff_from_lines_in_area
 from homr.staff_parsing import parse_staffs
 from homr.tonal_generator import notes_to_tonal_notation
 from homr.transformer.configs import default_config
@@ -30,15 +34,19 @@ inference: Staff2Score | None = None
 
 
 def process_fast(  # noqa: PLR0915
-    image: NDArray, enable_debug: bool, target_area: BoundingBox | None = None
+    image_path: str, enable_debug: bool, target_area: BoundingBox | None = None
 ) -> list[ResultStaff]:
+    image = cv2.imread(image_path)
+    image = autocrop(image)
     image_original_colors = resize_image(image)
-    image_original_colors = autocrop(image_original_colors)
     image, _background = color_adjust.color_adjust(image_original_colors, 40)
-    debug = Debug(image, "homr_input.png", enable_debug)
+    debug = Debug(image, image_path, enable_debug)
     eprint("Running segmentation")
     start = time.time()
     [staff_mask, bracket_mask, staff_lines] = staff_detection.inference(image)
+    [staff_lines, staff_mask, bracket_mask] = noise_filter(
+        [staff_lines, staff_mask, bracket_mask], debug
+    )
     debug.write_threshold_image("staff_mask", staff_mask)
     debug.write_threshold_image("bracket_mask", bracket_mask)
     debug.write_threshold_image("staff_lines", staff_lines)
@@ -100,7 +108,102 @@ def process_fast(  # noqa: PLR0915
 
     merged_staffs = maintain_accidentals(result_staffs)
     debug.clean_debug_files_from_previous_runs()
+    debug.write_teaser(replace_extension(image_path, "_teaser.png"), staffs)
     return merged_staffs
+
+
+def process_fast2(  # noqa: PLR0915
+    variant: int, image_path: str, enable_debug: bool, target_area: BoundingBox | None = None
+) -> list[ResultStaff]:
+    image = cv2.imread(image_path)
+    image = autocrop(image)
+    image_original_colors = resize_image(image)
+    image, _background = color_adjust.color_adjust(image_original_colors, 40)
+    debug = Debug(image, image_path, enable_debug)
+    eprint("Running segmentation")
+    start = time.time()
+    [staff_mask, bracket_mask, staff_lines] = staff_detection.inference(image)
+    [staff_lines, staff_mask, bracket_mask] = noise_filter(
+        [staff_lines, staff_mask, bracket_mask], debug
+    )
+    debug.write_threshold_image("staff_mask", staff_mask)
+    debug.write_threshold_image("bracket_mask", bracket_mask)
+    debug.write_threshold_image("staff_lines", staff_lines)
+    eprint("Running segmentation - Done in [s]:", time.time() - start)
+
+    eprint("Gettings staffs")
+    staff_areas = create_rotated_bounding_boxes(
+        staff_mask, skip_merging=True, min_size=(2 * image.shape[1] / 3, 50)
+    )
+    staff_areas = sorted(staff_areas, key=lambda staff: staff.top_left[1])
+    eprint("Found", len(staff_areas), "staff areas")
+    debug.write_bounding_boxes("staff_areas", staff_areas)
+    if target_area:
+        remaining_area = filter_areas(staff_areas, target_area)
+        staff_areas = [remaining_area]
+        retain_area = remaining_area.to_bounding_box().increase_size_in_each_dimension(
+            50, image.shape
+        )
+        eprint("Retaining only elements inside", retain_area.box)
+        x1, y1, x2, y2 = retain_area.box
+        retain_mask = np.zeros_like(staff_mask)
+        retain_mask[y1:y2, x1:x2] = 1
+        debug.write_threshold_image("retain_mask", retain_mask)
+        staff_mask = cv2.bitwise_and(staff_mask, staff_mask, mask=retain_mask)
+        bracket_mask = cv2.bitwise_and(bracket_mask, bracket_mask, mask=retain_mask)
+        staff_lines = cv2.bitwise_and(staff_lines, staff_lines, mask=retain_mask)
+        debug.write_threshold_image("staff_mask", staff_mask)
+        debug.write_threshold_image("bracket_mask", bracket_mask)
+        debug.write_threshold_image("staff_lines", staff_lines)
+
+    eprint("Creating bounds for bar lines and brackets")
+    bracket_mask = prepare_bar_line_image(bracket_mask)
+    bar_lines_and_brackets = create_rotated_bounding_boxes(
+        bracket_mask, skip_merging=True, min_size=(1, 5)
+    )
+    debug.write_bounding_boxes("barlines", bar_lines_and_brackets)
+
+    staffs = []
+    if variant == 1:
+        for area in staff_areas:
+            staff_result = construct_staff_from_lines_in_area(staff_lines, area)
+            if staff_result is not None:
+                staffs.append(staff_result)
+    else:
+        for area in staff_areas:
+            staffs.append(dummy_staff_from_rect(area.to_bounding_box()))
+    debug.write_bounding_boxes_alternating_colors("staffs", staffs)
+    eprint("Found", len(staffs), "staffs")
+
+    multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, bar_lines_and_brackets)
+    eprint(
+        "Found",
+        len(multi_staffs),
+        "connected staffs (after merging grand staffs, multiple voices): ",
+        [len(staff.staffs) for staff in multi_staffs],
+    )
+
+    result_staffs = parse_staffs(debug, multi_staffs, image, False)
+
+    merged_staffs = maintain_accidentals(result_staffs)
+    debug.write_teaser(replace_extension(image_path, "_teaser.png"), staffs)
+    debug.clean_debug_files_from_previous_runs()
+    return merged_staffs
+
+
+def noise_filter(images: list[NDArray], debug: Debug) -> list[NDArray]:
+    noise_mask = create_noise_grid(255 * images[0], debug, 10)
+    return [cv2.bitwise_and(image, image, mask=noise_mask) for image in images]
+
+
+def dummy_staff_from_rect(box: BoundingBox) -> Staff:
+    x1, y1, x2, y2 = box.box
+    points = []
+    height = y2 - y1
+    for x in range(x1, x2, 10):
+        yValues = np.array(range(5)) * (height / 2) / 4 + y1 + height / 4
+        points.append(StaffPoint(x, yValues, 0))
+    return Staff(points)
 
 
 def filter_areas(
@@ -152,11 +255,17 @@ def get_score(image: NDArray) -> list[str]:
     return inference.predict(image)
 
 
+def replace_extension(path: str, new_extension: str) -> str:
+    return os.path.splitext(path)[0] + new_extension
+
+
 if __name__ == "__main__":
     import sys
 
     image_path = sys.argv[1]
-    image = cv2.imread(image_path)
 
-    staffs = process_fast(image, True, BoundingBox((0, 0, 0, 0), np.array([])))
+    staffs = process_fast2(1, image_path, True)
     print(notes_to_tonal_notation(staffs))  # noqa: T201
+    xml = generate_xml(XmlGeneratorArguments(None, None, None), staffs, "")
+    xml_file = replace_extension(image_path, ".musicxml")
+    xml.write(xml_file)

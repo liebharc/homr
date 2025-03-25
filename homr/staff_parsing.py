@@ -204,7 +204,7 @@ def prepare_staff_image(
     ranges: list[float],
     staff: Staff,
     staff_image: NDArray,
-    perform_dewarp: bool = True,
+    perform_dewarp: bool,
 ) -> tuple[NDArray, Staff]:
     centers = [s.center for s in staff.symbols]
     x_values = np.array([c[0] for c in centers])
@@ -241,7 +241,7 @@ def prepare_staff_image(
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
-    if debug.debug:
+    if debug.debug and perform_dewarp:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
         transformed_staff_image = staff_image.copy()
         for symbol in transformed_staff.symbols:
@@ -291,10 +291,15 @@ def _dewarp_staff(
 
 
 def parse_staff_image(
-    debug: Debug, ranges: list[float], index: int, staff: Staff, image: NDArray
+    debug: Debug,
+    ranges: list[float],
+    index: int,
+    staff: Staff,
+    image: NDArray,
+    perform_dewarp: bool,
 ) -> ResultStaff | None:
     staff_image, transformed_staff = prepare_staff_image(
-        debug, index, ranges, staff, image, perform_dewarp=True
+        debug, index, ranges, staff, image, perform_dewarp=perform_dewarp
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
@@ -415,7 +420,12 @@ def remember_new_line(measures: list[ResultMeasure]) -> None:
         measures[0].is_new_line = True
 
 
-def parse_staffs(debug: Debug, staffs: list[MultiStaff], image: NDArray) -> list[ResultStaff]:
+def parse_staffs(
+    debug: Debug,
+    staffs: list[MultiStaff],
+    image: NDArray,
+    perform_dewarp: bool = True,
+) -> list[ResultStaff]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -431,7 +441,7 @@ def parse_staffs(debug: Debug, staffs: list[MultiStaff], image: NDArray) -> list
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
         result_for_voice = []
         for staff in staffs_for_voice:
-            result_staff = parse_staff_image(debug, ranges, i, staff, image)
+            result_staff = parse_staff_image(debug, ranges, i, staff, image, perform_dewarp)
             if result_staff is None:
                 eprint("Staff was filtered out", i)
                 i += 1
