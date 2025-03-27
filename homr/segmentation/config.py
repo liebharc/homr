@@ -5,7 +5,7 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 unet_path = os.path.join(script_location, "unet_91-df68794a7f3420b749780deb1eba938911b3d0d3")
 segnet_path = os.path.join(script_location, "segnet_89-f8076e6ee78bf998e291a56647477de80aa19f64")
 staffs_path = os.path.join(
-    script_location, "staff_124-2706067dd3b57803202fa8dcdab422cb11db643c.onnx"
+    script_location, "staff_125-f84bf2266d8572dfee6f782c19c1abf9ebacd033.onnx"
 )
 
 unet_version = os.path.basename(unet_path).split("_")[1]

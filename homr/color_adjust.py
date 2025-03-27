@@ -28,8 +28,8 @@ def get_dominant_color(
     return int(center_of_mass)
 
 
-def apply_clahe(channel: NDArray) -> NDArray:
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+def apply_clahe(channel: NDArray, clipLimit: float) -> NDArray:
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=(8, 8))
     return clahe.apply(channel)
 
 
@@ -78,7 +78,7 @@ def get_block_index(
     return np.ix_(y, x)
 
 
-def color_adjust(image: NDArray, block_size: int) -> tuple[NDArray, NDArray]:
+def color_adjust(image: NDArray, block_size: int, clip_limit:float = 2.0) -> tuple[NDArray, NDArray]:
     """
     Reduce the effect of uneven lighting on the image by dividing the image by its interpolated
     background.
@@ -86,7 +86,7 @@ def color_adjust(image: NDArray, block_size: int) -> tuple[NDArray, NDArray]:
     try:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         image, background = remove_background_from_channel(image, block_size)
-        return cv2.cvtColor(apply_clahe(image), cv2.COLOR_GRAY2BGR), background
+        return cv2.cvtColor(apply_clahe(image, clip_limit), cv2.COLOR_GRAY2BGR), background
     except Exception as e:
         eprint(e)
         return image, image

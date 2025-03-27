@@ -28,6 +28,7 @@ def notes_to_tonal_notation(staffs: list[ResultStaff]) -> list[str]:
                 if isinstance(symbol, ResultChord):
                     chord: list[str] = []
                     if symbol.is_rest:
+                        duration_modifier = ""
                         if symbol.duration.modifier == DurationModifier.DOT:
                             duration_modifier = "."
                         chord.append(

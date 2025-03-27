@@ -57,6 +57,7 @@ def process_fast(  # noqa: PLR0915
     staff_areas = sorted(staff_areas, key=lambda staff: staff.top_left[1])
     eprint("Found", len(staff_areas), "staff areas")
     debug.write_bounding_boxes("staff_areas", staff_areas)
+    target_area = adjust_target_area(target_area, staff_mask.shape)
     if target_area:
         remaining_area = filter_areas(staff_areas, target_area)
         staff_areas = [remaining_area]
@@ -118,7 +119,7 @@ def process_fast2(  # noqa: PLR0915
     image = cv2.imread(image_path)
     image = autocrop(image)
     image_original_colors = resize_image(image)
-    image, _background = color_adjust.color_adjust(image_original_colors, 40)
+    image, _background = color_adjust.color_adjust(image_original_colors, 40, clip_limit=1.5)
     debug = Debug(image, image_path, enable_debug)
     eprint("Running segmentation")
     start = time.time()
@@ -133,11 +134,30 @@ def process_fast2(  # noqa: PLR0915
 
     eprint("Gettings staffs")
     staff_areas = create_rotated_bounding_boxes(
-        staff_mask, skip_merging=True, min_size=(2 * image.shape[1] / 3, 50)
+        staff_mask, skip_merging=True, min_size=(image.shape[1] / 4, 50)
     )
-    staff_areas = sorted(staff_areas, key=lambda staff: staff.top_left[1])
+    staff_areas_sorted = sorted(staff_areas, key=lambda staff: staff.top_left[1])
+    staff_areas = []
+    avg_area_x_start = np.median([a.top_left[0] for a in staff_areas_sorted])
+    for area_index, area in enumerate(staff_areas_sorted):
+        if abs(area.angle) > 5:
+            eprint("Filtering area", "#" + str(area_index), "as due to large angle")
+            continue
+        if abs(area.top_left[0] - avg_area_x_start) > 100:
+            eprint(avg_area_x_start, area.top_left)
+            eprint("Filtering area", "#" + str(area_index), "as it starts at a different position than the other areas")
+            continue
+        lines_in_area = area.crop_rect_from_image(staff_lines)
+        white_pixels_in_area = np.sum(lines_in_area)
+        total_pixels_in_area = lines_in_area.shape[0] * lines_in_area.shape[1]
+        staff_line_percentage = 100 * white_pixels_in_area / total_pixels_in_area
+        if staff_line_percentage < 0.1:
+            eprint("Filtering area", "#" + str(area_index), "as it contains no staff lines")
+            continue
+        staff_areas.append(area)
     eprint("Found", len(staff_areas), "staff areas")
     debug.write_bounding_boxes("staff_areas", staff_areas)
+    target_area = adjust_target_area(target_area, staff_mask.shape)
     if target_area:
         remaining_area = filter_areas(staff_areas, target_area)
         staff_areas = [remaining_area]
@@ -171,7 +191,8 @@ def process_fast2(  # noqa: PLR0915
                 staffs.append(staff_result)
     else:
         for area in staff_areas:
-            staffs.append(dummy_staff_from_rect(area.to_bounding_box()))
+            staffs.append(dummy_staff_from_rect(area.to_bounding_box(), image.shape))
+
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
     eprint("Found", len(staffs), "staffs")
 
@@ -191,13 +212,24 @@ def process_fast2(  # noqa: PLR0915
     return merged_staffs
 
 
+def adjust_target_area(target_area: BoundingBox | None, image_shape: tuple[int, ...]):
+    if target_area is None:
+        return None
+    x1, y1, x2, y2 = target_area.box
+    
+    height, width = image_shape
+    return BoundingBox([x1 * width / 100, y1 * height / 100, x2 * width / 100, y2 * height / 100], target_area.contours)
+
+
 def noise_filter(images: list[NDArray], debug: Debug) -> list[NDArray]:
     noise_mask = create_noise_grid(255 * images[0], debug, 10)
     return [cv2.bitwise_and(image, image, mask=noise_mask) for image in images]
 
 
-def dummy_staff_from_rect(box: BoundingBox) -> Staff:
+def dummy_staff_from_rect(box: BoundingBox, shape: tuple[int, ...]) -> Staff:
     x1, y1, x2, y2 = box.box
+    x1 = max(0, x1 - 50)
+    x2 = min(shape[0], x2 + 50)
     points = []
     height = y2 - y1
     for x in range(x1, x2, 10):
@@ -225,9 +257,12 @@ def filter_areas(
             )
             eprint("Using staff with the largest target area")
             return staff_with_largest_overlap
-        else:
+        elif len(staff_areas) > 0:
             eprint("Using first staff in the image")
             return staff_areas[0]
+        else:
+            return staff_areas
+    return staff_areas
 
 
 def write_to_xml(

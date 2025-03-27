@@ -22,6 +22,7 @@ def download_cvs_musicma() -> str:
     eprint("Extracting download")
     unzip_file(download_path, dataset_root)
     eprint("Download complete")
+    # https://github.com/apacha/OMR-Datasets/releases/download/datasets/MUSCIMA-pp_v1.0-measure-annotations.zip
     return dataset_path
 
 

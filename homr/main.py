@@ -243,6 +243,19 @@ def process_image(  # noqa: PLR0915
             + " staves"
         )
         teaser_file = replace_extension(image_path, "_teaser.png")
+        yolo_file = replace_extension(image_path, ".txt")
+        yolo_coordinates = []
+        for staff in staffs:
+            x1, y1, x2, y2 = staff.min_x, staff.min_y, staff.max_x, staff.max_y
+            width = x2 - x1
+            height = y2 - y1
+            centerx = x1 + width / 2
+            centery = y1 + height / 2
+            img_height, img_width, _ = predictions.preprocessed.shape
+            coordinate = "0 " + str(centerx / img_width) + " " + str(centery / img_height) + " " + str(width / img_width) + " " + str(height / img_height)
+            yolo_coordinates.append(coordinate + "\n")
+        with open(yolo_file, "w") as text_file:
+            text_file.writelines(yolo_coordinates)
         debug.write_teaser(teaser_file, staffs)
         debug.clean_debug_files_from_previous_runs()
 
@@ -259,7 +272,7 @@ def process_image(  # noqa: PLR0915
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
     image_files = []
-    for ext in ["png", "jpg", "jpeg"]:
+    for ext in ["png", "jpg", "jpeg", "JPG"]:
         image_files.extend(glob.glob(os.path.join(folder, "**", f"*.{ext}"), recursive=True))
     without_teasers = [
         img
