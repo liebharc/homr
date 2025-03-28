@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -26,16 +27,18 @@ from homr.brace_dot_detection import (
     prepare_brace_dot_image,
 )
 from homr.debug import Debug
-from homr.model import InputPredictions
+from homr.model import InputPredictions, MultiStaff
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
+from homr.results import ResultStaff
 from homr.segmentation.config import segnet_path, unet_path
 from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
+from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.title_detection import detect_title
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
@@ -133,101 +136,36 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     )
 
 
+@dataclass
+class ProcessingConfig:
+    enable_debug: bool
+    enable_cache: bool
+    write_staff_positions: bool
+    read_staff_positions: bool
+    selected_staff: int
+
+
 def process_image(  # noqa: PLR0915
     image_path: str,
-    enable_debug: bool,
-    enable_cache: bool,
+    config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
-) -> tuple[str, str, str]:
+) -> list[ResultStaff]:
     eprint("Processing " + image_path)
-    predictions, debug = load_and_preprocess_predictions(image_path, enable_debug, enable_cache)
     xml_file = replace_extension(image_path, ".musicxml")
     try:
-        eprint("Loaded segmentation")
-        symbols = predict_symbols(debug, predictions)
-        eprint("Predicted symbols")
+        if config.read_staff_positions:
+            image = cv2.imread(image_path)
+            image = resize_image(image)
+            staff_position_files = replace_extension(image_path, ".txt")
+            multi_staffs = load_staff_positions(image.shape, staff_position_files)
+            title = ""
+            debug = Debug(image, image_path, config.enable_debug)
+        else:
+            multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
 
-        symbols.staff_fragments = break_wide_fragments(symbols.staff_fragments)
-        debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)
-        eprint("Found " + str(len(symbols.staff_fragments)) + " staff line fragments")
-
-        noteheads_with_stems, likely_bar_or_rests_lines = combine_noteheads_with_stems(
-            symbols.noteheads, symbols.stems_rest
+        result_staffs = parse_staffs(
+            debug, multi_staffs, image, selected_staff=config.selected_staff
         )
-        debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
-        eprint("Found " + str(len(noteheads_with_stems)) + " noteheads")
-        if len(noteheads_with_stems) == 0:
-            raise Exception("No noteheads found")
-
-        average_note_head_height = float(
-            np.median([notehead.notehead.size[1] for notehead in noteheads_with_stems])
-        )
-        eprint("Average note head height: " + str(average_note_head_height))
-
-        all_noteheads = [notehead.notehead for notehead in noteheads_with_stems]
-        all_stems = [note.stem for note in noteheads_with_stems if note.stem is not None]
-        bar_lines_or_rests = [
-            line
-            for line in symbols.bar_lines
-            if not line.is_overlapping_with_any(all_noteheads)
-            and not line.is_overlapping_with_any(all_stems)
-        ]
-        bar_line_boxes = detect_bar_lines(bar_lines_or_rests, average_note_head_height)
-        debug.write_bounding_boxes_alternating_colors("bar_lines", bar_line_boxes)
-        eprint("Found " + str(len(bar_line_boxes)) + " bar lines")
-
-        debug.write_bounding_boxes(
-            "anchor_input", symbols.staff_fragments + bar_line_boxes + symbols.clefs_keys
-        )
-        staffs = detect_staff(
-            debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
-        )
-        if len(staffs) == 0:
-            raise Exception("No staffs found")
-        debug.write_bounding_boxes_alternating_colors("staffs", staffs)
-
-        global_unit_size = np.mean([staff.average_unit_size for staff in staffs])
-
-        bar_lines_found = add_bar_lines_to_staffs(staffs, bar_line_boxes)
-        eprint("Found " + str(len(bar_lines_found)) + " bar lines")
-
-        possible_rests = [
-            rest for rest in bar_lines_or_rests if not rest.is_overlapping_with_any(bar_line_boxes)
-        ]
-        rests = add_rests_to_staffs(staffs, possible_rests)
-        eprint("Found", len(rests), "rests")
-
-        all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
-        brace_dot_img = prepare_brace_dot_image(
-            predictions.symbols, predictions.staff, all_classified, global_unit_size
-        )
-        debug.write_threshold_image("brace_dot", brace_dot_img)
-        brace_dot = create_rotated_bounding_boxes(
-            brace_dot_img, skip_merging=True, max_size=(100, -1)
-        )
-
-        notes = add_notes_to_staffs(
-            staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
-        )
-        accidentals = add_accidentals_to_staffs(staffs, symbols.accidentals)
-        eprint("Found", len(accidentals), "accidentals")
-
-        multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
-        eprint(
-            "Found",
-            len(multi_staffs),
-            "connected staffs (after merging grand staffs, multiple voices): ",
-            [len(staff.staffs) for staff in multi_staffs],
-        )
-
-        debug.write_all_bounding_boxes_alternating_colors(
-            "notes", multi_staffs, notes, rests, accidentals
-        )
-
-        title = detect_title(debug, staffs[0])
-        eprint("Found title: " + title)
-
-        result_staffs = parse_staffs(debug, multi_staffs, predictions)
 
         result_staffs = maintain_accidentals(result_staffs)
 
@@ -243,12 +181,15 @@ def process_image(  # noqa: PLR0915
             + " staves"
         )
         teaser_file = replace_extension(image_path, "_teaser.png")
-        debug.write_teaser(teaser_file, staffs)
+        if config.write_staff_positions:
+            staff_position_files = replace_extension(image_path, ".txt")
+            save_staff_positions(multi_staffs, image.shape, staff_position_files)
+        debug.write_teaser(teaser_file, multi_staffs)
         debug.clean_debug_files_from_previous_runs()
 
         eprint("Result was written to", xml_file)
 
-        return xml_file, title, teaser_file
+        return result_staffs
     except:
         if os.path.exists(xml_file):
             os.remove(xml_file)
@@ -257,9 +198,99 @@ def process_image(  # noqa: PLR0915
         debug.clean_debug_files_from_previous_runs()
 
 
+def detect_staffs_in_image(
+    image_path: str, config: ProcessingConfig
+) -> tuple[list[MultiStaff], NDArray, Debug, str]:
+    predictions, debug = load_and_preprocess_predictions(
+        image_path, config.enable_debug, config.enable_cache
+    )
+    eprint("Loaded segmentation")
+    symbols = predict_symbols(debug, predictions)
+    eprint("Predicted symbols")
+
+    symbols.staff_fragments = break_wide_fragments(symbols.staff_fragments)
+    debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)
+    eprint("Found " + str(len(symbols.staff_fragments)) + " staff line fragments")
+
+    noteheads_with_stems, likely_bar_or_rests_lines = combine_noteheads_with_stems(
+        symbols.noteheads, symbols.stems_rest
+    )
+    debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
+    eprint("Found " + str(len(noteheads_with_stems)) + " noteheads")
+    if len(noteheads_with_stems) == 0:
+        raise Exception("No noteheads found")
+
+    average_note_head_height = float(
+        np.median([notehead.notehead.size[1] for notehead in noteheads_with_stems])
+    )
+    eprint("Average note head height: " + str(average_note_head_height))
+
+    all_noteheads = [notehead.notehead for notehead in noteheads_with_stems]
+    all_stems = [note.stem for note in noteheads_with_stems if note.stem is not None]
+    bar_lines_or_rests = [
+        line
+        for line in symbols.bar_lines
+        if not line.is_overlapping_with_any(all_noteheads)
+        and not line.is_overlapping_with_any(all_stems)
+    ]
+    bar_line_boxes = detect_bar_lines(bar_lines_or_rests, average_note_head_height)
+    debug.write_bounding_boxes_alternating_colors("bar_lines", bar_line_boxes)
+    eprint("Found " + str(len(bar_line_boxes)) + " bar lines")
+
+    debug.write_bounding_boxes(
+        "anchor_input", symbols.staff_fragments + bar_line_boxes + symbols.clefs_keys
+    )
+    staffs = detect_staff(
+        debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
+    )
+    if len(staffs) == 0:
+        raise Exception("No staffs found")
+    debug.write_bounding_boxes_alternating_colors("staffs", staffs)
+
+    global_unit_size = np.mean([staff.average_unit_size for staff in staffs])
+
+    bar_lines_found = add_bar_lines_to_staffs(staffs, bar_line_boxes)
+    eprint("Found " + str(len(bar_lines_found)) + " bar lines")
+
+    possible_rests = [
+        rest for rest in bar_lines_or_rests if not rest.is_overlapping_with_any(bar_line_boxes)
+    ]
+    rests = add_rests_to_staffs(staffs, possible_rests)
+    eprint("Found", len(rests), "rests")
+
+    all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
+    brace_dot_img = prepare_brace_dot_image(
+        predictions.symbols, predictions.staff, all_classified, global_unit_size
+    )
+    debug.write_threshold_image("brace_dot", brace_dot_img)
+    brace_dot = create_rotated_bounding_boxes(brace_dot_img, skip_merging=True, max_size=(100, -1))
+
+    notes = add_notes_to_staffs(
+        staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
+    )
+    accidentals = add_accidentals_to_staffs(staffs, symbols.accidentals)
+    eprint("Found", len(accidentals), "accidentals")
+
+    multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
+    eprint(
+        "Found",
+        len(multi_staffs),
+        "connected staffs (after merging grand staffs, multiple voices): ",
+        [len(staff.staffs) for staff in multi_staffs],
+    )
+
+    debug.write_all_bounding_boxes_alternating_colors(
+        "notes", multi_staffs, notes, rests, accidentals
+    )
+
+    title = detect_title(debug, staffs[0])
+    eprint("Found title: " + title)
+    return multi_staffs, predictions.preprocessed, debug, title
+
+
 def get_all_image_files_in_folder(folder: str) -> list[str]:
     image_files = []
-    for ext in ["png", "jpg", "jpeg"]:
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         image_files.extend(glob.glob(os.path.join(folder, "**", f"*.{ext}"), recursive=True))
     without_teasers = [
         img
@@ -324,12 +355,27 @@ def main() -> None:
     parser.add_argument(
         "--output-tempo", type=int, help="Adds a tempo to the musicxml with the given bpm"
     )
+    parser.add_argument(
+        "--write-staff-positions",
+        action="store_true",
+        help="Writes the position of all detected staffs to a txt file.",
+    )
+    parser.add_argument(
+        "--read-staff-positions",
+        action="store_true",
+        help="Reads the position of all staffs from a txt file instead"
+        + " of running the built-in staff detection.",
+    )
     args = parser.parse_args()
 
     download_weights()
     if args.init:
         eprint("Init finished")
         return
+
+    config = ProcessingConfig(
+        args.debug, args.cache, args.write_staff_positions, args.read_staff_positions, -1
+    )
 
     xml_generator_args = XmlGeneratorArguments(
         args.output_large_page, args.output_metronome, args.output_tempo
@@ -340,7 +386,7 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
-        process_image(args.image, args.debug, args.cache, xml_generator_args)
+        process_image(args.image, config, xml_generator_args)
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
@@ -348,7 +394,7 @@ def main() -> None:
         for image_file in image_files:
             eprint("=========================================")
             try:
-                process_image(image_file, args.debug, args.cache, xml_generator_args)
+                process_image(image_file, config, xml_generator_args)
                 eprint("Finished", image_file)
             except Exception as e:
                 eprint(f"An error occurred while processing {image_file}: {e}")

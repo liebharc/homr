@@ -476,6 +476,8 @@ def sort_staffs_top_to_bottom(staffs: list[Staff]) -> list[Staff]:
 
 
 def filter_unusual_anchors(anchors: list[StaffAnchor]) -> list[StaffAnchor]:
+    if len(anchors) == 0:
+        return anchors
     unit_sizes = [anchor.average_unit_size for anchor in anchors]
     average_unit_size = np.mean(unit_sizes)
     unit_size_deviation = np.std(unit_sizes)
