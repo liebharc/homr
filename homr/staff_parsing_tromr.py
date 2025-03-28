@@ -54,7 +54,9 @@ def predict_best(
     global inference  # noqa: PLW0603
     if inference is None:
         inference = Staff2Score(default_config)
-    images = build_image_options(org_image)
+    images = [org_image]
+    if len(staff.symbols) > 0:
+        images = build_image_options(org_image)
     notes = staff.get_notes_and_groups()
     best_distance: float = 0
     best_attempt = 0

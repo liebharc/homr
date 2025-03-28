@@ -40,3 +40,5 @@ _build/
 
 # WSL
 *Zone.Identifier
+
+/*.txt
