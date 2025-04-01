@@ -355,6 +355,12 @@ class StaffPoint:
             [int(self.x), int(self.y[0]), int(self.x), int(self.y[-1])], np.array([]), -2
         )
 
+    def __str__(self) -> str:
+        return "P(" + str(self.x) + "," + str(self.y[2]) + ")"
+
+    def __repr__(self) -> str:
+        return str(self)
+
 
 class Staff(DebugDrawable):
     def __init__(self, grid: list[StaffPoint]):
@@ -444,6 +450,16 @@ class Staff(DebugDrawable):
             if isinstance(symbol, Note):
                 result.append(symbol)
         return result
+
+    def extend_to_x_range(self, min_x: int, max_x: int) -> "Staff":
+        grid = self.grid.copy()
+
+        if min_x >= 0 and min_x < grid[0].x:
+            grid.insert(0, StaffPoint(min_x, grid[0].y, grid[0].angle))
+        if max_x >= 0 and max_x > grid[-1].x:
+            grid.append(StaffPoint(max_x, grid[-1].y, grid[-1].angle))
+
+        return Staff(grid)
 
     def get_accidentals(self) -> list[Accidental]:
         result = []

@@ -416,8 +416,6 @@ def resample_staff(staff: RawStaff) -> Staff:
     staff_density = 10
     start = (staff.min_x // staff_density) * staff_density
     stop = (staff.max_x // staff_density + 1) * staff_density
-    current_anchor = 0
-    anchor = anchors_left_to_right[current_anchor]
 
     grid: list[StaffPoint] = []
     x = start
