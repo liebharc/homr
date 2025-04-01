@@ -156,10 +156,10 @@ def process_image(  # noqa: PLR0915
         if config.read_staff_positions:
             image = cv2.imread(image_path)
             image = resize_image(image)
-            staff_position_files = replace_extension(image_path, ".txt")
-            multi_staffs = load_staff_positions(image.shape, staff_position_files)
-            title = ""
             debug = Debug(image, image_path, config.enable_debug)
+            staff_position_files = replace_extension(image_path, ".txt")
+            multi_staffs = load_staff_positions(debug, image, staff_position_files)
+            title = ""
         else:
             multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
 

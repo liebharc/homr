@@ -98,6 +98,13 @@ class BoundingBox(AnyPolygon):
     def extract(self, img: NDArray) -> NDArray:
         return crop_image(img, self.box[0], self.box[1], self.box[2] + 1, self.box[3] + 1)
 
+    def blank_everything_outside_of_box(self, img: NDArray) -> NDArray:
+        x1, y1, x2, y2 = self.box
+        img = img.copy()
+        white_background = np.full_like(img, 255, dtype=np.uint8)
+        white_background[y1:y2, x1:x2] = img[y1:y2, x1:x2]
+        return white_background
+
     def increase_height(self, y_top: int, y_bottom: int) -> "BoundingBox":
         return BoundingBox(
             (
@@ -248,6 +255,21 @@ class AngledBoundingBox(AnyPolygon):
             return False
         return True
 
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, AngledBoundingBox):
+            return self.box == __value.box
+        else:
+            return False
+
+    def __hash__(self) -> int:
+        return hash(self.box)
+
+    def __str__(self) -> str:
+        return f"{self.box}"
+
+    def __repr__(self) -> str:
+        return str(self)
+
     @abstractmethod
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (0, 0, 255)) -> None:
         pass
@@ -293,12 +315,23 @@ class RotatedBoundingBox(AngledBoundingBox):
     def is_overlapping_extrapolated(self, other: "RotatedBoundingBox", unit_size: float) -> bool:
         return self._get_intersection_point_extrapolated(other, unit_size) is not None
 
+    def ensure_min_dimension(self, min_width: int, min_height: int) -> "RotatedBoundingBox":
+        return RotatedBoundingBox(
+            (
+                (self.box[0][0], self.box[0][1]),
+                (max(self.box[1][0], min_width), max(self.box[1][1], min_height)),
+                self.box[2],
+            ),
+            self.contours,
+            self.debug_id,
+        )
+
     def make_box_thicker(self, thickness: int) -> "RotatedBoundingBox":
         if thickness <= 0:
             return self
         return RotatedBoundingBox(
             (
-                (self.box[0][0], self.box[0][1]),
+                (self.box[0][0] - int(thickness / 2), self.box[0][1] - int(thickness / 2)),
                 (self.box[1][0] + thickness, self.box[1][1] + thickness),
                 self.box[2],
             ),
@@ -315,7 +348,7 @@ class RotatedBoundingBox(AngledBoundingBox):
     def make_box_taller(self, thickness: int) -> "RotatedBoundingBox":
         return RotatedBoundingBox(
             (
-                (self.box[0][0], self.box[0][1]),
+                (self.box[0][0], self.box[0][1] - int(thickness / 2)),
                 (self.box[1][0], self.box[1][1] + thickness),
                 self.box[2],
             ),
