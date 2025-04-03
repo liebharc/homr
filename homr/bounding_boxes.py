@@ -329,9 +329,13 @@ class RotatedBoundingBox(AngledBoundingBox):
     def make_box_thicker(self, thickness: int) -> "RotatedBoundingBox":
         if thickness <= 0:
             return self
+        # We tried to move the center by int(thickness / 2), however this gave much worse results
+        # for some examples
+        # That's possibly a case of an ill defined function, but downstream code depends on the
+        # behavior which we have today
         return RotatedBoundingBox(
             (
-                (self.box[0][0] - int(thickness / 2), self.box[0][1] - int(thickness / 2)),
+                (self.box[0][0], self.box[0][1]),
                 (self.box[1][0] + thickness, self.box[1][1] + thickness),
                 self.box[2],
             ),
@@ -348,7 +352,18 @@ class RotatedBoundingBox(AngledBoundingBox):
     def make_box_taller(self, thickness: int) -> "RotatedBoundingBox":
         return RotatedBoundingBox(
             (
-                (self.box[0][0], self.box[0][1] - int(thickness / 2)),
+                (self.box[0][0], self.box[0][1]),
+                (self.box[1][0], self.box[1][1] + thickness),
+                self.box[2],
+            ),
+            self.contours,
+            self.debug_id,
+        )
+
+    def make_box_taller_keep_center(self, thickness: int) -> "RotatedBoundingBox":
+        return RotatedBoundingBox(
+            (
+                (self.box[0][0], self.box[0][1] - thickness // 2),
                 (self.box[1][0], self.box[1][1] + thickness),
                 self.box[2],
             ),
