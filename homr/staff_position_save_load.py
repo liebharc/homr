@@ -66,8 +66,8 @@ def load_staff_positions(
         crop_area = bounding_box.increase_size_in_each_dimension(100, image.shape)
         staff_img = crop_area.blank_everything_outside_of_box(image)
         if selected_staff >= 0 and line_index != selected_staff:
-            staff = dummy_staff_from_rect(bounding_box, image.shape)
-            staffs.append(MultiStaff([staff], []))
+            dummy_staff = dummy_staff_from_rect(bounding_box, image.shape)
+            staffs.append(MultiStaff([dummy_staff], []))
             continue
 
         staff = detect_staff_simple(debug, staff_img, crop_area)
