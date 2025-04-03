@@ -1,3 +1,5 @@
+import traceback
+
 import cv2
 import numpy as np
 
@@ -5,6 +7,7 @@ from homr import constants
 from homr.bounding_boxes import BoundingBox, create_lines
 from homr.debug import Debug
 from homr.model import MultiStaff, Staff, StaffPoint
+from homr.simple_logging import eprint
 from homr.staff_detection import detect_staff
 from homr.type_definitions import NDArray
 
@@ -46,36 +49,41 @@ def load_staff_positions(
         lines = text_file.readlines()
 
     for line_index, line in enumerate(lines):
-        parts = line.strip().split()
-        if len(parts) != constants.number_of_lines_on_a_staff:
-            continue  # Ignore invalid lines
+        try:
+            parts = line.strip().split()
+            if len(parts) != constants.number_of_lines_on_a_staff:
+                continue  # Ignore invalid lines
 
-        _, norm_centerx, norm_centery, norm_width, norm_height = map(float, parts)
+            _, norm_centerx, norm_centery, norm_width, norm_height = map(float, parts)
 
-        width = norm_width * img_width
-        height = norm_height * img_height
-        centerx = norm_centerx * img_width
-        centery = norm_centery * img_height
+            width = norm_width * img_width
+            height = norm_height * img_height
+            centerx = norm_centerx * img_width
+            centery = norm_centery * img_height
 
-        x1 = int(centerx - width / 2)
-        y1 = int(centery - height / 2)
-        x2 = int(x1 + width)
-        y2 = int(y1 + height)
+            x1 = int(centerx - width / 2)
+            y1 = int(centery - height / 2)
+            x2 = int(x1 + width)
+            y2 = int(y1 + height)
 
-        bounding_box = BoundingBox([x1, y1, x2, y2], np.array([]))
-        crop_area = bounding_box.increase_size_in_each_dimension(100, image.shape)
-        staff_img = crop_area.blank_everything_outside_of_box(image)
-        if selected_staff >= 0 and line_index != selected_staff:
-            dummy_staff = dummy_staff_from_rect(bounding_box, image.shape)
-            staffs.append(MultiStaff([dummy_staff], []))
-            continue
+            bounding_box = BoundingBox([x1, y1, x2, y2], np.array([]))
+            crop_area = bounding_box.increase_size_in_each_dimension(100, image.shape)
+            staff_img = crop_area.blank_everything_outside_of_box(image)
+            if selected_staff >= 0 and line_index != selected_staff:
+                staff = dummy_staff_from_rect(bounding_box, image.shape)
+                if staff is not None:
+                    staffs.append(MultiStaff([staff], []))
+                continue
 
-        staff = detect_staff_simple(debug, staff_img, crop_area)
-        if staff is None:
-            staff = dummy_staff_from_rect(bounding_box, image.shape)
-        min_staff_width = 10
-        if staff.max_x - staff.min_x > min_staff_width:
-            staffs.append(MultiStaff([staff], []))
+            staff = detect_staff_simple(debug, staff_img, crop_area)
+            if staff is None:
+                staff = dummy_staff_from_rect(bounding_box, image.shape)
+            min_staff_width = 10
+            if staff is not None and staff.max_x - staff.min_x > min_staff_width:
+                staffs.append(MultiStaff([staff], []))
+        except Exception as e:
+            eprint("Skipping staff due to error:", e)
+            traceback.print_exc(file=sys.stderr)
 
     return staffs
 
@@ -116,7 +124,7 @@ def detect_staff_simple(debug: Debug, img: NDArray, crop_area: BoundingBox) -> S
     return None
 
 
-def dummy_staff_from_rect(box: BoundingBox, shape: tuple[int, ...]) -> Staff:
+def dummy_staff_from_rect(box: BoundingBox, shape: tuple[int, ...]) -> Staff | None:
     x1, y1, x2, y2 = box.box
     x1 = max(0, x1 - 50)
     x2 = min(shape[0], x2 + 50)
@@ -125,6 +133,8 @@ def dummy_staff_from_rect(box: BoundingBox, shape: tuple[int, ...]) -> Staff:
     for x in range(int(x1), int(x2), 10):
         yValues = [(i * height / 4) + y1 for i in range(5)]
         points.append(StaffPoint(x, yValues, 0))
+    if len(points) == 0:
+        return None
     return Staff(points)
 
 
