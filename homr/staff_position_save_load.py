@@ -36,14 +36,16 @@ def save_staff_positions(
         text_file.writelines(staff_coordinates)
 
 
-def load_staff_positions(debug: Debug, image: NDArray, file_path: str) -> list[MultiStaff]:
+def load_staff_positions(
+    debug: Debug, image: NDArray, file_path: str, selected_staff: int = -1
+) -> list[MultiStaff]:
     staffs = []
     img_height, img_width, _ = image.shape
 
     with open(file_path) as text_file:
         lines = text_file.readlines()
 
-    for line in lines:
+    for line_index, line in enumerate(lines):
         parts = line.strip().split()
         if len(parts) != constants.number_of_lines_on_a_staff:
             continue  # Ignore invalid lines
@@ -63,6 +65,11 @@ def load_staff_positions(debug: Debug, image: NDArray, file_path: str) -> list[M
         bounding_box = BoundingBox([x1, y1, x2, y2], np.array([]))
         crop_area = bounding_box.increase_size_in_each_dimension(100, image.shape)
         staff_img = crop_area.blank_everything_outside_of_box(image)
+        if selected_staff >= 0 and line_index != selected_staff:
+            staff = dummy_staff_from_rect(bounding_box, image.shape)
+            staffs.append(MultiStaff([staff], []))
+            continue
+
         staff = detect_staff_simple(debug, staff_img, crop_area)
         if staff is None:
             staff = dummy_staff_from_rect(bounding_box, image.shape)
@@ -97,7 +104,7 @@ def detect_staff_simple(debug: Debug, img: NDArray, crop_area: BoundingBox) -> S
     bar_lines = create_lines(vertical_lines, threshold=20, min_line_length=20, max_line_gap=15)
     staff_lines = [line.ensure_min_dimension(3, 3) for line in staff_lines]
     bar_lines = [line.ensure_min_dimension(3, 3) for line in bar_lines]
-    bar_lines = [bar.make_box_taller(5) for bar in bar_lines]
+    bar_lines = [bar.make_box_taller_keep_center(5) for bar in bar_lines]
 
     crop_box = crop_area.box
     min_x = max(crop_box[0] + 100, 0)
