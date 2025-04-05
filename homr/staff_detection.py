@@ -250,13 +250,6 @@ def connect_staff_lines(
             # If their right edge is too far away from the current left edge
             # then it will never be a valid connection anymore
 
-            # active_lines_to_check = [
-            #     item
-            #     for item in active_lines_to_check
-            #     if item[-1].closest_distance(current_staff_line)[0]
-            #     < constants.max_line_gap_size(unit_size)
-            # ]
-
             active_lines_to_check = [
                 item
                 for item in active_lines_to_check
