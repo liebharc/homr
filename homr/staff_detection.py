@@ -239,18 +239,35 @@ def connect_staff_lines(
     # With the pop below we are going through the elements from left to right
     sorted_by_right_to_left = sorted(staff_lines, key=lambda box: box.box[0][0], reverse=True)
     result: list[list[RotatedBoundingBox]] = []
+    active_lines_to_check: list[list[RotatedBoundingBox]] = []
+    i = 0
     while len(sorted_by_right_to_left) > 0:
         current_staff_line: RotatedBoundingBox = sorted_by_right_to_left.pop()
+
+        if i % 10 == 0:
+            # Remove line ends which are most unlikely to be relevant anymore
+
+            active_lines_to_check = [
+                item
+                for item in active_lines_to_check
+                if item[-1].closest_distance(current_staff_line)[0]
+                < constants.max_line_gap_size(unit_size)
+            ]
+
         is_short_line = current_staff_line.box[1][0] < constants.is_short_line(unit_size)
         if is_short_line:
             continue
         connected = False
-        for staff_lines in result:
+        for staff_lines in active_lines_to_check:
             if staff_lines[-1].is_overlapping_extrapolated(current_staff_line, unit_size):
                 staff_lines.append(current_staff_line)
                 connected = True
         if not connected:
-            result.append([current_staff_line])
+            new_list = [current_staff_line]
+            result.append(new_list)
+            active_lines_to_check.append(new_list)
+
+        i += 1
     result_top_to_bottom = sorted(result, key=lambda lines: lines[0].box[0][1])
     connected_lines = [
         StaffLineSegment(i, staff_lines) for i, staff_lines in enumerate(result_top_to_bottom)
@@ -347,15 +364,15 @@ def find_staff_anchors(
                     if (line.max_x - line.min_x)
                     > constants.is_short_connected_line(estimated_unit_size)
                 ]
-            if are_lines_crossing(connected_lines) or not are_lines_parallel(
-                connected_lines, estimated_unit_size
-            ):
+            if not len(connected_lines) == constants.number_of_lines_on_a_staff:
+                continue
+            if not are_lines_parallel(connected_lines, estimated_unit_size):
+                continue
+            if are_lines_crossing(connected_lines):
                 continue
             if not are_clefs and not begins_or_ends_on_one_staff_line(
                 symbol, connected_lines, estimated_unit_size
             ):
-                continue
-            if not len(connected_lines) == constants.number_of_lines_on_a_staff:
                 continue
 
             result.append(StaffAnchor(connected_lines, symbol))
