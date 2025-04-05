@@ -131,15 +131,17 @@ class ResultPitch:
     def __hash__(self) -> int:
         return hash((self.step, self.octave, self.alter))
 
-    def __str__(self) -> str:
-        alter = ""
+    def alter_str(self) -> str:
         if self.alter == 1:
-            alter = "#"
+            return "#"
         elif self.alter == -1:
-            alter = "b"
+            return "b"
         elif self.alter == 0:
-            alter = "♮"
-        return f"{self.step}{self.octave}{alter}"
+            return "♮"
+        return ""
+
+    def __str__(self) -> str:
+        return f"{self.step}{self.octave}{self.alter_str()}"
 
     def __repr__(self) -> str:
         return str(self)
@@ -261,6 +263,7 @@ def _adjust_duration(duration: int, modifier: DurationModifier) -> int:
 
 class ResultDuration:
     def __init__(self, base_duration: int, modifier: DurationModifier = DurationModifier.NONE):
+        self.base_duration = base_duration
         self.duration = _adjust_duration(base_duration, modifier)
         self.modifier = modifier
         self.duration_name = _get_duration_name(base_duration)

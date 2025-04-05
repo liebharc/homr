@@ -3,7 +3,6 @@ import os
 from typing import Any
 
 import numpy as np
-import tensorflow as tf
 from PIL import Image
 
 from homr.simple_logging import eprint
@@ -100,6 +99,7 @@ def inference(
 
 def _load_model(model_path: str) -> tuple[Any, dict[str, Any]]:
     """Load model and metadata"""
+    import tensorflow as tf
 
     model = tf.saved_model.load(model_path)
     with open(os.path.join(model_path, "meta.json")) as f:
