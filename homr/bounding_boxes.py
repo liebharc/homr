@@ -312,6 +312,37 @@ class RotatedBoundingBox(AngledBoundingBox):
         # TODO: How is this different from is_overlapping?
         return cv2.rotatedRectangleIntersection(self.box, other.box)[0] != cv2.INTERSECT_NONE
 
+    def distance_of_center(self, other: "RotatedBoundingBox") -> tuple[float, float]:
+        sx, sy = self.center
+        ox, oy = other.center
+        dx = sx - ox
+        dy = sy - oy
+        return (abs(dx), abs(dy))
+
+    def closest_distance(self, other: "RotatedBoundingBox") -> tuple[float, float]:
+        x1, y1 = self.top_left
+        x2, y2 = self.bottom_right
+        ox1, oy1 = other.top_left
+        ox2, oy2 = other.bottom_right
+
+        # Calculate horizontal distance
+        if x2 < ox1:
+            dx = ox1 - x2
+        elif ox2 < x1:
+            dx = ox2 - x1
+        else:
+            dx = 0.0  # Overlapping in X
+
+        # Calculate vertical distance
+        if y2 < oy1:
+            dy = oy1 - y2
+        elif oy2 < y1:
+            dy = oy2 - y1
+        else:
+            dy = 0.0  # Overlapping in Y
+
+        return dx, dy
+
     def is_overlapping_extrapolated(self, other: "RotatedBoundingBox", unit_size: float) -> bool:
         return self._get_intersection_point_extrapolated(other, unit_size) is not None
 
@@ -670,10 +701,56 @@ def _get_box_for_whole_group(groups: list[list[AngledBoundingBox]]) -> list[Rota
     return result
 
 
+class UnionFind:
+    def __init__(self, n: int):
+        self.parent: list[int] = list(range(n))
+        self.rank = [0] * n
+
+    def find(self, x: int) -> int:
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, x: int, y: int) -> None:
+        rootX = self.find(x)
+        rootY = self.find(y)
+
+        if rootX != rootY:
+            # Union by rank to keep the tree flat
+            if self.rank[rootX] > self.rank[rootY]:
+                self.parent[rootY] = rootX
+            elif self.rank[rootX] < self.rank[rootY]:
+                self.parent[rootX] = rootY
+            else:
+                self.parent[rootY] = rootX
+                self.rank[rootX] += 1
+
+
+def _merge_groups_optimized(groups: list[list[AngledBoundingBox]]) -> list[list[AngledBoundingBox]]:
+    n = len(groups)
+    uf = UnionFind(n)
+
+    # Try to find overlaps and union groups that overlap
+    for i in range(n):
+        for j in range(i + 1, n):
+            if _do_groups_overlap(groups[i], groups[j]):
+                uf.union(i, j)
+
+    # Create merged groups based on the union-find results
+    merged_groups: dict[int, list[AngledBoundingBox]] = {}
+    for i in range(n):
+        root = uf.find(i)
+        if root not in merged_groups:
+            merged_groups[root] = []
+        merged_groups[root].extend(groups[i])
+
+    return list(merged_groups.values())
+
+
 def merge_overlaying_bounding_boxes(
     boxes: Sequence[AngledBoundingBox],
 ) -> list[list[AngledBoundingBox]]:
     initial_groups: list[list[AngledBoundingBox]] = []
     for box in boxes:
         initial_groups.append([box])
-    return _merge_groups_recursive(initial_groups, 0)
+    return _merge_groups_optimized(initial_groups)
