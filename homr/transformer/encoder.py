@@ -1,6 +1,6 @@
 from typing import Any
 
-from timm.models.layers import StdConv2dSame  # type: ignore
+from timm.layers import StdConv2dSame  # type: ignore
 from timm.models.resnetv2 import ResNetV2  # type: ignore
 from timm.models.vision_transformer import VisionTransformer  # type: ignore
 from timm.models.vision_transformer_hybrid import HybridEmbed  # type: ignore
