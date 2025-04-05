@@ -237,22 +237,32 @@ def connect_staff_lines(
     where segments have an increased likelyhood to belong to a staff.
     """
     # With the pop below we are going through the elements from left to right
-    sorted_by_right_to_left = sorted(staff_lines, key=lambda box: box.box[0][0], reverse=True)
+    sorted_by_right_to_left = sorted(staff_lines, key=lambda box: box.bottom_left[0], reverse=True)
     result: list[list[RotatedBoundingBox]] = []
     active_lines_to_check: list[list[RotatedBoundingBox]] = []
-    i = 0
+    last_cleanup_at_x: float = 0
     while len(sorted_by_right_to_left) > 0:
         current_staff_line: RotatedBoundingBox = sorted_by_right_to_left.pop()
+        x = current_staff_line.bottom_left[0]
 
-        if i % 10 == 0:
+        if x - last_cleanup_at_x > constants.max_line_gap_size(unit_size):
             # Remove line ends which are most unlikely to be relevant anymore
+            # If their right edge is too far away from the current left edge
+            # then it will never be a valid connection anymore
+
+            # active_lines_to_check = [
+            #     item
+            #     for item in active_lines_to_check
+            #     if item[-1].closest_distance(current_staff_line)[0]
+            #     < constants.max_line_gap_size(unit_size)
+            # ]
 
             active_lines_to_check = [
                 item
                 for item in active_lines_to_check
-                if item[-1].closest_distance(current_staff_line)[0]
-                < constants.max_line_gap_size(unit_size)
+                if x - item[-1].bottom_right[0] < constants.max_line_gap_size(unit_size)
             ]
+            last_cleanup_at_x = x
 
         is_short_line = current_staff_line.box[1][0] < constants.is_short_line(unit_size)
         if is_short_line:
@@ -266,8 +276,6 @@ def connect_staff_lines(
             new_list = [current_staff_line]
             result.append(new_list)
             active_lines_to_check.append(new_list)
-
-        i += 1
     result_top_to_bottom = sorted(result, key=lambda lines: lines[0].box[0][1])
     connected_lines = [
         StaffLineSegment(i, staff_lines) for i, staff_lines in enumerate(result_top_to_bottom)
