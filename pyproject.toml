@@ -25,6 +25,8 @@ albumentations = "^1.4.0"
 timm = "^0.9.16"
 musicxml = "^1.4"
 easyocr = "^1.7.1"
+converter21 = "^3.4.0"
+music21 = "^9.5.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.2"
