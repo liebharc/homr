@@ -1,7 +1,6 @@
 from typing import Any
 
-from timm.layers import StdConv2dSame  # type: ignore
-from timm.models.resnetv2 import ResNetV2  # type: ignore
+import timm  # type: ignore
 from timm.models.vision_transformer import VisionTransformer  # type: ignore
 from timm.models.vision_transformer_hybrid import HybridEmbed  # type: ignore
 
@@ -10,16 +9,14 @@ from homr.transformer.configs import Config
 
 def get_encoder(config: Config) -> Any:
     backbone_layers = list(config.backbone_layers)
-    backbone = ResNetV2(
+    backbone = timm.create_model(
+        "resnetv2_50x1_bit.goog_in21k_ft_in1k",
+        pretrained=True,
         num_classes=0,
         global_pool="",
         in_chans=config.channels,
         drop_rate=0.1,
         drop_path_rate=0.1,
-        layers=backbone_layers,
-        preact=True,
-        stem_type="same",
-        conv_layer=StdConv2dSame,
     )
     min_patch_size = 2 ** (len(backbone_layers) + 1)
 

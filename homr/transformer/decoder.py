@@ -81,7 +81,6 @@ class ScoreTransformerWrapper(nn.Module):
         lifts: torch.Tensor,
         mask: torch.Tensor | None = None,
         return_hiddens: bool = True,
-        return_center_of_attention: bool = False,
         **kwargs: Any,
     ) -> Any:
         x = (
@@ -91,15 +90,7 @@ class ScoreTransformerWrapper(nn.Module):
             + self.pos_emb(rhythms)
         )
         x = self.project_emb(x)
-        debug = kwargs.pop("debug", None)
         x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
-
-        if return_center_of_attention:
-            center_of_attention = self.calculate_center_of_attention(
-                debug, hiddens.attn_intermediates
-            )
-        else:
-            center_of_attention = None
 
         x = self.norm(x)
 
@@ -107,7 +98,7 @@ class ScoreTransformerWrapper(nn.Module):
         out_pitchs = self.to_logits_pitch(x)
         out_rhythms = self.to_logits_rhythm(x)
         out_notes = self.to_logits_note(x)
-        return out_rhythms, out_pitchs, out_lifts, out_notes, x, center_of_attention
+        return out_rhythms, out_pitchs, out_lifts, out_notes, x
 
     def calculate_center_of_attention(
         self, debug: AttentionDebug | None, intermediates: Any
@@ -215,8 +206,8 @@ class ScoreDecoder(nn.Module):
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
 
-            rhythmsp, pitchsp, liftsp, notesp, _ignored, center_of_attention = self.net(
-                x_rhythm, x_pitch, x_lift, mask=mask, return_center_of_attention=True, **kwargs
+            rhythmsp, pitchsp, liftsp, notesp, _ignored = self.net(
+                x_rhythm, x_pitch, x_lift, mask=mask, **kwargs
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
