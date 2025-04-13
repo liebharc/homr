@@ -372,7 +372,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
             ),
         ),
         config=config,
-        noteindexes=config.noteindexes,
+        noteindexes=config.noteindexes + config.restindexes,
     )
 
 
