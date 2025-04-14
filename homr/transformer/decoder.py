@@ -90,6 +90,7 @@ class ScoreTransformerWrapper(nn.Module):
             + self.pos_emb(rhythms)
         )
         x = self.project_emb(x)
+        kwargs.pop("debug", None)
         x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
 
         x = self.norm(x)
