@@ -10,12 +10,18 @@ def mei_to_kern(mei_file: str) -> str:
     return kern_file
 
 
-def kern_to_musicxml(kern_file: str) -> str:
+def kern_file_to_musicxml(kern_file: str) -> str:
     converter21.register()
     music_xml_file = kern_file.replace(".krn", ".musicxml")
     score_stream = converter.parse(kern_file)
     score_stream.write("musicxml", fp=music_xml_file)
     return music_xml_file
+
+
+def kern_to_musicxml(kern_notation: str, music_xml_file: str) -> None:
+    converter21.register()
+    score_stream = converter.parseData(kern_notation, format="humdrum")
+    score_stream.write("musicxml", fp=music_xml_file)
 
 
 def musicxml_to_kern(music_xml_file: str) -> str:
@@ -43,6 +49,6 @@ if __name__ == "__main__":
     kern_file = mei_to_kern(mei_file)
     print(kern_file)
     sys.exit(0)
-    music_xml_file = kern_to_musicxml(kern_file)
+    music_xml_file = kern_file_to_musicxml(kern_file)
     print(music_xml_file)
     print(musicxml_to_kern(music_xml_file))

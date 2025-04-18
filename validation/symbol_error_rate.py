@@ -18,7 +18,7 @@ from training.transformer.kern_tokens import (
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
-    model = Staff2Score(config, keep_all_symbols_in_chord=True)
+    model = Staff2Score(config)
     checkpoint_file = Path(config.filepaths.checkpoint).resolve()
     result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
     all_sers = []

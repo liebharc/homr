@@ -180,9 +180,8 @@ class ScoreDecoder(nn.Module):
         eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
-        keep_all_symbols_in_chord: bool = False,
         **kwargs: Any,
-    ) -> list[str]:
+    ) -> str:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -249,7 +248,7 @@ class ScoreDecoder(nn.Module):
         out_rhythm = out_rhythm[:, t:]
 
         self.net.train(was_training)
-        return [self._complete_merged(merged)]
+        return self._complete_merged(merged)
 
     def _complete_merged(self, merged: list[str]) -> str:
         result = str.join(" ", merged)

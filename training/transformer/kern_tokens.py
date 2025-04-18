@@ -34,6 +34,12 @@ def filter_for_kern(lines: list[str]) -> list[str]:
     return filtered
 
 
+def merge_kerns(voices: list[str]) -> str:
+    split = [v.splitlines() for v in voices]
+    merged = zip(*split, strict=True)
+    return str.join("\n", [str.join("\t", e) for e in merged])
+
+
 def get_symbols_from_file(file: str) -> list[str]:
     with open(file) as f:
         return get_symbols(filter_for_kern(f.readlines()))
