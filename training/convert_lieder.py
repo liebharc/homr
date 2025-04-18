@@ -252,7 +252,7 @@ def split_kern_file_into_measures(kern_file: str) -> tuple[int, str, list[str]]:
     # Return: Number of staffs, key and time sig, measures
     measures = []
     number_of_staffs = 0
-    current_measure = []
+    current_measure: list[str] = []
     before_first_measure = ""
 
     with open(kern_file) as kern:
@@ -262,13 +262,14 @@ def split_kern_file_into_measures(kern_file: str) -> tuple[int, str, list[str]]:
             if line.startswith("*staff"):
                 number_of_staffs = len(line.split())
 
-            current_measure.append(line)
-
             if line.startswith("="):
                 if before_first_measure == "":
-                    before_first_measure = str.join("\n", current_measure)
+                    before_first_measure = str.join("\n", current_measure) + "\n"
                 else:
                     measures.append(str.join("\n", current_measure))
+                current_measure = [line]
+            else:
+                current_measure.append(line)
 
     return (number_of_staffs, before_first_measure, measures)
 

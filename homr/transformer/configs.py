@@ -62,10 +62,10 @@ class Config:
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 89
+        self.num_rhythm_tokens = 131
         self.num_note_tokens = 2
-        self.num_pitch_tokens = 71
-        self.num_lift_tokens = 5
+        self.num_pitch_tokens = 58
+        self.num_lift_tokens = 7
         self.lift_null = 0
         self.lift_sharp = 2
         self.lift_flat = 3
@@ -87,8 +87,6 @@ class Config:
         self.restindexes = self._get_values_of_keys_starting_with(
             "rest-"
         ) + self._get_values_of_keys_starting_with("multirest-")
-        self.chordindex = self.rhythm_vocab["|"]
-        self.barlineindex = self.rhythm_vocab["barline"]
 
     def _get_values_of_keys_starting_with(self, prefix: str) -> list[int]:
         return [value for key, value in self.rhythm_vocab.items() if key.startswith(prefix)]

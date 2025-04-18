@@ -36,7 +36,7 @@ def filter_for_kern(lines: list[str]) -> list[str]:
 
 def get_symbols_from_file(file: str) -> list[str]:
     with open(file) as f:
-        return get_symbols(f.readlines())
+        return get_symbols(filter_for_kern(f.readlines()))
 
 
 def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901
@@ -66,11 +66,13 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901
                     phrases_slurs_ties = "()[]{}_;"
                     stem_symbols = "/\\"
                     articulation_symbols = "^'\"~`"
-                    other_symbols = "@$"
+                    other_symbols = "@$<>"
                     for ignored_symbol in (
                         stem_symbols + phrases_slurs_ties + articulation_symbols + other_symbols
                     ):
                         symbol = symbol.replace(ignored_symbol, "")  # noqa: PLW2901
+                if symbol == "*":
+                    continue
                 symbols.append(symbol)
             if i < len(fields) - 1:
                 symbols.append("<TAB>")
@@ -93,6 +95,10 @@ def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
             rhythm = "q"  # grace note
         if not lift:
             lift = "nonote"
+        if rhythm.startswith("0"):
+            rhythm = "0"
+        rhythm = rhythm.replace("qq", "q")
+        rhythm = rhythm.replace("..", ".")
         return ("note", rhythm, pitch, lift)
     return ("nonote", symbol, "nonote", "nonote")
 

@@ -66,7 +66,7 @@ def load_and_mix_training_sets(
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
         sys.exit(1)
-    data_sources = [filter_for_clefs(data) for data in data_sources]
+
     eprint(
         "Total number of training files to choose from", sum([len(data) for data in data_sources])
     )
@@ -91,8 +91,8 @@ def _check_datasets_are_present() -> None:
 
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
-    number_of_files = -1
-    number_of_epochs = 10
+    number_of_files = 50000
+    number_of_epochs = 3
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -104,8 +104,8 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, grandstaff_train_index, lieder_train_index],
-        [1.0, 1.0, 1.0],
+        [primus_train_index, grandstaff_train_index],
+        [1.0, 1.0],
         number_of_files,
     )
 
