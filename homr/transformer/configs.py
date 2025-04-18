@@ -57,7 +57,7 @@ class Config:
         self.patch_size = 16
         self.max_height = 128
         self.max_width = 1280
-        self.max_seq_len = 256
+        self.max_seq_len = 512
         self.pad_token = 0
         self.bos_token = 1
         self.eos_token = 2

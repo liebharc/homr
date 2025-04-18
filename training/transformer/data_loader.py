@@ -162,6 +162,8 @@ class DataLoader:
         notes = tokenize(
             note_symbols, self.note_vocab, self.config.nonote_token, "note", sample_full_filepath
         )
+        if len(notes) > self.config.max_seq_len:
+            eprint("WARN:", sample_full_filepath, "has too many tokens: ", len(notes))
         rhythm_seq = self._check_seq_values(self._pad_rhythm(rhythm), self.config.num_rhythm_tokens)
         mask = np.zeros(self.config.max_seq_len).astype(np.bool_)
         mask[: entry["mask_len"]] = 1
