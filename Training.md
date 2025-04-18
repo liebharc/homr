@@ -11,7 +11,16 @@ Run `training/train.py transformer`. The script will guide you by asking you to 
 Converting the datasets on itself already takes around 8 hours. This is only required once at the beginning and everytime
 an improvement or fix was done to the conversion.
 
-The training process itself takes depending on the hardware you use a 2-3 days.
+The training process itself takes depending on the hardware you use a 2-3 days
+
+## Run 131
+
+Commit: c086620e4a40219fbbaa4e4a061f87f93fe44fb0
+Date: 16 Apr 2025
+SER: 21%
+Validation result: 10.0
+
+Using a pretrained Resnet to decrease training time to 10 epochs.
 
 ## Run 101
 
