@@ -9,7 +9,7 @@ from transformers import Trainer, TrainingArguments  # type: ignore
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.tromr_arch import TrOMR
+from homr.transformer.modelling_smt import SMTModelForCausalLM
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
 from training.convert_lieder import convert_lieder, lieder_train_index
 from training.convert_primus import (
@@ -145,7 +145,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
 
     if pretrained:
         eprint("Loading pretrained model")
-        model = TrOMR(config)
+        model = SMTModelForCausalLM(config)
         checkpoint_file_path = config.filepaths.checkpoint
         if ".safetensors" in checkpoint_file_path:
             tensors = {}
@@ -156,7 +156,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         else:
             model.load_state_dict(torch.load(checkpoint_file_path), strict=False)
     else:
-        model = TrOMR(config)
+        model = SMTModelForCausalLM(config)
 
     try:
         trainer = Trainer(

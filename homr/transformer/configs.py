@@ -2,6 +2,8 @@ import json
 import os
 from typing import Any
 
+from transformers import PretrainedConfig  # type: ignore
+
 workspace = os.path.join(os.path.dirname(__file__))
 
 
@@ -50,8 +52,9 @@ class DecoderArgs:
         return json.dumps(self.to_dict(), indent=2)
 
 
-class Config:
+class Config(PretrainedConfig):  # type: ignore
     def __init__(self) -> None:
+        self.architectures = ["SMT"]
         self.filepaths = FilePaths()
         self.channels = 1
         self.patch_size = 16
