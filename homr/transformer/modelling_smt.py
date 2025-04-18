@@ -528,7 +528,7 @@ class SMTModelForCausalLM(PreTrainedModel):
     def forward_encoder(self, x):
         return self.encoder(pixel_values=x).last_hidden_state
 
-    def forward_decoder(self, encoder_output, rhythms_seq, pitchs_seq, lifts_seq, note_seq):
+    def forward_decoder(self, encoder_output, rhythms_seq, pitchs_seq, lifts_seq, note_seq) -> tuple[SMTOutput, SMTOutput, SMTOutput, SMTOutput]:
         b, _, _, _ = encoder_output.size()
         reduced_size = [s.shape[:2] for s in encoder_output]
         ylens = [len(sample) for sample in rhythms_seq]
@@ -587,40 +587,29 @@ class SMTModelForCausalLM(PreTrainedModel):
         )
         return note_output, rhythms_output, pitch_output, lift_output
 
-    def wrap_decoder_result(result) -> SMTOutput:
+    def wrap_decoder_result(self, result) -> SMTOutput:
         output, predictions, _, _, weights = result
         return SMTOutput(
-            logits=predictions,
+            logits=predictions.permute(0, 2, 1),
             hidden_states=output,
             attentions=weights["self"],
             cross_attentions=weights["mix"],
         )
 
-    def forward(self, x, rhythms_seq, pitchs_seq, lifts_seq, note_seq, **kwargs):
-        # liftsi = lifts_seq[:, :-1]
-        liftso = lifts_seq[:, 1:]
-        # pitchsi = pitchs_seq[:, :-1]
-        pitchso = pitchs_seq[:, 1:]
-        # rhythmsi = rhythms_seq[:, :-1]
-        rhythmso = rhythms_seq[:, 1:]
-        noteso = note_seq[:, 1:]
-
-        mask = kwargs.get("mask", None)
-        if mask is not None and mask.shape[1] == rhythms_seq.shape[1]:
-            mask = mask[:, :-1]
-            kwargs["mask"] = mask
-        x = self.forward_encoder(x)
+    def forward(self, inputs, rhythms_seq, pitchs_seq, lifts_seq, note_seq, mask):
+        inputs = self.forward_encoder(inputs)
         note_output, rhythms_output, pitch_output, lift_output = self.forward_decoder(
-            x, rhythms_seq, pitchs_seq, lifts_seq, note_seq
+            inputs, rhythms_seq, pitchs_seq, lifts_seq, note_seq
         )
 
         loss_consist = self.calConsistencyLoss(
             rhythms_output.logits, pitch_output.logits, lift_output.logits, note_output.logits, mask
         )
-        loss_rhythm = self.masked_logits_cross_entropy(rhythms_output.logits, rhythmso, mask)
-        loss_pitch = self.masked_logits_cross_entropy(pitch_output.logits, pitchso, mask)
-        loss_lift = self.masked_logits_cross_entropy(lift_output.logits, liftso, mask)
-        loss_note = self.masked_logits_cross_entropy(note_output.logits, noteso, mask)
+        
+        loss_rhythm = self.masked_logits_cross_entropy(rhythms_output.logits, rhythms_seq, mask)
+        loss_pitch = self.masked_logits_cross_entropy(pitch_output.logits, pitchs_seq, mask)
+        loss_lift = self.masked_logits_cross_entropy(lift_output.logits, lifts_seq, mask)
+        loss_note = self.masked_logits_cross_entropy(note_output.logits, note_seq, mask)
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
         alpha = 0.1
         beta = 1
