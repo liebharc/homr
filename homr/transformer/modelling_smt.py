@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.nn.init import xavier_uniform_
 from transformers import ConvNextConfig, ConvNextModel, PreTrainedModel  # type: ignore
@@ -474,13 +475,39 @@ class SMTModelForCausalLM(PreTrainedModel):
         )
         self.encoder = ConvNextModel(next_config)
 
-        # TODO this is just a single decoder, but we want 4 to stick with the TrOMR arch
-        self.decoder = Decoder(
+        self.note_decoder = Decoder(
+            d_model=config.decoder_dim,
+            dim_ff=config.decoder_dim,
+            n_layers=config.decoder_depth,
+            maxlen=config.max_seq_len,
+            out_categories=config.num_note_tokens,
+            attention_window=config.max_seq_len + 1,
+        )
+
+        self.rhythm_decoder = Decoder(
             d_model=config.decoder_dim,
             dim_ff=config.decoder_dim,
             n_layers=config.decoder_depth,
             maxlen=config.max_seq_len,
             out_categories=config.num_rhythm_tokens,
+            attention_window=config.max_seq_len + 1,
+        )
+
+        self.pitch_decoder = Decoder(
+            d_model=config.decoder_dim,
+            dim_ff=config.decoder_dim,
+            n_layers=config.decoder_depth,
+            maxlen=config.max_seq_len,
+            out_categories=config.num_pitch_tokens,
+            attention_window=config.max_seq_len + 1,
+        )
+
+        self.lift_decoder = Decoder(
+            d_model=config.decoder_dim,
+            dim_ff=config.decoder_dim,
+            n_layers=config.decoder_depth,
+            maxlen=config.max_seq_len,
+            out_categories=config.num_lift_tokens,
             attention_window=config.max_seq_len + 1,
         )
 
@@ -494,28 +521,74 @@ class SMTModelForCausalLM(PreTrainedModel):
         self.maxlen = config.max_seq_len
         self.config = config
 
+        note_mask = torch.zeros(config.num_rhythm_tokens)
+        note_mask[config.noteindexes] = 1
+        self.note_mask = nn.Parameter(note_mask)
+
     def forward_encoder(self, x):
         return self.encoder(pixel_values=x).last_hidden_state
 
-    def forward_decoder(self, encoder_output, y_pred):
+    def forward_decoder(self, encoder_output, rhythms_seq, pitchs_seq, lifts_seq, note_seq):
         b, _, _, _ = encoder_output.size()
         reduced_size = [s.shape[:2] for s in encoder_output]
-        ylens = [len(sample) for sample in y_pred]
+        ylens = [len(sample) for sample in rhythms_seq]
 
         pos_features = self.positional_2D(encoder_output)
         features = torch.flatten(encoder_output, start_dim=2, end_dim=3).permute(2, 0, 1)
         enhanced_features = features
         enhanced_features = torch.flatten(pos_features, start_dim=2, end_dim=3).permute(2, 0, 1)
-        output, predictions, _, _, weights = self.decoder(
-            features,
-            enhanced_features,
-            y_pred[:, :],
-            reduced_size,
-            [max(ylens) for _ in range(b)],
-            encoder_output.size(),
-            cache=None,
-            keep_all_weights=True,
+        note_output = self.wrap_decoder_result(
+            self.note_decoder(
+                features,
+                enhanced_features,
+                note_seq[:, :],
+                reduced_size,
+                [max(ylens) for _ in range(b)],
+                encoder_output.size(),
+                cache=None,
+                keep_all_weights=True,
+            )
         )
+        rhythms_output = self.wrap_decoder_result(
+            self.rhythm_decoder(
+                features,
+                enhanced_features,
+                rhythms_seq[:, :],
+                reduced_size,
+                [max(ylens) for _ in range(b)],
+                encoder_output.size(),
+                cache=None,
+                keep_all_weights=True,
+            )
+        )
+        pitch_output = self.wrap_decoder_result(
+            self.pitch_decoder(
+                features,
+                enhanced_features,
+                pitchs_seq[:, :],
+                reduced_size,
+                [max(ylens) for _ in range(b)],
+                encoder_output.size(),
+                cache=None,
+                keep_all_weights=True,
+            )
+        )
+        lift_output = self.wrap_decoder_result(
+            self.lift_decoder(
+                features,
+                enhanced_features,
+                lifts_seq[:, :],
+                reduced_size,
+                [max(ylens) for _ in range(b)],
+                encoder_output.size(),
+                cache=None,
+                keep_all_weights=True,
+            )
+        )
+        return note_output, rhythms_output, pitch_output, lift_output
+
+    def wrap_decoder_result(result) -> SMTOutput:
+        output, predictions, _, _, weights = result
         return SMTOutput(
             logits=predictions,
             hidden_states=output,
@@ -523,14 +596,98 @@ class SMTModelForCausalLM(PreTrainedModel):
             cross_attentions=weights["mix"],
         )
 
-    def forward(self, x, y_pred, labels=None):
+    def forward(self, x, rhythms_seq, pitchs_seq, lifts_seq, note_seq, **kwargs):
+        # liftsi = lifts_seq[:, :-1]
+        liftso = lifts_seq[:, 1:]
+        # pitchsi = pitchs_seq[:, :-1]
+        pitchso = pitchs_seq[:, 1:]
+        # rhythmsi = rhythms_seq[:, :-1]
+        rhythmso = rhythms_seq[:, 1:]
+        noteso = note_seq[:, 1:]
+
+        mask = kwargs.get("mask", None)
+        if mask is not None and mask.shape[1] == rhythms_seq.shape[1]:
+            mask = mask[:, :-1]
+            kwargs["mask"] = mask
         x = self.forward_encoder(x)
-        output = self.forward_decoder(x, y_pred)
+        note_output, rhythms_output, pitch_output, lift_output = self.forward_decoder(
+            x, rhythms_seq, pitchs_seq, lifts_seq, note_seq
+        )
 
-        if labels is not None:
-            output.loss = self.loss(output.logits, labels[:, :-1])
+        loss_consist = self.calConsistencyLoss(
+            rhythms_output.logits, pitch_output.logits, lift_output.logits, note_output.logits, mask
+        )
+        loss_rhythm = self.masked_logits_cross_entropy(rhythms_output.logits, rhythmso, mask)
+        loss_pitch = self.masked_logits_cross_entropy(pitch_output.logits, pitchso, mask)
+        loss_lift = self.masked_logits_cross_entropy(lift_output.logits, liftso, mask)
+        loss_note = self.masked_logits_cross_entropy(note_output.logits, noteso, mask)
+        # From the TR OMR paper equation 2, we use however different values for alpha and beta
+        alpha = 0.1
+        beta = 1
+        loss_sum = loss_rhythm + loss_pitch + loss_lift + loss_note
+        loss = alpha * loss_sum + beta * loss_consist
 
-        return output
+        return {
+            "loss_rhythm": loss_rhythm,
+            "loss_pitch": loss_pitch,
+            "loss_lift": loss_lift,
+            "loss_consist": loss_consist,
+            "loss_note": loss_note,
+            "loss": loss,
+        }
+
+    def calConsistencyLoss(
+        self,
+        rhythmsp: torch.Tensor,
+        pitchsp: torch.Tensor,
+        liftsp: torch.Tensor,
+        notesp: torch.Tensor,
+        mask: torch.Tensor,
+        gamma: int = 10,
+    ) -> torch.Tensor:
+        notesp_soft = torch.softmax(notesp, dim=2)
+        note_flag = notesp_soft[:, :, 1] * mask
+
+        rhythmsp_soft = torch.softmax(rhythmsp, dim=2)
+        rhythmsp_note = torch.sum(rhythmsp_soft * self.note_mask, dim=2) * mask
+
+        pitchsp_soft = torch.softmax(pitchsp, dim=2)
+        pitchsp_note = torch.sum(pitchsp_soft[:, :, 1:], dim=2) * mask
+
+        liftsp_soft = torch.softmax(liftsp, dim=2)
+        liftsp_note = torch.sum(liftsp_soft[:, :, 1:], dim=2) * mask
+
+        loss = (
+            gamma
+            * (
+                F.l1_loss(rhythmsp_note, note_flag, reduction="none")
+                + F.l1_loss(note_flag, liftsp_note, reduction="none")
+                + F.l1_loss(note_flag, pitchsp_note, reduction="none")
+            )
+            / 3.0
+        )
+
+        # Apply the mask to the loss and average over the non-masked elements
+        loss = (loss * mask).sum() / mask.sum()
+
+        return loss
+
+    def masked_logits_cross_entropy(
+        self,
+        logits: torch.Tensor,
+        target: torch.Tensor,
+        mask: torch.Tensor,
+        weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        # Calculate the cross-entropy loss
+        loss = F.cross_entropy(logits.transpose(1, 2), target, reduction="none", weight=weights)
+
+        # As reduction is "none", we can apply the mask to the loss
+        # and this way we ignore the loss for the padded tokens
+        loss = loss * mask
+        loss = loss.sum() / mask.sum()
+
+        return loss
 
     def predict(self, input_tensor, convert_to_str=False):
         predicted_sequence = (
@@ -541,12 +698,15 @@ class SMTModelForCausalLM(PreTrainedModel):
         encoder_output = self.forward_encoder(input_tensor)
         text_sequence = []
         for _ in range(self.maxlen - predicted_sequence.shape[-1]):
-            predictions = self.forward_decoder(encoder_output, predicted_sequence.long())
-            predicted_token = torch.argmax(predictions.logits[:, :, -1]).item()
+            note_output, rhythms_output, pitch_output, lift_output = self.forward_decoder(
+                encoder_output, predicted_sequence.long()
+            )
+            # TODO merge decoder outputs
+            predicted_token = torch.argmax(rhythms_output.logits[:, :, -1]).item()
             predicted_sequence = torch.cat(
                 [
                     predicted_sequence,
-                    torch.argmax(predictions.logits[:, :, -1], dim=1, keepdim=True),
+                    torch.argmax(rhythms_output.logits[:, :, -1], dim=1, keepdim=True),
                 ],
                 dim=1,
             )
@@ -556,4 +716,4 @@ class SMTModelForCausalLM(PreTrainedModel):
                 break
             text_sequence.append(self.config.rhythm_vocab[predicted_token])
 
-        return text_sequence, predictions
+        return text_sequence, rhythms_output
