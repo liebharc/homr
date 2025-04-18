@@ -379,3 +379,9 @@ def split_symbols(  # noqa: C901
         predrhythms.append(predrhythm)
         prednotes.append(prednote)
     return predlifts, predpitchs, predrhythms, prednotes
+
+
+def merge_kern_tokens(predrhythm: str, predpitch: str, predlift: str) -> str:
+    if predpitch == "nonote" or predlift == "nonote":
+        return predrhythm
+    return predrhythm + predpitch + predlift

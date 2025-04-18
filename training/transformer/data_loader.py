@@ -129,7 +129,7 @@ class DataLoader:
             return [], [], [], []
         symbols = kern_tokens.get_symbols_from_file(path)
         tokens = [kern_tokens.split_symbol_into_token(sym) for sym in symbols]
-        return tuple(zip(*tokens, strict=False))
+        return tuple(zip(*tokens, strict=False))  # type: ignore
 
     def __getitem__(self, idx: int) -> Any:
         entry = self.corpus_list[idx]

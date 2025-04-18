@@ -46,7 +46,7 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901
     for line in lines:
         if line.startswith("!"):
             continue
-        is_key_or_time = line.startswith(("*M", "*k"))
+        is_key_or_time = line.startswith(("*M", "*k")) and not line.startswith("*MM")
         if line.startswith("*") and not is_key_or_time:
             continue
         fields = line.split("\t")
@@ -101,6 +101,74 @@ def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
         rhythm = rhythm.replace("..", ".")
         return ("note", rhythm, pitch, lift)
     return ("nonote", symbol, "nonote", "nonote")
+
+
+def split_kern_file_into_measures(kern_file: str) -> tuple[int, str, list[str]]:
+    # Return: Number of staffs, key and time sig, measures
+    measures = []
+    number_of_staffs = 0
+    current_measure: list[str] = []
+    before_first_measure = ""
+
+    with open(kern_file) as kern:
+        lines = kern.readlines()
+        lines = filter_for_kern(lines)
+        for line in lines:
+            if line.startswith("*staff"):
+                number_of_staffs = len(line.split())
+
+            if line.startswith("="):
+                if before_first_measure == "":
+                    before_first_measure = str.join("\n", current_measure) + "\n"
+                else:
+                    measures.append(str.join("\n", current_measure))
+                current_measure = [line]
+            else:
+                current_measure.append(line)
+
+    return (number_of_staffs, before_first_measure, measures)
+
+
+def split_kern_measures_into_voices(  # noqa: C901
+    number_of_staffs: int, before_first_measure: str, measures: list[str]
+) -> tuple[list[str], list[list[str]]]:
+    prelude_lines = before_first_measure.split("\n")
+    prelude_per_voice: list[list[str]] = [[] for _ in range(number_of_staffs)]
+    for line in prelude_lines:
+        cells = line.strip().split("\t")
+        if len(cells) == 1:
+            for voice in prelude_per_voice:
+                voice.append(cells[0])
+        else:
+            for i in range(number_of_staffs):
+                prelude_per_voice[i].append(cells[i])
+
+    measures_per_voice: list[list[str]] = [[] for _ in range(number_of_staffs)]
+    for measure in measures:
+        lines = measure.split("\n")
+        lines_per_voice: list[list[str]] = [[] for _ in range(number_of_staffs)]
+        for line in lines:
+            cells = line.strip().split("\t")
+            if len(cells) == 1:
+                for voice in lines_per_voice:
+                    voice.append(cells[0])
+            else:
+                for i in range(number_of_staffs):
+                    lines_per_voice[i].append(cells[i])
+
+        for i in range(number_of_staffs):
+            measures_per_voice[i].append(str.join("\n", lines_per_voice[i]))
+
+    preludes = [str.join("\n", v) + "\n" for v in prelude_per_voice]
+    return (preludes, measures_per_voice)
+
+
+def load_and_sanitize_kern_file(filename: str) -> str:
+    symbols = get_symbols_from_file(filename)
+    tokens = str.join(" ", symbols)
+    tokens = tokens.replace("<NL>", "\n")
+    tokens = tokens.replace("<TAB>", "\t")
+    return tokens
 
 
 if __name__ == "__main__":

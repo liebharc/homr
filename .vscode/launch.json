@@ -17,6 +17,17 @@
 			"program": "${workspaceFolder}/training/train.py",
 			"console": "integratedTerminal",
 			"args": ["transformer"]
+		},
+		{
+			"name": "Python Debugger: Calc SER",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/validation/symbol_error_rate.py",
+			"console": "integratedTerminal",
+			"args": [
+				"${workspaceFolder}/current_training/checkpoint-16481/model.safetensors"
+			]
 		}
 	]
 }

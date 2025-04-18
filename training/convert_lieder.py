@@ -24,7 +24,7 @@ from training.musescore_svg import (
     SvgStaff,
     get_position_from_multiple_svg_files,
 )
-from training.transformer.kern_tokens import filter_for_kern
+from training.transformer.kern_tokens import split_kern_file_into_measures
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -246,32 +246,6 @@ def _convert_file(file: Path) -> list[str]:
     except Exception as e:
         eprint("Error while processing", file, e)
         return []
-
-
-def split_kern_file_into_measures(kern_file: str) -> tuple[int, str, list[str]]:
-    # Return: Number of staffs, key and time sig, measures
-    measures = []
-    number_of_staffs = 0
-    current_measure: list[str] = []
-    before_first_measure = ""
-
-    with open(kern_file) as kern:
-        lines = kern.readlines()
-        lines = filter_for_kern(lines)
-        for line in lines:
-            if line.startswith("*staff"):
-                number_of_staffs = len(line.split())
-
-            if line.startswith("="):
-                if before_first_measure == "":
-                    before_first_measure = str.join("\n", current_measure) + "\n"
-                else:
-                    measures.append(str.join("\n", current_measure))
-                current_measure = [line]
-            else:
-                current_measure.append(line)
-
-    return (number_of_staffs, before_first_measure, measures)
 
 
 def convert_lieder() -> None:
