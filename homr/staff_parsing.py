@@ -16,7 +16,9 @@ from homr.results import (
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
+from homr.transformer import configs
 from homr.type_definitions import NDArray
+from training.transformer.kern_tokens import merge_kerns
 
 
 def _have_all_the_same_number_of_staffs(staffs: list[MultiStaff]) -> bool:
@@ -58,13 +60,14 @@ def _get_number_of_voices(staffs: list[MultiStaff]) -> int:
     return len(staffs[0].staffs)
 
 
-tr_omr_max_height = 128
-tr_omr_max_width = 1280
+tr_omr_max_height: int = configs.default_config.max_height
+tr_omr_max_width: int = configs.default_config.max_width
 
 
 def get_tr_omr_canvas_size(
     image_shape: tuple[int, ...], margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
+
     tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
     tr_omr_ratio = float(tr_omr_max_height_with_margin) / tr_omr_max_width
     height, width = image_shape[:2]
@@ -205,7 +208,7 @@ def prepare_staff_image(
     staff: Staff,
     staff_image: NDArray,
     perform_dewarp: bool,
-) -> tuple[NDArray, Staff]:
+) -> NDArray:
     centers = [s.center for s in staff.symbols]
     x_values = np.array([c[0] for c in centers])
     y_values = np.array([c[1] for c in centers])
@@ -267,7 +270,7 @@ def prepare_staff_image(
         debug.write_image_with_fixed_suffix(
             f"_staff-{index}_debug_annotated.jpg", transformed_staff_image
         )
-    return staff_image, staff
+    return staff_image
 
 
 def _dewarp_staff(
@@ -297,15 +300,14 @@ def parse_staff_image(
     staff: Staff,
     image: NDArray,
     perform_dewarp: bool,
-) -> ResultStaff | None:
-    staff_image, transformed_staff = prepare_staff_image(
+) -> str:
+    staff_image = prepare_staff_image(
         debug, index, ranges, staff, image, perform_dewarp=perform_dewarp
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(
         staff_image=staff_image,
-        staff=transformed_staff,
         debug=attention_debug,
     )
     if attention_debug is not None:
@@ -415,18 +417,13 @@ def determine_ranges(staffs: list[MultiStaff]) -> list[float]:
     return staff_centers
 
 
-def remember_new_line(measures: list[ResultMeasure]) -> None:
-    if len(measures) > 0:
-        measures[0].is_new_line = True
-
-
 def parse_staffs(
     debug: Debug,
     staffs: list[MultiStaff],
     image: NDArray,
     selected_staff: int = -1,
     perform_dewarp: bool = True,
-) -> list[ResultStaff]:
+) -> str:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -437,7 +434,7 @@ def parse_staffs(
     number_of_voices = _get_number_of_voices(staffs)
     i = 0
     ranges = determine_ranges(staffs)
-    voices = []
+    voices: list[str] = []
     for voice in range(number_of_voices):
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
         result_for_voice = []
@@ -447,21 +444,8 @@ def parse_staffs(
                 i += 1
                 continue
             result_staff = parse_staff_image(debug, ranges, i, staff, image, perform_dewarp)
-            if result_staff is None:
-                eprint("Staff was filtered out", i)
-                i += 1
-                continue
-            if result_staff.is_empty():
-                eprint("Skipping empty staff", i)
-                i += 1
-                continue
-            remember_new_line(result_staff.measures)
+            # TODO remember_new_line(result_staff.measures)
             result_for_voice.append(result_staff)
             i += 1
-
-        # Piano music can have a change of clef, while for other instruments
-        # we assume that the clef is the same for all staffs.
-        # The number of voices is the only way we can distinguish between the two.
-        force_single_clef_type = number_of_voices == 1
-        voices.append(merge_and_clean(result_for_voice, force_single_clef_type))
-    return voices
+        voices.append(str.join("\n", result_for_voice))
+    return merge_kerns(voices)

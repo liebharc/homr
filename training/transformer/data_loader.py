@@ -7,9 +7,9 @@ import numpy as np
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder import tokenize
-from homr.transformer.split_merge_symbols import split_semantic_file
 from homr.transformer.staff2score import readimg
 from homr.type_definitions import NDArray
+from training.transformer import kern_tokens
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 
@@ -50,9 +50,9 @@ class DataLoader:
         result = []
         for entry in corpus_list:
             image, semantic_file = entry.strip().split(",")
-            semantic = self._read_semantic(semantic_file)
-            lifts = semantic[0][0]
-            semantic_len = len(lifts)
+            semantic = self._read_kern_file(semantic_file)
+            notes = semantic[0]
+            semantic_len = len(notes)
             # If we would have the money to do it we would want to use:
             # mask_lens = range(1, semantic_len)
             # Instead we construct take up to 3 random mask lengths and the full length
@@ -124,12 +124,12 @@ class DataLoader:
                 eprint("Checked " + str(i) + "/" + str(len(self)) + " entries")
         return has_errors
 
-    def _read_semantic(
-        self, path: str
-    ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
+    def _read_kern_file(self, path: str) -> tuple[list[str], list[str], list[str], list[str]]:
         if path == "nosymbols":
-            return [[]], [[]], [[]], [[]]
-        return split_semantic_file(path)
+            return [], [], [], []
+        symbols = kern_tokens.get_symbols_from_file(path)
+        tokens = [kern_tokens.split_symbol_into_token(sym) for sym in symbols]
+        return tuple(zip(*tokens, strict=False))  # type: ignore
 
     def __getitem__(self, idx: int) -> Any:
         entry = self.corpus_list[idx]
@@ -138,30 +138,32 @@ class DataLoader:
 
         # ground truth
         sample_full_filepath = entry["semantic"]
-        liftsymbols, pitchsymbols, rhythmsymbols, note_symbols = self._read_semantic(
+        note_symbols, rhythmsymbols, pitchsymbols, liftsymbols = self._read_kern_file(
             sample_full_filepath
         )
 
         rhythm = tokenize(
-            rhythmsymbols[0],
+            rhythmsymbols,
             self.rhythm_vocab,
             self.config.pad_token,
             "rhythm",
             sample_full_filepath,
         )
         lifts = tokenize(
-            liftsymbols[0], self.lift_vocab, self.config.nonote_token, "lift", sample_full_filepath
+            liftsymbols, self.lift_vocab, self.config.nonote_token, "lift", sample_full_filepath
         )
         pitch = tokenize(
-            pitchsymbols[0],
+            pitchsymbols,
             self.pitch_vocab,
             self.config.nonote_token,
             "pitch",
             sample_full_filepath,
         )
         notes = tokenize(
-            note_symbols[0], self.note_vocab, self.config.nonote_token, "note", sample_full_filepath
+            note_symbols, self.note_vocab, self.config.nonote_token, "note", sample_full_filepath
         )
+        if len(notes) > self.config.max_seq_len:
+            eprint("WARN:", sample_full_filepath, "has too many tokens: ", len(notes))
         rhythm_seq = self._check_seq_values(self._pad_rhythm(rhythm), self.config.num_rhythm_tokens)
         mask = np.zeros(self.config.max_seq_len).astype(np.bool_)
         mask[: entry["mask_len"]] = 1

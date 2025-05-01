@@ -34,8 +34,8 @@ class DecoderArgs:
         self.attn_on_attn = True
         self.cross_attend = True
         self.ff_glu = True
-        self.rel_pos_bias = False
-        self.use_scalenorm = False
+        self.rel_pos_bias = True
+        self.use_scalenorm = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,17 +55,17 @@ class Config:
         self.filepaths = FilePaths()
         self.channels = 1
         self.patch_size = 16
-        self.max_height = 128
-        self.max_width = 1280
-        self.max_seq_len = 256
+        self.max_height = 256
+        self.max_width = 640
+        self.max_seq_len = 748
         self.pad_token = 0
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 89
+        self.num_rhythm_tokens = 133
         self.num_note_tokens = 2
-        self.num_pitch_tokens = 71
-        self.num_lift_tokens = 5
+        self.num_pitch_tokens = 58
+        self.num_lift_tokens = 7
         self.lift_null = 0
         self.lift_sharp = 2
         self.lift_flat = 3
@@ -87,8 +87,6 @@ class Config:
         self.restindexes = self._get_values_of_keys_starting_with(
             "rest-"
         ) + self._get_values_of_keys_starting_with("multirest-")
-        self.chordindex = self.rhythm_vocab["|"]
-        self.barlineindex = self.rhythm_vocab["barline"]
 
     def _get_values_of_keys_starting_with(self, prefix: str) -> list[int]:
         return [value for key, value in self.rhythm_vocab.items() if key.startswith(prefix)]

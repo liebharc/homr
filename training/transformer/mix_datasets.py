@@ -6,6 +6,9 @@ import numpy as np
 def _calc_number_of_files_to_take(
     data_sources: list[dict[str, Any]], number_of_files: int
 ) -> list[int]:
+    if len(data_sources) == 1:
+        return [number_of_files]
+
     files_to_take = [0 for _ in data_sources]
     while number_of_files > 0:
         total_weight = sum([s["weight"] for s in data_sources])

@@ -22,6 +22,15 @@ Validation result: 10.0
 
 Using a pretrained Resnet to decrease training time to 10 epochs.
 
+## Run 131
+
+Commit: c086620e4a40219fbbaa4e4a061f87f93fe44fb0
+Date: 16 Apr 2025
+SER: 21%
+Validation result: 10.0
+
+Using a pretrained Resnet to decrease training time to 10 epochs.
+
 ## Run 101
 
 Commit: ba12ebef4606948816a06f4a011248d07a6f06da

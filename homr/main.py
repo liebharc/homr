@@ -7,9 +7,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from homr import color_adjust, download_utils
+from homr import color_adjust, download_utils, notation_conversions
 from homr.accidental_detection import add_accidentals_to_staffs
-from homr.accidental_rules import maintain_accidentals
 from homr.autocrop import autocrop
 from homr.bar_line_detection import (
     add_bar_lines_to_staffs,
@@ -32,7 +31,6 @@ from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
-from homr.results import ResultStaff
 from homr.segmentation.config import segnet_path, unet_path
 from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
@@ -42,7 +40,7 @@ from homr.staff_position_save_load import load_staff_positions, save_staff_posit
 from homr.title_detection import detect_title
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
-from homr.xml_generator import XmlGeneratorArguments, generate_xml
+from homr.xml_generator import XmlGeneratorArguments
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -149,7 +147,7 @@ def process_image(  # noqa: PLR0915
     image_path: str,
     config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
-) -> list[ResultStaff]:
+) -> str:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
     try:
@@ -161,27 +159,20 @@ def process_image(  # noqa: PLR0915
             multi_staffs = load_staff_positions(
                 debug, image, staff_position_files, config.selected_staff
             )
-            title = ""
         else:
-            multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
+            multi_staffs, image, debug, _title = detect_staffs_in_image(
+                image_path, config
+            )  # TODO, do something with the title
 
         result_staffs = parse_staffs(
             debug, multi_staffs, image, selected_staff=config.selected_staff
         )
-
-        result_staffs = maintain_accidentals(result_staffs)
-
+        eprint("Finished staff parsing")
+        eprint(result_staffs)
         eprint("Writing XML")
-        xml = generate_xml(xml_generator_args, result_staffs, title)
-        xml.write(xml_file)
+        notation_conversions.kern_to_musicxml(result_staffs, xml_file)
 
-        eprint(
-            "Finished parsing "
-            + str(len(result_staffs))
-            + " voices over "
-            + str(sum(staff.number_of_new_lines() for staff in result_staffs))
-            + " staves"
-        )
+        eprint("Finished parsing")
         teaser_file = replace_extension(image_path, "_teaser.png")
         if config.write_staff_positions:
             staff_position_files = replace_extension(image_path, ".txt")

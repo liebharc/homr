@@ -5,16 +5,21 @@ from pathlib import Path
 import cv2
 import editdistance  # type: ignore
 
-from homr import download_utils
+from homr import download_utils, notation_conversions
 from homr.simple_logging import eprint
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
 from training.musescore_svg import get_position_from_multiple_svg_files
-from training.music_xml import group_in_measures, music_xml_to_semantic
+from training.transformer.kern_tokens import (
+    load_and_sanitize_kern_file,
+    split_kern_file_into_measures,
+    split_kern_measures_into_voices,
+)
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
-    model = Staff2Score(config, keep_all_symbols_in_chord=True)
+    model = Staff2Score(config)
     checkpoint_file = Path(config.filepaths.checkpoint).resolve()
     result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
     all_sers = []
@@ -23,15 +28,13 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     interesting_results: list[tuple[str, str]] = []
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
-        expected_str = _load_semantic_file(semantic_path)[0].strip()
+        expected_str = load_and_sanitize_kern_file(semantic_path)
         image = cv2.imread(img_path)
-        actual = model.predict(image)[0].split("+")
-        actual = [
-            symbol for symbol in actual if not symbol.startswith("timeSignature")
-        ]  # reference data has no time signature
-        expected = expected_str.split("+")
-        actual = sort_chords(actual)
-        expected = sort_chords(expected)
+        actual_str = model.predict(image)[0]
+        actual = actual_str.split("\n")
+        expected = expected_str.split("\n")
+        # actual = sort_chords(actual)
+        # expected = sort_chords(expected)
         distance = editdistance.eval(expected, actual)
         ser = distance / len(expected)
         all_sers.append(ser)
@@ -55,11 +58,6 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         f.write(f"SER avg: {ser_avg}%\n")
 
 
-def _load_semantic_file(semantic_path: str) -> list[str]:
-    with open(semantic_path) as f:
-        return f.readlines()
-
-
 def sort_chords(symbols: list[str]) -> list[str]:
     result = []
     for symbol in symbols:
@@ -74,13 +72,16 @@ def index_folder(folder: str, index_file: str) -> None:
             if not os.path.isdir(full_name):
                 continue
             file = os.path.join(full_name, "music.musicxml")
-            semantic = music_xml_to_semantic(file)
-            measures = [group_in_measures(voice) for voice in semantic]
+            kern_file = notation_conversions.musicxml_to_kern(file)
+            number_of_voices, time_sig, measures = split_kern_file_into_measures(kern_file)
+            time_sig_per_voice, measures_per_voice = split_kern_measures_into_voices(
+                number_of_voices, time_sig, measures
+            )
+            time_sig_per_voice = list(reversed(time_sig_per_voice))
+            measures_per_voice = list(reversed(measures_per_voice))
             svg_files = get_position_from_multiple_svg_files(file)
-            number_of_voices = len(semantic)
-            total_number_of_measures = semantic[0].count("barline")
             measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
-            sum_of_measures_in_xml = total_number_of_measures * number_of_voices
+            sum_of_measures_in_xml = number_of_voices * len(measures)
             if sum(measures_in_svg) != sum_of_measures_in_xml:
                 eprint(
                     file,
@@ -97,13 +98,11 @@ def index_folder(folder: str, index_file: str) -> None:
                     selected_measures: list[str] = []
                     staffs_per_voice = len(svg_file.staffs) // number_of_voices
                     for _ in range(staff.number_of_measures):
-                        selected_measures.append(str.join("+", measures[voice][1].pop(0)))
+                        selected_measures.append(measures_per_voice[voice].pop(0))
 
-                    prelude = measures[voice][0]
-                    semantic_content = str.join("+", selected_measures) + "\n"
-
-                    if not semantic_content.startswith("clef"):
-                        semantic_content = prelude + semantic_content
+                    expected_file_content = (
+                        time_sig_per_voice[voice] + str.join("\n", selected_measures) + "\n"
+                    )
 
                     file_number = (
                         total_staffs_in_previous_files
@@ -113,14 +112,20 @@ def index_folder(folder: str, index_file: str) -> None:
 
                     file_name = f"staff-{file_number}.jpg"
                     staff_image = os.path.join(full_name, file_name)
-                    with open(os.path.join(full_name, f"staff-{file_number}.semantic"), "w") as f:
-                        f.write(semantic_content)
+                    with open(os.path.join(full_name, f"staff-{file_number}.krn"), "w") as f:
+                        f.write(expected_file_content)
+                    image = cv2.imread(staff_image)
+                    if image is None:
+                        continue
+                    preprocessed_file_name = os.path.join(full_name, f"staff-pre-{file_number}.jpg")
+                    preprocessed = add_image_into_tr_omr_canvas(image)
+                    cv2.imwrite(preprocessed_file_name, preprocessed)
                     voice = (voice + 1) % number_of_voices
                     if os.path.exists(staff_image):
                         index.write(
-                            staff_image
+                            preprocessed_file_name
                             + ","
-                            + os.path.join(full_name, f"staff-{file_number}.semantic")
+                            + os.path.join(full_name, f"staff-{file_number}.krn")
                             + "\n"
                         )
                 total_staffs_in_previous_files += len(svg_file.staffs)
