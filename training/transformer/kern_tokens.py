@@ -182,37 +182,3 @@ def load_and_sanitize_kern_file(filename: str) -> str:
     tokens = tokens.replace("<NL>", "\n")
     tokens = tokens.replace("<TAB>", "\t")
     return tokens
-
-
-if __name__ == "__main__":
-    # ruff: noqa: T201
-    import sys
-    from pathlib import Path
-
-    src_files = Path(sys.argv[1])
-    if src_files.is_dir():
-        tokens = []
-        for filename in src_files.rglob("*.krn"):
-            try:
-                symbols = get_symbols_from_file(str(filename))
-                tokens += [split_symbol_into_token(sym) for sym in symbols]
-            except Exception as e:
-                print("Failed to parse", filename, e)
-    else:
-        symbols = get_symbols_from_file(sys.argv[1])
-        tokens = [split_symbol_into_token(sym) for sym in symbols]
-    note_tokens = set()
-    rhythm_tokens = set()
-    pitch_tokens = set()
-    lift_tokens = set()
-
-    for note, rhythm, pitch, lift in tokens:
-        note_tokens.add(note)
-        rhythm_tokens.add(rhythm)
-        pitch_tokens.add(pitch)
-        lift_tokens.add(lift)
-
-    print("note", sorted(note_tokens))
-    print("rhythm", sorted(rhythm_tokens))
-    print("pitch", sorted(pitch_tokens))
-    print("lift", sorted(lift_tokens))

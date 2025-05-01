@@ -20,7 +20,7 @@ from training.convert_primus import (
 from training.run_id import get_run_id
 from training.transformer.custom_trainer import UnfreezeBackboneCallback  # type: ignore
 from training.transformer.data_loader import load_dataset
-from training.transformer.data_set_filters import contains_supported_clef
+from training.transformer.data_set_filters import contains_only_supported_clefs
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
@@ -34,13 +34,11 @@ def load_training_index(file_path: str) -> list[str]:
 def filter_for_clefs(file_paths: list[str]) -> list[str]:
     result = []
     for entry in file_paths:
-        semantic = entry.strip().split(",")[1]
-        if semantic == "nosymbols":
+        kern_file = entry.strip().split(",")[1]
+        if kern_file == "nosymbols":
             continue
-        with open(semantic) as f:
-            lines = f.readlines()
-            if all(contains_supported_clef(line) for line in lines):
-                result.append(entry)
+        if contains_only_supported_clefs(kern_file):
+            result.append(entry)
     return result
 
 
@@ -67,7 +65,7 @@ def load_and_mix_training_sets(
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
         sys.exit(1)
-
+    data_sources = [filter_for_clefs(data) for data in data_sources]
     eprint(
         "Total number of training files to choose from", sum([len(data) for data in data_sources])
     )

@@ -319,3 +319,23 @@ class TestKernTokens(unittest.TestCase):
     """
         symbols = get_symbols(file_content.splitlines())
         self.assertEqual(len(symbols), 501)
+
+    def test_key_change(self) -> None:
+        file_content = """**kern	**kern
+*clefF4	*clefG2
+*k[]	*k[]
+*M3/8	*M3/8
+=-	=-
+4.BB 4.G 4.B	8gL
+.	8g
+.	8gggJ[
+*clefG2	*
+=	=
+16ddLL	8ff# 8aaL
+16dJJ	.
+*clefF4	*
+16gLL	8gg 8bb
+    """
+        symbols = get_symbols(file_content.splitlines())
+        self.assertEqual(symbols.count("*clefF4"), 2)
+        self.assertEqual(symbols.count("*clefG2"), 2)
