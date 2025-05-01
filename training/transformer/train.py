@@ -18,6 +18,7 @@ from training.convert_primus import (
     primus_train_index,
 )
 from training.run_id import get_run_id
+from training.transformer.custom_trainer import UnfreezeBackboneCallback  # type: ignore
 from training.transformer.data_loader import load_dataset
 from training.transformer.data_set_filters import contains_supported_clef
 from training.transformer.mix_datasets import mix_training_sets
@@ -91,7 +92,7 @@ def _check_datasets_are_present() -> None:
 
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
-    number_of_files = -1
+    number_of_files = 100
     number_of_epochs = 10
     resume_from_checkpoint = None
 
@@ -164,6 +165,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
             train_args,
             train_dataset=datasets["train"],
             eval_dataset=datasets["validation"],
+            callbacks=[UnfreezeBackboneCallback(unfreeze_epoch=3)],
         )
 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
