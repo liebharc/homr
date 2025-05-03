@@ -147,16 +147,16 @@ def _get_min_max_y_position_of_notes(staff: Staff) -> tuple[float, float]:
         min_y = staff.min_y - 3.5 * staff.average_unit_size
         max_y = staff.max_y + 3.5 * staff.average_unit_size
         return min_y, max_y
-    min_y = staff.min_y - 2.5 * staff.average_unit_size
-    max_y = staff.max_y + 2.5 * staff.average_unit_size
+    min_y = staff.min_y - 3.5 * staff.average_unit_size
+    max_y = staff.max_y + 3.5 * staff.average_unit_size
     for symbol in staff.symbols:
         if isinstance(symbol, NoteGroup):
             for note in symbol.notes:
-                min_y = min(min_y, note.center[1] - staff.average_unit_size)
-                max_y = max(max_y, note.center[1] + staff.average_unit_size)
+                min_y = min(min_y, note.center[1] - 3 * staff.average_unit_size)
+                max_y = max(max_y, note.center[1] + 3 * staff.average_unit_size)
         elif isinstance(symbol, Note):
-            min_y = min(min_y, symbol.center[1] - staff.average_unit_size)
-            max_y = max(max_y, symbol.center[1] + staff.average_unit_size)
+            min_y = min(min_y, symbol.center[1] - 3 * staff.average_unit_size)
+            max_y = max(max_y, symbol.center[1] + 3 * staff.average_unit_size)
     return min_y, max_y
 
 
