@@ -16,10 +16,12 @@ from homr.results import (
 from homr.tr_omr_parser import TrOMRParser
 
 
-def single_note(pitch: ResultPitch, duration: ResultDuration) -> ResultChord:
+def single_note(
+    pitch: ResultPitch, duration: ResultDuration, chord_duration: ResultDuration | None = None
+) -> ResultChord:
 
     return ResultChord(
-        duration,
+        duration if chord_duration is None else chord_duration,
         [
             ResultNote(
                 pitch,
@@ -29,8 +31,10 @@ def single_note(pitch: ResultPitch, duration: ResultDuration) -> ResultChord:
     )
 
 
-def note_chord(notes: list[ResultNote]) -> ResultChord:
-    return ResultChord(notes[0].duration, notes)
+def note_chord(
+    notes: list[ResultNote], chord_duration: ResultDuration | None = None
+) -> ResultChord:
+    return ResultChord(notes[0].duration if chord_duration is None else chord_duration, notes)
 
 
 class TestTrOmrParser(unittest.TestCase):
@@ -340,7 +344,7 @@ class TestTrOmrParser(unittest.TestCase):
         self.assertEqual(actual, expected)
 
     def test_parsing_chords_with_rests(self) -> None:
-        data = "rest_quarter|note-A4_half|note-B4_half"
+        data = "rest-quarter|note-A4_half|note-B4_half"
         expected = ResultStaff(
             [
                 ResultMeasure(
@@ -355,7 +359,8 @@ class TestTrOmrParser(unittest.TestCase):
                                     ResultPitch("B", 4, None),
                                     ResultDuration(2 * constants.duration_of_quarter),
                                 ),
-                            ]
+                            ],
+                            chord_duration=ResultDuration(constants.duration_of_quarter),
                         )
                     ]
                 )

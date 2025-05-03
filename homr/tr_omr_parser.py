@@ -141,15 +141,20 @@ class TrOMRParser:
 
     def parse_notes(self, notes: str) -> ResultChord | None:
         note_parts = notes.split("|")
-        note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
         rest_parts = [rest_part for rest_part in note_parts if rest_part.startswith("rest")]
+        note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
         if len(note_parts) == 0:
             if len(rest_parts) == 0:
                 return None
             else:
                 return self.parse_rest(rest_parts[0])
         result_notes = [self.parse_note(note_part) for note_part in note_parts]
-        return ResultChord(get_min_duration(result_notes), result_notes)
+        min_duration = get_min_duration(result_notes)
+        for rest_part in rest_parts:
+            rest = self.parse_rest(rest_part)
+            if rest.duration.duration < min_duration.duration:
+                min_duration = rest.duration
+        return ResultChord(min_duration, result_notes)
 
     def parse_rest(self, rest: str) -> ResultChord:
         rest = rest.split("|")[0]
