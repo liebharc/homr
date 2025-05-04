@@ -19,7 +19,7 @@ from training.convert_primus import (
 )
 from training.run_id import get_run_id
 from training.transformer.data_loader import load_dataset
-from training.transformer.data_set_filters import contains_supported_clef
+from training.transformer.data_set_filters import contains_only_supported_clefs
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
@@ -33,13 +33,11 @@ def load_training_index(file_path: str) -> list[str]:
 def filter_for_clefs(file_paths: list[str]) -> list[str]:
     result = []
     for entry in file_paths:
-        semantic = entry.strip().split(",")[1]
-        if semantic == "nosymbols":
+        kern_file = entry.strip().split(",")[1]
+        if kern_file == "nosymbols":
             continue
-        with open(semantic) as f:
-            lines = f.readlines()
-            if all(contains_supported_clef(line) for line in lines):
-                result.append(entry)
+        if contains_only_supported_clefs(kern_file):
+            result.append(entry)
     return result
 
 
@@ -92,7 +90,7 @@ def _check_datasets_are_present() -> None:
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 30
+    number_of_epochs = 15
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -104,8 +102,8 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     _check_datasets_are_present()
 
     train_index = load_and_mix_training_sets(
-        [primus_train_index, grandstaff_train_index, lieder_train_index],
-        [1.0, 1.0, 1.0],
+        [grandstaff_train_index, primus_train_index],
+        [1.0, 1.0],
         number_of_files,
     )
 
@@ -129,8 +127,8 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
         learning_rate=1e-4,
         optim="adamw_torch",  # TrOMR Paper page 3 species an Adam optimizer
-        per_device_train_batch_size=16,  # TrOMR Paper page 3
-        per_device_eval_batch_size=8,
+        per_device_train_batch_size=12,
+        per_device_eval_batch_size=6,
         num_train_epochs=number_of_epochs,
         weight_decay=0.01,
         load_best_model_at_end=False,

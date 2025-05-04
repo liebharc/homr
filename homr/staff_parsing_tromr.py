@@ -70,7 +70,7 @@ def predict_best(
             debug=debug,
         )
         parser = TrOMRParser()
-        result_staff = parser.parse_tr_omr_output(str.join("", result))
+        result_staff = parser.parse_tr_omr_output(result)  # TODO: Parse kern tokens to ResultStaff
 
         clef_type = _get_clef_type(result[0])
         if clef_type is None:
@@ -144,3 +144,12 @@ def _differences(actual: list[str], expected: list[str]) -> int:
     counter1 = Counter(actual)
     counter2 = Counter(expected)
     return sum((counter1 - counter2).values()) + sum((counter2 - counter1).values())
+
+
+if __name__ == "__main__":
+    # ruff: noqa: T201
+    import sys
+
+    image = cv2.imread(sys.argv[1])
+    result = parse_staff_tromr(image, None)
+    print(result)

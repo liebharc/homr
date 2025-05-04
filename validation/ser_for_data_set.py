@@ -8,20 +8,20 @@ import editdistance  # type: ignore
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
-from training.transformer.data_set_filters import contains_supported_clef
+from training.transformer.data_set_filters import contains_only_supported_clefs
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], result_file: str, config: Config) -> None:
-    model = Staff2Score(config, keep_all_symbols_in_chord=True)
+    model = Staff2Score(config)
     i = 0
     total = len(dataset)
 
     with open(result_file, "w") as result:
         for sample in dataset:
-            img_path, semantic_path = sample.strip().split(",")
-            expected_str = _load_semantic_file(semantic_path)[0].strip()
-            if not contains_supported_clef(expected_str):
+            img_path, kern_path = sample.strip().split(",")
+            if not contains_only_supported_clefs(kern_path):
                 continue
+            expected_str = _load_kern_file(kern_path)[0].strip()
 
             image = cv2.imread(img_path)
             actual = model.predict(image)[0].split("+")
@@ -41,12 +41,12 @@ def calc_symbol_error_rate_for_list(dataset: list[str], result_file: str, config
             added_symbols = "+".join(set(actual) - set(expected))
             missing_symbols = "+".join(set(expected) - set(actual))
             result.write(
-                f"{img_path},{semantic_path},{ser},{len_expected},{len_actual},{added_symbols},{missing_symbols},{'+'.join(expected)},{'+'.join(actual)}\n"
+                f"{img_path},{kern_path},{ser},{len_expected},{len_actual},{added_symbols},{missing_symbols},{'+'.join(expected)},{'+'.join(actual)}\n"
             )
             eprint(f"Progress: {percentage}%, SER: {ser}%")
 
 
-def _load_semantic_file(semantic_path: str) -> list[str]:
+def _load_kern_file(semantic_path: str) -> list[str]:
     with open(semantic_path) as f:
         return f.readlines()
 

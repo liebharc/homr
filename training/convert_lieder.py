@@ -14,13 +14,17 @@ import cv2
 import numpy as np
 from PIL import Image
 
+import homr.notation_conversions as conversions
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
-from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
-from training.music_xml import group_in_measures, music_xml_to_semantic
-from training.segmentation.model_utils import write_text_to_file
+from training.musescore_svg import (
+    SvgMusicFile,
+    SvgStaff,
+    get_position_from_multiple_svg_files,
+)
+from training.transformer.kern_tokens import split_kern_file_into_measures
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -123,100 +127,128 @@ def _create_musicxml_and_svg_files() -> None:
 
 
 def _split_file_into_staffs(
-    semantic: list[list[str]], svg_files: list[SvgMusicFile], just_semantic_files: bool
+    time_sig: str, number_of_staffs: int, measures: list[str], svg_files: list[SvgMusicFile]
 ) -> list[str]:
-    voice = 0
-    measures = [group_in_measures(voice) for voice in semantic]
     result: list[str] = []
+    start_measure = 0
     for svg_file in svg_files:
         png_file = svg_file.filename.replace(".svg", ".png")
-        if not just_semantic_files:
-            target_width = 1400
-            scale = target_width / svg_file.width
-            png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
-            pil_img = Image.open(BytesIO(png_data))
-            image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
-        for staff_number, staff in enumerate(svg_file.staffs):
+        target_width = 1400
+        scale = target_width / svg_file.width
+        png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
+        pil_img = Image.open(BytesIO(png_data))
+        image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
+        for staff_number, staff_group in enumerate(group_array(svg_file.staffs, number_of_staffs)):
+            for staff in staff_group:
+                if staff.number_of_measures != staff_group[0].number_of_measures:
+                    raise ValueError("Different number of measures in the same group")
             staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
-            if not just_semantic_files:
-                y_offset = staff.height
-                x_offset = 50
-                x = staff.x - x_offset
-                y = staff.y - y_offset
-                width = staff.width + 2 * x_offset
-                height = staff.height + 2 * y_offset
-                x = int(x * scale)
-                y = int(y * scale)
-                width = int(width * scale)
-                height = int(height * scale)
+            max_staff_height = max([s.height for s in staff_group])
+            min_staff_x = min([s.x for s in staff_group])
+            max_staff_x = max([s.x + s.width for s in staff_group])
+            min_staff_y = min([s.y for s in staff_group])
+            max_staff_y = max([s.y + s.height for s in staff_group])
+            y_offset = max_staff_height
+            x_offset = 50
+            x = min_staff_x - x_offset
+            y = min_staff_y - y_offset
+            width = (max_staff_x - min_staff_x) + 2 * x_offset
+            height = (max_staff_y - min_staff_y) + 2 * y_offset
+            x = int(x * scale)
+            y = int(y * scale)
+            width = int(width * scale)
+            height = int(height * scale)
 
-                staff_image = image[y : y + height, x : x + width]
-                margin_top = random.randint(0, 10)
-                margin_bottom = random.randint(0, 10)
-                preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
-                cv2.imwrite(staff_image_file_name, preprocessed)
-                staff_image_file_name = distort_image(staff_image_file_name)
-            elif not os.path.exists(staff_image_file_name):
-                raise ValueError(f"File {staff_image_file_name} not found")
+            staff_image = image[y : y + height, x : x + width]
+            margin_top = random.randint(0, 10)
+            margin_bottom = random.randint(0, 10)
+            preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
+            cv2.imwrite(staff_image_file_name, preprocessed)
+            staff_image_file_name = distort_image(staff_image_file_name)
 
-            semantic_file_name = png_file.replace(".png", f"-{staff_number}.semantic")
-            prelude = measures[voice][0]
-            selected_measures: list[str] = []
-            for _ in range(staff.number_of_measures):
-                selected_measures.append(str.join("+", measures[voice][1].pop(0)))
-            semantic_content = str.join("+", selected_measures) + "\n"
-            if not semantic_content.startswith("clef"):
-                semantic_content = prelude + semantic_content
-            write_text_to_file(semantic_content, semantic_file_name)
-            result.append(staff_image_file_name + "," + semantic_file_name + "\n")
-            voice = (voice + 1) % len(semantic)
-    if any(len(measure[1]) > 0 for measure in measures):
-        raise ValueError("Warning: Not all measures were processed")
+            end_measure = start_measure + staff_group[0].number_of_measures
+            kern_lines = [time_sig]
+            kern_lines += measures[start_measure:end_measure]
+            start_measure = end_measure
+
+            kern_file = staff_image_file_name.replace(".png", ".krn")
+
+            with open(kern_file, "w") as file:
+                file.writelines(kern_lines)
+
+            result.append(staff_image_file_name + "," + kern_file + "\n")
+
+    if len(measures) != start_measure:
+        raise ValueError(
+            "Warning: Not all measures were processed "
+            + str(len(measures))
+            + " "
+            + str(start_measure)
+        )
 
     return result
 
 
-def _contains_max_one_clef(semantic: list[str]) -> bool:
-    return sum(1 for s in semantic if s.startswith("clef")) <= 1
+def group_array(arr: list[SvgStaff], group_size: int) -> list[list[SvgStaff]]:
+    return [arr[i : i + group_size] for i in range(0, len(arr), group_size)]
 
 
-def _convert_file(file: Path, just_semantic_files: bool) -> list[str]:
+def _split_file_into_pages(
+    time_sig: str, number_of_staffs: int, measures: list[str], svg_files: list[SvgMusicFile]
+) -> list[str]:
+    result: list[str] = []
+    start_measure = 0
+    for svg_file in svg_files:
+        target_width = 1400
+        scale = target_width / svg_file.width
+        png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
+        pil_img = Image.open(BytesIO(png_data))
+        image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
+
+        margin_top = random.randint(0, 10)
+        margin_bottom = random.randint(0, 10)
+        preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+        preprocessed_path = Path(svg_file.filename.replace(".svg", "-pre.png"))
+        cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
+        distort_image(str(preprocessed_path.absolute()))
+        kern_file = svg_file.filename.replace(".svg", ".krn")
+        number_of_kern_measures = len(svg_file.staffs) // number_of_staffs
+        kern_lines = [time_sig]
+        kern_lines += measures[start_measure : start_measure + number_of_kern_measures]
+        start_measure += number_of_kern_measures
+        with open(kern_file, "w") as file:
+            file.writelines(kern_lines)
+        result.append(str(preprocessed_path) + "," + kern_file + "\n")
+
+    return result
+
+
+def _convert_file(file: Path) -> list[str]:
     try:
-        semantic = music_xml_to_semantic(str(file))
-        number_of_voices = len(semantic)
-        number_of_measures = semantic[0].count("barline")
-        if not all(_contains_max_one_clef(s) for s in semantic):
-            eprint(file, "contains more than one clef")
-            return []
+        kern_file = conversions.musicxml_to_kern(str(file))
+        number_of_staffs, time_sig, measures = split_kern_file_into_measures(kern_file)
+        number_of_measures = len(measures)
         svg_files = get_position_from_multiple_svg_files(str(file))
         measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
-        sum_of_measures_in_xml = number_of_measures * number_of_voices
-        if sum(measures_in_svg) != sum_of_measures_in_xml:
+        sum_of_measures_in_kern = number_of_measures * number_of_staffs
+        if sum(measures_in_svg) != sum_of_measures_in_kern:
             eprint(
-                file,
+                kern_file,
                 "INFO: Number of measures in SVG files",
                 sum(measures_in_svg),
-                "does not match number of measures in XML",
-                sum_of_measures_in_xml,
+                "does not match number of measures in KRN",
+                sum_of_measures_in_kern,
             )
 
             return []
-        return _split_file_into_staffs(semantic, svg_files, just_semantic_files)
+        return _split_file_into_staffs(time_sig, number_of_staffs, measures, svg_files)
 
     except Exception as e:
         eprint("Error while processing", file, e)
         return []
 
 
-def _convert_file_only_semantic(path: Path) -> list[str]:
-    return _convert_file(path, True)
-
-
-def _convert_semantic_and_image(path: Path) -> list[str]:
-    return _convert_file(path, False)
-
-
-def convert_lieder(only_recreate_semantic_files: bool = False) -> None:
+def convert_lieder() -> None:
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
@@ -225,11 +257,7 @@ def convert_lieder(only_recreate_semantic_files: bool = False) -> None:
         skipped_files = 0
         with multiprocessing.Pool() as p:
             for result in p.imap_unordered(
-                (
-                    _convert_file_only_semantic
-                    if only_recreate_semantic_files
-                    else _convert_semantic_and_image
-                ),
+                (_convert_file),
                 music_xml_files,
             ):
                 if len(result) > 0:
@@ -249,7 +277,4 @@ def convert_lieder(only_recreate_semantic_files: bool = False) -> None:
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
-    only_recreate_semantic_files = False
-    if "--only-semantic" in sys.argv:
-        only_recreate_semantic_files = True
-    convert_lieder(only_recreate_semantic_files)
+    convert_lieder()

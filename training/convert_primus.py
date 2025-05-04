@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 
+import homr.notation_conversions as conversions
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
@@ -35,18 +36,20 @@ def _replace_suffix(path: Path, suffix: str) -> Path | None:
     return None
 
 
-def _find_semantic_file(path: Path) -> Path | None:
-    semantic_file = _replace_suffix(path, ".semantic")
-    if semantic_file is not None and semantic_file.exists():
-        return semantic_file
+def _find_mei_file(path: Path) -> Path | None:
+    mei_file = _replace_suffix(path, ".mei")
+    if mei_file is not None and mei_file.exists():
+        return mei_file
     return None
 
 
-def _convert_file(path: Path, distort: bool = False) -> list[str]:
+def _convert_file(path: Path, distort: bool = False) -> list[str]:  # noqa: PLR0911
     if "-pre.jpg" in str(path):
         return []
     if "," in str(path):
         return []
+
+    preprocessed_path = _replace_suffix(path, "-pre.jpg")
     image = cv2.imread(str(path))
     if image is None:
         eprint("Warning: Could not read image", path)
@@ -54,21 +57,26 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
     preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
-    preprocessed_path = _replace_suffix(path, "-pre.jpg")
     if preprocessed_path is None:
         eprint("Warning: Unknown extension", path)
         return []
     cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
     if distort:
         distort_image(str(preprocessed_path.absolute()))
-    semantic_file = _find_semantic_file(path)
-    if semantic_file is None:
-        eprint("Warning: No semantic file found for", path)
+    mei_file = _find_mei_file(path)
+    if mei_file is None:
+        eprint("Warning: No mei file found for", path)
         return []
+
+    conversions.fix_utf8_encoding(str(mei_file))
+    kern_file = Path(str(mei_file).replace(".mei", ".krn"))
+    if not kern_file.exists():
+        kern_file = Path(conversions.mei_to_kern(str(mei_file)))
+
     return [
         str(preprocessed_path.relative_to(git_root))
         + ","
-        + str(semantic_file.relative_to(git_root))
+        + str(kern_file.relative_to(git_root))
         + "\n"
     ]
 

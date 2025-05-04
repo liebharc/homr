@@ -16,7 +16,7 @@ from x_transformers.x_transformers import (  # type: ignore
 from homr.debug import AttentionDebug
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.split_merge_symbols import SymbolMerger
+from homr.transformer.split_merge_symbols import merge_kern_tokens
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -188,9 +188,8 @@ class ScoreDecoder(nn.Module):
         eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
-        keep_all_symbols_in_chord: bool = False,
         **kwargs: Any,
-    ) -> list[str]:
+    ) -> str:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -204,7 +203,7 @@ class ScoreDecoder(nn.Module):
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         mask = kwargs.pop("mask", None)
-        merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
+        merged: list[str] = []
 
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
@@ -223,28 +222,23 @@ class ScoreDecoder(nn.Module):
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
 
-            current_temperature = temperature
-            retry = True
-            attempt = 0
-            max_attempts = 5
-            while retry and attempt < max_attempts:
-                lift_probs = F.softmax(filtered_lift_logits / current_temperature, dim=-1)
-                pitch_probs = F.softmax(filtered_pitch_logits / current_temperature, dim=-1)
-                rhythm_probs = F.softmax(filtered_rhythm_logits / current_temperature, dim=-1)
+            lift_probs = F.softmax(filtered_lift_logits / temperature, dim=-1)
+            pitch_probs = F.softmax(filtered_pitch_logits / temperature, dim=-1)
+            rhythm_probs = F.softmax(filtered_rhythm_logits / temperature, dim=-1)
 
-                lift_sample = torch.multinomial(lift_probs, 1)
-                pitch_sample = torch.multinomial(pitch_probs, 1)
-                rhythm_sample = torch.multinomial(rhythm_probs, 1)
+            lift_sample = torch.multinomial(lift_probs, 1)
+            pitch_sample = torch.multinomial(pitch_probs, 1)
+            rhythm_sample = torch.multinomial(rhythm_probs, 1)
 
-                lift_token = detokenize(lift_sample, self.lifttokenizer)
-                pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
-                rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
-                is_eos = len(rhythm_token[0])
-                if is_eos == 0:
-                    break
-                retry = merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
-                current_temperature *= 3.5
-                attempt += 1
+            lift_token = detokenize(lift_sample, self.lifttokenizer)
+            pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
+            rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
+            is_eos = len(rhythm_token[0])
+            if is_eos == 0:
+                break
+            merged.append(
+                merge_kern_tokens(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
+            )
 
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
@@ -262,7 +256,13 @@ class ScoreDecoder(nn.Module):
         out_rhythm = out_rhythm[:, t:]
 
         self.net.train(was_training)
-        return [merger.complete()]
+        return self._complete_merged(merged)
+
+    def _complete_merged(self, merged: list[str]) -> str:
+        result = str.join(" ", merged)
+        result = result.replace("<NL>", "\n")
+        result = result.replace("<TAB>", "\t")
+        return result
 
     def forward(
         self,
@@ -285,7 +285,7 @@ class ScoreDecoder(nn.Module):
             mask = mask[:, :-1]
             kwargs["mask"] = mask
 
-        rhythmsp, pitchsp, liftsp, notesp, x, _attention = self.net(
+        rhythmsp, pitchsp, liftsp, notesp, x = self.net(
             rhythmsi, pitchsi, liftsi, **kwargs
         )  # this calls ScoreTransformerWrapper.forward
 
