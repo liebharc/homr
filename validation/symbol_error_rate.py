@@ -95,6 +95,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         expected_str = semantic_to_kern(semantic_path)
         image = cv2.imread(img_path)
         actual_str = model.predict(image)
+        print(img_path)
         print(actual_str)
         actual = actual_str.split("\n")
         expected = expected_str.split("\n")

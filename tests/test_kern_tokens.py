@@ -421,6 +421,10 @@ class TestKernTokens(unittest.TestCase):
         self.assertEqual(symbols.count("*clefG2"), 1)
         self._assert_no_multiple_tabs_per_line(symbols)
 
+    def test_sort_pitches(self) -> None:
+        symbols = get_symbols(["4c	2c 2r 2cc 4gg"])
+        self.assertEqual(symbols, ["4c", "<TAB>", "2c", "2r", "2cc", "4gg", "<NL>"])
+
     def _assert_no_multiple_tabs_per_line(self, symbols: list[str]) -> None:
         number_of_tabs = 0
         for symbol in symbols:

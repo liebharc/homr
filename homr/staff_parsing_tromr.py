@@ -18,7 +18,7 @@ inference: Staff2Score | None = None
 
 
 def parse_staff_tromr(
-    staff: Staff, staff_image: NDArray, debug: AttentionDebug | None
+    staff: Staff | None, staff_image: NDArray, debug: AttentionDebug | None
 ) -> ResultStaff | None:
     return predict_best(staff_image, debug=debug, staff=staff)
 
@@ -49,15 +49,15 @@ def _fill_in_time_signature(staff: ResultStaff) -> None:
 
 
 def predict_best(
-    org_image: NDArray, staff: Staff, debug: AttentionDebug | None = None
+    org_image: NDArray, staff: Staff | None, debug: AttentionDebug | None = None
 ) -> ResultStaff | None:
     global inference  # noqa: PLW0603
     if inference is None:
         inference = Staff2Score(default_config)
     images = [org_image]
-    if len(staff.symbols) > 0:
+    if staff is not None and len(staff.symbols) > 0:
         images = build_image_options(org_image)
-    notes = staff.get_notes_and_groups()
+    notes = [] if staff is None else staff.get_notes_and_groups()
     best_distance: float = 0
     best_attempt = 0
     best_result: ResultStaff = ResultStaff([])
@@ -114,7 +114,9 @@ def _superfluous_number(count: int) -> int:
     return count - 1 if count > 1 else 0
 
 
-def _number_of_accidentals_in_model(staff: Staff) -> int:
+def _number_of_accidentals_in_model(staff: Staff | None) -> int:
+    if staff is None:
+        return 0
     return len(staff.get_accidentals())
 
 
@@ -151,5 +153,5 @@ if __name__ == "__main__":
     import sys
 
     image = cv2.imread(sys.argv[1])
-    result = parse_staff_tromr(Staff([]), image, None)
+    result = parse_staff_tromr(None, image, None)
     print(result)

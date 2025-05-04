@@ -103,6 +103,7 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
         if norm_line.startswith("*") and not is_key_or_time:
             continue
         fields = norm_line.split("\t")
+        symbols_in_this_field = []
         for i, field in enumerate(fields):
             for symbol in field.split():
                 if not symbol:
@@ -111,7 +112,7 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
                     continue
                 if symbol.startswith("="):
                     # With this mapping of "=" we ignore information about measures
-                    symbols.append("=")
+                    symbols_in_this_field.append("=")
                     continue
 
                 # By stripping these symbols we ignore encoding of phrases, slurs and ties
@@ -126,15 +127,65 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
                         symbol = symbol.replace(ignored_symbol, "")  # noqa: PLW2901
                 if symbol == "*":
                     continue
-                symbols.append(symbol)
+                symbols_in_this_field.append(symbol)
             if i < len(fields) - 1:
-                symbols.append("<TAB>")
+                symbols_in_this_field.append("<TAB>")
+            symbols.extend(_sort_notes(symbols_in_this_field))
+            symbols_in_this_field = []
         while len(symbols) > 0 and symbols[-1] == "<TAB>":
             # To use tokens more efficiently we ignore all tabs which are immediately followed
             # by a newline
             del symbols[-1]
         symbols.append("<NL>")
     return symbols
+
+
+def _kern_pitch_value(note: str) -> int:
+    """
+    Convert a **kern note to a numeric pitch value for comparison.
+    This handles octave by letter repetition and case (upper = lower octave).
+    """
+    match = re.match(r"(\d*)([a-gA-G]+)", note)
+    if not match:
+        return -1  # fallback for unrecognized
+
+    _, pitch = match.groups()
+
+    base_pitches = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
+    letter = pitch[0].lower()
+    octave_shift = len(pitch) - 1  # 'cc' -> +1 octave, 'ccc' -> +2
+
+    if pitch[0].islower():
+        # Octave 5 + shifts (middle C = c)
+        base_octave = 5 + octave_shift
+    else:
+        # Octave 3 - shifts (C = octave 4, B = 3)
+        base_octave = 4 - octave_shift
+
+    midi = base_octave * 12 + base_pitches[letter]
+    return -midi
+
+
+def _is_note(symbol: str) -> bool:
+    return re.match(r"\d*[a-gA-G]+", symbol) is not None
+
+
+def _sort_notes(symbols: list[str]) -> list[str]:
+    """
+    Sorts only the notes from lowest to highest pitch, leaving non-note symbols in place.
+    """
+    # Extract and sort notes
+    notes = [(i, s) for i, s in enumerate(symbols) if _is_note(s)]
+    sorted_notes = sorted([s for _, s in notes], key=_kern_pitch_value, reverse=True)
+
+    # Reinsert sorted notes
+    result = symbols[:]
+    j = 0
+    for i, s in enumerate(symbols):
+        if _is_note(s):
+            result[i] = sorted_notes[j]
+            j += 1
+    return result
 
 
 def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
