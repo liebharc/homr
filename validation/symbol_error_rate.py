@@ -12,10 +12,74 @@ from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.transformer.kern_tokens import (
-    load_and_sanitize_kern_file,
     split_kern_file_into_measures,
     split_kern_measures_into_voices,
 )
+
+
+def translate_note_or_rest(note: str) -> str:
+    duration_map = {
+        "whole": "1",
+        "half": "2",
+        "quarter": "4",
+        "eighth": "8",
+        "sixteenth": "16",
+        "thirty_second": "32",
+    }
+
+    accidental_map = {"N": "", "b": "-", "#": "#"}
+
+    if note.startswith("rest-"):
+        dur = note.split("-")[1]
+        return f"{duration_map.get(dur, '4')}r"
+
+    elif note.startswith("note-"):
+        _, pitch_dur = note.split("note-")
+        parts = pitch_dur.split("_")
+        pitch_part = parts[0]
+        dur = str.join("_", parts[1:])
+
+        # Extract pitch name, accidental, and octave
+        if pitch_part[-1] in ["b", "#", "N"]:
+            accidental = accidental_map[pitch_part[-1]]
+            pitch_letter = pitch_part[0].lower()
+            octave = int(pitch_part[1:-1])
+        else:
+            accidental = ""
+            pitch_letter = pitch_part[0].lower()
+            octave = int(pitch_part[1:])
+
+        # Determine case and repetitions for octave
+        kern_base_octave = 4
+        if octave < kern_base_octave:
+            kern_pitch = pitch_part[0].upper() * (kern_base_octave - octave)
+        elif octave == kern_base_octave:
+            kern_pitch = pitch_letter
+        else:
+            kern_pitch = pitch_letter * (octave - 3)
+
+        return f"{duration_map.get(dur, '4')}{accidental}{kern_pitch}"
+
+    else:
+        raise ValueError(f"Invalid input format: {note}")
+
+
+def semantic_to_kern(semantic_path: str) -> str:
+    translations = {"clef-G2": "*clefG2", "clef-F2": "*clefF2", "barline": "="}
+    result = []
+    with open(semantic_path) as f:
+        first_line = f.readline()
+        parts = first_line.split("+")
+        for part in parts:
+            if part in translations:
+                result.append(translations[part])
+            if "note" in part or "rest" in part:
+                chord = part.split("|")
+                new_chord = []
+                for note in chord:
+                    new_chord.append(translate_note_or_rest(note))
+                result.append(str.join(" ", new_chord))
+    return str.join("\n", result)
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
@@ -28,9 +92,10 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     interesting_results: list[tuple[str, str]] = []
     for sample in dataset:
         img_path, semantic_path = sample.strip().split(",")
-        expected_str = load_and_sanitize_kern_file(semantic_path)
+        expected_str = semantic_to_kern(semantic_path)
         image = cv2.imread(img_path)
-        actual_str = model.predict(image)[0]
+        actual_str = model.predict(image)
+        print(actual_str)
         actual = actual_str.split("\n")
         expected = expected_str.split("\n")
         # actual = sort_chords(actual)
@@ -132,6 +197,7 @@ def index_folder(folder: str, index_file: str) -> None:
 
 
 if __name__ == "__main__":
+    # ruff: noqa: T201
     parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
     parser.add_argument("checkpoint_file", type=str, help="Path to the checkpoint file.")
     args = parser.parse_args()

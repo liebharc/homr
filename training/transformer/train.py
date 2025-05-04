@@ -89,8 +89,8 @@ def _check_datasets_are_present() -> None:
 
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
-    number_of_files = -1
-    number_of_epochs = 15
+    number_of_files = 50000
+    number_of_epochs = 3
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"

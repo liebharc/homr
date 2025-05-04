@@ -285,7 +285,7 @@ class ScoreDecoder(nn.Module):
             mask = mask[:, :-1]
             kwargs["mask"] = mask
 
-        rhythmsp, pitchsp, liftsp, notesp, x = self.net(
+        rhythmsp, pitchsp, liftsp, notesp, x, _attention = self.net(
             rhythmsi, pitchsi, liftsi, **kwargs
         )  # this calls ScoreTransformerWrapper.forward
 
