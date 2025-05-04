@@ -151,5 +151,5 @@ if __name__ == "__main__":
     import sys
 
     image = cv2.imread(sys.argv[1])
-    result = parse_staff_tromr(image, None)
+    result = parse_staff_tromr(Staff([]), image, None)
     print(result)

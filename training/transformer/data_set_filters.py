@@ -48,6 +48,7 @@ if __name__ == "__main__":
         for filename in src_files.rglob("*.krn"):
             try:
                 if not contains_only_supported_clefs(str(filename)):
+                    print(filename)
                     invalid_clefs += 1
                 number_of_files += 1
                 symbols = get_symbols_from_file(str(filename))
@@ -57,7 +58,6 @@ if __name__ == "__main__":
                 print("Failed to parse", filename, e)
     else:
         if not contains_only_supported_clefs(sys.argv[1]):
-            print(sys.argv[1])
             invalid_clefs += 1
         number_of_files += 1
         symbols = get_symbols_from_file(sys.argv[1])

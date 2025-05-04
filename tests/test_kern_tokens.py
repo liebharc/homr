@@ -122,7 +122,6 @@ class TestKernTokens(unittest.TestCase):
             {
                 "*clefF4",
                 "*clefG2",
-                "**kern",
                 "2G",
                 "2A-X",
                 "4b",
@@ -319,7 +318,7 @@ class TestKernTokens(unittest.TestCase):
     *-	*-
     """
         symbols = get_symbols(file_content.splitlines())
-        self.assertEqual(len(symbols), 505)
+        self.assertEqual(len(symbols), 501)
 
     def test_key_change(self) -> None:
         file_content = """**kern	**kern
@@ -340,3 +339,93 @@ class TestKernTokens(unittest.TestCase):
         symbols = get_symbols(file_content.splitlines())
         self.assertEqual(symbols.count("*clefF4"), 2)
         self.assertEqual(symbols.count("*clefG2"), 2)
+
+    def test_multiple_voices_for_g_staff(self) -> None:
+        file_content = """**kern	**kern
+*	*^
+*clefF4	*clefG2	*clefG2
+*k[b-e-a-d-g-]	*k[b-e-a-d-g-]	*k[b-e-a-d-g-]
+*M3/4	*M3/4	*M3/4
+=-	=-	=-
+4AA- 4E- 4A-	4ee-	8ccL
+.	.	16b-L
+.	.	16ccJJ
+4GG 4E-	4ee-	8dd-L
+.	.	16ccL
+.	.	16b-JJ
+4AA- 4E-	4ee-	8ccL
+.	.	16b-L
+.	.	16a-JJ
+=	=	=
+4EE- 4E-	4ee-	8gL
+.	.	16fL
+.	.	16e-JJ
+4C 4E- 4A-	4ee-	8a-L
+.	.	16gL
+.	.	16a-JJ
+4BB- 4D- 4G	4ee-	8b-L
+.	.	16a-L
+.	.	16b-JJ
+    """
+        symbols = get_symbols(file_content.splitlines())
+        self.assertEqual(symbols.count("*clefF4"), 1)
+        self.assertEqual(symbols.count("*clefG2"), 1)
+        self._assert_no_multiple_tabs_per_line(symbols)
+
+    def test_multiple_voices_for_f_staff(self) -> None:
+        file_content = """**kern	**kern
+*^	*
+*clefF4	*clefF4	*clefG2
+*k[b-e-a-d-]	*k[b-e-a-d-]	*k[b-e-a-d-]
+*M3/8	*M3/8	*M3/8
+=-	=-	=-
+8FFL	4.FF	4ee
+8C	.	.
+8FJ	.	8ff
+    """
+        symbols = get_symbols(file_content.splitlines())
+        self.assertEqual(symbols.count("*clefF4"), 1)
+        self.assertEqual(symbols.count("*clefG2"), 1)
+        self._assert_no_multiple_tabs_per_line(symbols)
+
+    def test_multiple_voices_for_each_staff(self) -> None:
+        file_content = """**kern	**kern
+*^	*^
+*clefF4	*clefF4	*clefG2	*clefG2
+*k[]	*k[]	*k[]	*k[]
+*M3/4	*M3/4	*M3/4	*M3/4
+=-	=-	=-	=-
+2A#	8.C#L	8.a#L	2.e#
+.	16BB#Jk	16a#Jk	.
+.	4C#	4f##	.
+4r	4r	4ff##	.
+*v	*v	*	*
+*	*v	*v
+=	=
+2.r	8ee#L>
+.	8cc#J
+.	4a#
+.	4f##
+=	=
+2.r	8e#<L>
+.	8c#<J
+.	4A#<
+.	4E#<
+=	=
+2.EE#< 2.BB#<	2.G#<
+==	==
+*-	*-
+    """
+        symbols = get_symbols(file_content.splitlines())
+        self.assertEqual(symbols.count("*clefF4"), 1)
+        self.assertEqual(symbols.count("*clefG2"), 1)
+        self._assert_no_multiple_tabs_per_line(symbols)
+
+    def _assert_no_multiple_tabs_per_line(self, symbols: list[str]) -> None:
+        number_of_tabs = 0
+        for symbol in symbols:
+            if symbol == "<TAB>":
+                number_of_tabs += 1
+                self.assertTrue(number_of_tabs <= 1)
+            elif symbol == "<NL>":
+                number_of_tabs = 0

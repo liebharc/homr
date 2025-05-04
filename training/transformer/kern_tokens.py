@@ -45,7 +45,51 @@ def get_symbols_from_file(file: str) -> list[str]:
         return get_symbols(filter_for_kern(f.readlines()))
 
 
+def _merge_multiple_voices(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
+    """
+    This method tries to merge multiple voices for the same staff together.
+    """
+    merges = []
+    result = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if "*clef" in line:
+            clefs = line.split()
+            if len(clefs) == 3:  # noqa: PLR2004
+                if clefs[0] == clefs[1]:
+                    merges = [[0, 1], [2]]
+                    result.append(str.join("\t", [clefs[0], clefs[2]]))
+                else:
+                    merges = [[0], [1, 2]]
+                    result.append(str.join("\t", [clefs[0], clefs[1]]))
+            elif len(clefs) == 4:  # noqa: PLR2004
+                if clefs[0] == clefs[1] and clefs[2] == clefs[3]:
+                    merges = [[0, 1], [2, 3]]
+                    result.append(str.join("\t", [clefs[0], clefs[2]]))
+                else:
+                    return lines
+            else:
+                return lines
+        elif len(merges) == 0:
+            result.append(line)
+        else:
+            cells = line.split("\t")
+            if len(cells) <= 2:  # noqa: PLR2004
+                result.append(line)
+            else:
+                new_cells = []
+                for merge in merges:
+                    current_cell = []
+                    for index in merge:
+                        if index < len(cells):
+                            current_cell.append(cells[index])
+                    new_cells.append(str.join(" ", current_cell))
+                result.append(str.join("\t", new_cells))
+    return result
+
+
 def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
+    lines = _merge_multiple_voices(lines)
     standalone_dot = "."
     ignore_symbols = [standalone_dot]
     symbols = []
@@ -53,9 +97,9 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
         norm_line = line.strip()
         if norm_line.startswith("!") or not norm_line:
             continue
-        is_key_or_time = norm_line.startswith(
-            ("*M", "*k", "*clef", "**kern")
-        ) and not norm_line.startswith("*MM")
+        is_key_or_time = norm_line.startswith(("*M", "*k", "*clef")) and not norm_line.startswith(
+            "*MM"
+        )
         if norm_line.startswith("*") and not is_key_or_time:
             continue
         fields = norm_line.split("\t")
