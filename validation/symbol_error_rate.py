@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 import editdistance  # type: ignore
+import numpy as np
 
 from homr import download_utils, notation_conversions
 from homr.simple_logging import eprint
@@ -30,6 +31,8 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         img_path, semantic_path = sample.strip().split(",")
         expected_str = semantic_to_kern(semantic_path)
         image = cv2.imread(img_path)
+        image = auto_crop_white_bg(image)
+        image = add_image_into_tr_omr_canvas(image)
         actual_str = model.predict(image)
         print(img_path)
         print(actual_str)
@@ -131,6 +134,39 @@ def index_folder(folder: str, index_file: str) -> None:
                             + "\n"
                         )
                 total_staffs_in_previous_files += len(svg_file.staffs)
+
+
+def auto_crop_white_bg(image: np.ndarray, threshold: int = 240) -> np.ndarray:
+    """
+    Auto-crops the non-white area of an image.
+
+    Parameters:
+        image (np.ndarray): Input image with a white background.
+        threshold (int): Pixel intensity threshold to consider as white (0-255).
+                         Increase for stricter white detection.
+
+    Returns:
+        np.ndarray: Cropped image containing non-white content.
+    """
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Create a mask of all non-white pixels
+    mask = gray < threshold
+
+    # Find coordinates where the mask is True (non-white)
+    coords = np.argwhere(mask)
+
+    if coords.size == 0:
+        # Entire image is white
+        return image
+
+    # Bounding box of non-white content
+    y0, x0 = coords.min(axis=0)
+    y1, x1 = coords.max(axis=0) + 1  # Add 1 since slicing is exclusive at the top
+
+    # Crop and return the result
+    return image[y0:y1, x0:x1]
 
 
 if __name__ == "__main__":

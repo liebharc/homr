@@ -16,6 +16,7 @@ from homr.results import (
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
+from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 
 
@@ -58,8 +59,8 @@ def _get_number_of_voices(staffs: list[MultiStaff]) -> int:
     return len(staffs[0].staffs)
 
 
-tr_omr_max_height = 128
-tr_omr_max_width = 1280
+tr_omr_max_height = default_config.max_height
+tr_omr_max_width = default_config.max_width
 
 
 def get_tr_omr_canvas_size(

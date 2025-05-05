@@ -338,7 +338,7 @@ def translate_note_or_rest(note: str) -> str:
 
     accidental_map = {"N": "", "b": "-", "#": "#"}
     is_grace = note.startswith("grace")
-    note = note.replace("grace", "").replace("_fermata", "")
+    note = note.replace("grace", "").replace("_fermata", "").replace("³", "")
 
     if note.startswith("multirest-"):
         return "1r"
@@ -390,4 +390,8 @@ def translate_key(key: str) -> str:
 
 
 def translate_time(time: str) -> str:
+    if time == "timeSignature-C":
+        return "*M4/4"
+    if time == "timeSignature-C/":
+        return "*M2/2"
     return time.replace("timeSignature-", "*M")
