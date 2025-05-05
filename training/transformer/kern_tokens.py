@@ -1,5 +1,10 @@
 import re
 
+from homr.circle_of_fifths import (
+    get_circle_of_fifth_notes,
+    key_signature_to_circle_of_fifth,
+)
+
 
 def filter_for_kern(lines: list[str]) -> list[str]:
     filtered = []
@@ -277,3 +282,112 @@ def load_and_sanitize_kern_file(filename: str) -> str:
     tokens = tokens.replace("<NL>", "\n")
     tokens = tokens.replace("<TAB>", "\t")
     return tokens
+
+
+def semantic_to_kern(semantic_path: str) -> str:
+    with open(semantic_path) as f:
+        first_line = f.readline()
+        return semantic_to_kern_notation(first_line)
+
+
+def semantic_to_kern_notation(semantic: str) -> str:
+    translations = {"clef-G2": "*clefG2", "clef-F2": "*clefF2", "barline": "="}
+    result = ["**kern"]
+    parts = re.split(r"[\s\+]", semantic)
+    for part in parts:
+        if part in translations:
+            result.append(translations[part])
+        if "note" in part or "rest" in part:
+            chord = part.split("|")
+            new_chord = []
+            for note in chord:
+                new_chord.append(translate_note_or_rest(note))
+            result.append(str.join(" ", new_chord))
+        if part.startswith("keySignature-"):
+            result.append(translate_key(part))
+        if part.startswith("timeSignature-"):
+            result.append(translate_time(part))
+    return str.join("\n", result)
+
+
+def translate_duration(duration: str, is_grace: bool) -> str:
+    duration_map = {
+        # From the humdrum definition: The number zero (0) is reserved for the breve duration
+        "quadruple_whole": "0",
+        "double_whole": "0",
+        "whole": "1",
+        "half": "2",
+        "quarter": "4",
+        "eighth": "8",
+        "sixteenth": "16",
+        "thirty_second": "32",
+        "sixty_fourth": "64",
+        "hundred_twenty_eighth": "128",
+    }
+
+    has_dot = "." in duration
+    suffix = "." if has_dot else ""
+    if is_grace:
+        suffix = "q"
+    duration = duration.replace(".", "")
+
+    return duration_map[duration] + suffix
+
+
+def translate_note_or_rest(note: str) -> str:
+
+    accidental_map = {"N": "", "b": "-", "#": "#"}
+    is_grace = note.startswith("grace")
+    note = note.replace("grace", "").replace("_fermata", "")
+
+    if note.startswith("multirest-"):
+        return "1r"
+
+    if note.startswith("rest-"):
+        duration = note.split("-")[1]
+        return f"{translate_duration(duration, is_grace)}r"
+
+    elif note.startswith("note-"):
+        _, pitch_dur = note.split("note-")
+        parts = pitch_dur.split("_")
+        pitch_part = parts[0]
+        duration = str.join("_", parts[1:])
+
+        # Extract pitch name, accidental, and octave
+        if pitch_part[-1] in ["b", "#", "N"]:
+            accidental = accidental_map[pitch_part[-1]]
+            pitch_letter = pitch_part[0].lower()
+            octave = int(pitch_part[1:-1])
+        elif pitch_part[-2] in ["b", "#", "N"]:
+            accidental = accidental_map[pitch_part[-2]]
+            pitch_letter = pitch_part[0].lower()
+            octave = int(pitch_part[2:])
+        else:
+            accidental = ""
+            pitch_letter = pitch_part[0].lower()
+            octave = int(pitch_part[1:])
+
+        # Determine case and repetitions for octave
+        kern_base_octave = 4
+        if octave < kern_base_octave:
+            kern_pitch = pitch_part[0].upper() * (kern_base_octave - octave)
+        elif octave == kern_base_octave:
+            kern_pitch = pitch_letter
+        else:
+            kern_pitch = pitch_letter * (octave - 3)
+
+        return f"{translate_duration(duration, is_grace)}{kern_pitch}{accidental}"
+
+    else:
+        raise ValueError(f"Invalid input format: {note}")
+
+
+def translate_key(key: str) -> str:
+    circle = key_signature_to_circle_of_fifth(key.split("-")[1])
+    notes = get_circle_of_fifth_notes(circle)
+    sym = "#" if circle > 0 else "-"
+    return "*k[" + str.join("", [n.lower() + sym for n in notes]) + "]"
+
+
+def translate_time(time: str) -> str:
+    return time.replace("timeSignature-", "*M")

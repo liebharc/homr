@@ -6,18 +6,17 @@ from pathlib import Path
 
 import cv2
 
-import homr.notation_conversions as conversions
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
+from training.transformer.kern_tokens import semantic_to_kern
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 primus = os.path.join(dataset_root, "Corpus")
 primus_train_index = os.path.join(primus, "index.txt")
-primus_distorted_train_index = os.path.join(primus, "distored_index.txt")
 
 if not os.path.exists(primus):
     eprint("Downloading Camera-PrIMuS from https://grfia.dlsi.ua.es/primus/")
@@ -33,13 +32,6 @@ def _replace_suffix(path: Path, suffix: str) -> Path | None:
     for s in suffixes:
         if s in str(path):
             return Path(str(path).replace(s, suffix))
-    return None
-
-
-def _find_mei_file(path: Path) -> Path | None:
-    mei_file = _replace_suffix(path, ".mei")
-    if mei_file is not None and mei_file.exists():
-        return mei_file
     return None
 
 
@@ -63,15 +55,11 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:  # noqa: PLR0
     cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
     if distort:
         distort_image(str(preprocessed_path.absolute()))
-    mei_file = _find_mei_file(path)
-    if mei_file is None:
-        eprint("Warning: No mei file found for", path)
-        return []
 
-    conversions.fix_utf8_encoding(str(mei_file))
-    kern_file = Path(str(mei_file).replace(".mei", ".krn"))
-    if not kern_file.exists():
-        kern_file = Path(conversions.mei_to_kern(str(mei_file)))
+    semantic_path = _replace_suffix(path, ".semantic")
+    kern_file = _replace_suffix(path, ".krn")
+    with open(kern_file, "w") as f:
+        f.write(semantic_to_kern(semantic_path))
 
     return [
         str(preprocessed_path.relative_to(git_root))
@@ -108,8 +96,6 @@ def _convert_dataset(
 def convert_primus_dataset() -> None:
     eprint("Indexing PrIMuS dataset")
     _convert_dataset(Path(primus).rglob("*.png"), primus_train_index, distort=True)
-    eprint("Indexing PrIMuS Distorted dataset")
-    _convert_dataset(Path(primus).rglob("*_distorted.jpg"), primus_distorted_train_index)
     eprint("Done indexing")
 
 

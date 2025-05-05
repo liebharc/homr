@@ -12,11 +12,7 @@ from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
 from training.convert_lieder import convert_lieder, lieder_train_index
-from training.convert_primus import (
-    convert_primus_dataset,
-    primus_distorted_train_index,
-    primus_train_index,
-)
+from training.convert_primus import convert_primus_dataset, primus_train_index
 from training.run_id import get_run_id
 from training.transformer.data_loader import load_dataset
 from training.transformer.data_set_filters import contains_only_supported_clefs
@@ -78,7 +74,7 @@ git_root = os.path.join(script_location, "..", "..")
 
 
 def _check_datasets_are_present() -> None:
-    if not os.path.exists(primus_train_index) or not os.path.exists(primus_distorted_train_index):
+    if not os.path.exists(primus_train_index):
         convert_primus_dataset()
 
     if not os.path.exists(grandstaff_train_index):
