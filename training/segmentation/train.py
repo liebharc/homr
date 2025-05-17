@@ -127,11 +127,11 @@ def preprocess_image(img_path: str, reduce_contrast: bool = False) -> Image.Imag
     )
 
     # Blur
-    rad = random.choice(np.arange(0.1, 2.1, 0.5))
+    rad = np.random.choice(np.arange(0.1, 2.1, 0.5))
     aug_image = imaugs.blur(aug_image, radius=rad)
 
     # Pixel shuffle, kind of adding noise
-    factor = random.choice(np.arange(0.1, 0.26, 0.05))
+    factor = np.random.choice(np.arange(0.1, 0.26, 0.05))
     aug_image = imaugs.shuffle_pixels(aug_image, factor=factor)
 
     # Image quality
@@ -238,7 +238,7 @@ class DataLoader(MultiprocessingDataLoader):
                 image = preprocess_image(inp_img_path, reduce_contrast=True)
 
                 # Random resize
-                ratio = random.choice(np.arange(0.2, 1.21, 0.1))
+                ratio = np.random.choice(np.arange(0.2, 1.21, 0.1))
                 tar_w = int(ratio * image.size[0])
                 tar_h = int(ratio * image.size[1])
                 image = imaugs.resize(image, width=tar_w, height=tar_h)
@@ -374,7 +374,7 @@ class DsDataLoader(MultiprocessingDataLoader):
                 label = build_label(seg_img_path, strenghten_channels=strengthen_channels)
 
                 # Random resize
-                ratio = random.choice(np.arange(0.2, 1.21, 0.1))
+                ratio = np.random.choice(np.arange(0.2, 1.21, 0.1))
                 tar_w = int(ratio * image.size[0])
                 tar_h = int(ratio * image.size[1])
 
