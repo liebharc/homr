@@ -116,13 +116,12 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     run_id = get_run_id()
 
     train_args = TrainingArguments(
-        checkpoint_folder,
+        output_dir=checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
-        evaluation_strategy="epoch",
-        # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
+        eval_strategy="epoch",
         learning_rate=1e-4,
-        optim="adamw_torch",  # TrOMR Paper page 3 species an Adam optimizer
+        optim="adamw_torch_fused",
         per_device_train_batch_size=12,
         per_device_eval_batch_size=6,
         num_train_epochs=number_of_epochs,
@@ -135,6 +134,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         fp16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
+        report_to="none",
     )
 
     if pretrained:
