@@ -377,6 +377,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
                 dim=config.decoder_dim,
                 depth=config.decoder_depth,
                 heads=config.decoder_heads,
+                attn_flash=True,
                 **config.decoder_args.to_dict(),
             ),
         ),

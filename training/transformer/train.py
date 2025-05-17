@@ -106,18 +106,10 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     config = Config()
     datasets = load_dataset(train_index, config, val_split=0.1)
 
-    compile_threshold = 50000
-    compile_model = (
-        number_of_files < 0 or number_of_files * number_of_epochs >= compile_threshold
-    )  # Compiling needs time, but pays off for large datasets
-    if compile_model:
-        eprint("Compiling model")
-
     run_id = get_run_id()
 
     train_args = TrainingArguments(
         output_dir=checkpoint_folder,
-        torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
         learning_rate=1e-4,
