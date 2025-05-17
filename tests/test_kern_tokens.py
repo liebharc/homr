@@ -1,6 +1,11 @@
 import unittest
 
-from training.transformer.kern_tokens import filter_for_kern, get_symbols
+from homr.transformer.split_merge_symbols import merge_kern_tokens
+from training.transformer.kern_tokens import (
+    filter_for_kern,
+    get_symbols,
+    split_symbol_into_token,
+)
 
 
 class TestKernTokens(unittest.TestCase):
@@ -424,6 +429,18 @@ class TestKernTokens(unittest.TestCase):
     def test_sort_pitches(self) -> None:
         symbols = get_symbols(["4c	2c 2r 2cc 4gg"])
         self.assertEqual(symbols, ["4c", "<TAB>", "2c", "2r", "2cc", "4gg", "<NL>"])
+
+    def test_split_merge_clef(self) -> None:
+        tokens = split_symbol_into_token("*clefF4")
+        self.assertEqual(tokens, ("nonote", "*clef", "*clefF4", "*clefF4"))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "*clefF4")
+
+    def test_split_merge_key(self) -> None:
+        tokens = split_symbol_into_token("*k[]")
+        self.assertEqual(tokens, ("nonote", "*k", "nonote", "*k[]"))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "*k[]")
 
     def _assert_no_multiple_tabs_per_line(self, symbols: list[str]) -> None:
         number_of_tabs = 0

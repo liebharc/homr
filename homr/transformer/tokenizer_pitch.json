@@ -86,7 +86,9 @@
 			"GGGG": 54,
 			"AAAA": 55,
 			"BBBB": 56,
-			"r": 57
+			"r": 57,
+			"*clefF4": 58,
+			"*clefG2": 59
 		},
 		"unk_token": "<unk>"
 	}

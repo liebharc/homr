@@ -213,6 +213,10 @@ def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
         rhythm = rhythm.replace("qq", "q")
         rhythm = rhythm.replace("..", ".")
         return ("note", rhythm, pitch, lift)
+    if symbol.startswith("*k"):
+        return ("nonote", "*k", "nonote", symbol)
+    if symbol.startswith("*clef"):
+        return ("nonote", "*clef", symbol, symbol)
     return ("nonote", symbol, "nonote", "nonote")
 
 
