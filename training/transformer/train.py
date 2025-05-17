@@ -85,8 +85,8 @@ def _check_datasets_are_present() -> None:
 
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
-    number_of_files = 50000
-    number_of_epochs = 5
+    number_of_files = -1
+    number_of_epochs = 30
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -114,8 +114,8 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         eval_strategy="epoch",
         learning_rate=1e-4,
         optim="adamw_torch_fused",
-        per_device_train_batch_size=12,
-        per_device_eval_batch_size=6,
+        per_device_train_batch_size=20,
+        per_device_eval_batch_size=10,
         num_train_epochs=number_of_epochs,
         weight_decay=0.01,
         load_best_model_at_end=False,
