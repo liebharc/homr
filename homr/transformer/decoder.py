@@ -94,7 +94,7 @@ class ScoreTransformerWrapper(nn.Module):
         debug = kwargs.pop("debug", None)
         x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
 
-        if return_center_of_attention:
+        if return_center_of_attention and False:
             center_of_attention = self.calculate_center_of_attention(
                 debug, hiddens.attn_intermediates
             )
