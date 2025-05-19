@@ -87,8 +87,16 @@ def get_tr_omr_canvas_size(
 
 
 def center_image_on_canvas(
-    image: NDArray, canvas_size: NDArray, margin_top: int = 0, margin_bottom: int = 0
+    image: NDArray,
+    canvas_size: NDArray,
+    is_single_staff_image: bool,
+    margin_top: int = 0,
+    margin_bottom: int = 0,
 ) -> NDArray:
+    """
+    is_single_staff_image: Single staff images should be placed in the upper half so that symbols
+    have roughly the same size between single staff and grand staff images.
+    """
 
     resized = cv2.resize(image, canvas_size)  # type: ignore
 
@@ -98,7 +106,13 @@ def center_image_on_canvas(
     # Copy the resized image into the center of the new image.
     x_offset = 0
     tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
-    y_offset = (tr_omr_max_height_with_margin - resized.shape[0]) // 2 + margin_top
+
+    if is_single_staff_image:
+        upper_half_height = tr_omr_max_height_with_margin // 2
+        y_offset = (upper_half_height - resized.shape[0]) // 2 + margin_top
+    else:
+        y_offset = (tr_omr_max_height_with_margin - resized.shape[0]) // 2 + margin_top
+
     new_image[y_offset : y_offset + resized.shape[0], x_offset : x_offset + resized.shape[1]] = (
         resized
     )
@@ -107,10 +121,12 @@ def center_image_on_canvas(
 
 
 def add_image_into_tr_omr_canvas(
-    image: NDArray, margin_top: int = 0, margin_bottom: int = 0
+    image: NDArray, is_single_staff_image: bool, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
     new_shape = get_tr_omr_canvas_size(image.shape, margin_top, margin_bottom)
-    new_image = center_image_on_canvas(image, new_shape, margin_top, margin_bottom)
+    new_image = center_image_on_canvas(
+        image, new_shape, is_single_staff_image, margin_top, margin_bottom
+    )
     return new_image
 
 
@@ -240,7 +256,7 @@ def prepare_staff_image(
         staff_image, top_left = crop_image_and_return_new_top(staff_image, *region)
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
-    staff_image = center_image_on_canvas(staff_image, image_dimensions)
+    staff_image = center_image_on_canvas(staff_image, image_dimensions, True)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug and perform_dewarp:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)

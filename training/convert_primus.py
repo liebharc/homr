@@ -5,12 +5,10 @@ from collections.abc import Generator
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.type_definitions import NDArray
 from training.convert_grandstaff import distort_image
 from training.transformer.kern_tokens import semantic_to_kern
 
@@ -37,27 +35,6 @@ def _replace_suffix(path: Path, suffix: str) -> Path | None:
     return None
 
 
-def _pad_image_to_twice_its_height(image: NDArray) -> NDArray:
-    original_height = image.shape[0]
-    target_height = 2 * original_height
-    pad_bottom = target_height - original_height
-
-    if image.ndim == 2:  # noqa: PLR2004
-        # Grayscale image
-        padded_image = np.pad(
-            image, ((0, pad_bottom), (0, 0)), mode="constant", constant_values=255
-        )
-    elif image.ndim == 3:  # noqa: PLR2004
-        # Color image (H x W x C)
-        padded_image = np.pad(
-            image, ((0, pad_bottom), (0, 0), (0, 0)), mode="constant", constant_values=255
-        )
-    else:
-        raise ValueError("Unsupported image shape. Expected 2D or 3D array.")
-
-    return padded_image
-
-
 def _convert_file(path: Path, distort: bool = False) -> list[str]:  # noqa: PLR0911
     if "-pre.jpg" in str(path):
         return []
@@ -69,10 +46,9 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:  # noqa: PLR0
     if image is None:
         eprint("Warning: Could not read image", path)
         return []
-    image = _pad_image_to_twice_its_height(image)
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
-    preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+    preprocessed = add_image_into_tr_omr_canvas(image, True, margin_top, margin_bottom)
     if preprocessed_path is None:
         eprint("Warning: Unknown extension", path)
         return []

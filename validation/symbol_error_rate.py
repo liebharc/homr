@@ -32,7 +32,7 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         expected_str = semantic_to_kern(semantic_path)
         image = cv2.imread(img_path)
         image = auto_crop_white_bg(image)
-        image = add_image_into_tr_omr_canvas(image)
+        image = add_image_into_tr_omr_canvas(image, True)
         actual_str = model.predict(image)
         print(img_path)
         print(actual_str)

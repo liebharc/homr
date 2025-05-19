@@ -120,7 +120,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         weight_decay=0.01,
         load_best_model_at_end=False,
         metric_for_best_model="loss",
-        logging_dir=os.path.join("logs", f"run{run_id}"),
+        logging_dir=os.path.join(git_root, "logs", f"run{run_id}"),
         save_strategy="epoch",
         label_names=["rhythms_seq", "note_seq", "lifts_seq", "pitchs_seq"],
         fp16=not fp32,
