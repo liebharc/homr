@@ -195,7 +195,7 @@ def _sort_notes(symbols: list[str]) -> list[str]:
 
 def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
     # Splits a token into a token for each decoder: is_note, rhythm, pitch, lift
-    # Refert to https://www.humdrum.org/rep/kern/ for a description of
+    # Refer to https://www.humdrum.org/rep/kern/ for a description of
     # the different symbols in kern notation
 
     match = re.match("^([0-9q]+[\\.q]*)?([a-gA-G]+|r|R|RR)([#n-]*)?(.*)?$", symbol)
@@ -214,9 +214,15 @@ def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
         rhythm = rhythm.replace("..", ".")
         return ("note", rhythm, pitch, lift)
     if symbol.startswith("*k"):
-        return ("nonote", "*k", "nonote", symbol)
+        # The loss function between the decoders is configured such that
+        # pitch and lift must return nonote if the is_note decoder return nonote
+        # as a consequence: Every time we want to return a symbol different from
+        # nonte in lift and pitch then the is_note decoder must return "note"
+        return ("note", "*k", "*symbol", symbol)
+    if symbol == "=":
+        return ("note", symbol, "*symbol", symbol)
     if symbol.startswith("*clef"):
-        return ("nonote", "*clef", symbol, symbol)
+        return ("note", "*clef", symbol, symbol)
     return ("nonote", symbol, "nonote", "nonote")
 
 

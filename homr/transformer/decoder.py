@@ -48,6 +48,7 @@ class ScoreTransformerWrapper(nn.Module):
         self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
         self.attention_width = config.max_width // config.patch_size
         self.attention_height = config.max_height // config.patch_size
+        self.can_return_center_of_attention = config.return_center_of_attention
         self.patch_size = config.patch_size
 
         self.project_emb = (
@@ -94,7 +95,7 @@ class ScoreTransformerWrapper(nn.Module):
         debug = kwargs.pop("debug", None)
         x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
 
-        if return_center_of_attention and False:
+        if return_center_of_attention and self.can_return_center_of_attention:
             center_of_attention = self.calculate_center_of_attention(
                 debug, hiddens.attn_intermediates
             )
@@ -377,7 +378,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
                 dim=config.decoder_dim,
                 depth=config.decoder_depth,
                 heads=config.decoder_heads,
-                attn_flash=True,
+                attn_flash=not config.return_center_of_attention,
                 **config.decoder_args.to_dict(),
             ),
         ),

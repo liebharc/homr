@@ -88,7 +88,8 @@
 			"BBBB": 56,
 			"r": 57,
 			"*clefF4": 58,
-			"*clefG2": 59
+			"*clefG2": 59,
+			"*symbol": 60
 		},
 		"unk_token": "<unk>"
 	}

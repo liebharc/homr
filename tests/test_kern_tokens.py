@@ -442,6 +442,12 @@ class TestKernTokens(unittest.TestCase):
         symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
         self.assertEqual(symbol, "*k[]")
 
+    def test_split_merge_barline(self) -> None:
+        tokens = split_symbol_into_token("=")
+        self.assertEqual(tokens, ("nonote", "=", "nonote", "="))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "=")
+
     def _assert_no_multiple_tabs_per_line(self, symbols: list[str]) -> None:
         number_of_tabs = 0
         for symbol in symbols:

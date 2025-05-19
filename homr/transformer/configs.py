@@ -65,8 +65,8 @@ class Config:
         self.nonote_token = 0
         self.num_rhythm_tokens = 118
         self.num_note_tokens = 2
-        self.num_pitch_tokens = 60
-        self.num_lift_tokens = 24
+        self.num_pitch_tokens = 61
+        self.num_lift_tokens = 25
         self.lift_null = 0
         self.lift_sharp = 2
         self.lift_flat = 3
@@ -78,6 +78,9 @@ class Config:
         self.decoder_dim = 256
         self.decoder_depth = 8
         self.decoder_heads = 8
+        self.return_center_of_attention = (
+            False  # Enable this for more debug output but at the cost of processing time
+        )
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()
         self.lift_vocab = json.load(open(self.filepaths.lifttokenizer))["model"]["vocab"]
@@ -85,6 +88,9 @@ class Config:
         self.note_vocab = json.load(open(self.filepaths.notetokenizer))["model"]["vocab"]
         self.rhythm_vocab = json.load(open(self.filepaths.rhythmtokenizer))["model"]["vocab"]
         self.noteindexes = self._get_values_of_keys_matching(re.compile(r"[0-9\.q]+"))
+        self.noteindexes.append(self.rhythm_vocab["="])
+        self.noteindexes.append(self.rhythm_vocab["*k"])
+        self.noteindexes.append(self.rhythm_vocab["*clef"])
 
     def _get_values_of_keys_matching(self, pattern: re.Pattern[str]) -> list[int]:
         return [value for key, value in self.rhythm_vocab.items() if pattern.match(key)]

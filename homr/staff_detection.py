@@ -262,6 +262,11 @@ def connect_staff_lines(
             continue
         connected = False
         for staff_lines in active_lines_to_check:
+            if (
+                abs(current_staff_line.angle - staff_lines[-1].angle)
+                > constants.max_angle_for_lines_to_be_parallel
+            ):
+                continue
             if staff_lines[-1].is_overlapping_extrapolated(current_staff_line, unit_size):
                 staff_lines.append(current_staff_line)
                 connected = True

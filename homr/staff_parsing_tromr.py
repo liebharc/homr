@@ -53,6 +53,8 @@ def predict_best(
 ) -> ResultStaff | None:
     global inference  # noqa: PLW0603
     if inference is None:
+        if debug is not None:
+            default_config.return_center_of_attention = True
         inference = Staff2Score(default_config)
     images = [org_image]
     if staff is not None and len(staff.symbols) > 0:

@@ -12,7 +12,7 @@
 		{
 			"name": "Python Debugger: Train Transformer",
 			"type": "debugpy",
-			"python": "${workspaceFolder}/.venv/bin/python",
+			"python": "${workspaceFolder}/venv/bin/python",
 			"request": "launch",
 			"program": "${workspaceFolder}/training/train.py",
 			"console": "integratedTerminal",

@@ -52,7 +52,8 @@
 			"*k[f#c#g#d#a#e#]": 20,
 			"*k[f#c#g#d#a#e#b#]": 21,
 			"*clefF4": 22,
-			"*clefG2": 23
+			"*clefG2": 23,
+			"=": 24
 		},
 		"unk_token": "<unk>"
 	}
