@@ -386,6 +386,8 @@ def merge_kern_tokens(predrhythm: str, predpitch: str, predlift: str) -> str:
         return predlift
     if predrhythm == "*clef":
         return predpitch
+    if predrhythm == "=":
+        return predrhythm
     if predpitch == "nonote" or predlift == "nonote":
         return predrhythm
     return predrhythm + predpitch + predlift

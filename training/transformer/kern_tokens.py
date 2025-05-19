@@ -207,7 +207,7 @@ def split_symbol_into_token(symbol: str) -> tuple[str, str, str, str]:
         if not rhythm:
             rhythm = "q"  # grace note
         if not lift:
-            lift = "nonote"
+            lift = ""
         if rhythm.startswith("0"):
             rhythm = "0"
         rhythm = rhythm.replace("qq", "q")

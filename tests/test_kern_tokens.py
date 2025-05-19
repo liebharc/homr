@@ -1,5 +1,6 @@
 import unittest
 
+from homr.transformer.configs import default_config
 from homr.transformer.split_merge_symbols import merge_kern_tokens
 from training.transformer.kern_tokens import (
     filter_for_kern,
@@ -425,6 +426,13 @@ class TestKernTokens(unittest.TestCase):
         self.assertEqual(symbols.count("*clefF4"), 1)
         self.assertEqual(symbols.count("*clefG2"), 1)
         self._assert_no_multiple_tabs_per_line(symbols)
+        for symbol in symbols:
+            note, rhythm, pitch, lift = split_symbol_into_token(symbol)
+            rhythm_token = default_config.rhythm_vocab[rhythm]
+            is_note_rhythm = rhythm_token in default_config.noteindexes
+            self.assertEqual(note == "nonote", not is_note_rhythm)
+            self.assertEqual(note == "nonote", pitch == "nonote")
+            self.assertEqual(note == "nonote", lift == "nonote")
 
     def test_sort_pitches(self) -> None:
         symbols = get_symbols(["4c	2c 2r 2cc 4gg"])
@@ -432,19 +440,19 @@ class TestKernTokens(unittest.TestCase):
 
     def test_split_merge_clef(self) -> None:
         tokens = split_symbol_into_token("*clefF4")
-        self.assertEqual(tokens, ("nonote", "*clef", "*clefF4", "*clefF4"))
+        self.assertEqual(tokens, ("note", "*clef", "*clefF4", "*clefF4"))
         symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
         self.assertEqual(symbol, "*clefF4")
 
     def test_split_merge_key(self) -> None:
         tokens = split_symbol_into_token("*k[]")
-        self.assertEqual(tokens, ("nonote", "*k", "nonote", "*k[]"))
+        self.assertEqual(tokens, ("note", "*k", "*symbol", "*k[]"))
         symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
         self.assertEqual(symbol, "*k[]")
 
     def test_split_merge_barline(self) -> None:
         tokens = split_symbol_into_token("=")
-        self.assertEqual(tokens, ("nonote", "=", "nonote", "="))
+        self.assertEqual(tokens, ("note", "=", "*symbol", "="))
         symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
         self.assertEqual(symbol, "=")
 
