@@ -74,7 +74,7 @@ def _convert_file(path: Path) -> list[str]:
     try:
         basename = str(path).replace(".krn", "")
         kern_file = str(path)
-        image_file = str(path).replace(".krn", ".jpg")
+        image_file = str(path).replace(".krn", "_distorted.jpg")
         image = cv2.imread(str(image_file))
         if image is None:
             eprint("Warning: Could not read image", path)
@@ -82,13 +82,13 @@ def _convert_file(path: Path) -> list[str]:
 
         margin_top = random.randint(0, 10)
         margin_bottom = random.randint(0, 10)
-        preprocessed = add_image_into_tr_omr_canvas(image, False, margin_top, margin_bottom)
+        preprocessed = add_image_into_tr_omr_canvas(image, False)
         preprocessed_path = Path(basename + "-pre.jpg")
         if preprocessed_path is None:
             eprint("Warning: Unknown extension", path)
             return []
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
-        distort_image(str(preprocessed_path.absolute()))
+        # distort_image(str(preprocessed_path.absolute()))
 
         return [
             str(preprocessed_path.relative_to(git_root))

@@ -42,18 +42,19 @@ def _convert_file(path: Path, distort: bool = False) -> list[str]:  # noqa: PLR0
         return []
 
     preprocessed_path = _replace_suffix(path, "-pre.jpg")
-    image = cv2.imread(str(path))
+    distorted_path = _replace_suffix(path, "_distorted.jpg")
+    image = cv2.imread(str(distorted_path))
     if image is None:
         eprint("Warning: Could not read image", path)
         return []
     margin_top = random.randint(0, 10)
     margin_bottom = random.randint(0, 10)
-    preprocessed = add_image_into_tr_omr_canvas(image, True, margin_top, margin_bottom)
+    preprocessed = add_image_into_tr_omr_canvas(image, True)
     if preprocessed_path is None:
         eprint("Warning: Unknown extension", path)
         return []
     cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
-    if distort:
+    if distort and False:
         distort_image(str(preprocessed_path.absolute()))
 
     semantic_path = _replace_suffix(path, ".semantic")

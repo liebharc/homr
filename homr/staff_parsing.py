@@ -64,9 +64,13 @@ tr_omr_max_width = default_config.max_width
 
 
 def get_tr_omr_canvas_size(
-    image_shape: tuple[int, ...], margin_top: int = 0, margin_bottom: int = 0
+    image_shape: tuple[int, ...],
+    is_single_staff_image: bool,
+    margin_top: int = 0,
+    margin_bottom: int = 0,
 ) -> NDArray:
-    tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
+    max_height = tr_omr_max_height // 2 if is_single_staff_image else tr_omr_max_height
+    tr_omr_max_height_with_margin = max_height - margin_top - margin_bottom
     tr_omr_ratio = float(tr_omr_max_height_with_margin) / tr_omr_max_width
     height, width = image_shape[:2]
 
@@ -123,7 +127,9 @@ def center_image_on_canvas(
 def add_image_into_tr_omr_canvas(
     image: NDArray, is_single_staff_image: bool, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
-    new_shape = get_tr_omr_canvas_size(image.shape, margin_top, margin_bottom)
+    new_shape = get_tr_omr_canvas_size(
+        image.shape, is_single_staff_image, margin_top, margin_bottom
+    )
     new_image = center_image_on_canvas(
         image, new_shape, is_single_staff_image, margin_top, margin_bottom
     )

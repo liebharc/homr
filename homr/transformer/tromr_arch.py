@@ -34,6 +34,7 @@ class TrOMR(nn.Module):
         loss = self.decoder(
             rhythms_seq, pitchs_seq, lifts_seq, note_seq, context=encoded, mask=mask, **kwargs
         )
+        # print(loss["loss"].detach().item(), loss["loss_consist"].detach().item(), loss["loss_note"].detach().item(), loss["loss_rhythm"].detach().item(), loss["loss_pitch"].detach().item(), loss["loss_lift"].detach().item())
         return loss
 
     @torch.no_grad()

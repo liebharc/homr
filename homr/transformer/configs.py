@@ -9,7 +9,7 @@ workspace = os.path.join(os.path.dirname(__file__))
 class FilePaths:
     def __init__(self) -> None:
         self.checkpoint = os.path.join(
-            workspace, "pytorch_model_143-0a20cbd35bf31b58b8354e2ec94807ff3c9dc16f.pth"
+            workspace, "pytorch_model_147-c1f30b0aa6538f6fb501a42869f7137378959fb7.pth"
         )
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
@@ -57,8 +57,8 @@ class Config:
         self.channels = 1
         self.patch_size = 16
         self.max_height = 256
-        self.max_width = 640
-        self.max_seq_len = 748
+        self.max_width = 1280
+        self.max_seq_len = 550
         self.pad_token = 0
         self.bos_token = 1
         self.eos_token = 2
@@ -67,9 +67,6 @@ class Config:
         self.num_note_tokens = 2
         self.num_pitch_tokens = 61
         self.num_lift_tokens = 25
-        self.lift_null = 0
-        self.lift_sharp = 2
-        self.lift_flat = 3
         self.encoder_structure = "hybrid"
         self.encoder_depth = 8
         self.backbone_layers = [2, 3, 7]

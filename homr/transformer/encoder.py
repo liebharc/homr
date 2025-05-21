@@ -10,6 +10,15 @@ from homr.transformer.configs import Config
 
 def get_encoder(config: Config) -> Any:
     backbone_layers = list(config.backbone_layers)
+    # backbone = timm.create_model(
+    #    "convnext_small.in12k_ft_in1k",
+    #    pretrained=True,
+    #    num_classes=0,
+    #    in_chans=config.channels,
+    #    global_pool="",
+    #    drop_rate=0.1,
+    #    drop_path_rate=0.1,
+    # )
     backbone = ResNetV2(
         num_classes=0,
         global_pool="",
@@ -30,6 +39,7 @@ def get_encoder(config: Config) -> Any:
                 "patch_size needs to be multiple of %i with current backbone configuration"
                 % min_patch_size
             )
+        # return HybridEmbedWith2DPos(**x, patch_size=ps // min_patch_size, backbone=backbone, max_height=config.max_height, max_width=config.max_width)
         return HybridEmbed(**x, patch_size=ps // min_patch_size, backbone=backbone)
 
     encoder = VisionTransformer(
@@ -38,6 +48,7 @@ def get_encoder(config: Config) -> Any:
         in_chans=config.channels,
         num_classes=0,
         embed_dim=config.encoder_dim,
+        # pos_embed="none",
         depth=config.encoder_depth,
         num_heads=config.encoder_heads,
         embed_layer=embed_layer,

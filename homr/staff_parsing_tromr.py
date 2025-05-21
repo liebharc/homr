@@ -123,7 +123,7 @@ def _number_of_accidentals_in_model(staff: Staff | None) -> int:
 
 
 def _get_clef_type(result: str) -> ClefType | None:
-    match = re.search(r"clef-([A-G])([0-9])", result)
+    match = re.search(r"\*clef([A-G])([0-9])", result)
     if match is None:
         return None
     return ClefType(match.group(1), int(match.group(2)))

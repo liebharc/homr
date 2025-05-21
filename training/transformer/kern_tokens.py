@@ -133,8 +133,8 @@ def get_symbols(lines: list[str]) -> list[str]:  # noqa: C901, PLR0912
                 if symbol == "*":
                     continue
                 symbols_in_this_field.append(symbol)
-            if i < len(fields) - 1:
-                symbols_in_this_field.append("<TAB>")
+            # if i < len(fields) - 1:
+            #   symbols_in_this_field.append("<TAB>")
             symbols.extend(_sort_notes(symbols_in_this_field))
             symbols_in_this_field = []
         while len(symbols) > 0 and symbols[-1] == "<TAB>":

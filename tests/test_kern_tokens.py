@@ -426,6 +426,7 @@ class TestKernTokens(unittest.TestCase):
         self.assertEqual(symbols.count("*clefF4"), 1)
         self.assertEqual(symbols.count("*clefG2"), 1)
         self._assert_no_multiple_tabs_per_line(symbols)
+        note_symbols = 0
         for symbol in symbols:
             note, rhythm, pitch, lift = split_symbol_into_token(symbol)
             rhythm_token = default_config.rhythm_vocab[rhythm]
@@ -433,10 +434,39 @@ class TestKernTokens(unittest.TestCase):
             self.assertEqual(note == "nonote", not is_note_rhythm)
             self.assertEqual(note == "nonote", pitch == "nonote")
             self.assertEqual(note == "nonote", lift == "nonote")
+            if is_note_rhythm:
+                note_symbols += 1
+        # Around half of the symbols should be classified as note so that the consist loss is meaningful
+        self.assertTrue(abs(100 * note_symbols / len(symbols) - 50) < 10)
 
     def test_sort_pitches(self) -> None:
         symbols = get_symbols(["4c	2c 2r 2cc 4gg"])
         self.assertEqual(symbols, ["4c", "<TAB>", "2c", "2r", "2cc", "4gg", "<NL>"])
+
+    def test_split_merge_note(self) -> None:
+        tokens = split_symbol_into_token("4CC#")
+        self.assertEqual(tokens, ("note", "4", "CC", "#"))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "4CC#")
+
+    def test_split_merge_rest(self) -> None:
+        tokens = split_symbol_into_token("4r")
+        self.assertEqual(tokens, ("note", "4", "r", ""))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "4r")
+        self.assertEqual(symbol, "4cc#")
+
+    def test_split_merge_tab(self) -> None:
+        tokens = split_symbol_into_token("<TAB>")
+        self.assertEqual(tokens, ("nonote", "<TAB>", "nonote", "nonote"))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "<TAB>")
+
+    def test_split_merge_new_line(self) -> None:
+        tokens = split_symbol_into_token("<NL>")
+        self.assertEqual(tokens, ("nonote", "<NL>", "nonote", "nonote"))
+        symbol = merge_kern_tokens(tokens[1], tokens[2], tokens[3])
+        self.assertEqual(symbol, "<NL>")
 
     def test_split_merge_clef(self) -> None:
         tokens = split_symbol_into_token("*clefF4")
