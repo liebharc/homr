@@ -58,7 +58,7 @@ def calculate_span_and_optimal_points(
                     first_y_offset = y_offset
                     y_delta = 0
                 else:
-                    y_delta = y_offset - first_y_offset
+                    y_delta = int(y_offset - first_y_offset)
                 point = (x, y + y_delta)
                 if is_point_on_image(point, image):
                     line_points.append(point)

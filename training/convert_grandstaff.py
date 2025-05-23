@@ -1,6 +1,5 @@
 import multiprocessing
 import os
-import sys
 from pathlib import Path
 
 import cv2
@@ -11,13 +10,13 @@ from scipy.signal import find_peaks  # type: ignore
 from torchvision import transforms as tr  # type: ignore
 from torchvision.transforms import Compose  # type: ignore
 
-from homr.download_utils import download_file, untar_file, unzip_file
+from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
+from training.humdrum_kern import convert_kern_to_semantic
 from training.musescore_svg import SvgValidationError
-from training.music_xml import MusicXmlValidationError, music_xml_to_semantic
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -32,12 +31,6 @@ if not os.path.exists(grandstaff_root):
     download_file("https://grfia.dlsi.ua.es/musicdocs/grandstaff.tgz", grandstaff_archive)
     untar_file(grandstaff_archive, grandstaff_root)
     eprint("Adding musicxml files to grandstaff dataset")
-    music_xml_download = os.path.join(dataset_root, "grandstaff_musicxml.zip")
-    download_file(
-        "https://github.com/liebharc/grandstaff_musicxml/archive/refs/heads/main.zip",
-        music_xml_download,
-    )
-    unzip_file(music_xml_download, grandstaff_root, flatten_root_entry=True)
 
 
 def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
@@ -183,19 +176,19 @@ def contains_max_one_clef(semantic: str) -> bool:
     return semantic.count("clef-") <= 1
 
 
-def _music_xml_to_semantic(path: str, basename: str) -> tuple[str | None, str | None]:
-    result = music_xml_to_semantic(path)
+def _kern_to_semantic(path: str, basename: str) -> tuple[str | None, str | None]:
+    with open(path) as text_file:
+        result = convert_kern_to_semantic(text_file.readlines())
     staffs_in_grandstaff = 2
     if len(result) != staffs_in_grandstaff:
         return None, None
-    lines = [" ".join(staff) for staff in result]
-    if not all(contains_max_one_clef(line) for line in lines):
+    if not all(contains_max_one_clef(line) for line in result):
         return None, None
 
     with open(basename + "_upper.semantic", "w") as f:
-        f.write(lines[0])
+        f.write(result[0])
     with open(basename + "_lower.semantic", "w") as f:
-        f.write(lines[1])
+        f.write(result[1])
     return basename + "_upper.semantic", basename + "_lower.semantic"
 
 
@@ -205,10 +198,8 @@ def _convert_file(  # noqa: PLR0911
     try:
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
-        musicxml = str(path).replace(".krn", ".musicxml")
-        upper_semantic, lower_semantic = _music_xml_to_semantic(musicxml, basename)
+        upper_semantic, lower_semantic = _kern_to_semantic(str(path), basename)
         if upper_semantic is None or lower_semantic is None:
-            eprint(f"Failed to convert {musicxml}")
             return []
         if ony_recreate_semantic_files:
             upper, lower = _check_staff_image(image_file, basename)
@@ -230,7 +221,7 @@ def _convert_file(  # noqa: PLR0911
             + ","
             + str(Path(lower_semantic).relative_to(git_root)),
         ]
-    except (SvgValidationError, MusicXmlValidationError):
+    except SvgValidationError:
         return []
     except Exception as e:
         eprint("Failed to convert ", path, e)
@@ -281,6 +272,6 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
     only_recreate_semantic_files = False
-    if "--only-semantic" in sys.argv:
-        only_recreate_semantic_files = True
+    # if "--only-semantic" in sys.argv:
+    only_recreate_semantic_files = True
     convert_grandstaff(only_recreate_semantic_files)
