@@ -261,9 +261,9 @@ def connect_staff_lines(
         if is_short_line:
             continue
         connected = False
-        for staff_lines in active_lines_to_check:
-            if staff_lines[-1].is_overlapping_extrapolated(current_staff_line, unit_size):
-                staff_lines.append(current_staff_line)
+        for active_line in active_lines_to_check:
+            if active_line[-1].is_overlapping_extrapolated(current_staff_line, unit_size):
+                active_line.append(current_staff_line)
                 connected = True
         if not connected:
             new_list = [current_staff_line]
@@ -604,10 +604,10 @@ def find_horizontal_lines(
         if group_number not in grouped_centers:
             grouped_centers[group_number] = []
         grouped_centers[group_number].append(center)
-    complete_groups = []
-    for key in grouped_centers.keys():
-        if len(grouped_centers[key]) == constants.number_of_lines_on_a_staff:
-            complete_groups.append(sorted(grouped_centers[key]))
+    complete_groups: list[list[int]] = []
+    for grouped_center in grouped_centers.values():
+        if len(grouped_center) == constants.number_of_lines_on_a_staff:
+            complete_groups.append(sorted(grouped_center))
     return complete_groups
 
 

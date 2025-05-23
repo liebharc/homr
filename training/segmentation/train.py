@@ -22,7 +22,7 @@ def monkey_patch_float_for_imaugs() -> None:
     """
     Monkey path workaround of np.float for imaugs
     """
-    np.float = float  # type: ignore # ruff: noqa: E731
+    np.float = float  # type: ignore # noqa: E731
 
 
 def get_cvc_data_paths(dataset_path: str) -> list[list[str]]:

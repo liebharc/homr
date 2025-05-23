@@ -27,8 +27,7 @@ def get_encoder(config: Config) -> Any:
         ps = x.pop("patch_size", min_patch_size)
         if ps % min_patch_size != 0 or ps < min_patch_size:
             raise ValueError(
-                "patch_size needs to be multiple of %i with current backbone configuration"
-                % min_patch_size
+                f"patch_size needs to be multiple of {min_patch_size} with current backbone configuration"  # noqa: E501
             )
         return HybridEmbed(**x, patch_size=ps // min_patch_size, backbone=backbone)
 
