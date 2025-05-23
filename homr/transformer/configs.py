@@ -66,9 +66,6 @@ class Config:
         self.num_note_tokens = 2
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
-        self.lift_null = 0
-        self.lift_sharp = 2
-        self.lift_flat = 3
         self.encoder_structure = "hybrid"
         self.encoder_depth = 8
         self.backbone_layers = [2, 3, 7]

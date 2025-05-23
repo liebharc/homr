@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import PreTrainedTokenizerFast  # type: ignore
 from x_transformers.x_transformers import (  # type: ignore
     AbsolutePositionalEmbedding,
     AttentionLayers,
@@ -160,17 +159,12 @@ class ScoreDecoder(nn.Module):
         self.pad_value = (config.pad_token,)
         self.ignore_index = ignore_index
         self.config = config
-
-        self.lifttokenizer = PreTrainedTokenizerFast(tokenizer_file=config.filepaths.lifttokenizer)
-        self.pitchtokenizer = PreTrainedTokenizerFast(
-            tokenizer_file=config.filepaths.pitchtokenizer
-        )
-        self.rhythmtokenizer = PreTrainedTokenizerFast(
-            tokenizer_file=config.filepaths.rhythmtokenizer
-        )
-
         self.net = transformer
         self.max_seq_len = transformer.max_seq_len
+
+        self.inv_rhythm_vocab = {v: k for k, v in config.rhythm_vocab.items()}
+        self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
+        self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
 
         note_mask = torch.zeros(config.num_rhythm_tokens)
         note_mask[noteindexes] = 1
@@ -236,13 +230,13 @@ class ScoreDecoder(nn.Module):
                 pitch_sample = torch.multinomial(pitch_probs, 1)
                 rhythm_sample = torch.multinomial(rhythm_probs, 1)
 
-                lift_token = detokenize(lift_sample, self.lifttokenizer)
-                pitch_token = detokenize(pitch_sample, self.pitchtokenizer)
-                rhythm_token = detokenize(rhythm_sample, self.rhythmtokenizer)
-                is_eos = len(rhythm_token[0])
+                lift_token = detokenize(lift_sample, self.inv_lift_vocab)
+                pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
+                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
+                is_eos = len(rhythm_token)
                 if is_eos == 0:
                     break
-                retry = merger.add_symbol(rhythm_token[0][0], pitch_token[0][0], lift_token[0][0])
+                retry = merger.add_symbol(rhythm_token[0], pitch_token[0], lift_token[0])
                 current_temperature *= 3.5
                 attempt += 1
 
@@ -385,15 +379,9 @@ def get_decoder(config: Config) -> ScoreDecoder:
     )
 
 
-def detokenize(tokens: torch.Tensor, tokenizer: Any) -> list[list[str]]:
-    toks = [tokenizer.convert_ids_to_tokens(tok) for tok in tokens]
-    for b in range(len(toks)):
-        for i in reversed(range(len(toks[b]))):
-            if toks[b][i] is None:
-                toks[b][i] = ""
-            toks[b][i] = toks[b][i].replace("Ġ", " ").strip()
-            if toks[b][i] in (["[BOS]", "[EOS]", "[PAD]"]):
-                del toks[b][i]
+def detokenize(tokens: torch.Tensor, vocab: Any) -> list[list[str]]:
+    toks = [vocab[tok.item()] for tok in tokens]
+    toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
 
 
