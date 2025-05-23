@@ -29,8 +29,8 @@ def single_note(pitch: ResultPitch, duration: ResultDuration) -> ResultChord:
     )
 
 
-def note_chord(notes: list[ResultNote]) -> ResultChord:
-    return ResultChord(notes[0].duration, notes)
+def note_chord(notes: list[ResultNote], duration: ResultDuration | None = None) -> ResultChord:
+    return ResultChord(duration if duration is not None else notes[0].duration, notes)
 
 
 class TestTrOmrParser(unittest.TestCase):
@@ -355,7 +355,8 @@ class TestTrOmrParser(unittest.TestCase):
                                     ResultPitch("B", 4, None),
                                     ResultDuration(2 * constants.duration_of_quarter),
                                 ),
-                            ]
+                            ],
+                            duration=ResultDuration(constants.duration_of_quarter),
                         )
                     ]
                 )
