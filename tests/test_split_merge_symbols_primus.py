@@ -18,6 +18,6 @@ class TestMergeSymbolsPrimus(unittest.TestCase):
         self.assertEqual(
             actual,
             [
-                "clef-C1+timeSignature-C/+note-G4_breve+note-G4_whole+note-A4_whole.+note-G4_half+note-G4_half+note-F4#_half+note-G4_breve+note-G4_half"
+                "clef-C1+timeSignature-/2+note-G4_breve+note-G4_whole+note-A4_whole.+note-G4_half+note-G4_half+note-F4#_half+note-G4_breve+note-G4_half"
             ],
         )

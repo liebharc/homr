@@ -173,7 +173,7 @@ def _translate_duration(duration: str) -> str:
     return duration
 
 
-def _symbol_to_rhythm(symbol: str) -> str:
+def _symbol_to_rhythm(symbol: str) -> str:  # noqa: PLR0911
     if symbol.startswith(("note", "gracenote")):
         note = "note-" + _translate_duration(symbol.split("_")[1])
         return note + _add_duration_modifier(symbol)
@@ -195,6 +195,10 @@ def _symbol_to_rhythm(symbol: str) -> str:
         if rest_length > max_supported_multi_rest:
             return "multirest-" + str(max_supported_multi_rest)
         symbol = "multirest-" + str(rest_length)
+    if symbol == "timeSignature-C":
+        return "timeSignature-/4"
+    if symbol == "timeSignature-C/":
+        return "timeSignature-/2"
     timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
     if timesignature_match:
         return "timeSignature-/" + timesignature_match[2]
