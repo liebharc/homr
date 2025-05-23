@@ -379,7 +379,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
     )
 
 
-def detokenize(tokens: torch.Tensor, vocab: Any) -> list[list[str]]:
+def detokenize(tokens: torch.Tensor, vocab: Any) -> list[str]:
     toks = [vocab[tok.item()] for tok in tokens]
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
