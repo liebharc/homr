@@ -61,7 +61,7 @@ class DataLoader:
             mask_lens = set()
             mask_lens.add(semantic_len + 2)
 
-            number_of_desired_samples = 6
+            number_of_desired_samples = 0
             for _ in range(1, min(number_of_desired_samples, semantic_len)):
                 mask_lens.add(random.randint(1, semantic_len) + 1)
 

@@ -80,7 +80,6 @@ class ScoreTransformerWrapper(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         mask: torch.Tensor | None = None,
-        return_hiddens: bool = True,
         return_center_of_attention: bool = False,
         **kwargs: Any,
     ) -> Any:
@@ -92,13 +91,14 @@ class ScoreTransformerWrapper(nn.Module):
         )
         x = self.project_emb(x)
         debug = kwargs.pop("debug", None)
-        x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=return_hiddens, **kwargs)
 
         if return_center_of_attention:
+            x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
             center_of_attention = self.calculate_center_of_attention(
                 debug, hiddens.attn_intermediates
             )
         else:
+            x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
             center_of_attention = None
 
         x = self.norm(x)
