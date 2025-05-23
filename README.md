@@ -28,7 +28,7 @@ The homr result is obtained by processing the [homr output](figures/tabi.musicxm
 
 ## Limitations
 
-The current implementation focuses on pitch and rhtyhm information, neglecting dynamics, articulation, and other musical symbols.
+The current implementation focuses on pitch and rhtyhm information on the bass or treble clef, neglecting dynamics, articulation, double sharps/flats, and other musical symbols.
 
 ## Technical Details
 
