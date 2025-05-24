@@ -66,7 +66,7 @@ class Staff2Score:
 
 _transform = alb.Compose(
     [
-        alb.ToGray(always_apply=True),
+        alb.ToGray(),
         alb.Normalize((0.7931, 0.7931, 0.7931), (0.1738, 0.1738, 0.1738)),
         ToTensorV2(),
     ]
