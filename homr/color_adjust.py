@@ -56,9 +56,9 @@ def remove_background_from_channel(channel: NDArray, block_size: int) -> tuple[N
             )
     background_blurred = cv2.blur(background_pixels, (3, 3))
     color_white = 255
-    valid_background = background_blurred < color_white  # type: ignore
+    valid_background = background_blurred < color_white
     max_background = int(np.max(background_blurred[valid_background]))
-    background_blurred[valid_background] += color_white - max_background
+    background_blurred[valid_background] += color_white - max_background  # type: ignore
     result_background = cv2.resize(
         background_blurred, (channel.shape[1], channel.shape[0]), interpolation=cv2.INTER_LINEAR
     )

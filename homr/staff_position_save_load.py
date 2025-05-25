@@ -100,13 +100,13 @@ def detect_staff_simple(debug: Debug, img: NDArray, crop_area: BoundingBox) -> S
     horizontal_lines = cv2.morphologyEx(binary, cv2.MORPH_ERODE, kernel, iterations=2)
     horizontal_lines = cv2.morphologyEx(horizontal_lines, cv2.MORPH_DILATE, kernel, iterations=2)
     horizontal_lines = cv2.morphologyEx(horizontal_lines, cv2.MORPH_CLOSE, kernel, iterations=2)
-    debug.write_threshold_image("horizontal_lines", 255 * horizontal_lines)  # type: ignore
+    debug.write_threshold_image("horizontal_lines", 255 * horizontal_lines)
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 10))
     vertical_lines = cv2.morphologyEx(binary, cv2.MORPH_ERODE, kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(vertical_lines, cv2.MORPH_DILATE, kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(vertical_lines, cv2.MORPH_CLOSE, kernel, iterations=2)
-    debug.write_threshold_image("vertical_lines", 255 * vertical_lines)  # type: ignore
+    debug.write_threshold_image("vertical_lines", 255 * vertical_lines)
 
     # Detect lines using Hough Transform
     staff_lines = create_lines(horizontal_lines, threshold=30, min_line_length=30)
