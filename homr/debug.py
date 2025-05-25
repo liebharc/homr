@@ -21,7 +21,7 @@ class AttentionDebug:
         attention_resized = cv2.resize(attention, (self.image.shape[1], self.image.shape[0]))
         # Apply a colormap to the attention weights
         attention_colormap = cv2.applyColorMap(  # type: ignore
-            np.uint8(255.0 * attention_resized / attention_resized.max()), cv2.COLORMAP_JET  # type: ignore
+            np.uint8(255.0 * attention_resized / attention_resized.max()), cv2.COLORMAP_JET
         )
         overlay = cv2.addWeighted(self.image, 0.6, attention_colormap, 0.4, 0)
 

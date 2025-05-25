@@ -125,7 +125,7 @@ def copy_image_in_center_of_double_the_height_and_white_background(image: NDArra
 def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> NDArray:
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 97, 255, cv2.THRESH_BINARY)
-    thresh = 255 - thresh  # type: ignore
+    thresh = 255 - thresh
     contours, _hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     threshold = constants.black_spot_removal_threshold(unit_size)
     for cnt in contours:
@@ -136,7 +136,7 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
         if not is_at_edge_of_image:
             continue
         average_gray_intensity = 127
-        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity  # type: ignore
+        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity
         if is_mostly_dark:
             continue
         bgr[y : y + h, x : x + w] = (255, 255, 255)
