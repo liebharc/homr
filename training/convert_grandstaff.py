@@ -89,7 +89,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
             return None, None
         middle = central_valley
 
-    overlap = 10
+    overlap = np.random.randint(0, 15) + 10
     if middle < overlap or middle > image.shape[0] - overlap:
         eprint(f"INFO: Failed to split {path}, middle is at {middle}")
         return None, None
@@ -270,8 +270,10 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
     multiprocessing.set_start_method("spawn")
     only_recreate_semantic_files = False
-    # if "--only-semantic" in sys.argv:
-    only_recreate_semantic_files = True
+    if "--only-semantic" in sys.argv:
+        only_recreate_semantic_files = True
     convert_grandstaff(only_recreate_semantic_files)
