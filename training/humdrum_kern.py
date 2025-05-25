@@ -1,5 +1,6 @@
 import re
 
+from homr import constants
 from homr.circle_of_fifths import (
     AbstractKeyTransformation,
     KeyTransformation,
@@ -142,7 +143,7 @@ class HumdrumKernConverter:
 
         if duration_value % 3 == 0:
             base = 2 * duration_value // 3
-            return standard_durations[base] + "³"
+            return standard_durations[base] + constants.triplet_symbol
 
         if duration_value % 5 == 0:
             base = 4 * duration_value // 5
