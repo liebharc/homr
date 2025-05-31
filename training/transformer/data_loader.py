@@ -13,8 +13,6 @@ from homr.type_definitions import NDArray
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 
-os.environ["WANDB_DISABLED"] = "true"
-
 git_root = os.path.join(script_location, "..", "..")
 
 
