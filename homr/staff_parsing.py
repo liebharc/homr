@@ -4,7 +4,7 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
-from homr.model import MultiStaff, Note, NoteGroup, Staff
+from homr.model import MultiStaff, NoteGroup, Staff
 from homr.results import (
     ResultChord,
     ResultClef,
@@ -143,77 +143,22 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
     return bgr
 
 
-def _get_min_max_y_position_of_notes(staff: Staff) -> tuple[float, float]:
-    if len(staff.symbols) == 0:
-        min_y = staff.min_y - 3.5 * staff.average_unit_size
-        max_y = staff.max_y + 3.5 * staff.average_unit_size
-        return min_y, max_y
-    min_y = staff.min_y - 2.5 * staff.average_unit_size
-    max_y = staff.max_y + 2.5 * staff.average_unit_size
-    for symbol in staff.symbols:
-        if isinstance(symbol, NoteGroup):
-            for note in symbol.notes:
-                min_y = min(min_y, note.center[1] - staff.average_unit_size)
-                max_y = max(max_y, note.center[1] + staff.average_unit_size)
-        elif isinstance(symbol, Note):
-            min_y = min(min_y, symbol.center[1] - staff.average_unit_size)
-            max_y = max(max_y, symbol.center[1] + staff.average_unit_size)
-    return min_y, max_y
-
-
-def _calculate_region(staff: Staff, x_values: NDArray, y_values: NDArray) -> NDArray:
-    if len(x_values) == 0 or len(y_values) == 0:
-        x_min = staff.min_x - 2 * staff.average_unit_size
-        x_max = staff.max_x + 2 * staff.average_unit_size
-        y_min, y_max = _get_min_max_y_position_of_notes(staff)
-    else:
-        x_min = min(*x_values, staff.min_x) - 2 * staff.average_unit_size
-        x_max = max(*x_values, staff.max_x) + 2 * staff.average_unit_size
-        staff_min_y, staff_max_y = _get_min_max_y_position_of_notes(staff)
-        y_min = min(*(y_values - 0.5 * staff.average_unit_size), staff_min_y)
-        y_max = max(*(y_values + 0.5 * staff.average_unit_size), staff_max_y)
+def _calculate_region(staff: Staff) -> NDArray:
+    x_min = staff.min_x - 2 * staff.average_unit_size
+    x_max = staff.max_x + 2 * staff.average_unit_size
+    y_min = staff.min_y - 4 * staff.average_unit_size
+    y_max = staff.max_y + 4 * staff.average_unit_size
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
-
-
-def _calculate_offsets(staff: Staff, ranges: list[float]) -> list[float]:
-    staff_center = (staff.max_y + staff.min_y) // 2
-    y_offsets = []
-    staff_above = max([r for r in ranges if r < staff_center], default=-1)
-    if staff_above >= 0:
-        y_offsets.append(staff.max_y - staff_above)
-    staff_below = min([r for r in ranges if r > staff_center], default=-1)
-    if staff_below >= 0:
-        y_offsets.append(staff_below - staff.min_y)
-    return y_offsets
-
-
-def _adjust_region(region: NDArray, y_offsets: list[float], staff: Staff) -> NDArray:
-    if len(y_offsets) > 0:
-        min_y_offset = min(y_offsets)
-        if (
-            min_y_offset > 3 * staff.average_unit_size
-            and min_y_offset < 8 * staff.average_unit_size
-        ):
-            region[1] = int(staff.min_y - min_y_offset)
-            region[3] = int(staff.max_y + min_y_offset)
-    return region
 
 
 def prepare_staff_image(
     debug: Debug,
     index: int,
-    ranges: list[float],
     staff: Staff,
     staff_image: NDArray,
     perform_dewarp: bool,
 ) -> tuple[NDArray, Staff]:
-    centers = [s.center for s in staff.symbols]
-    x_values = np.array([c[0] for c in centers])
-    y_values = np.array([c[1] for c in centers])
-
-    region = _calculate_region(staff, x_values, y_values)
-    y_offsets = _calculate_offsets(staff, ranges)
-    region = _adjust_region(region, y_offsets, staff)
+    region = _calculate_region(staff)
     image_dimensions = get_tr_omr_canvas_size(
         (int(region[3] - region[1]), int(region[2] - region[0]))
     )
@@ -293,14 +238,13 @@ def _dewarp_staff(
 
 def parse_staff_image(
     debug: Debug,
-    ranges: list[float],
     index: int,
     staff: Staff,
     image: NDArray,
     perform_dewarp: bool,
 ) -> ResultStaff | None:
     staff_image, transformed_staff = prepare_staff_image(
-        debug, index, ranges, staff, image, perform_dewarp=perform_dewarp
+        debug, index, staff, image, perform_dewarp=perform_dewarp
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
@@ -407,15 +351,6 @@ def merge_and_clean(staffs: list[ResultStaff], force_single_clef_type: bool) -> 
     return result
 
 
-def determine_ranges(staffs: list[MultiStaff]) -> list[float]:
-    staff_centers = []
-    for voice in staffs:
-        for staff in voice.staffs:
-            staff_centers.append((staff.max_y + staff.min_y) // 2)
-    staff_centers = sorted(staff_centers)
-    return staff_centers
-
-
 def remember_new_line(measures: list[ResultMeasure]) -> None:
     if len(measures) > 0:
         measures[0].is_new_line = True
@@ -437,7 +372,6 @@ def parse_staffs(
     # even if it's part of a grand staff.
     number_of_voices = _get_number_of_voices(staffs)
     i = 0
-    ranges = determine_ranges(staffs)
     voices = []
     for voice in range(number_of_voices):
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
@@ -447,7 +381,7 @@ def parse_staffs(
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
-            result_staff = parse_staff_image(debug, ranges, i, staff, image, perform_dewarp)
+            result_staff = parse_staff_image(debug, i, staff, image, perform_dewarp)
             if result_staff is None:
                 eprint("Staff was filtered out", i)
                 i += 1
