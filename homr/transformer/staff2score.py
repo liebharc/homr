@@ -1,10 +1,9 @@
 import os
 
-import albumentations as alb  # type: ignore
 import cv2
+import numpy as np
 import safetensors
 import torch
-from albumentations.pytorch import ToTensorV2  # type: ignore
 
 from homr.debug import AttentionDebug
 from homr.transformer.configs import Config
@@ -40,7 +39,7 @@ class Staff2Score:
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
     def predict(self, image: NDArray, debug: AttentionDebug | None = None) -> list[str]:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         imgs_tensor = self._image_to_tensor(image)
         return self._generate(
             imgs_tensor,
@@ -48,7 +47,7 @@ class Staff2Score:
         )
 
     def _image_to_tensor(self, image: NDArray) -> torch.Tensor:
-        transformed = _transform(image=image)["image"][:1]
+        transformed = _transform(image=image)
         imgs_tensor = transformed.float().unsqueeze(1)
         return imgs_tensor.to(self.device)  # type: ignore
 
@@ -64,13 +63,25 @@ class Staff2Score:
         )
 
 
-_transform = alb.Compose(
-    [
-        alb.ToGray(),
-        alb.Normalize((0.7931, 0.7931, 0.7931), (0.1738, 0.1738, 0.1738)),
-        ToTensorV2(),
-    ]
-)
+class ConvertToTensor:
+    def __init__(self):
+        self.mean = torch.tensor([0.7931]).view(1, 1, 1)
+        self.std = torch.tensor([0.1738]).view(1, 1, 1)
+
+    def to_tensor(self, img: NDArray) -> torch.Tensor:
+        img_array = img.astype(np.float32) / 255.0
+        return torch.tensor(img_array)
+
+    def normalize(self, tensor: torch.Tensor) -> torch.Tensor:
+        return (tensor - self.mean) / self.std
+
+    def __call__(self, image: NDArray) -> torch.Tensor:
+        tensor = self.to_tensor(image)
+        tensor = self.normalize(tensor)
+        return tensor
+
+
+_transform = ConvertToTensor()
 
 
 def readimg(config: Config, path: str) -> NDArray:
@@ -80,19 +91,19 @@ def readimg(config: Config, path: str) -> NDArray:
 
     if img.shape[-1] == 4:  # noqa: PLR2004
         img = 255 - img[:, :, 3]
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     elif img.shape[-1] == 3:  # noqa: PLR2004
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     elif len(img.shape) == 2:  # noqa: PLR2004
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        # Image is already gray scale
+        pass
     else:
         raise RuntimeError("Unsupport image type!")
 
-    h, w, c = img.shape
+    h, w = img.shape
     size_h = config.max_height
     new_h = size_h
     new_w = int(size_h / h * w)
     new_w = new_w // config.patch_size * config.patch_size
     img = cv2.resize(img, (new_w, new_h))
-    img = _transform(image=img)["image"][:1]
+    img = _transform(image=img)
     return img
