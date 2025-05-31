@@ -10,19 +10,17 @@ documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-numpy = "1.26.4"
-tensorflow = "2.16.1"
-types-tensorflow = "2.16.0.20240428"
-opencv-python-headless = "^4.11.0.86 "
+numpy = "^2.1.3"
+tensorflow = "^2.19.0"
+types-tensorflow = "^2.18.0.20250516"
+opencv-python-headless = "^4.11.0.86"
 Pillow = "^11.2.1"
 types-Pillow = "^10.2.0.20240822"
 scipy = "1.13.0"
-torch = "2.2.2"
+torch = "^2.4.1"
 typing_extensions = "^4.13.2"
-transformers = "4.40.2"
-x-transformers = "1.30.0"
-albumentations = "^2.0.7"
-timm = "0.9.16"
+transformers = "^4.52.4"
+x-transformers = "^2.3.11"
 musicxml = "^1.4"
 easyocr = "^1.7.2"
 
@@ -38,8 +36,8 @@ pyclean = "^3.1.0"
 coverage = "^7.8.2"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
-torchvision = "0.17.2"
-transformers = {extras = ["torch"], version = "4.40.2"}
+torchvision = "^0.19.1"
+transformers = {extras = ["torch"], version = "^4.52.4"}
 cairosvg = "^2.8.2"
 
 [tool.poetry.group.docs]
