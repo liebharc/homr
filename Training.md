@@ -13,6 +13,24 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 146 with triplets
+
+Commit: 5dfe630c7aac942d9cf6cde64c93f2ce7c018068
+Date: 26 Mai 2025
+SER: 11%
+Validation result: 13.5
+
+Added triplets to the output and updated the staff detection crop sizes.
+
+## Run 146
+
+Commit: 5dfe630c7aac942d9cf6cde64c93f2ce7c018068
+Date: 26 Mai 2025
+SER: 13% # Without triplets
+Validation result: 9.5 # Without triplets
+
+Fixed an issue with the grandstaff dataset. Added triplets to the vocabulary.
+
 ## Run 101
 
 Commit: ba12ebef4606948816a06f4a011248d07a6f06da
