@@ -57,7 +57,7 @@ class ScoreTransformerWrapper(nn.Module):
             nn.Linear(config.decoder_dim, dim) if config.decoder_dim != dim else nn.Identity()
         )
         self.attn_layers = attn_layers
-        self.norm = nn.LayerNorm(dim)
+        self.post_emb_norm = nn.LayerNorm(dim)
         self.init_()
 
         self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
@@ -72,9 +72,6 @@ class ScoreTransformerWrapper(nn.Module):
             nn.init.normal_(self.rhythm_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
             return
-        nn.init.kaiming_normal_(self.lift_emb.emb.weight)
-        nn.init.kaiming_normal_(self.pitch_emb.emb.weight)
-        nn.init.kaiming_normal_(self.rhythm_emb.emb.weight)
 
     def forward(
         self,
@@ -92,6 +89,7 @@ class ScoreTransformerWrapper(nn.Module):
             + self.pos_emb(rhythms)
         )
 
+        x = self.post_emb_norm(x)
         x = self.project_emb(x)
         debug = kwargs.pop("debug", None)
 
@@ -103,8 +101,6 @@ class ScoreTransformerWrapper(nn.Module):
         else:
             x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
             center_of_attention = None
-
-        x = self.norm(x)
 
         out_lifts = self.to_logits_lift(x)
         out_pitchs = self.to_logits_pitch(x)
