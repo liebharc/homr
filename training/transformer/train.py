@@ -92,7 +92,7 @@ def _check_datasets_are_present() -> None:
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 30
+    number_of_epochs = 100
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -133,6 +133,8 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         per_device_eval_batch_size=24,
         num_train_epochs=number_of_epochs,
         weight_decay=0.01,
+        warmup_ratio=0.1,
+        lr_scheduler_type="cosine",
         load_best_model_at_end=False,
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
