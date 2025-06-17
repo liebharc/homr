@@ -110,7 +110,7 @@ class TrOMRParser:
             modifier = DurationModifier.DOT
         elif is_triplet:
             duration = duration[:-1]
-            modifier = DurationModifier.TRIPLET
+            # modifier = DurationModifier.TRIPLET
         return ResultDuration(
             self.parse_duration_name(duration),
             modifier,

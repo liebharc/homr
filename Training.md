@@ -13,6 +13,24 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Run 156 after average_weights.py checkpoint-164238 checkpoint-166887 checkpoint-169536 checkpoint-172185 checkpoint-174834
+
+Commit: 9a8eb56757d40256e0c664c46b4822d4a856fbda
+Date: 17 Jun 2025
+SER: 13%
+Validation result: 9.6
+
+Average results around the lowest validation loss. In the end we just could have excecuted run 156 with only 65 epochs.
+
+## Run 156
+
+Commit: 9a8eb56757d40256e0c664c46b4822d4a856fbda
+Date: 17 Jun 2025
+SER: 18%
+Validation result: 18.0
+
+Larger decoder and more epochs.
+
 ## Run 146 with triplets
 
 Commit: 5dfe630c7aac942d9cf6cde64c93f2ce7c018068
