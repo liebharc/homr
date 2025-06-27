@@ -62,7 +62,7 @@ class Config:
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 89
+        self.num_rhythm_tokens = 87
         self.num_note_tokens = 2
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
@@ -72,7 +72,7 @@ class Config:
         self.encoder_dim = 256
         self.encoder_heads = 8
         self.decoder_dim = 256
-        self.decoder_depth = 8
+        self.decoder_depth = 12
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()

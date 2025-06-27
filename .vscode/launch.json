@@ -1,13 +1,58 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python Debugger: Current File",
-            "type": "debugpy",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
-        }
-    ]
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Python Debugger: Current File",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${file}",
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "Python Debugger: Main",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/homr/main.py",
+			"console": "integratedTerminal",
+			"args": ["--debug", "--cache", "test.jpg"]
+		},
+		{
+			"name": "Python Debugger: Train Transformer",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/training/transformer/train.py",
+			"console": "integratedTerminal",
+			"args": [""]
+		},
+		{
+			"name": "Python Debugger: Calc SER",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/validation/symbol_error_rate.py",
+			"console": "integratedTerminal",
+			"args": [
+				"${workspaceFolder}/current_training/checkpoint-16481/model.safetensors"
+			]
+		},
+		{
+			"name": "Python Debugger: Convert grandstaff",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/training/convert_grandstaff.py",
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "Python Debugger: Convert PRiMuS",
+			"type": "debugpy",
+			"python": "${workspaceFolder}/.venv/bin/python",
+			"request": "launch",
+			"program": "${workspaceFolder}/training/convert_primus.py",
+			"console": "integratedTerminal"
+		}
+	]
 }

@@ -317,7 +317,7 @@ def split_semantic_file(
         return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
 
 
-def split_symbols(  # noqa: C901
+def split_symbols(  # noqa: C901, PLR0912
     merged: list[str], convert_to_modified_semantic: bool = True
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     """
@@ -378,8 +378,36 @@ def split_symbols(  # noqa: C901
                 predrhythm += symbolrhythm
                 prednote += symbolnote
                 predlift += symbollift
-        predlifts.append(predlift)
-        predpitchs.append(predpitch)
-        predrhythms.append(predrhythm)
-        prednotes.append(prednote)
+        if len(predpitch) > 0:
+            predlifts.append(predlift)
+            predpitchs.append(predpitch)
+            predrhythms.append(predrhythm)
+            prednotes.append(prednote)
     return predlifts, predpitchs, predrhythms, prednotes
+
+
+if __name__ == "__main__":
+    import os
+    from collections import defaultdict
+
+    all_lift: dict[str, int] = defaultdict(int)
+    all_pitch: dict[str, int] = defaultdict(int)
+    all_rhythm: dict[str, int] = defaultdict(int)
+    for dirpath, _, filenames in os.walk("datasets/Lieder-main/"):
+        for filename in filenames:
+            if filename.endswith(".semantic"):
+                with open(os.path.join(dirpath, filename)) as file:
+                    symbols = file.readlines()
+                    lifts, pitches, rhythms, _ = split_symbols(symbols)
+                for symbols in lifts:
+                    for symbol in symbols:
+                        all_lift[symbol] += 1
+                for symbols in pitches:
+                    for symbol in symbols:
+                        all_pitch[symbol] += 1
+                for symbols in rhythms:
+                    for symbol in symbols:
+                        all_rhythm[symbol] += 1
+    print(all_lift)  # noqa: T201
+    print(all_pitch)  # noqa: T201
+    print(all_rhythm)  # noqa: T201

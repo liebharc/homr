@@ -92,7 +92,7 @@ def _check_datasets_are_present() -> None:
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 30
+    number_of_epochs = 70
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -125,14 +125,16 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
         learning_rate=1e-4,
         optim="adamw_torch",  # TrOMR Paper page 3 species an Adam optimizer
-        per_device_train_batch_size=16,  # TrOMR Paper page 3
-        per_device_eval_batch_size=8,
+        per_device_train_batch_size=48,
+        per_device_eval_batch_size=24,
         num_train_epochs=number_of_epochs,
         weight_decay=0.01,
+        warmup_ratio=0.1,
+        lr_scheduler_type="cosine",
         load_best_model_at_end=False,
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
@@ -173,3 +175,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     model_destination = os.path.join(git_root, "homr", "transformer", f"pytorch_model_{run_id}.pth")
     torch.save(model.state_dict(), model_destination)
     eprint(f"Saved model to {model_destination}")
+
+
+if __name__ == "__main__":
+    train_transformer()

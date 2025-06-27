@@ -42,7 +42,8 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         if is_staff_with_accidentals:
             interesting_results.append((str.join(" ", expected), str.join(" ", actual)))
         percentage = round(i / total * 100)
-        eprint(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}%")
+        img_path_rel = os.path.relpath(img_path)
+        eprint(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}% ({img_path_rel})")
 
     for result in interesting_results:
         eprint("Expected:", result[0])

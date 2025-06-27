@@ -270,8 +270,10 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
     multiprocessing.set_start_method("spawn")
     only_recreate_semantic_files = False
-    # if "--only-semantic" in sys.argv:
-    only_recreate_semantic_files = True
+    if "--only-semantic" in sys.argv:
+        only_recreate_semantic_files = True
     convert_grandstaff(only_recreate_semantic_files)

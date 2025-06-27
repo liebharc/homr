@@ -9,7 +9,6 @@ from training import download
 from training.run_id import get_run_id
 from training.segmentation import train
 from training.segmentation.model_utils import save_model
-from training.transformer.train import train_transformer
 
 
 def get_segmentation_model_path(model_name: str) -> str:
@@ -22,11 +21,6 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 
 parser = argparse.ArgumentParser(description="Train a model")
 parser.add_argument("model_name", type=str, help="The name of the model to train")
-parser.add_argument(
-    "--fp32",
-    action="store_true",
-    help="Only applicable for the transformer: Trains with fp32 accuracy",
-)
 args = parser.parse_args()
 
 model_type = args.model_name
@@ -64,7 +58,10 @@ elif model_type in ["unet_from_checkpoint", "segnet_from_checkpoint"]:
     save_model(model, meta, filename)
     eprint("Model saved as " + filename)
 elif model_type == "transformer":
-    train_transformer(fp32=args.fp32)
+    eprint(
+        "Run training/transformers/train.py directly to avoid issues "
+        + "with loading Tensorflow and Pytorch at the same time"
+    )
 else:
     eprint("Unknown model: " + model_type)
     sys.exit(1)
