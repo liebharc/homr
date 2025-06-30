@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Rim 140
+
+Commit: 4a0d7991b3824f2a667a237b1370a8999cd3695e
+Day: 29 Jun 2024
+SER: 9%
+Validation result: 7.8
+
+Updated dependencies.
+
 ## Run 101
 
 Commit: ba12ebef4606948816a06f4a011248d07a6f06da
