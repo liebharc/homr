@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import random
 from pathlib import Path
 
 import cv2
@@ -89,7 +90,7 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
             return None, None
         middle = central_valley
 
-    overlap = 10
+    overlap = np.random.randint(0, 15) + 10
     if middle < overlap or middle > image.shape[0] - overlap:
         eprint(f"INFO: Failed to split {path}, middle is at {middle}")
         return None, None
@@ -102,7 +103,9 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    result = add_image_into_tr_omr_canvas(image)
+    margin_top = random.randint(5, 20)
+    margin_bottom = random.randint(5, 20)
+    result = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
     return result
 
 
