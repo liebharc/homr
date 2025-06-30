@@ -28,7 +28,9 @@ class Staff2Score:
                     tensors[k] = f.get_tensor(k)
             self.model.load_state_dict(tensors, strict=False)
         elif torch.cuda.is_available():
-            self.model.load_state_dict(torch.load(checkpoint_file_path), strict=False)
+            self.model.load_state_dict(
+                torch.load(checkpoint_file_path, weights_only=True), strict=False
+            )
         else:
             self.model.load_state_dict(
                 torch.load(checkpoint_file_path, map_location=torch.device("cpu")), strict=False
