@@ -1,3 +1,5 @@
+# type: ignore
+
 import argparse
 from pathlib import Path
 
@@ -12,12 +14,12 @@ from homr.transformer.tromr_arch import TrOMR
 def load_checkpoint(path, model):
     if ".safetensors" in path:
         tensors = {}
-        with safetensors.safe_open(path, framework="pt", device=0) as f:  # type: ignore
+        with safetensors.safe_open(path, framework="pt", device=0) as f:
             for k in f.keys():
                 tensors[k] = f.get_tensor(k)
         model.load_state_dict(tensors, strict=False)
     else:
-        model.load_state_dict(torch.load(path, map_location="cpu"), strict=False)
+        model.load_state_dict(torch.load(path, weights_only=True, map_location="cpu"), strict=False)
     return model
 
 

@@ -8,7 +8,6 @@ from PIL import Image
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
 from training.segmentation.dense_dataset_definitions import (
     DENSE_DATASET_DEFINITIONS as DEF,
 )
@@ -70,36 +69,6 @@ def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
                 tar[np.array(cand_y), np.array(cand_x)] = 1
 
     return tar
-
-
-def build_label(
-    seg_path: str, strenghten_channels: dict[int, tuple[int, int]] | None = None
-) -> NDArray:
-    img = Image.open(seg_path)
-    arr = np.array(img)
-    color_set = set(np.unique(arr))
-    color_set.remove(0)  # Remove background color from the candidates
-
-    total_chs = CHANNEL_NUM
-    output = np.zeros(arr.shape + (total_chs,))
-
-    output[..., 0] = np.where(arr == 0, 1, 0)
-    for color in color_set:
-        ch = CLASS_CHANNEL_MAP.get(color, 0)
-        if (ch != 0) and color in HALF_WHOLE_NOTE:
-            note = fill_hole(arr, color)
-            output[..., ch] += note
-        elif ch != 0:
-            output[..., ch] += np.where(arr == color, 1, 0)
-    if strenghten_channels is not None:
-        for ch in strenghten_channels.keys():
-            output[..., ch] = make_symbols_stronger(output[..., ch], strenghten_channels[ch])
-        # The background channel is 1 if all other channels are 0
-        background_ch = np.ones((arr.shape[0], arr.shape[1]))
-        for ch in range(1, total_chs):
-            background_ch = np.where(output[..., ch] == 1, 0, background_ch)
-        output[..., 0] = background_ch
-    return output
 
 
 def close_lines(img: cv2.typing.MatLike) -> cv2.typing.MatLike:

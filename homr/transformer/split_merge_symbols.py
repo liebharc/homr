@@ -397,8 +397,8 @@ if __name__ == "__main__":
         for filename in filenames:
             if filename.endswith(".semantic"):
                 with open(os.path.join(dirpath, filename)) as file:
-                    symbols = file.readlines()
-                    lifts, pitches, rhythms, _ = split_symbols(symbols)
+                    symbols: list[str] = file.readlines()
+                    lifts, pitches, rhythms, _ = split_symbols(symbols)  # type: ignore
                 for symbols in lifts:
                     for symbol in symbols:
                         all_lift[symbol] += 1

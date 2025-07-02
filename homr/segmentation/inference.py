@@ -1,107 +1,80 @@
-import json
-import os
-from typing import Any
-
 import numpy as np
-from PIL import Image
+import torch
 
-from homr.simple_logging import eprint
+from homr.segmentation.model import CamVidModel  # type: ignore
 from homr.type_definitions import NDArray
 
 
-class InferenceModel:
-    def __init__(self, model_path: str) -> None:
-        model, metadata = _load_model(model_path)
-        self.model = model
-        self.input_shape = metadata["input_shape"]
-        self.output_shape = metadata["output_shape"]
+def split_into_patches(image: NDArray, win_size: int, step_size: int = -1) -> NDArray:
+    if step_size < 0:
+        step_size = win_size // 2
 
-    def inference(  # noqa: C901, PLR0912
-        self,
-        image: NDArray,
-        step_size: int = 128,
-        batch_size: int = 16,
-        manual_th: Any | None = None,
-    ) -> tuple[NDArray, NDArray]:
+    data = []
+    for y in range(0, image.shape[0], step_size):
+        if y + win_size > image.shape[0]:
+            y = image.shape[0] - win_size  # noqa: PLW2901
+        for x in range(0, image.shape[1], step_size):
+            if x + win_size > image.shape[1]:
+                x = image.shape[1] - win_size  # noqa: PLW2901
+            hop = image[y : y + win_size, x : x + win_size]
+            data.append(hop)
+    return np.array(data)
 
-        # Collect data
-        # Tricky workaround to avoid random mistery transpose when loading with 'Image'.
-        image_rgb = Image.fromarray(image).convert("RGB")
-        image = np.array(image_rgb)
-        win_size = self.input_shape[1]
-        data = []
-        for y in range(0, image.shape[0], step_size):
-            if y + win_size > image.shape[0]:
-                y = image.shape[0] - win_size  # noqa: PLW2901
-            for x in range(0, image.shape[1], step_size):
-                if x + win_size > image.shape[1]:
-                    x = image.shape[1] - win_size  # noqa: PLW2901
-                hop = image[y : y + win_size, x : x + win_size]
-                data.append(hop)
 
-        # Predict
-        pred = []
-        for idx in range(0, len(data), batch_size):
-            eprint(f"{idx+1}/{len(data)} (step: {batch_size})", end="\r")
-            batch = np.array(data[idx : idx + batch_size])
-            out = self.model.serve(batch)
-            pred.append(out)
-        eprint(f"{len(data)}/{len(data)} (step: {batch_size})")  # Add newline after progress
+def merge_patches(
+    patches: NDArray, image_shape: list[int], win_size: int, step_size: int = -1
+) -> NDArray:
+    if step_size < 0:
+        step_size = win_size // 2
 
-        # Merge prediction patches
-        output_shape = image.shape[:2] + (self.output_shape[-1],)
-        out = np.zeros(output_shape, dtype=np.float32)
-        mask = np.zeros(output_shape, dtype=np.float32)
-        hop_idx = 0
-        for y in range(0, image.shape[0], step_size):
-            if y + win_size > image.shape[0]:
-                y = image.shape[0] - win_size  # noqa: PLW2901
-            for x in range(0, image.shape[1], step_size):
-                if x + win_size > image.shape[1]:
-                    x = image.shape[1] - win_size  # noqa: PLW2901
-                batch_idx = hop_idx // batch_size
-                remainder = hop_idx % batch_size
-                hop = pred[batch_idx][remainder]
-                out[y : y + win_size, x : x + win_size] += hop
-                mask[y : y + win_size, x : x + win_size] += 1
-                hop_idx += 1
+    reconstructed = np.zeros(image_shape, dtype=np.float32)
+    weight = np.zeros(image_shape, dtype=np.float32)
 
-        out /= mask
-        if manual_th is None:
-            class_map = np.argmax(out, axis=-1)
+    idx = 0
+    for iy in range(0, image_shape[0], step_size):
+        if iy + win_size > image_shape[0]:
+            y = image_shape[0] - win_size
         else:
-            if len(manual_th) != output_shape[-1] - 1:
-                raise ValueError(f"{manual_th}, {output_shape[-1]}")
-            class_map = np.zeros(out.shape[:2] + (len(manual_th),))
-            for idx, th in enumerate(manual_th):
-                class_map[..., idx] = np.where(out[..., idx + 1] > th, 1, 0)
+            y = iy
+        for ix in range(0, image_shape[1], step_size):
+            if ix + win_size > image_shape[1]:
+                x = image_shape[1] - win_size
+            else:
+                x = ix
 
-        return class_map, out
+            reconstructed[y : y + win_size, x : x + win_size] += patches[idx]
+            weight[y : y + win_size, x : x + win_size] += 1
+            idx += 1
 
+    # Avoid division by zero
+    weight[weight == 0] = 1
+    reconstructed /= weight
 
-cached_segmentation: dict[str, Any] = {}
+    return reconstructed.astype(patches[0].dtype)
 
 
 def inference(
     model_path: str,
     image: NDArray,
-    step_size: int = 128,
-    batch_size: int = 16,
-    manual_th: Any | None = None,
-) -> tuple[NDArray, NDArray]:
-    if model_path not in cached_segmentation:
-        model = InferenceModel(model_path)
-        cached_segmentation[model_path] = model
-    else:
-        model = cached_segmentation[model_path]
-    return model.inference(image, step_size, batch_size, manual_th)
+    out_classes: int,
+) -> NDArray:
 
+    model = CamVidModel(out_classes=out_classes)
+    model.load_state_dict(torch.load(model_path, weights_only=True), strict=False)
+    images = split_into_patches(image, win_size=320, step_size=320)
 
-def _load_model(model_path: str) -> tuple[Any, dict[str, Any]]:
-    """Load model and metadata"""
-    import tensorflow as tf
+    # Switch the model to evaluation mode
+    with torch.inference_mode():
+        model.eval()
+        logits = model(torch.tensor(images).permute(0, 3, 1, 2))  # Get raw logits from the model
 
-    model = tf.saved_model.load(model_path)
-    with open(os.path.join(model_path, "meta.json")) as f:
-        metadata = json.loads(f.read())
-    return model, metadata
+    # Apply softmax to get class probabilities
+    # Shape: [batch_size, num_classes, H, W]
+
+    pr_masks = logits.softmax(dim=1)
+    # Convert class probabilities to predicted class labels
+    pr_masks = pr_masks.argmax(dim=1)  # Shape: [batch_size, H, W]
+
+    return merge_patches(
+        pr_masks.cpu().detach().numpy(), image.shape[0:2], win_size=320, step_size=320
+    )

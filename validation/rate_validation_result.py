@@ -12,7 +12,7 @@ from homr.simple_logging import eprint
 
 
 class Note:
-    def __init__(self, note: mxl.XMLNote) -> None:  # type: ignore
+    def __init__(self, note: mxl.XMLNote) -> None:
         self.note = note
         self.is_chord = get_child_of_type(note, mxl.XMLChord) is not None
         self.pitch = get_child_of_type(note, mxl.XMLPitch)

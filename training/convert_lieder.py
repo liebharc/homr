@@ -20,7 +20,6 @@ from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
-from training.segmentation.model_utils import write_text_to_file
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.absolute()
@@ -120,6 +119,11 @@ def _create_musicxml_and_svg_files() -> None:
         os.remove("job.json")
         sys.exit(1)
     os.remove("job.json")
+
+
+def write_text_to_file(text: str, path: str) -> None:
+    with open(path, "w") as f:
+        f.write(text)
 
 
 def _split_file_into_staffs(

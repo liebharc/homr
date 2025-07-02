@@ -125,12 +125,10 @@ class ScoreTransformerWrapper(nn.Module):
         image_attention_2d = (
             image_attention.reshape(self.attention_height, self.attention_width).cpu().numpy()
         )
-        center_of_attention = np.unravel_index(
-            image_attention_2d.argmax(), image_attention_2d.shape
-        )
+        center = np.unravel_index(image_attention_2d.argmax(), image_attention_2d.shape)
         center_of_attention = (
-            center_of_attention[0] * self.patch_size,
-            center_of_attention[1] * self.patch_size,
+            float(center[0] * self.patch_size),
+            float(center[1] * self.patch_size),
         )
 
         if debug is not None:
@@ -278,6 +276,8 @@ class ScoreDecoder(nn.Module):
         if mask is not None and mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
             kwargs["mask"] = mask
+        if mask is None:
+            raise ValueError("A mask is required")
 
         rhythmsp, pitchsp, liftsp, notesp, x, _attention = self.net(
             rhythmsi, pitchsi, liftsi, **kwargs

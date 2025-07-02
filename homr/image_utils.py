@@ -4,11 +4,11 @@ from homr.type_definitions import NDArray
 
 
 def _limit_x(image: NDArray, x: float) -> int:
-    return max(0, min(image.shape[1] - 1, int(round(x))))
+    return max(0, min(int(image.shape[1] - 1), int(round(x))))
 
 
 def _limit_y(image: NDArray, y: float) -> int:
-    return max(0, min(image.shape[0] - 1, int(round(y))))
+    return max(0, min(int(image.shape[0] - 1), int(round(y))))
 
 
 def crop_image(image: NDArray, x1: float, y1: float, x2: float, y2: float) -> NDArray:

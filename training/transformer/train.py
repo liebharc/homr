@@ -156,19 +156,19 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
                     tensors[k] = f.get_tensor(k)
             model.load_state_dict(tensors, strict=False)
         else:
-            model.load_state_dict(torch.load(checkpoint_file_path), strict=False)
+            model.load_state_dict(torch.load(checkpoint_file_path, weights_only=True), strict=False)
     else:
         model = TrOMR(config)
 
     try:
-        trainer = Trainer(
+        trainer = Trainer(  # type: ignore
             model,
             train_args,
             train_dataset=datasets["train"],
             eval_dataset=datasets["validation"],
         )
 
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)  # type: ignore
     except KeyboardInterrupt:
         eprint("Interrupted")
 

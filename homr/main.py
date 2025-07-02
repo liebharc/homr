@@ -152,6 +152,7 @@ def process_image(  # noqa: PLR0915
 ) -> list[ResultStaff]:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
+    debug_cleanup: Debug | None = None
     try:
         if config.read_staff_positions:
             image = cv2.imread(image_path)
@@ -164,6 +165,7 @@ def process_image(  # noqa: PLR0915
             title = ""
         else:
             multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
+        debug_cleanup = debug
 
         result_staffs = parse_staffs(
             debug, multi_staffs, image, selected_staff=config.selected_staff
@@ -197,7 +199,8 @@ def process_image(  # noqa: PLR0915
             os.remove(xml_file)
         raise
     finally:
-        debug.clean_debug_files_from_previous_runs()
+        if debug_cleanup is not None:
+            debug_cleanup.clean_debug_files_from_previous_runs()
 
 
 def detect_staffs_in_image(

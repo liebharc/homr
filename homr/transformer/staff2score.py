@@ -33,7 +33,10 @@ class Staff2Score:
             )
         else:
             self.model.load_state_dict(
-                torch.load(checkpoint_file_path, map_location=torch.device("cpu")), strict=False
+                torch.load(
+                    checkpoint_file_path, weights_only=True, map_location=torch.device("cpu")
+                ),
+                strict=False,
             )
         self.model.to(self.device)
 
@@ -51,7 +54,7 @@ class Staff2Score:
     def _image_to_tensor(self, image: NDArray) -> torch.Tensor:
         transformed = _transform(image=image)
         imgs_tensor = transformed.float().unsqueeze(1)
-        return imgs_tensor.to(self.device)  # type: ignore
+        return imgs_tensor.to(self.device)
 
     def _generate(
         self,
@@ -66,7 +69,7 @@ class Staff2Score:
 
 
 class ConvertToTensor:
-    def __init__(self):
+    def __init__(self) -> None:
         self.mean = torch.tensor([0.7931]).view(1, 1, 1)
         self.std = torch.tensor([0.1738]).view(1, 1, 1)
 
@@ -86,7 +89,7 @@ class ConvertToTensor:
 _transform = ConvertToTensor()
 
 
-def readimg(config: Config, path: str) -> NDArray:
+def readimg(config: Config, path: str) -> torch.Tensor:
     img: NDArray = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if img is None:
         raise ValueError("Failed to read image from " + path)
@@ -107,5 +110,5 @@ def readimg(config: Config, path: str) -> NDArray:
     new_w = int(size_h / h * w)
     new_w = new_w // config.patch_size * config.patch_size
     img = cv2.resize(img, (new_w, new_h))
-    img = _transform(image=img)
-    return img
+    tensor = _transform(image=img)
+    return tensor

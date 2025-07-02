@@ -1,8 +1,8 @@
 from typing import Any
 
 from timm.layers import StdConv2dSame  # type: ignore
-from timm.models.resnetv2 import ResNetV2  # type: ignore
-from timm.models.vision_transformer import VisionTransformer  # type: ignore
+from timm.models.resnetv2 import ResNetV2
+from timm.models.vision_transformer import VisionTransformer
 from timm.models.vision_transformer_hybrid import HybridEmbed  # type: ignore
 
 from homr.transformer.configs import Config
@@ -10,7 +10,7 @@ from homr.transformer.configs import Config
 
 def get_encoder(config: Config) -> Any:
     backbone_layers = list(config.backbone_layers)
-    backbone = ResNetV2(
+    backbone = ResNetV2(  # type: ignore
         num_classes=0,
         global_pool="",
         in_chans=config.channels,

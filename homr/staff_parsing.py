@@ -28,8 +28,8 @@ def _have_all_the_same_number_of_staffs(staffs: list[MultiStaff]) -> bool:
 
 
 def _is_close_to_image_top_or_bottom(staff: MultiStaff, image: NDArray) -> bool:
-    tolerance = 50
-    closest_distance_to_top_or_bottom = [
+    tolerance = 50.0
+    closest_distance_to_top_or_bottom: list[float] = [
         min(s.min_x, image.shape[0] - s.max_x) for s in staff.staffs
     ]
     return min(closest_distance_to_top_or_bottom) < tolerance
