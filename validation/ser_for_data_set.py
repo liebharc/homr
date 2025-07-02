@@ -3,7 +3,7 @@ import os
 import re
 
 import cv2
-import editdistance  # type: ignore
+import editdistance
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -12,7 +12,7 @@ from training.transformer.data_set_filters import contains_supported_clef
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], result_file: str, config: Config) -> None:
-    model = Staff2Score(config, keep_all_symbols_in_chord=True)
+    model = Staff2Score(config)
     i = 0
     total = len(dataset)
 

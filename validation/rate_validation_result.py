@@ -4,9 +4,9 @@ import glob
 import os
 import xml.etree.ElementTree as ET
 
-import editdistance  # type: ignore
-import musicxml.xmlelement.xmlelement as mxl  # type: ignore
-from musicxml.parser.parser import _parse_node  # type: ignore
+import editdistance
+import musicxml.xmlelement.xmlelement as mxl
+from musicxml.parser.parser import _parse_node
 
 from homr.simple_logging import eprint
 

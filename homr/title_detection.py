@@ -1,6 +1,6 @@
 import re
 
-import easyocr  # type: ignore
+import easyocr
 
 from homr.debug import Debug
 from homr.model import Staff

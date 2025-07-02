@@ -2,7 +2,7 @@ import math
 
 import cv2
 import numpy as np
-import scipy  # type: ignore
+import scipy
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray

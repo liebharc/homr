@@ -9,7 +9,7 @@ import sys
 from io import BytesIO
 from pathlib import Path
 
-import cairosvg  # type: ignore
+import cairosvg
 import cv2
 import numpy as np
 from PIL import Image

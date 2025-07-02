@@ -6,9 +6,9 @@ import cv2
 import numpy as np
 import PIL
 import PIL.Image
-from scipy.signal import find_peaks  # type: ignore
-from torchvision import transforms as tr  # type: ignore
-from torchvision.transforms import Compose  # type: ignore
+from scipy.signal import find_peaks
+from torchvision import transforms as tr
+from torchvision.transforms import Compose
 
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint

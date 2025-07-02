@@ -142,9 +142,14 @@ class TrOMRParser:
             return ResultNote(ResultPitch("C", 4, 0), ResultDuration(constants.duration_of_quarter))
 
     def parse_notes(self, notes: str) -> ResultChord | None:
-        note_or_rest_parts = notes.split("|")
-        rest_parts = [rest_part for rest_part in note_or_rest_parts if rest_part.startswith("rest")]
-        note_parts = [note_part for note_part in note_or_rest_parts if note_part.startswith("note")]
+        note_parts = notes.split("|")
+        rest_parts = [rest_part for rest_part in note_parts if rest_part.startswith("rest")]
+        note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
+        if len(note_parts) == 0:
+            if len(rest_parts) == 0:
+                return None
+            else:
+                return self.parse_rest(rest_parts[0])
         result_notes = [self.parse_note(note_part) for note_part in note_parts]
         min_duration = get_min_duration(result_notes)
         for rest_part in rest_parts:

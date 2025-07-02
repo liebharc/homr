@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from x_transformers.x_transformers import (  # type: ignore
+from x_transformers.x_transformers import (
     AbsolutePositionalEmbedding,
     AttentionLayers,
     Decoder,
@@ -180,7 +180,6 @@ class ScoreDecoder(nn.Module):
         eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
-        keep_all_symbols_in_chord: bool = False,
         **kwargs: Any,
     ) -> list[str]:
         was_training = self.net.training
@@ -196,7 +195,7 @@ class ScoreDecoder(nn.Module):
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         mask = kwargs.pop("mask", None)
-        merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
+        merger = SymbolMerger()
 
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)

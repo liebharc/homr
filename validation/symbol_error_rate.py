@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import cv2
-import editdistance  # type: ignore
+import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
@@ -14,7 +14,7 @@ from training.music_xml import group_in_measures, music_xml_to_semantic
 
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
-    model = Staff2Score(config, keep_all_symbols_in_chord=True)
+    model = Staff2Score(config)
     checkpoint_file = Path(config.filepaths.checkpoint).resolve()
     result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
     all_sers = []
