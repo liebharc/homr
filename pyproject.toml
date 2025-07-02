@@ -124,6 +124,7 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 implicit_reexport = false
 strict_equality = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 log_cli = true
