@@ -2,7 +2,7 @@ import os
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 
-unet_path = os.path.join(script_location, "unet_160-777e3c95d3c486b058868d6fa60d2a255c1ff629.pth")
+unet_path = os.path.join(script_location, "unet_144-d6eda3cccad148085bcf62cae34ff1f805e02bab.pth")
 segnet_path = os.path.join(
     script_location, "segnet_143-aa8e2f59ef1bc8ce3b9c79672b0fb559f759f782.pth"
 )
