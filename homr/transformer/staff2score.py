@@ -12,9 +12,8 @@ from homr.type_definitions import NDArray
 
 
 class Staff2Score:
-    def __init__(self, config: Config, keep_all_symbols_in_chord: bool = False) -> None:
+    def __init__(self, config: Config) -> None:
         self.config = config
-        self.keep_all_symbols_in_chord = keep_all_symbols_in_chord
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = TrOMR(config)
         self.model.eval_mode()
@@ -63,7 +62,6 @@ class Staff2Score:
     ) -> list[str]:
         return self.model.generate(
             imgs_tensor,
-            keep_all_symbols_in_chord=self.keep_all_symbols_in_chord,
             debug=debug,
         )
 

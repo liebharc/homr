@@ -24,7 +24,7 @@ from training.segmentation.build_label import HALF_WHOLE_NOTE, fill_hole
 from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
 
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
-import albumentations as A  # type: ignore  # noqa
+import albumentations as A  # noqa
 
 
 def process_image(path: str, patch_size: int) -> list[tuple[str, int, int]]:

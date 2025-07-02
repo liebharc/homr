@@ -1,4 +1,4 @@
-import musicxml.xmlelement.xmlelement as mxl  # type: ignore
+import musicxml.xmlelement.xmlelement as mxl
 
 from homr import constants
 from homr.results import (

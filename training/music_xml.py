@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 
-import musicxml.xmlelement.xmlelement as mxl  # type: ignore
-from musicxml.parser.parser import _parse_node  # type: ignore
+import musicxml.xmlelement.xmlelement as mxl
+from musicxml.parser.parser import _parse_node
 
 from homr import constants
 from homr.circle_of_fifths import KeyTransformation, circle_of_fifth_to_key_signature

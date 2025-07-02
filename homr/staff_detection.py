@@ -3,7 +3,7 @@ from collections.abc import Generator, Iterable
 import cv2
 import cv2.typing as cvt
 import numpy as np
-from scipy import signal  # type: ignore
+from scipy import signal
 
 from homr import constants
 from homr.bounding_boxes import (
