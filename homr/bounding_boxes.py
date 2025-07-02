@@ -6,7 +6,7 @@ from typing import Any, TypeVar, cast
 import cv2
 import cv2.typing as cvt
 import numpy as np
-from scipy import ndimage  # type: ignore
+from scipy import ndimage
 
 from homr import constants
 from homr.image_utils import crop_image

@@ -1,4 +1,4 @@
-import musicxml.xmlelement.xmlelement as mxl  # type: ignore
+import musicxml.xmlelement.xmlelement as mxl
 
 from homr import constants
 from homr.results import (
@@ -146,6 +146,11 @@ def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ign
     for note in note_group.notes:
         result.append(build_note(note, not is_first))
         is_first = False
+    max_duration = max([n.duration.duration for n in note_group.notes])
+    if note_group.duration.duration < max_duration:
+        backup = mxl.XMLBackup()
+        backup.add_child(mxl.XMLDuration(value_=max_duration - note_group.duration.duration))
+        result.append(backup)
     return result
 
 

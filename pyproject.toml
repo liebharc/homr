@@ -39,6 +39,7 @@ editdistance = "^0.8.1"
 torchvision = "^0.19.1"
 transformers = {extras = ["torch"], version = "^4.52.4"}
 cairosvg = "^2.8.2"
+types-requests = "^2.32.4.20250611"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]
@@ -124,6 +125,7 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 implicit_reexport = false
 strict_equality = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 log_cli = true

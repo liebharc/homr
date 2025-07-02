@@ -70,7 +70,7 @@ def predict_best(
             debug=debug,
         )
         parser = TrOMRParser()
-        result_staff = parser.parse_tr_omr_output(str.join("", result))
+        result_staff = parser.parse_tr_omr_output(str.join("+", result))
 
         clef_type = _get_clef_type(result[0])
         if clef_type is None:

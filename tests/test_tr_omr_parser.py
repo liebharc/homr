@@ -340,7 +340,7 @@ class TestTrOmrParser(unittest.TestCase):
         self.assertEqual(actual, expected)
 
     def test_parsing_chords_with_rests(self) -> None:
-        data = "rest_quarter|note-A4_half|note-B4_half"
+        data = "rest-quarter|note-A4_half|note-B4_half"
         expected = ResultStaff(
             [
                 ResultMeasure(

@@ -11,8 +11,7 @@ from homr.transformer.configs import default_config
 
 
 class SymbolMerger:
-    def __init__(self, keep_all_symbols_in_chord: bool) -> None:
-        self._keep_all_symbols_in_chord = keep_all_symbols_in_chord
+    def __init__(self) -> None:
         self.merge: list[list[str]] = []
         self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
@@ -66,8 +65,6 @@ class SymbolMerger:
     def _clean_and_sort_chord(self, chord: list[str]) -> list[str]:
         if len(chord) == 1:
             return chord
-        if not self._keep_all_symbols_in_chord:
-            chord = [symbol for symbol in chord if symbol.startswith("note")]
         chord = sorted(chord, key=pitch_name_to_sortable)
         return chord
 
@@ -76,13 +73,8 @@ class SymbolMerger:
         return str.join("+", merged)
 
 
-def merge_single_line(
-    predrhythm: list[str],
-    predpitch: list[str],
-    predlift: list[str],
-    keep_all_symbols_in_chord: bool,
-) -> str:
-    merger = SymbolMerger(keep_all_symbols_in_chord=keep_all_symbols_in_chord)
+def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: list[str]) -> str:
+    merger = SymbolMerger()
 
     for j in range(len(predrhythm)):
         merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
@@ -91,19 +83,14 @@ def merge_single_line(
 
 
 def merge_symbols(
-    predrhythms: list[list[str]],
-    predpitchs: list[list[str]],
-    predlifts: list[list[str]],
-    keep_all_symbols_in_chord: bool = False,
+    predrhythms: list[list[str]], predpitchs: list[list[str]], predlifts: list[list[str]]
 ) -> list[str]:
     merges = []
     for i in range(len(predrhythms)):
         predrhythm = predrhythms[i]
         predlift = predlifts[i]
         predpitch = predpitchs[i]
-        merge = merge_single_line(
-            predrhythm, predpitch, predlift, keep_all_symbols_in_chord=keep_all_symbols_in_chord
-        )
+        merge = merge_single_line(predrhythm, predpitch, predlift)
         merges.append(merge)
     return merges
 
