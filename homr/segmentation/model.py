@@ -145,3 +145,11 @@ class CamVidModel(pl.LightningModule):
                 "frequency": 1,
             },
         }
+
+
+def create_unet() -> CamVidModel:
+    return CamVidModel(encoder_name="resnet34", out_classes=3)
+
+
+def create_segnet() -> CamVidModel:
+    return CamVidModel(out_classes=4)

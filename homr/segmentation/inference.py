@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from homr.segmentation.model import CamVidModel  # type: ignore
+from homr.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.type_definitions import NDArray
 
 
@@ -56,10 +56,13 @@ def merge_patches(
 def inference(
     model_path: str,
     image: NDArray,
-    out_classes: int,
 ) -> NDArray:
-
-    model = CamVidModel(out_classes=out_classes)
+    if "segnet" in model_path:
+        model = create_segnet()
+    elif "unet" in model_path:
+        model = create_unet()
+    else:
+        raise ValueError("Unknown model type: " + model_path)
     model.load_state_dict(torch.load(model_path, weights_only=True), strict=False)
     images = split_into_patches(image, win_size=320, step_size=320)
 

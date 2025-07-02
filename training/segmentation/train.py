@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as BaseDataset
 
 from homr.resize import calc_target_image_size, resize_image
-from homr.segmentation.model import CamVidModel  # type: ignore
+from homr.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 from training.run_id import get_run_id
@@ -238,7 +238,7 @@ def train_segnet(visualize: bool = False) -> None:
     train_loader = DataLoader(train_dataset, batch_size=24, shuffle=False, num_workers=4)
     validation_loader = DataLoader(validation_dataset, batch_size=24, shuffle=False, num_workers=4)
 
-    model = CamVidModel(out_classes=CHANNEL_NUM)
+    model = create_segnet()
 
     trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
 
@@ -265,8 +265,6 @@ def train_unet(visualize: bool = False) -> None:
     images = glob.glob(cvc_root + "/**/image/*.png", recursive=True)
     train_images, val_images = random_split(images)
 
-    channel_num = 3
-
     train_dataset = CvcMuscimaDataset(train_images, augmentation=get_training_augmentation())
 
     if visualize:
@@ -277,9 +275,9 @@ def train_unet(visualize: bool = False) -> None:
     train_loader = DataLoader(train_dataset, batch_size=24, shuffle=False, num_workers=4)
     validation_loader = DataLoader(validation_dataset, batch_size=24, shuffle=False, num_workers=4)
 
-    model = CamVidModel(out_classes=channel_num)
+    model = create_unet()
 
-    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=1, log_every_n_steps=1)
 
     trainer.fit(
         model,

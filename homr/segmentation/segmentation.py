@@ -16,14 +16,14 @@ def generate_pred(image: NDArray) -> tuple[NDArray, NDArray, NDArray, NDArray, N
     if config.unet_path == config.segnet_path:
         raise ValueError("unet_path and segnet_path should be different")
     eprint("Extracting staffline and symbols")
-    staff_symbols_map = inference(config.unet_path, image, 3)
+    staff_symbols_map = inference(config.unet_path, image)
     staff_layer = 1
     staff = np.where(staff_symbols_map == staff_layer, 1, 0)
     symbol_layer = 2
     symbols = np.where(staff_symbols_map == symbol_layer, 1, 0)
 
     eprint("Extracting layers of different symbols")
-    sep = inference(config.segnet_path, image, 4)
+    sep = inference(config.segnet_path, image)
     stems_layer = 1
     stems_rests = np.where(sep == stems_layer, 1, 0)
     notehead_layer = 2
