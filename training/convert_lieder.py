@@ -155,8 +155,8 @@ def _split_file_into_staffs(
                 height = int(height * scale)
 
                 staff_image = image[y : y + height, x : x + width]
-                margin_top = random.randint(0, 10)
-                margin_bottom = random.randint(0, 10)
+                margin_top = random.randint(5, 20)
+                margin_bottom = random.randint(5, 20)
                 preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
                 cv2.imwrite(staff_image_file_name, preprocessed)
                 staff_image_file_name = distort_image(staff_image_file_name)

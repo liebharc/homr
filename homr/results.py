@@ -305,10 +305,10 @@ class ResultNote:
         return str(self)
 
 
-def get_min_duration(notes: list[ResultNote]) -> ResultDuration:
+def get_max_duration(notes: list[ResultNote]) -> ResultDuration:
     if len(notes) == 0:
         return ResultDuration(constants.duration_of_quarter)
-    return min([note.duration for note in notes], key=lambda x: x.duration)
+    return max([note.duration for note in notes], key=lambda x: x.duration)
 
 
 class ResultChord(ResultSymbol):
