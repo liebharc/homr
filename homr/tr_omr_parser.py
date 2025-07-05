@@ -12,7 +12,7 @@ from homr.results import (
     ResultPitch,
     ResultStaff,
     ResultTimeSignature,
-    get_min_duration,
+    get_max_duration,
 )
 from homr.simple_logging import eprint
 
@@ -151,12 +151,24 @@ class TrOMRParser:
             else:
                 return self.parse_rest(rest_parts[0])
         result_notes = [self.parse_note(note_part) for note_part in note_parts]
-        min_duration = get_min_duration(result_notes)
+        chord_duration = self._get_chord_duration(result_notes, rest_parts)
+        return ResultChord(chord_duration, result_notes)
+
+    def _get_chord_duration(
+        self, result_notes: list[ResultNote], rest_parts: list[str]
+    ) -> ResultDuration:
+        """
+        This definition was put together based on some examples:
+        If there is a rest in a chord then we assume that this was done by intention to reduce
+        the chord length.
+        Otherwise we take the max note length.
+        """
+        chord_duration = get_max_duration(result_notes)
         for rest_part in rest_parts:
             rest = self.parse_rest(rest_part)
-            if rest.duration.duration < min_duration.duration:
-                min_duration = rest.duration
-        return ResultChord(min_duration, result_notes)
+            if rest.duration.duration < chord_duration.duration:
+                chord_duration = rest.duration
+        return chord_duration
 
     def parse_rest(self, rest: str) -> ResultChord:
         rest = rest.split("|")[0]
