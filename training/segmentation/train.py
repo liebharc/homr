@@ -298,7 +298,7 @@ def train_segnet(visualize: bool = False) -> None:
 
     model = create_segnet()
 
-    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=10, log_every_n_steps=1)
 
     trainer.fit(
         model,
@@ -310,6 +310,10 @@ def train_segnet(visualize: bool = False) -> None:
 
 
 def train_unet(visualize: bool = False) -> None:
+    """
+    Segnet is layer #5 and #6 have replaced unet.
+    """
+    eprint("Unet is unused and the training code might be removed in future")
 
     script_location = os.path.dirname(os.path.realpath(__file__))
     git_root = Path(script_location).parent.parent.absolute()
