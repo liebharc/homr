@@ -18,10 +18,21 @@ from torch.utils.data import Dataset as BaseDataset
 from homr.resize import calc_target_image_size, resize_image
 from homr.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.simple_logging import eprint
+from homr.staff_detection import make_lines_stronger
 from homr.type_definitions import NDArray
 from training.run_id import get_run_id
-from training.segmentation.build_label import HALF_WHOLE_NOTE, fill_hole
-from training.segmentation.constant_min import CHANNEL_NUM, CLASS_CHANNEL_MAP
+from training.segmentation.build_label import (
+    HALF_WHOLE_NOTE,
+    fill_hole,
+    reconstruct_lines_between_staffs,
+)
+from training.segmentation.dense_dataset_definitions import (
+    CHANNEL_NUM,
+    CLASS_CHANNEL_MAP,
+)
+from training.segmentation.dense_dataset_definitions import (
+    DENSE_DATASET_DEFINITIONS as DEF,
+)
 
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 import albumentations as A  # noqa
@@ -61,11 +72,13 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
             mask = self.last_mask
         else:
             image = cv2.imread(path)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert BGR to Grayscale
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            mask = self._build_label(image, path)
             image = resize_image(image)
             image = self._prepare_image(image)
-            mask = self._build_label(path)
-            mask = resize_image(mask)
+            mask = cv2.resize(
+                mask, (int(image.shape[1]), int(image.shape[0])), interpolation=cv2.INTER_NEAREST
+            )
             self.last_path = path
             self.last_image = image
             self.last_mask = mask
@@ -108,7 +121,7 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
         return patch
 
     @abstractmethod
-    def _build_label(self, mask: str) -> NDArray:
+    def _build_label(self, image: NDArray, mask: str) -> NDArray:
         pass
 
     def _prepare_image(self, image: NDArray) -> NDArray:
@@ -123,15 +136,21 @@ class D2DenseDataset(SegmentationBaseDataset):
     def _get_mask(self, image_name: str) -> str:
         return image_name.replace(".png", "_seg.png").replace("/images/", "/segmentation/")
 
-    def _build_label(self, path: str) -> NDArray:
+    def _build_label(self, image: NDArray, path: str) -> NDArray:
         mask = np.array(Image.open(self._get_mask(path)))
+        mask = reconstruct_lines_between_staffs(image, mask)
         # Create a blank mask to remap the class values
         mask_remap = np.zeros_like(mask)
 
         # Remap the mask according to the dynamically created class map
-        for class_value, new_value in CLASS_CHANNEL_MAP.items():
+        for class_value, new_value in sorted(CLASS_CHANNEL_MAP.items()):
             if class_value in HALF_WHOLE_NOTE:
                 temp_canvas = fill_hole(mask, class_value)
+                mask_remap[temp_canvas == 1] = new_value
+            if class_value in DEF.STAFF:
+                temp_canvas = np.zeros_like(mask_remap)
+                temp_canvas[mask == class_value] = 1
+                temp_canvas = make_lines_stronger(temp_canvas, (3, 3))
                 mask_remap[temp_canvas == 1] = new_value
             else:
                 mask_remap[mask == class_value] = new_value
@@ -146,8 +165,9 @@ class CvcMuscimaDataset(SegmentationBaseDataset):
     def _get_symbol_mask(self, image_name: str) -> str:
         return image_name.replace("/image/", "/symbol/")
 
-    def _build_label(self, path: str) -> NDArray:
+    def _build_label(self, image: NDArray, path: str) -> NDArray:
         mask = np.array(Image.open(self._get_staff_mask(path))).astype(np.uint8)
+        mask = make_lines_stronger(mask, (3, 3))
         symbol = np.array(Image.open(self._get_symbol_mask(path))).astype(np.uint8)
         mask[symbol == 1] = 2
         return mask
@@ -157,13 +177,51 @@ class CvcMuscimaDataset(SegmentationBaseDataset):
         return 255 - image
 
 
+def create_horizontal_gray_gradient(width: int, height: int) -> NDArray:
+    # Create a gradient from 0 to 255 horizontally
+    gradient = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
+    # Convert to 3-channel grayscale image
+    return cv2.merge([gradient, gradient, gradient])
+
+
+def create_vertical_gray_gradient(width: int, height: int) -> NDArray:
+    gradient = np.tile(np.linspace(0, 255, height, dtype=np.uint8), (width, 1)).T
+    return cv2.merge([gradient, gradient, gradient])
+
+
+def blend_with_gradient(image: NDArray, gradient: NDArray, alpha: float = 0.3) -> NDArray:
+    gradient_resized = cv2.resize(gradient, (image.shape[1], image.shape[0]))
+    blended = cv2.addWeighted(image, 1 - alpha, gradient_resized, alpha, 0)
+    return blended
+
+
+class AddGrayGradient(A.ImageOnlyTransform):  # type: ignore
+    def __init__(
+        self,
+        alpha: float = 0.3,
+        direction: str = "horizontal",
+        always_apply: bool = False,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(always_apply, p)
+        self.alpha = alpha
+        self.direction = direction
+
+    def apply(self, image: NDArray, **params: Any) -> NDArray:
+        h, w = image.shape[:2]
+        if self.direction == "horizontal":
+            gradient = create_horizontal_gray_gradient(w, h)
+        else:
+            gradient = create_vertical_gray_gradient(w, h)
+        return blend_with_gradient(image, gradient, self.alpha)
+
+
 # training set images augmentation
 def get_training_augmentation() -> Any:
     train_transform = [
+        AddGrayGradient(alpha=0.4, direction="vertical", p=1.0),
         A.HorizontalFlip(p=0.5),
         A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=1, border_mode=0),
-        # A.PadIfNeeded(min_height=320, min_width=320, always_apply=True),
-        # A.RandomCrop(height=320, width=320, always_apply=True),
         A.GaussNoise(p=0.2),
         A.Perspective(p=0.5),
         A.OneOf(
@@ -210,7 +268,7 @@ def visualize_dataset(dataset: SegmentationBaseDataset) -> None:
         image = np.transpose(image, (1, 2, 0))
         cv2.imwrite(f"{i}_image.png", image)
         cv2.imwrite(f"{i}_mask.png", 255.0 * mask / (CHANNEL_NUM - 1))
-        eprint(np.max(mask), np.max(255.0 * mask / (CHANNEL_NUM - 1)), CHANNEL_NUM)
+        eprint(f"{i}_mask.png", set(np.unique(mask)))
 
 
 def train_segnet(visualize: bool = False) -> None:
@@ -230,7 +288,7 @@ def train_segnet(visualize: bool = False) -> None:
 
     train_dataset = D2DenseDataset(train_images, augmentation=get_training_augmentation())
 
-    if visualize:
+    if visualize or True:
         visualize_dataset(train_dataset)
 
     validation_dataset = D2DenseDataset(val_images, augmentation=None)
@@ -277,7 +335,7 @@ def train_unet(visualize: bool = False) -> None:
 
     model = create_unet()
 
-    trainer = pl.Trainer(max_epochs=1, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
 
     trainer.fit(
         model,

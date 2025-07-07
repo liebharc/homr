@@ -152,4 +152,4 @@ def create_unet() -> CamVidModel:
 
 
 def create_segnet() -> CamVidModel:
-    return CamVidModel(out_classes=4)
+    return CamVidModel(out_classes=6)

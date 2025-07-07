@@ -23,9 +23,9 @@
 			"type": "debugpy",
 			"python": "${workspaceFolder}/.venv/bin/python",
 			"request": "launch",
-			"program": "${workspaceFolder}/training/transformer/train.py",
+			"program": "${workspaceFolder}/training/train.py",
 			"console": "integratedTerminal",
-			"args": [""]
+			"args": ["transformer"]
 		},
 		{
 			"name": "Python Debugger: Calc SER",

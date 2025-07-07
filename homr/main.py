@@ -209,9 +209,7 @@ def detect_staffs_in_image(
     predictions, debug = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache
     )
-    eprint("Loaded segmentation")
     symbols = predict_symbols(debug, predictions)
-    eprint("Predicted symbols")
 
     symbols.staff_fragments = break_wide_fragments(symbols.staff_fragments)
     debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)

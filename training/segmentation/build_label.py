@@ -107,18 +107,62 @@ def make_symbols_stronger(img: NDArray, kernel_size: tuple[int, int] = (5, 5)) -
 
 
 def find_example(
-    dataset_path: str, color: int, max_count: int = 100, mark_value: int = 200
+    dataset_path: str, color: int, max_count: int = 100, mark_value: int = 255
 ) -> NDArray | None:
     files = os.listdir(dataset_path)
     random.shuffle(files)
     for ff in files[:max_count]:
         path = os.path.join(dataset_path, ff)
         img = Image.open(path)
-        arr = np.array(img)
+        arr = np.array(img).astype(np.uint8)
         if color in arr:
-            return np.where(arr == color, mark_value, arr)
+            return np.where(arr == color, mark_value * np.ones_like(arr), arr)
 
     return None
+
+
+def reconstruct_lines_between_staffs(image: NDArray, mask: NDArray) -> NDArray:
+    """
+    Step 1: Find tallest barline in the mask
+    Step 2: Find vertical black lines in the image with height >= 2x tallest barline
+    Return a binary mask highlighting those tall lines
+    """
+    height, width = mask.shape
+    result = np.zeros((height, width), dtype=np.uint8)
+
+    barline_mask = np.isin(mask, DEF.ALL_BARLINES).astype(np.uint8) * 255
+
+    # Use connected components to find barlines
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(barline_mask)
+
+    max_barline_height = 0
+    for i in range(1, num_labels):  # Skip background
+        x, y, w, h, area = stats[i]
+        if h > max_barline_height:
+            max_barline_height = h
+
+    # Threshold for long lines in the RGB image
+    min_required_height = max(2 * max_barline_height, 100)
+
+    # Convert RGB to grayscale, then to binary black pixel mask
+    gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    black_pixels = (gray_img == 0).astype(np.uint8) * 255
+
+    # Morphological operation to connect vertical structures
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, min_required_height))
+    connected = cv2.morphologyEx(black_pixels, cv2.MORPH_OPEN, vertical_kernel)
+
+    # Find connected components again to isolate tall vertical lines
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(connected)
+
+    for i in range(1, num_labels):  # Skip background
+        x, y, w, h, area = stats[i]
+        if h >= min_required_height:
+            result[labels == i] = 1
+
+    mask[(result == 1) & (mask == 0)] = DEF.BRACKETS[0]
+
+    return mask
 
 
 if __name__ == "__main__":
@@ -128,9 +172,28 @@ if __name__ == "__main__":
     git_root = Path(script_location).parent.parent.absolute()
     dataset_root = os.path.join(git_root, "datasets")
     seg_folder = os.path.join(dataset_root, "ds2_dense", "segmentation")
+
+    image = cv2.imread(
+        os.path.join(dataset_root, "ds2_dense", "images", "lg-10247684-aug-beethoven--page-2.png")
+    )
+    mask = np.array(
+        Image.open(
+            os.path.join(
+                dataset_root,
+                "ds2_dense",
+                "segmentation",
+                "lg-10247684-aug-beethoven--page-2_seg.png",
+            )
+        )
+    )
+    result = reconstruct_lines_between_staffs(image, mask)
+    cv2.imwrite("result.png", 255 * result)
+
+    sys.exit(0)
+
     color = int(sys.argv[1])
     with_background = find_example(seg_folder, color)
     if with_background is None:
         eprint("Found no examples")
     else:
-        cv2.imwrite("example.png", 255 * with_background)
+        cv2.imwrite("example.png", with_background)
