@@ -13,8 +13,6 @@ from homr.type_definitions import NDArray
 
 
 def generate_pred(image: NDArray) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
-    if config.unet_path == config.segnet_path:
-        raise ValueError("unet_path and segnet_path should be different")
 
     eprint("Extracting layers of different symbols")
     sep = inference(config.segnet_path, image)

@@ -33,7 +33,7 @@ from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stem
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
 from homr.results import ResultStaff
-from homr.segmentation.config import segnet_path, unet_path
+from homr.segmentation.config import segnet_path
 from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
@@ -308,7 +308,7 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 def download_weights() -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
-    models = [segnet_path, unet_path, default_config.filepaths.checkpoint]
+    models = [segnet_path, default_config.filepaths.checkpoint]
     missing_models = [model for model in models if not os.path.exists(model)]
     if len(missing_models) == 0:
         return

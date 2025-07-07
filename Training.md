@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
+## Rim 152 after update of the staff detection (1240eedca553155b3c75fc9c7f643465383430a0)
+
+Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
+Day: 07 Jul 2025
+SER: 9%
+Validation result: 7.4
+
+Updated staff detection (1240eedca553155b3c75fc9c7f643465383430a0).
+
 ## Rim 152
 
 Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
@@ -38,7 +47,7 @@ Date: 10 Sep 2024
 SER: 9%
 Validation result: 6.4
 
-Training runs now also pick the last iteration and not the one with the lowest validation loss.
+Training runs now pick the last iteration and not the one with the lowest validation loss.
 
 ## Run 100
 
