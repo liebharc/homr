@@ -67,12 +67,12 @@ class Config:
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
         self.encoder_structure = "hybrid"
-        self.encoder_depth = 4
+        self.encoder_depth = 6
         self.backbone_layers = [2, 3, 7]
         self.encoder_dim = 256
         self.encoder_heads = 8
         self.decoder_dim = 256
-        self.decoder_depth = 4
+        self.decoder_depth = 6
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()
