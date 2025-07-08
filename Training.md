@@ -13,16 +13,49 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 2-3 days.
 
-## Rim 152 after update of the staff detection (1240eedca553155b3c75fc9c7f643465383430a0)
+## Run ..
+
+Commit:
+Day:
+SER:
+Validation result:
+
+Transformer depth of 8.
+
+## Run ..
+
+Commit:
+Day:
+SER:
+Validation result:
+
+Transformer depth of 6.
+
+## Run ..
+
+Commit:
+Day:
+SER:
+Validation result:
+
+Transformer depth of 4 (as Polymorphic-TrOmr is using).
+
+## Run 152 after update of the staff detection (1240eedca553155b3c75fc9c7f643465383430a0)
 
 Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
 Day: 07 Jul 2025
 SER: 9%
 Validation result: 7.4
 
-Updated staff detection (1240eedca553155b3c75fc9c7f643465383430a0).
+Updated staff detection:
 
-## Rim 152
+- Resnet18 after 3 epochs (1240eedca553155b3c75fc9c7f643465383430a0): 7.4
+- Resnet18 after 10 epochs (66dd2392759d1746cc9458c097e25aaaa1559fc5):
+- Resnet34 after 10 epochs (a9dd113eb203979b6c2b21403574832da39fee76):
+
+Note at this point the transformer depth is 8 for the decoder and 12 for the encoder.
+
+## Run 152
 
 Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
 Day: 05 Jul 2025
@@ -31,7 +64,7 @@ Validation result: 8.3
 
 Updated dependencies.
 
-## Rim 140
+## Run 140
 
 Commit: 4a0d7991b3824f2a667a237b1370a8999cd3695e
 Day: 29 Jun 2025
