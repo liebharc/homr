@@ -298,7 +298,7 @@ def train_segnet(visualize: bool = False) -> None:
 
     model = create_segnet()
 
-    trainer = pl.Trainer(max_epochs=10, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
 
     trainer.fit(
         model,

@@ -11,9 +11,9 @@ Run `training/train.py transformer`. The script will guide you by asking you to 
 Converting the datasets on itself already takes around 8 hours. This is only required once at the beginning and everytime
 an improvement or fix was done to the conversion.
 
-The training process itself takes depending on the hardware you use a 2-3 days.
+The training process itself takes depending on the hardware you use a 1-2 days.
 
-## Run ..
+## Run 161
 
 Commit:
 Day:
@@ -22,23 +22,23 @@ Validation result:
 
 Transformer depth of 8.
 
-## Run ..
+## Run 160
 
-Commit:
+Commit: bf39c935c9081d04dc1d97e25dcda68ebb0ca40c
 Day:
 SER:
 Validation result:
 
 Transformer depth of 6.
 
-## Run ..
+## Run 159
 
-Commit:
-Day:
-SER:
-Validation result:
+Commit: a9dd113eb203979b6c2b21403574832da39fee76
+Day: 09 Jul 2025
+SER: 11%
+Validation result: 8.4
 
-Transformer depth of 4 (as Polymorphic-TrOmr is using).
+Transformer depth of 4 (as Polymorphic-TrOmr is using). Training was stopped at epoch 59 by a Windows Update.
 
 ## Run 152 after update of the staff detection (1240eedca553155b3c75fc9c7f643465383430a0)
 
@@ -50,8 +50,9 @@ Validation result: 7.4
 Updated staff detection:
 
 - Resnet18 after 3 epochs (1240eedca553155b3c75fc9c7f643465383430a0): 7.4
-- Resnet18 after 10 epochs (66dd2392759d1746cc9458c097e25aaaa1559fc5):
-- Resnet34 after 10 epochs (a9dd113eb203979b6c2b21403574832da39fee76):
+- Resnet18 after 10 epochs (66dd2392759d1746cc9458c097e25aaaa1559fc5): 10.8 (overfitting?)
+- Resnet34 after 3 epochs (): 7.3
+- Resnet34 after 10 epochs (a9dd113eb203979b6c2b21403574832da39fee76): 8.3
 
 Note at this point the transformer depth is 8 for the decoder and 12 for the encoder.
 
