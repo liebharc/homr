@@ -6,7 +6,7 @@ SER failues shown here should be taken with a grain of salt. The SER is calculat
 
 ## How to train
 
-Run `training/train.py transformer`. The script will guide you by asking you to install a few things manually and will then continue to download the datasets, convert the datasets and run the training process.
+Run `training/train.py transformer`. The script will download the datasets, convert the datasets and run the training process.
 
 Converting the datasets on itself already takes around 8 hours. This is only required once at the beginning and everytime
 an improvement or fix was done to the conversion.
@@ -15,19 +15,19 @@ The training process itself takes depending on the hardware you use a 1-2 days.
 
 ## Run 161
 
-Commit:
-Day:
-SER:
-Validation result:
+Commit: 1cd1d06543e885e4d64a74d985b4725c50054c2a
+Day: 11 Jul 2025
+SER: 10%
+Validation result: 8.0
 
 Transformer depth of 8.
 
 ## Run 160
 
 Commit: bf39c935c9081d04dc1d97e25dcda68ebb0ca40c
-Day:
-SER:
-Validation result:
+Day: 10 Jul 2025
+SER: 9%
+Validation result: 7.6
 
 Transformer depth of 6.
 
@@ -51,7 +51,7 @@ Updated staff detection:
 
 - Resnet18 after 3 epochs (1240eedca553155b3c75fc9c7f643465383430a0): 7.4
 - Resnet18 after 10 epochs (66dd2392759d1746cc9458c097e25aaaa1559fc5): 10.8 (overfitting?)
-- Resnet34 after 3 epochs (): 7.3
+- Resnet34 after 3 epochs (1cd1d06543e885e4d64a74d985b4725c50054c2a): 7.3
 - Resnet34 after 10 epochs (a9dd113eb203979b6c2b21403574832da39fee76): 8.3
 
 Note at this point the transformer depth is 8 for the decoder and 12 for the encoder.
