@@ -8,7 +8,7 @@ workspace = os.path.join(os.path.dirname(__file__))
 class FilePaths:
     def __init__(self) -> None:
         self.checkpoint = os.path.join(
-            workspace, "pytorch_model_140-4a0d7991b3824f2a667a237b1370a8999cd3695e.pth"
+            workspace, "pytorch_model_160-bf39c935c9081d04dc1d97e25dcda68ebb0ca40c.pth"
         )
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
@@ -67,12 +67,12 @@ class Config:
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
         self.encoder_structure = "hybrid"
-        self.encoder_depth = 8
+        self.encoder_depth = 6
         self.backbone_layers = [2, 3, 7]
         self.encoder_dim = 256
         self.encoder_heads = 8
         self.decoder_dim = 256
-        self.decoder_depth = 12
+        self.decoder_depth = 6
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()

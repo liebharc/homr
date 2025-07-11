@@ -13,11 +13,11 @@ def prepare_brace_dot_image(
 ) -> NDArray:
     brace_dot = cv2.subtract(symbols, staff)
     """
-    Remove horizontal lines.
+    Remove horizontal lines and Make elements larger.
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 5))
     out = cv2.erode(brace_dot.astype(np.uint8), kernel)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (1, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 35))
     return cv2.dilate(out, kernel)
 
 

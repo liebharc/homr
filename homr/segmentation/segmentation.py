@@ -13,14 +13,6 @@ from homr.type_definitions import NDArray
 
 
 def generate_pred(image: NDArray) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
-    if config.unet_path == config.segnet_path:
-        raise ValueError("unet_path and segnet_path should be different")
-    eprint("Extracting staffline and symbols")
-    staff_symbols_map = inference(config.unet_path, image)
-    staff_layer = 1
-    staff = np.where(staff_symbols_map == staff_layer, 1, 0)
-    symbol_layer = 2
-    symbols = np.where(staff_symbols_map == symbol_layer, 1, 0)
 
     eprint("Extracting layers of different symbols")
     sep = inference(config.segnet_path, image)
@@ -30,6 +22,10 @@ def generate_pred(image: NDArray) -> tuple[NDArray, NDArray, NDArray, NDArray, N
     notehead = np.where(sep == notehead_layer, 1, 0)
     clefs_keys_layer = 3
     clefs_keys = np.where(sep == clefs_keys_layer, 1, 0)
+    staff_layer = 4
+    staff = np.where(sep == staff_layer, 1, 0)
+    symbol_layer = 5
+    symbols = np.where(sep == symbol_layer, 1, 0)
 
     return staff, symbols, stems_rests, notehead, clefs_keys
 

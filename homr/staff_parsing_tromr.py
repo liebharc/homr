@@ -102,6 +102,13 @@ def predict_best(
             best_result = result_staff
             best_attempt = attempt
 
+        if best_distance < 1.0:
+            _fill_in_time_signature(best_result)
+            eprint(
+                "Stopping at attempt", best_attempt + 1, "with distance", best_distance, best_result
+            )
+            return best_result
+
     _fill_in_time_signature(best_result)
     eprint("Taking attempt", best_attempt + 1, "with distance", best_distance, best_result)
     return best_result

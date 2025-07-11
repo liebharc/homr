@@ -44,3 +44,4 @@ _build/
 /*.txt
 
 /lightning_logs
+/*.safetensors

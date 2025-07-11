@@ -6,17 +6,69 @@ SER failues shown here should be taken with a grain of salt. The SER is calculat
 
 ## How to train
 
-Run `training/train.py transformer`. The script will guide you by asking you to install a few things manually and will then continue to download the datasets, convert the datasets and run the training process.
+Run `training/train.py transformer`. The script will download the datasets, convert the datasets and run the training process.
 
 Converting the datasets on itself already takes around 8 hours. This is only required once at the beginning and everytime
 an improvement or fix was done to the conversion.
 
-The training process itself takes depending on the hardware you use a 2-3 days.
+The training process itself takes depending on the hardware you use a 1-2 days.
 
-## Rim 140
+## Run 161
+
+Commit: 1cd1d06543e885e4d64a74d985b4725c50054c2a
+Day: 11 Jul 2025
+SER: 10%
+Validation result: 8.0
+
+Transformer depth of 8.
+
+## Run 160
+
+Commit: bf39c935c9081d04dc1d97e25dcda68ebb0ca40c
+Day: 10 Jul 2025
+SER: 9%
+Validation result: 7.6
+
+Transformer depth of 6.
+
+## Run 159
+
+Commit: a9dd113eb203979b6c2b21403574832da39fee76
+Day: 09 Jul 2025
+SER: 11%
+Validation result: 8.4
+
+Transformer depth of 4 (as Polymorphic-TrOmr is using). Training was stopped at epoch 59 by a Windows Update.
+
+## Run 152 after update of the staff detection (1240eedca553155b3c75fc9c7f643465383430a0)
+
+Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
+Day: 07 Jul 2025
+SER: 9%
+Validation result: 7.4
+
+Updated staff detection:
+
+- Resnet18 after 3 epochs (1240eedca553155b3c75fc9c7f643465383430a0): 7.4
+- Resnet18 after 10 epochs (66dd2392759d1746cc9458c097e25aaaa1559fc5): 10.8 (overfitting?)
+- Resnet34 after 3 epochs (1cd1d06543e885e4d64a74d985b4725c50054c2a): 7.3
+- Resnet34 after 10 epochs (a9dd113eb203979b6c2b21403574832da39fee76): 8.3
+
+Note at this point the transformer depth is 8 for the decoder and 12 for the encoder.
+
+## Run 152
+
+Commit: 46ff7e18fd85d9d2026f9ed18eacf7ae0638a14c
+Day: 05 Jul 2025
+SER: 9%
+Validation result: 8.3
+
+Updated dependencies.
+
+## Run 140
 
 Commit: 4a0d7991b3824f2a667a237b1370a8999cd3695e
-Day: 29 Jun 2024
+Day: 29 Jun 2025
 SER: 9%
 Validation result: 7.8
 
@@ -29,7 +81,7 @@ Date: 10 Sep 2024
 SER: 9%
 Validation result: 6.4
 
-Training runs now also pick the last iteration and not the one with the lowest validation loss.
+Training runs now pick the last iteration and not the one with the lowest validation loss.
 
 ## Run 100
 
