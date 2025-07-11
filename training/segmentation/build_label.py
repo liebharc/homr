@@ -138,8 +138,7 @@ def reconstruct_lines_between_staffs(image: NDArray, mask: NDArray) -> NDArray:
     max_barline_height = 0
     for i in range(1, num_labels):  # Skip background
         x, y, w, h, area = stats[i]
-        if h > max_barline_height:
-            max_barline_height = h
+        max_barline_height = max(max_barline_height, h)
 
     # Threshold for long lines in the RGB image
     min_required_height = max(2 * max_barline_height, 100)
