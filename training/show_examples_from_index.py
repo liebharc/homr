@@ -97,7 +97,7 @@ while True:
         if images is None:
             images = image
         else:
-            images = np.concatenate((images, image), axis=0)
+            images = np.concatenate((images, image), axis=0)  # type: ignore
         print()
         if ser is not None:
             print(">>> " + image_path + f" SER: {ser}%")

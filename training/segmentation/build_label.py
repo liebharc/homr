@@ -81,17 +81,17 @@ def close_lines(img: cv2.typing.MatLike) -> cv2.typing.MatLike:
         angles = []
         # Draw lines
         for line in lines:
-            x1, y1, x2, y2 = line[0]
+            x1, y1, x2, y2 = line[0]  # type: ignore
             angle = np.arctan2(y2 - y1, x2 - x1)
             angles.append(angle)
         mean_angle = np.mean(angles)
         # Draw lines
         for line in lines:
-            x1, y1, x2, y2 = line[0]
+            x1, y1, x2, y2 = line[0]  # type: ignore
             angle = np.arctan2(y2 - y1, x2 - x1)
             is_horizontal = abs(angle - mean_angle) < np.pi / 16
             if is_horizontal:
-                cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), 255, 1)  # type: ignore
+                cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), 255, 1)
     else:
         eprint("No lines found")
 
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             )
         )
     )
-    result = reconstruct_lines_between_staffs(image, mask)
+    result = reconstruct_lines_between_staffs(image, mask)  # type: ignore
     cv2.imwrite("result.png", 255 * result)
 
     sys.exit(0)

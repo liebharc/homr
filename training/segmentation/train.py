@@ -71,7 +71,7 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
             image = self.last_image
             mask = self.last_mask
         else:
-            image = cv2.imread(path)
+            image = cv2.imread(path)  # type: ignore
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             mask = self._build_label(image, path)
             image = resize_image(image)
@@ -113,7 +113,7 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
             patch = np.ones((self.patch_size, self.patch_size), dtype=image.dtype) * pad_value
         else:
             # RGB, create an empty white patch
-            patch = np.ones((self.patch_size, self.patch_size, 3), dtype=image.dtype) * pad_value
+            patch = np.ones((self.patch_size, self.patch_size, 3), dtype=image.dtype) * pad_value  # type: ignore
 
         # Copy valid region from source image to patch
         patch[0:patch_content_height, 0:patch_content_width] = image[y_start:y_end, x_start:x_end]
