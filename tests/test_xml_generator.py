@@ -19,8 +19,8 @@ class TestMusicXmlGen(unittest.TestCase):
         chord = ResultChord(half, [ResultNote(a4, half), ResultNote(d4, half)])
         note = build_note_group(chord)
         expected = """
-XMLNote([XMLPitch([XMLStep(value: A)]), XMLDuration(value: 32)]),
-XMLNote([XMLChord(), XMLPitch([XMLStep(value: D)]), XMLDuration(value: 32)])
+XMLNote([XMLPitch([XMLStep(value: A)]),XMLDuration(value: 32)]),
+XMLNote([XMLChord(),XMLPitch([XMLStep(value: D)]),XMLDuration(value: 32)])
 """
         self.assertEqual(self._xml_to_str(note), self._norm_expected(expected))
 
@@ -29,8 +29,8 @@ XMLNote([XMLChord(), XMLPitch([XMLStep(value: D)]), XMLDuration(value: 32)])
         chord = ResultChord(quarter, [ResultNote(a4, half), ResultNote(d4, half)])
         note = build_note_group(chord)
         expected = """
-XMLNote([XMLPitch([XMLStep(value: A)]), XMLDuration(value: 32)]),
-XMLNote([XMLChord(), XMLPitch([XMLStep(value: D)]), XMLDuration(value: 32)]),
+XMLNote([XMLPitch([XMLStep(value: A)]),XMLDuration(value: 32)]),
+XMLNote([XMLChord(),XMLPitch([XMLStep(value: D)]),XMLDuration(value: 32)]),
 XMLBackup([XMLDuration(value: 16)])
 """
         self.assertEqual(self._xml_to_str(note), self._norm_expected(expected))
@@ -40,8 +40,8 @@ XMLBackup([XMLDuration(value: 16)])
         chord = ResultChord(half, [ResultNote(a4, quarter), ResultNote(d4, quarter)])
         note = build_note_group(chord)
         expected = """
-XMLNote([XMLPitch([XMLStep(value: A)]), XMLDuration(value: 16)]),
-XMLNote([XMLChord(), XMLPitch([XMLStep(value: D)]), XMLDuration(value: 16)]),
+XMLNote([XMLPitch([XMLStep(value: A)]),XMLDuration(value: 16)]),
+XMLNote([XMLChord(),XMLPitch([XMLStep(value: D)]),XMLDuration(value: 16)]),
 XMLForward([XMLDuration(value: 16)])
 """
         self.assertEqual(self._xml_to_str(note), self._norm_expected(expected))
@@ -51,9 +51,9 @@ XMLForward([XMLDuration(value: 16)])
         chord = ResultChord(quarter, [ResultNote(a4, quarter), ResultNote(d4, half)])
         note = build_note_group(chord)
         expected = """
-XMLNote([XMLPitch([XMLStep(value: A)]), XMLDuration(value: 16)]),
+XMLNote([XMLPitch([XMLStep(value: A)]),XMLDuration(value: 16)]),
 XMLBackup([XMLDuration(value: 16)]),
-XMLNote([XMLPitch([XMLStep(value: D)]), XMLDuration(value: 32)]),
+XMLNote([XMLPitch([XMLStep(value: D)]),XMLDuration(value: 32)]),
 XMLBackup([XMLDuration(value: 16)])
 """
         self.assertEqual(self._xml_to_str(note), self._norm_expected(expected))
@@ -66,7 +66,7 @@ XMLBackup([XMLDuration(value: 16)])
             if isinstance(node_or_list, list):
                 return (
                     "["
-                    + ", ".join(recurse(child) for child in node_or_list if child is not None)
+                    + ",".join(recurse(child) for child in node_or_list if child is not None)
                     + "]"
                 )
 
@@ -93,10 +93,10 @@ XMLBackup([XMLDuration(value: 16)])
             if value is not None and value != "":
                 parts.append(f"value: {value}")
             if child_strs:
-                parts.append(f"[{', '.join(child_strs)}]")
+                parts.append(f"[{','.join(child_strs)}]")
 
             if parts:
-                return f"{name}({', '.join(parts)})"
+                return f"{name}({','.join(parts)})"
             else:
                 return f"{name}()"
 
