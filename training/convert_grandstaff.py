@@ -64,9 +64,11 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     it only works with images which have no distortions.
     """
     image = cv2.imread(path)
-    dark_pixels_per_row = _get_dark_pixels_per_row(image)  # type: ignore
+    if image is None:
+        raise ValueError("Failed to read " + path)
+    dark_pixels_per_row = _get_dark_pixels_per_row(image)
     upper_bound, lower_bound = _get_image_bounds(dark_pixels_per_row)
-    image = image[upper_bound:-lower_bound]  # type: ignore
+    image = image[upper_bound:-lower_bound]
     dark_pixels_per_row = dark_pixels_per_row[upper_bound:-lower_bound]
     norm = (dark_pixels_per_row - np.mean(dark_pixels_per_row)) / np.std(dark_pixels_per_row)
     centers, _ = find_peaks(norm, height=1.4, distance=3, prominence=1)
@@ -76,7 +78,9 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
         predistorted_path = basename + "_distorted.jpg"
         if os.path.exists(predistorted_path):
             predistorted_image = cv2.imread(predistorted_path)
-            single_image = _prepare_image(predistorted_image)  # type: ignore
+            if predistorted_image is None:
+                raise ValueError("Failed to load " + predistorted_path)
+            single_image = _prepare_image(predistorted_image)
             cv2.imwrite(basename + "_single-pre.jpg", single_image)
             return distort_image(basename + "_single-pre.jpg"), None
         eprint(f"INFO: Couldn't find pre-distorted image {path}, using custom distortions")

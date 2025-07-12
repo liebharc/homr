@@ -25,7 +25,9 @@ def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
         img_path, semantic_path = sample.strip().split(",")
         expected_str = _load_semantic_file(semantic_path)[0].strip()
         image = cv2.imread(img_path)
-        actual = model.predict(image)[0].split("+")  # type: ignore
+        if image is None:
+            raise ValueError("Failed to read " + img_path)
+        actual = model.predict(image)[0].split("+") 
         actual = [
             symbol for symbol in actual if not symbol.startswith("timeSignature")
         ]  # reference data has no time signature

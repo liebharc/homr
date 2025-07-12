@@ -71,7 +71,10 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
             image = self.last_image
             mask = self.last_mask
         else:
-            image = cv2.imread(path)  # type: ignore
+            loaded = cv2.imread(path)
+            if loaded is None:
+                raise ValueError("Failed to read " + path)
+            image = loaded
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             mask = self._build_label(image, path)
             image = resize_image(image)

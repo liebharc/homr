@@ -171,25 +171,6 @@ if __name__ == "__main__":
     git_root = Path(script_location).parent.parent.absolute()
     dataset_root = os.path.join(git_root, "datasets")
     seg_folder = os.path.join(dataset_root, "ds2_dense", "segmentation")
-
-    image = cv2.imread(
-        os.path.join(dataset_root, "ds2_dense", "images", "lg-10247684-aug-beethoven--page-2.png")
-    )
-    mask = np.array(
-        Image.open(
-            os.path.join(
-                dataset_root,
-                "ds2_dense",
-                "segmentation",
-                "lg-10247684-aug-beethoven--page-2_seg.png",
-            )
-        )
-    )
-    result = reconstruct_lines_between_staffs(image, mask)  # type: ignore
-    cv2.imwrite("result.png", 255 * result)
-
-    sys.exit(0)
-
     color = int(sys.argv[1])
     with_background = find_example(seg_folder, color)
     if with_background is None:
