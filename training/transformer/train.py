@@ -92,7 +92,7 @@ def _check_datasets_are_present() -> None:
 
 def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
     number_of_files = -1
-    number_of_epochs = 70
+    number_of_epochs = 20 if pretrained else 70
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -110,7 +110,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     )
 
     config = Config()
-    datasets = load_dataset(train_index, config, val_split=0.1)
+    datasets = load_dataset(train_index, config, pretrained, val_split=0.1)
 
     compile_threshold = 50000
     compile_model = (
@@ -160,6 +160,14 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
     else:
         model = TrOMR(config)
 
+    model_name = "pytorch_finetuned" if pretrained else "pytorch_model"
+
+    model_destination = os.path.join(git_root, "homr", "transformer", f"{model_name}_{run_id}.pth")
+
+    if os.path.exists(model_destination):
+        eprint("Model already exists", model_destination)
+        return
+
     try:
         trainer = Trainer(  # type: ignore
             model,
@@ -171,8 +179,6 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)  # type: ignore
     except KeyboardInterrupt:
         eprint("Interrupted")
-
-    model_destination = os.path.join(git_root, "homr", "transformer", f"pytorch_model_{run_id}.pth")
     torch.save(model.state_dict(), model_destination)
     eprint(f"Saved model to {model_destination}")
 

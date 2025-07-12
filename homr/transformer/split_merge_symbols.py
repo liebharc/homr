@@ -135,14 +135,12 @@ def _symbol_to_pitch(symbol: str) -> str:
     return "nonote"
 
 
-def _add_duration_modifier(duration: str) -> str:
+def _add_duration_modifier(duration: str, keep_triplets: bool) -> str:
     # TrOMR only allows one dot
     if "." in duration:
         return "."
-    if constants.triplet_symbol in duration:
-        # Ignore triplets for now
-        # return constants.triplet_symbol
-        return ""
+    if constants.triplet_symbol in duration and keep_triplets:
+        return constants.triplet_symbol
     return ""
 
 
@@ -160,10 +158,10 @@ def _translate_duration(duration: str) -> str:
     return duration
 
 
-def _symbol_to_rhythm(symbol: str) -> str:  # noqa: PLR0911
+def _symbol_to_rhythm(symbol: str, keep_triplets: bool) -> str:  # noqa: PLR0911
     if symbol.startswith(("note", "gracenote")):
         note = "note-" + _translate_duration(symbol.split("_")[1])
-        return note + _add_duration_modifier(symbol)
+        return note + _add_duration_modifier(symbol, keep_triplets)
     symbol = symbol.replace("rest-double_whole", "multirest-2")
     symbol = symbol.replace("rest-quadruple_whole", "multirest-2")
     symbol = symbol.replace("_fermata", "")
@@ -189,7 +187,7 @@ def _symbol_to_rhythm(symbol: str) -> str:  # noqa: PLR0911
     timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
     if timesignature_match:
         return "timeSignature-/" + timesignature_match[2]
-    return symbol + _add_duration_modifier(symbol)
+    return symbol + _add_duration_modifier(symbol, keep_triplets)
 
 
 def _symbol_to_note(symbol: str) -> str:
@@ -297,15 +295,17 @@ def convert_alter_to_accidentals(merged: list[str]) -> list[str]:
 
 
 def split_semantic_file(
-    file_path: str,
+    file_path: str, keep_triplets: bool
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     is_primus = "Corpus" in file_path
     with open(file_path) as f:
-        return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
+        return split_symbols(
+            f.readlines(), convert_to_modified_semantic=is_primus, keep_triplets=keep_triplets
+        )
 
 
 def split_symbols(  # noqa: C901, PLR0912
-    merged: list[str], convert_to_modified_semantic: bool = True
+    merged: list[str], convert_to_modified_semantic: bool = True, keep_triplets: bool = True
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     """
     modified_semantic: Semantic format but with accidentals depending on how they are placed.
@@ -348,7 +348,7 @@ def split_symbols(  # noqa: C901, PLR0912
                 else:
                     pitch = _symbol_to_pitch(symbol)
                     symbolpitch.append(pitch)
-                    symbolrhythm.append(_symbol_to_rhythm(symbol))
+                    symbolrhythm.append(_symbol_to_rhythm(symbol, keep_triplets))
                     symbolnote.append(_symbol_to_note(symbol))
                     alter = _get_alter(symbol)
                     if alter is not None:

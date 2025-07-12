@@ -37,8 +37,10 @@ class DataLoader:
         note_vocab: Any,
         lift_vocab: Any,
         config: Config,
+        finetune: bool,
     ) -> None:
         self.current_idx = 0
+        self.finetune = finetune
         self.corpus_list = self._add_mask_steps(corpus_list)
         self.rhythm_vocab = rhythm_vocab
         self.pitch_vocab = pitch_vocab
@@ -129,7 +131,7 @@ class DataLoader:
     ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
         if path == "nosymbols":
             return [[]], [[]], [[]], [[]]
-        return split_semantic_file(path)
+        return split_semantic_file(path, self.finetune)
 
     def __getitem__(self, idx: int) -> Any:
         entry = self.corpus_list[idx]
@@ -182,7 +184,9 @@ class DataLoader:
         return result
 
 
-def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
+def load_dataset(
+    samples: list[str], config: Config, finetune: bool, val_split: float = 0.0
+) -> dict[str, Any]:
     rhythm_tokenizer_vocab = config.rhythm_vocab
     pitch_tokenizer_vocab = config.pitch_vocab
     note_tokenizer_vocab = config.note_vocab
@@ -207,6 +211,7 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
             note_tokenizer_vocab,
             lift_tokenizer_vocab,
             config,
+            finetune,
         ),
         "train_list": training_list,
         "validation": DataLoader(
@@ -216,6 +221,7 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
             note_tokenizer_vocab,
             lift_tokenizer_vocab,
             config,
+            finetune,
         ),
         "validation_list": validation_list,
     }

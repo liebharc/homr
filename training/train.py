@@ -20,6 +20,8 @@ elif model_type == "unet":
     train.train_unet()
 elif model_type == "transformer":
     transformer.train_transformer()
+elif model_type == "transformerfine":
+    transformer.train_transformer(pretrained=True)
 else:
     eprint("Unknown model: " + model_type)
     sys.exit(1)

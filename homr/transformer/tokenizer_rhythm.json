@@ -96,7 +96,13 @@
 			"timeSignature-/12": 83,
 			"timeSignature-/16": 84,
 			"timeSignature-/32": 85,
-			"timeSignature-/48": 86
+			"timeSignature-/48": 86,
+			"note-half³": 87,
+			"note-quarter³": 88,
+			"note-eighth³": 89,
+			"note-sixteenth³": 90,
+			"note-thirty_second³": 91,
+			"note-sixty_fourth³": 92
 		},
 		"unk_token": "<unk>"
 	}
