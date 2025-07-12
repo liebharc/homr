@@ -58,9 +58,9 @@ def inference(
     image: NDArray,
 ) -> NDArray:
     if "segnet" in model_path:
-        model = create_segnet()
+        model = create_segnet(skip_weights_download=True)
     elif "unet" in model_path:
-        model = create_unet()
+        model = create_unet(skip_weights_download=True)
     else:
         raise ValueError("Unknown model type: " + model_path)
     model.load_state_dict(torch.load(model_path, weights_only=True), strict=False)
