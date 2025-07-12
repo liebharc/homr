@@ -146,7 +146,7 @@ def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ign
     by_duration = _group_notes(note_group.notes)
     result = []
     last_duration = 0
-    for i, group_duration in enumerate(by_duration):
+    for i, group_duration in enumerate(sorted(by_duration)):
         is_first = True
         for note in by_duration[group_duration]:
             result.append(build_note(note, i, not is_first))
