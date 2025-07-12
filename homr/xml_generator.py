@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import musicxml.xmlelement.xmlelement as mxl
 
 from homr import constants
@@ -112,7 +114,7 @@ def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
     return note
 
 
-def build_note(model_note: ResultNote, is_chord=False) -> mxl.XMLNote:  # type: ignore
+def build_note(model_note: ResultNote, voice: int, is_chord=False) -> mxl.XMLNote:  # type: ignore
     note = mxl.XMLNote()
     if is_chord:
         note.add_child(mxl.XMLChord())
@@ -129,7 +131,7 @@ def build_note(model_note: ResultNote, is_chord=False) -> mxl.XMLNote:  # type: 
     note.add_child(mxl.XMLType(value_=model_duration.duration_name))
     note.add_child(mxl.XMLDuration(value_=model_duration.duration))
     note.add_child(mxl.XMLStaff(value_=1))
-    note.add_child(mxl.XMLVoice(value_="1"))
+    note.add_child(mxl.XMLVoice(value_=(str(voice + 1))))
     if model_duration.modifier == DurationModifier.DOT:
         note.add_child(mxl.XMLDot())
     elif model_duration.modifier == DurationModifier.TRIPLET:
@@ -141,17 +143,38 @@ def build_note(model_note: ResultNote, is_chord=False) -> mxl.XMLNote:  # type: 
 
 
 def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
+    by_duration = _group_notes(note_group.notes)
     result = []
-    is_first = True
-    for note in note_group.notes:
-        result.append(build_note(note, not is_first))
-        is_first = False
-    max_duration = max([n.duration.duration for n in note_group.notes])
-    if note_group.duration.duration < max_duration:
+    last_duration = 0
+    for i, group_duration in enumerate(by_duration):
+        is_first = True
+        for note in by_duration[group_duration]:
+            result.append(build_note(note, i, not is_first))
+            is_first = False
+        if i != len(by_duration) - 1:
+            backup = mxl.XMLBackup()
+            backup.add_child(mxl.XMLDuration(value_=group_duration))
+            result.append(backup)
+        else:
+            last_duration = group_duration
+
+    if note_group.duration.duration < last_duration:
         backup = mxl.XMLBackup()
-        backup.add_child(mxl.XMLDuration(value_=max_duration - note_group.duration.duration))
+        backup.add_child(mxl.XMLDuration(value_=last_duration - note_group.duration.duration))
+        result.append(backup)
+    elif note_group.duration.duration > last_duration:
+        backup = mxl.XMLForward()
+        backup.add_child(mxl.XMLDuration(value_=note_group.duration.duration - last_duration))
         result.append(backup)
     return result
+
+
+def _group_notes(notes: list[ResultNote]) -> dict[int, list[ResultNote]]:
+    groups_by_duration = defaultdict(list)
+    for note in notes:
+        duration = note.duration.duration
+        groups_by_duration[duration].append(note)
+    return groups_by_duration
 
 
 def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:  # type: ignore

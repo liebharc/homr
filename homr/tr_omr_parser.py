@@ -12,7 +12,7 @@ from homr.results import (
     ResultPitch,
     ResultStaff,
     ResultTimeSignature,
-    get_max_duration,
+    get_min_duration,
 )
 from homr.simple_logging import eprint
 
@@ -161,9 +161,9 @@ class TrOMRParser:
         This definition was put together based on some examples:
         If there is a rest in a chord then we assume that this was done by intention to reduce
         the chord length.
-        Otherwise we take the max note length.
+        Otherwise we take the min note length.
         """
-        chord_duration = get_max_duration(result_notes)
+        chord_duration = get_min_duration(result_notes)
         for rest_part in rest_parts:
             rest = self.parse_rest(rest_part)
             if rest.duration.duration < chord_duration.duration:
