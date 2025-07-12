@@ -8,9 +8,7 @@ from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
-def get_dominant_color(
-    gray_scale: NDArray, color_range: range, default: int | None = None
-) -> int | None:
+def get_dominant_color(gray_scale: NDArray, color_range: range, default: int | None = None) -> int:
     if gray_scale.dtype != np.uint8:
         raise Exception("Wrong image dtype")
 
@@ -20,7 +18,7 @@ def get_dominant_color(
     # Apply the mask to the grayscale image
     masked_gray_scale = gray_scale[mask]
     if masked_gray_scale.size == 0:
-        return default
+        return 0 if default is None else default
 
     bins = np.bincount(masked_gray_scale.flatten())
     center_of_mass = scipy.ndimage.measurements.center_of_mass(bins)[0]

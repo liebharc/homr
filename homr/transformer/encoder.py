@@ -10,7 +10,7 @@ from homr.transformer.configs import Config
 
 def get_encoder(config: Config) -> Any:
     backbone_layers = list(config.backbone_layers)
-    backbone = ResNetV2(  # type: ignore
+    backbone = ResNetV2(
         num_classes=0,
         global_pool="",
         in_chans=config.channels,

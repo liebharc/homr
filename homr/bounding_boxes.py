@@ -45,10 +45,10 @@ def calculate_edges_of_rotated_rectangle(
 def do_polygons_overlap(poly1: cvt.MatLike, poly2: cvt.MatLike) -> bool:
     # Check if any point of one ellipse is inside the other ellipse
     for point in poly1:
-        if cv2.pointPolygonTest(poly2, (float(point[0]), float(point[1])), False) >= 0:
+        if cv2.pointPolygonTest(poly2, (float(point[0]), float(point[1])), False) >= 0:  # type: ignore
             return True
     for point in poly2:
-        if cv2.pointPolygonTest(poly1, (float(point[0]), float(point[1])), False) >= 0:
+        if cv2.pointPolygonTest(poly1, (float(point[0]), float(point[1])), False) >= 0:  # type: ignore
             return True
 
     return False
@@ -441,7 +441,7 @@ class RotatedBoundingBox(AngledBoundingBox):
         mask = np.zeros_like(img)
 
         # Fill the polygon in the mask
-        cv2.fillPoly(mask, [poly], 1)  # type: ignore
+        cv2.fillPoly(mask, [poly], 1)
 
         # Use the mask to index the image
         points = img[mask == 1]
@@ -507,7 +507,7 @@ class BoundingEllipse(AngledBoundingBox):
         mask = np.zeros_like(img)
 
         # Fill the polygon in the mask
-        cv2.fillPoly(mask, [self.polygon], 1)  # type: ignore
+        cv2.fillPoly(mask, [self.polygon], 1)
 
         # Use the mask to index the image
         points = img[mask == 1]
@@ -581,7 +581,7 @@ def create_lines(
     )
     boxes = []
     for i, line in enumerate(lines):
-        x1, y1, x2, y2 = line[0]
+        x1, y1, x2, y2 = line[0]  # type: ignore
         contour = np.array([[x1, y1], [x2, y2]])
         box = cv2.minAreaRect(contour)
         if box[1][0] > box[1][1]:

@@ -136,7 +136,7 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
         if not is_at_edge_of_image:
             continue
         average_gray_intensity = 127
-        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity
+        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity  # type: ignore
         if is_mostly_dark:
             continue
         bgr[y : y + h, x : x + w] = (255, 255, 255)

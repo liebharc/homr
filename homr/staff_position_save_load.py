@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     img = cv2.imread(sys.argv[1])
     staff = detect_staff_simple(
-        Debug(img, "input.jpg", True), img, BoundingBox([100, 100, 500, 500], np.array([]))
+        Debug(img, "input.jpg", True), img, BoundingBox([100, 100, 500, 500], np.array([]))  # type: ignore
     )
 
     if staff is None:

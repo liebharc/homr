@@ -88,7 +88,7 @@ _transform = ConvertToTensor()
 
 
 def readimg(config: Config, path: str) -> torch.Tensor:
-    img: NDArray = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    img: NDArray = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # type: ignore
     if img is None:
         raise ValueError("Failed to read image from " + path)
 

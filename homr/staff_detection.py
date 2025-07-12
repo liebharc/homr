@@ -592,7 +592,7 @@ def find_horizontal_lines(
     for y in sub_ys:
         count[y] += 1
 
-    count = np.insert(count, [0, len(count)], [0, 0])  # Prepend / append
+    count = np.insert(count, [0, len(count)], [0, 0])  # type: ignore
     norm = (count - np.mean(count)) / np.std(count)
     centers, _ = signal.find_peaks(norm, height=line_threshold, distance=unit_size, prominence=1)
     centers -= 1
@@ -645,12 +645,12 @@ def break_wide_fragments(
     for fragment in fragments:
         remaining_fragment = fragment
         while remaining_fragment.size[0] > limit:
-            min_x = min([c[0][0] for c in remaining_fragment.contours])
-            contours_left = [c for c in remaining_fragment.contours if c[0][0] < min_x + limit]
-            contours_right = [c for c in remaining_fragment.contours if c[0][0] >= min_x + limit]
+            min_x = min([c[0][0] for c in remaining_fragment.contours])  # type: ignore
+            contours_left = [c for c in remaining_fragment.contours if c[0][0] < min_x + limit]  # type: ignore
+            contours_right = [c for c in remaining_fragment.contours if c[0][0] >= min_x + limit]  # type: ignore
             # sort by x
-            contours_left = sorted(contours_left, key=lambda c: c[0][0])
-            contours_right = sorted(contours_right, key=lambda c: c[0][0])
+            contours_left = sorted(contours_left, key=lambda c: c[0][0])  # type: ignore
+            contours_right = sorted(contours_right, key=lambda c: c[0][0])  # type: ignore
             if len(contours_left) == 0 or len(contours_right) == 0:
                 break
             # Make sure that the contours remain connected by adding
