@@ -19,12 +19,14 @@ class CamVidModel(pl.LightningModule):
         encoder_name: str = "resnet18",
         in_channels: int = 3,
         out_classes: int = 0,
+        skip_weights_download: bool = False,
         **kwargs,
     ) -> None:
         super().__init__()
         self.model = smp.create_model(
             arch,
             encoder_name=encoder_name,
+            encoder_weights=None if skip_weights_download else "imagenet",
             in_channels=in_channels,
             classes=out_classes,
             **kwargs,
@@ -147,9 +149,13 @@ class CamVidModel(pl.LightningModule):
         }
 
 
-def create_unet() -> CamVidModel:
-    return CamVidModel(encoder_name="resnet34", out_classes=3)
+def create_unet(skip_weights_download: bool = False) -> CamVidModel:
+    return CamVidModel(
+        encoder_name="resnet34", out_classes=3, skip_weights_download=skip_weights_download
+    )
 
 
-def create_segnet() -> CamVidModel:
-    return CamVidModel(encoder_name="resnet34", out_classes=6)
+def create_segnet(skip_weights_download: bool = False) -> CamVidModel:
+    return CamVidModel(
+        encoder_name="resnet34", out_classes=6, skip_weights_download=skip_weights_download
+    )

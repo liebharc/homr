@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+import segmentation_models_pytorch as smp
 
 from homr import color_adjust, download_utils
 from homr.accidental_detection import add_accidentals_to_staffs
@@ -90,7 +91,9 @@ def load_and_preprocess_predictions(
     image_path: str, enable_debug: bool, enable_cache: bool
 ) -> tuple[InputPredictions, Debug]:
     image = cv2.imread(image_path)
-    image = autocrop(image)  # type: ignore
+    if image is None:
+        raise ValueError("Failed to read " + image_path)
+    image = autocrop(image)
     image = resize_image(image)
     preprocessed, _background = color_adjust.color_adjust(image, 40)
     predictions = get_predictions(image, preprocessed, image_path, enable_cache)
@@ -156,7 +159,9 @@ def process_image(  # noqa: PLR0915
     try:
         if config.read_staff_positions:
             image = cv2.imread(image_path)
-            image = resize_image(image)  # type: ignore
+            if image is None:
+                raise ValueError("Failed to read " + image_path)
+            image = resize_image(image)
             debug = Debug(image, image_path, config.enable_debug)
             staff_position_files = replace_extension(image_path, ".txt")
             multi_staffs = load_staff_positions(
@@ -310,6 +315,7 @@ def download_weights() -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
     models = [segnet_path, default_config.filepaths.checkpoint]
     missing_models = [model for model in models if not os.path.exists(model)]
+    smp.encoders.get_preprocessing_params("resnet18")
     if len(missing_models) == 0:
         return
 

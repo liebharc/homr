@@ -174,4 +174,6 @@ if __name__ == "__main__":
     import sys
 
     image = cv2.imread(sys.argv[1])
-    cv2.imwrite(sys.argv[2], warp_image_array_randomly(image))  # type: ignore
+    if image is None:
+        raise ValueError("Failed to read " + sys.argv[1])
+    cv2.imwrite(sys.argv[2], warp_image_array_randomly(image))

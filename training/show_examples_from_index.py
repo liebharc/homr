@@ -87,6 +87,8 @@ while True:
             ser = int(cells[ser_position])
         agnostic_path = semantic_path.replace(".semantic", ".agnostic")
         image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError("Failed to read " + image_path)
         with open(semantic_path) as file:
             semantic = file.readline().strip().replace("+", " ")
         if os.path.exists(agnostic_path):
@@ -97,7 +99,7 @@ while True:
         if images is None:
             images = image
         else:
-            images = np.concatenate((images, image), axis=0)  # type: ignore
+            images = np.concatenate((images, image), axis=0)
         print()
         if ser is not None:
             print(">>> " + image_path + f" SER: {ser}%")
