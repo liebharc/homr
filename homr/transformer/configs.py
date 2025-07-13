@@ -8,7 +8,7 @@ workspace = os.path.join(os.path.dirname(__file__))
 class FilePaths:
     def __init__(self) -> None:
         self.checkpoint = os.path.join(
-            workspace, "pytorch_model_160-bf39c935c9081d04dc1d97e25dcda68ebb0ca40c.pth"
+            workspace, "pytorch_model_171-9734559469ca8b7953a14c3b5697dfeb6263a186.pth"
         )
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
