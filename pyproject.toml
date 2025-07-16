@@ -5,7 +5,7 @@ description = "End-to-end Optical Music Recognition (OMR) system build on top of
 authors = ["Christian Liebhardt <christian.liebhardt@arcor.de>"]
 license = "AGPL-3.0"
 readme = "README.md"
-homepage = "https://github.com/liebharc"
+homepage = "https://github.com/liebharc/homr"
 documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
