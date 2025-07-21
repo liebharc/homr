@@ -4,7 +4,7 @@ homr is an Optical Music Recognition (OMR) software designed to transform camera
 machine-readable MusicXML format. The resulting [MusicXML](https://www.w3.org/2021/06/musicxml40/) files can be further
 processed using tools such as [musescore](https://musescore.com/).
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/orangishcat/homr/blob/main/colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/liebharc/homr/blob/main/colab.ipynb)
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ The example below provides an overview of the current performance of the impleme
 in the output, the overall structure remains accurate.
 
 |                                          Original Image                                           |                                                                               homr Result                                                                                |
-|:-------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| :-----------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | <img src="https://github.com/BreezeWhite/oemer/blob/main/figures/tabi.jpg?raw=true" width="400" > | <img src="https://github.com/liebharc/homr/blob/main/figures/tabi.svg?raw=true" alt="Go to https://github.com/liebharc/homr if this image isn't displayed" width="400" > |
 
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it
