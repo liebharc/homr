@@ -157,5 +157,5 @@ def create_unet(skip_weights_download: bool = False) -> CamVidModel:
 
 def create_segnet(skip_weights_download: bool = False) -> CamVidModel:
     return CamVidModel(
-        encoder_name="resnet34", out_classes=6, skip_weights_download=skip_weights_download
+        encoder_name="resnet18", out_classes=6, skip_weights_download=skip_weights_download
     )
