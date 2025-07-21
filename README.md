@@ -6,7 +6,7 @@ processed using tools such as [musescore](https://musescore.com/).
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/orangishcat/homr/blob/main/colab.ipynb)
 
-## Prequisites
+## Prerequisites
 
 - Python 3.10
 - Poetry
