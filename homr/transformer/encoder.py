@@ -10,18 +10,19 @@ from homr.transformer.configs import Config
 
 def get_encoder(config: Config) -> Any:
     backbone_layers = list(config.backbone_layers)
+    min_patch_size = 16
     backbone = ResNetV2(
         num_classes=0,
         global_pool="",
         in_chans=config.channels,
         drop_rate=0.1,
+        output_stride=min_patch_size,
         drop_path_rate=0.1,
         layers=backbone_layers,
         preact=True,
         stem_type="same",
         conv_layer=StdConv2dSame,
     )
-    min_patch_size = 2 ** (len(backbone_layers) + 1)
 
     def embed_layer(**x: Any) -> Any:
         ps = x.pop("patch_size", min_patch_size)
