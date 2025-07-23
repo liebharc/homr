@@ -2,7 +2,6 @@ import os
 import shutil
 import sys
 
-import safetensors
 import torch
 import torch._dynamo
 from transformers import Trainer, TrainingArguments  # type: ignore
@@ -90,7 +89,7 @@ def _check_datasets_are_present() -> None:
         convert_lieder()
 
 
-def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str = "") -> None:
+def train_transformer(fp32: bool = False, resume: str = "") -> None:  # noqa: C901, PLR0912
     number_of_files = -1
     number_of_epochs = 70
     resume_from_checkpoint = None
@@ -128,7 +127,7 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         eval_strategy="epoch",
         # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
         learning_rate=1e-4,
-        optim="adamw_torch",  # TrOMR Paper page 3 species an Adam optimizer
+        optim="adamw_torch",  # TrOMR Paper page 3 specifies an Adam optimizer
         per_device_train_batch_size=48,
         per_device_eval_batch_size=24,
         num_train_epochs=number_of_epochs,
@@ -145,20 +144,15 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         dataloader_num_workers=12,
     )
 
-    if pretrained:
-        eprint("Loading pretrained model")
-        model = TrOMR(config)
-        checkpoint_file_path = config.filepaths.checkpoint
-        if ".safetensors" in checkpoint_file_path:
-            tensors = {}
-            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:  # type: ignore
-                for k in f.keys():
-                    tensors[k] = f.get_tensor(k)
-            model.load_state_dict(tensors, strict=False)
-        else:
-            model.load_state_dict(torch.load(checkpoint_file_path, weights_only=True), strict=False)
-    else:
-        model = TrOMR(config)
+    model = TrOMR(config)
+
+    model_name = "pytorch_model"
+
+    model_destination = os.path.join(git_root, "homr", "transformer", f"{model_name}_{run_id}.pth")
+
+    if os.path.exists(model_destination):
+        eprint("Model already exists", model_destination)
+        return
 
     try:
         trainer = Trainer(  # type: ignore
@@ -171,8 +165,6 @@ def train_transformer(fp32: bool = False, pretrained: bool = False, resume: str 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)  # type: ignore
     except KeyboardInterrupt:
         eprint("Interrupted")
-
-    model_destination = os.path.join(git_root, "homr", "transformer", f"pytorch_model_{run_id}.pth")
     torch.save(model.state_dict(), model_destination)
     eprint(f"Saved model to {model_destination}")
 

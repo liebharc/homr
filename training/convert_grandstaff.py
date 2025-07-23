@@ -139,7 +139,9 @@ def _check_staff_image(path: str, basename: str) -> tuple[str | None, str | None
 
 def distort_image(path: str) -> str:
     image = PIL.Image.open(path)
-    image = _add_random_gray_tone(image)
+    image_arr = np.array(image)
+    image_arr = _add_random_gray_tone(image_arr)
+    image = PIL.Image.fromarray(image_arr)
     pipeline = Compose(
         [
             tr.RandomRotation(degrees=1),
@@ -154,19 +156,45 @@ def distort_image(path: str) -> str:
     return path
 
 
-def _add_random_gray_tone(image: PIL.Image.Image) -> PIL.Image.Image:
-    image_arr = np.array(image)
-    random_gray_value = 255 - np.random.randint(0, 50)
+def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
+    """
+    Adds a gray background. While doing so it ensures
+    that all symbols are still visible on the image.
+    """
+    gray = cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+    lightest_pixel_value = _find_lighest_non_white_pixel(gray)
+
+    minimum_contrast = 30
+    pure_white = 255
+
+    if lightest_pixel_value >= pure_white - minimum_contrast:
+        return image_arr
+
+    strongest_possible_gray = max(lightest_pixel_value + minimum_contrast, 175)
+
+    random_gray_value = np.random.randint(strongest_possible_gray, pure_white)
+    if random_gray_value >= pure_white:
+        return image_arr
 
     mask = np.all(image_arr > random_gray_value, axis=-1)
 
     jitter = np.random.randint(-5, 5, size=mask.shape)
+    gray = np.clip(random_gray_value + jitter, 0, pure_white)
 
-    gray = np.clip(random_gray_value + jitter, 0, 255)
+    image_arr[mask] = np.stack([gray[mask]] * 3, axis=-1)
 
-    image_arr[mask] = gray[mask, None]
+    return image_arr
 
-    return PIL.Image.fromarray(image_arr)
+
+def _find_lighest_non_white_pixel(gray: NDArray) -> int:
+    pure_white = 255
+    valid_pixels = gray[gray < pure_white]
+
+    if valid_pixels.size > 0:
+        return valid_pixels.max()
+    else:
+        return pure_white
 
 
 def contains_max_one_clef(semantic: str) -> bool:
