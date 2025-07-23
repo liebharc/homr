@@ -140,6 +140,46 @@ class SemanticPart:
         return self.staffs
 
 
+class TripletState:
+
+    def __init__(self) -> None:
+        self.started = False
+
+    def get_triplet_mark(self, note: mxl.XMLNote) -> str:  # type: ignore
+        notations = note.get_children_of_type(mxl.XMLNotations)
+        if len(notations) > 0:
+            tuplets = notations[0].get_children_of_type(mxl.XMLTuplet)
+            print_object = notations[0].attributes.get("print-object", None)
+            for t in tuplets:
+                t_type = t.attributes.get("type", None)
+                show_number = t.attributes.get("show-number", None)
+                if t_type == "start" and show_number != "none" and print_object != "no":
+                    self.started = True
+                if t_type == "stop":
+                    self.started = False
+
+        if not self.started:
+            return ""
+        time_modification = note.get_children_of_type(mxl.XMLTimeModification)
+        if len(time_modification) == 0:
+            return ""
+        actual_notes = time_modification[0].get_children_of_type(mxl.XMLActualNotes)
+        if len(actual_notes) == 0:
+            return ""
+        normal_notes = time_modification[0].get_children_of_type(mxl.XMLNormalNotes)
+        if len(normal_notes) == 0:
+            return ""
+        is_triplet = (
+            int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2  # noqa: PLR2004
+        )
+        is_sixtuplet = (
+            int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
+        )
+        if is_triplet or is_sixtuplet:
+            return constants.triplet_symbol
+        return ""
+
+
 def _translate_duration(duration: str) -> str:
     definition = {
         "breve": "double_whole",
@@ -184,27 +224,6 @@ def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
     return "." * len(dots)
 
 
-def _get_triplet_mark(note: mxl.XMLNote) -> str:  # type: ignore
-    time_modification = note.get_children_of_type(mxl.XMLTimeModification)
-    if len(time_modification) == 0:
-        return ""
-    actual_notes = time_modification[0].get_children_of_type(mxl.XMLActualNotes)
-    if len(actual_notes) == 0:
-        return ""
-    normal_notes = time_modification[0].get_children_of_type(mxl.XMLNormalNotes)
-    if len(normal_notes) == 0:
-        return ""
-    is_triplet = (
-        int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2  # noqa: PLR2004
-    )
-    is_sixtuplet = (
-        int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
-    )
-    if is_triplet or is_sixtuplet:
-        return constants.triplet_symbol
-    return ""
-
-
 def _process_attributes(  # type: ignore
     semantic: SemanticPart, attribute: mxl.XMLAttributes, key: KeyTransformation
 ) -> KeyTransformation:
@@ -230,7 +249,7 @@ def _process_attributes(  # type: ignore
 
 
 def _process_note(  # type: ignore
-    semantic: SemanticPart, note: mxl.XMLNote, key: KeyTransformation
+    semantic: SemanticPart, note: mxl.XMLNote, key: KeyTransformation, triplet: TripletState
 ) -> KeyTransformation:
     staff = 0
     staff_nodes = note.get_children_of_type(mxl.XMLStaff)
@@ -279,7 +298,7 @@ def _process_note(  # type: ignore
             + "_"
             + _translate_duration(duration_type)
             + _count_dots(note)
-            + _get_triplet_mark(note),
+            + triplet.get_triplet_mark(note),
         )
     return key
 
@@ -298,11 +317,12 @@ def _music_part_to_semantic(part: mxl.XMLPart) -> list[list[str]]:  # type: igno
     semantic = SemanticPart()
     key = KeyTransformation(0)
     for measure in part.get_children_of_type(mxl.XMLMeasure):
+        triplet = TripletState()
         for child in measure.get_children():
             if isinstance(child, mxl.XMLAttributes):
                 key = _process_attributes(semantic, child, key)
             if isinstance(child, mxl.XMLNote):
-                key = _process_note(semantic, child, key)
+                key = _process_note(semantic, child, key, triplet)
             if isinstance(child, mxl.XMLBackup):
                 _process_backup(semantic, child)
             if isinstance(child, mxl.XMLForward):
