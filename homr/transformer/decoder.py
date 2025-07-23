@@ -53,17 +53,53 @@ class ScoreTransformerWrapper(nn.Module):
         self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
 
-        self.project_emb = (
-            nn.Linear(config.decoder_dim, dim) if config.decoder_dim != dim else nn.Identity()
+        self.spatial_attention_layers = nn.ModuleList(
+            [
+                SpatialCrossAttention(
+                    dim, num_heads=8, window_size=getattr(config, "decoder_window_size", 7)
+                )
+                for _ in range(getattr(config, "num_spatial_layers", 2))
+            ]
         )
+
+        self.project_emb = (
+            nn.Sequential(nn.Linear(config.decoder_dim, dim), nn.LayerNorm(dim), nn.Dropout(0.1))
+            if config.decoder_dim != dim
+            else nn.Identity()
+        )
+
         self.attn_layers = attn_layers
         self.post_emb_norm = nn.LayerNorm(dim)
+
+        self.spatial_context_proj = nn.Linear(dim, dim)
+        self.context_gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
+
         self.init_()
 
-        self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
-        self.to_logits_pitch = nn.Linear(dim, config.num_pitch_tokens)
-        self.to_logits_rhythm = nn.Linear(dim, config.num_rhythm_tokens)
-        self.to_logits_note = nn.Linear(dim, config.num_note_tokens)
+        self.to_logits_lift = nn.Sequential(
+            nn.Linear(dim, dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(dim // 2, config.num_lift_tokens),
+        )
+        self.to_logits_pitch = nn.Sequential(
+            nn.Linear(dim, dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(dim // 2, config.num_pitch_tokens),
+        )
+        self.to_logits_rhythm = nn.Sequential(
+            nn.Linear(dim, dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(dim // 2, config.num_rhythm_tokens),
+        )
+        self.to_logits_note = nn.Sequential(
+            nn.Linear(dim, dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(dim // 2, config.num_note_tokens),
+        )
 
     def init_(self) -> None:
         if self.l2norm_embed:
@@ -78,6 +114,7 @@ class ScoreTransformerWrapper(nn.Module):
         rhythms: torch.Tensor,
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
+        context: torch.Tensor = None,
         mask: torch.Tensor | None = None,
         return_center_of_attention: bool = False,
         **kwargs: Any,
@@ -91,15 +128,26 @@ class ScoreTransformerWrapper(nn.Module):
 
         x = self.post_emb_norm(x)
         x = self.project_emb(x)
+
+        if context is not None:
+            spatial_context = context
+            for spatial_layer in self.spatial_attention_layers:
+                spatial_features = spatial_layer(x, spatial_context)
+
+                gate = self.context_gate(torch.cat([x, spatial_features], dim=-1))
+                x = x + gate * spatial_features
+
         debug = kwargs.pop("debug", None)
 
         if return_center_of_attention and False:
-            x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
+            x, hiddens = self.attn_layers(
+                x, context=context, mask=mask, return_hiddens=True, **kwargs
+            )
             center_of_attention = self.calculate_center_of_attention(
                 debug, hiddens.attn_intermediates
             )
         else:
-            x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+            x = self.attn_layers(x, context=context, mask=mask, return_hiddens=False, **kwargs)
             center_of_attention = None
 
         out_lifts = self.to_logits_lift(x)
@@ -143,6 +191,60 @@ def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
     probs = torch.full_like(logits, float("-inf"))
     probs.scatter_(1, ind, val)
     return probs
+
+
+class SpatialCrossAttention(nn.Module):
+    """Enhanced cross-attention for spatial reasoning between decoder and encoder features"""
+
+    def __init__(self, dim: int, num_heads: int = 8, window_size: int = 7):
+        super().__init__()
+        self.dim = dim
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim**-0.5
+
+        self.q_proj = nn.Linear(dim, dim)
+        self.k_proj = nn.Linear(dim, dim)
+        self.v_proj = nn.Linear(dim, dim)
+        self.out_proj = nn.Linear(dim, dim)
+
+        self.spatial_pos_emb = nn.Parameter(torch.randn(1, window_size * window_size, dim))
+
+        self.dropout = nn.Dropout(0.1)
+        self.layer_norm = nn.LayerNorm(dim)
+
+    def forward(self, decoder_seq: torch.Tensor, encoder_spatial: torch.Tensor) -> torch.Tensor:
+        B, N_dec, C = decoder_seq.shape
+        B, N_enc, C = encoder_spatial.shape
+
+        q = (
+            self.q_proj(decoder_seq)
+            .reshape(B, N_dec, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+
+        k = (
+            self.k_proj(encoder_spatial)
+            .reshape(B, N_enc, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        v = (
+            self.v_proj(encoder_spatial)
+            .reshape(B, N_enc, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = F.softmax(attn, dim=-1)
+        attn = self.dropout(attn)
+
+        out = (attn @ v).transpose(1, 2).reshape(B, N_dec, C)
+        out = self.out_proj(out)
+
+        out = self.layer_norm(out + decoder_seq)
+
+        return out
 
 
 class ScoreDecoder(nn.Module):
