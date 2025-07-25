@@ -140,9 +140,7 @@ def _add_duration_modifier(duration: str) -> str:
     if "." in duration:
         return "."
     if constants.triplet_symbol in duration:
-        # Ignore triplets for now
-        # return constants.triplet_symbol
-        return ""
+        return constants.triplet_symbol
     return ""
 
 
