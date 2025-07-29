@@ -371,6 +371,21 @@ def split_symbols(  # noqa: C901, PLR0912
     return predlifts, predpitchs, predrhythms, prednotes
 
 
+def check_triplets(semantic: str) -> bool:
+    parts = re.split("\\s+|\\+", semantic)
+    triplet_counter = 0
+    expected_number_of_triplets = 3
+    for part in parts:
+        if constants.triplet_symbol in part:
+            triplet_counter += 1
+            if triplet_counter == expected_number_of_triplets:
+                triplet_counter = 0
+        elif triplet_counter > 0:
+            return False
+
+    return triplet_counter == 0
+
+
 if __name__ == "__main__":
     import os
     from collections import defaultdict

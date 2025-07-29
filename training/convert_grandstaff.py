@@ -192,7 +192,7 @@ def _find_lighest_non_white_pixel(gray: NDArray) -> int:
     valid_pixels = gray[gray < pure_white]
 
     if valid_pixels.size > 0:
-        return valid_pixels.max()
+        return valid_pixels.max()  # type: ignore
     else:
         return pure_white
 
