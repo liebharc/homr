@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 186
+
+Commit: 3f0631db15012e928ad3d4da739817f92d958979
+Day: 30 Jul 2025
+SER: 10%
+Validation result: 7.9
+
+Removed cases of incorrect triplets from the dataset
+
 ## Run 183
 
 Commit: 74d500a5d94e553f24dbbd57a0e71b8566e2e554
