@@ -1,6 +1,15 @@
 import unittest
+from fractions import Fraction
 
-from homr.results import ClefType, ResultClef, ResultPitch, move_pitch_to_clef
+from homr import constants
+from homr.results import (
+    ClefType,
+    DurationModifier,
+    ResultClef,
+    ResultDuration,
+    ResultPitch,
+    move_pitch_to_clef,
+)
 
 
 class TestResultModel(unittest.TestCase):
@@ -54,3 +63,29 @@ class TestResultModel(unittest.TestCase):
         self.assertEqual(note_d4.move_by(5, None), ResultPitch("B", 4, None))
         self.assertEqual(note_d4.move_by(6, None), ResultPitch("C", 5, None))
         self.assertEqual(note_d4.move_by(7, None), ResultPitch("D", 5, None))
+
+    def test_duration(self) -> None:
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter, modifier=DurationModifier.NONE
+        )
+        self.assertEqual(duration.duration, 16)
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter, modifier=DurationModifier.DOT
+        )
+        self.assertEqual(duration.duration, 24)
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter, modifier=DurationModifier.TRIPLET
+        )
+        self.assertEqual(duration.duration, Fraction(32, 3))
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter // 2, modifier=DurationModifier.NONE
+        )
+        self.assertEqual(duration.duration, 8)
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter // 2, modifier=DurationModifier.DOT
+        )
+        self.assertEqual(duration.duration, 12)
+        duration = ResultDuration(
+            base_duration=constants.duration_of_quarter // 2, modifier=DurationModifier.TRIPLET
+        )
+        self.assertEqual(duration.duration, Fraction(16, 3))

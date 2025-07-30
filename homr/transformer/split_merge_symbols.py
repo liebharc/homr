@@ -6,27 +6,47 @@ from homr.circle_of_fifths import (
     NoKeyTransformation,
     key_signature_to_circle_of_fifth,
 )
+from homr.results import TransformerChord, TransformerSymbol
 from homr.simple_logging import eprint
 from homr.transformer.configs import default_config
 
 
 class SymbolMerger:
     def __init__(self) -> None:
-        self.merge: list[list[str]] = []
+        self.merge: list[TransformerChord] = []
         self.next_symbol_is_chord: bool = False
         self.last_clef: str = ""
 
-    def _append_symbol(self, symbol: str) -> None:
+    def _append_symbol(
+        self, symbol: str, confidence: float, alternative: str, alternative_confidence: float
+    ) -> None:
         if self.next_symbol_is_chord:
             if len(self.merge) == 0:
                 eprint("Warning: Unexpected chord symbol")
                 return
-            self.merge[-1].append(symbol)
+            self.merge[-1].append(
+                TransformerSymbol(symbol, confidence, alternative, alternative_confidence)
+            )
             self.next_symbol_is_chord = False
         else:
-            self.merge.append([symbol])
+            self.merge.append(
+                TransformerChord(
+                    [TransformerSymbol(symbol, confidence, alternative, alternative_confidence)]
+                )
+            )
 
     def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
+        return self.add_symbol_and_alternative(predrhythm, 1, predpitch, predlift, "", 0)
+
+    def add_symbol_and_alternative(
+        self,
+        predrhythm: str,
+        rhythm_confidence: float,
+        predpitch: str,
+        predlift: str,
+        rhythm_alternative: str,
+        alternative_confidence: float,
+    ) -> bool:
         """
         Adds a symbol to the merge list. Returns True if the symbol should be retried.
 
@@ -48,7 +68,12 @@ class SymbolMerger:
                 "lift_N",
             ):
                 lift = predlift.split("_")[-1]
-            self._append_symbol(predpitch + lift + "_" + predrhythm.split("note-")[-1])
+            self._append_symbol(
+                predpitch + lift + "_" + predrhythm.split("note-")[-1],
+                rhythm_confidence,
+                rhythm_alternative,
+                alternative_confidence,
+            )
             return False
         elif "clef" in predrhythm:
             # Two clefs in a the same staff are very unlikely
@@ -56,21 +81,32 @@ class SymbolMerger:
                 eprint("Warning: Two clefs in a staff")
                 return True
             self.last_clef = predrhythm
-            self._append_symbol(predrhythm)
+            self._append_symbol(
+                predrhythm,
+                rhythm_confidence,
+                rhythm_alternative,
+                alternative_confidence,
+            )
             return False
         else:
-            self._append_symbol(predrhythm)
+            self._append_symbol(
+                predrhythm,
+                rhythm_confidence,
+                rhythm_alternative,
+                alternative_confidence,
+            )
             return False
 
-    def _clean_and_sort_chord(self, chord: list[str]) -> list[str]:
+    def _clean_and_sort_chord(self, chord: list[TransformerSymbol]) -> list[TransformerSymbol]:
         if len(chord) == 1:
             return chord
-        chord = sorted(chord, key=pitch_name_to_sortable)
+        chord = sorted(chord, key=symbol_to_sortable)
         return chord
 
-    def complete(self) -> str:
-        merged = [str.join("|", self._clean_and_sort_chord(symbols)) for symbols in self.merge]
-        return str.join("+", merged)
+    def complete(self) -> list[TransformerChord]:
+        return [
+            TransformerChord(self._clean_and_sort_chord(symbols.symbols)) for symbols in self.merge
+        ]
 
 
 def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: list[str]) -> str:
@@ -79,7 +115,7 @@ def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: lis
     for j in range(len(predrhythm)):
         merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
 
-    return merger.complete()
+    return str.join("+", [str(m) for m in merger.complete()])
 
 
 def merge_symbols(
@@ -217,6 +253,10 @@ def pitch_name_to_sortable(pitch_or_rest_name: str) -> int:
     note_name = pitch_or_rest_name.split("_")[0]
     note_name = _replace_accidentals(note_name)
     return _note_name_and_octave_to_sortable(note_name)
+
+
+def symbol_to_sortable(symbol: TransformerSymbol) -> int:
+    return pitch_name_to_sortable(symbol.symbol)
 
 
 def _sort_by_pitch(

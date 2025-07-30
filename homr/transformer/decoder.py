@@ -13,6 +13,7 @@ from x_transformers.x_transformers import (
 )
 
 from homr.debug import AttentionDebug
+from homr.results import TransformerChord
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.split_merge_symbols import SymbolMerger
@@ -181,7 +182,7 @@ class ScoreDecoder(nn.Module):
         temperature: float = 1.0,
         filter_thres: float = 0.7,
         **kwargs: Any,
-    ) -> list[str]:
+    ) -> list[TransformerChord]:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -218,6 +219,7 @@ class ScoreDecoder(nn.Module):
             retry = True
             attempt = 0
             max_attempts = 5
+
             while retry and attempt < max_attempts:
                 lift_probs = F.softmax(filtered_lift_logits / current_temperature, dim=-1)
                 pitch_probs = F.softmax(filtered_pitch_logits / current_temperature, dim=-1)
@@ -227,13 +229,36 @@ class ScoreDecoder(nn.Module):
                 pitch_sample = torch.multinomial(pitch_probs, 1)
                 rhythm_sample = torch.multinomial(rhythm_probs, 1)
 
+                sorted_probs, sorted_indices = torch.sort(rhythm_probs, descending=True)
+                rhythm_confidence = sorted_probs[0, 0].item()
+                alternative_confidence = sorted_probs[0, 1].item()
+
+                top_token_id = sorted_indices[0, 0].unsqueeze(0)
+                alt_token_id = sorted_indices[0, 1].unsqueeze(0)
+
+                rhythm_token = detokenize(top_token_id, self.inv_rhythm_vocab)
+                alternative_rhythm_token = detokenize(alt_token_id, self.inv_rhythm_vocab)
+
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
-                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
+
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
                     break
-                retry = merger.add_symbol(rhythm_token[0], pitch_token[0], lift_token[0])
+
+                if len(alternative_rhythm_token) == 0:
+                    alternative_rhythm_token = [""]
+                    alternative_confidence = 0
+
+                retry = merger.add_symbol_and_alternative(
+                    rhythm_token[0],
+                    rhythm_confidence,
+                    pitch_token[0],
+                    lift_token[0],
+                    alternative_rhythm_token[0],
+                    alternative_confidence,
+                )
+
                 current_temperature *= 3.5
                 attempt += 1
 
@@ -253,7 +278,7 @@ class ScoreDecoder(nn.Module):
         out_rhythm = out_rhythm[:, t:]
 
         self.net.train(was_training)
-        return [merger.complete()]
+        return merger.complete()
 
     def forward(
         self,

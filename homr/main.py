@@ -34,6 +34,7 @@ from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stem
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
 from homr.results import ResultStaff
+from homr.rhythm_rules import correct_rhythm
 from homr.segmentation.config import segnet_path
 from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
@@ -177,6 +178,7 @@ def process_image(  # noqa: PLR0915
         )
 
         result_staffs = maintain_accidentals(result_staffs)
+        result_staffs = correct_rhythm(result_staffs)
 
         eprint("Writing XML")
         xml = generate_xml(xml_generator_args, result_staffs, title)

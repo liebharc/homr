@@ -12,7 +12,8 @@ from homr.results import (
     ResultPitch,
     ResultStaff,
     ResultTimeSignature,
-    get_min_duration,
+    TransformerChord,
+    TransformerSymbol,
 )
 from homr.simple_logging import eprint
 
@@ -100,7 +101,25 @@ class TrOMRParser:
         }
         return duration_mapping.get(duration_name, constants.duration_of_quarter // 16)
 
-    def parse_duration(self, duration: str) -> ResultDuration:
+    def parse_duration(
+        self, rhythm_symbol: TransformerSymbol
+    ) -> tuple[ResultDuration, ResultDuration]:
+        if rhythm_symbol.symbol.startswith("rest"):
+            duration = re.split("-|_", rhythm_symbol.symbol)[1]
+        else:
+            pitch_and_duration = rhythm_symbol.symbol.split("_")
+            duration = str.join("_", pitch_and_duration[1:])
+        best = self._parse_duration_text(duration, rhythm_symbol.confidence)
+        alternative_token = rhythm_symbol.alternative.split("-")
+        if len(alternative_token) > 1:
+            alternative = self._parse_duration_text(
+                rhythm_symbol.alternative.split("-")[1], rhythm_symbol.alternative_confidence
+            )
+        else:
+            alternative = ResultDuration(constants.duration_of_quarter, confidence=0)
+        return (best, alternative)
+
+    def _parse_duration_text(self, duration: str, confidence: float) -> ResultDuration:
         has_dot = duration.endswith(".")
         is_triplet = duration.endswith(constants.triplet_symbol)
 
@@ -111,17 +130,13 @@ class TrOMRParser:
         elif is_triplet:
             duration = duration[:-1]
             modifier = DurationModifier.TRIPLET
-        return ResultDuration(
-            self.parse_duration_name(duration),
-            modifier,
-        )
+        return ResultDuration(self.parse_duration_name(duration), modifier, confidence=confidence)
 
-    def parse_note(self, note: str) -> ResultNote:
+    def parse_note(self, note: TransformerSymbol) -> ResultNote:
         try:
-            note_details = note.split("-")[1]
+            note_details = note.symbol.split("-")[1]
             pitch_and_duration = note_details.split("_")
             pitch = pitch_and_duration[0]
-            duration = str.join("_", pitch_and_duration[1:])
             note_name = pitch[0]
             octave = int(pitch[1])
             alter = None
@@ -136,60 +151,57 @@ class TrOMRParser:
                 else:
                     alter = 0
 
-            return ResultNote(ResultPitch(note_name, octave, alter), self.parse_duration(duration))
+            (best_duration, alternative) = self.parse_duration(note)
+            return ResultNote(
+                ResultPitch(note_name, octave, alter),
+                best_duration,
+                alternative_duration=alternative,
+            )
         except Exception:
-            eprint("Failed to parse note: " + note)
+            eprint("Failed to parse note: " + str(note))
             return ResultNote(ResultPitch("C", 4, 0), ResultDuration(constants.duration_of_quarter))
 
-    def parse_notes(self, notes: str) -> ResultChord | None:
-        note_parts = notes.split("|")
-        rest_parts = [rest_part for rest_part in note_parts if rest_part.startswith("rest")]
-        note_parts = [note_part for note_part in note_parts if note_part.startswith("note")]
+    def parse_notes(self, notes: TransformerChord) -> ResultChord | None:
+        note_parts = notes.symbols
+        rest_parts = [rest_part for rest_part in note_parts if rest_part.symbol.startswith("rest")]
+        note_parts = [note_part for note_part in note_parts if note_part.symbol.startswith("note")]
         if len(note_parts) == 0:
             if len(rest_parts) == 0:
                 return None
             else:
                 return self.parse_rest(rest_parts[0])
         result_notes = [self.parse_note(note_part) for note_part in note_parts]
-        chord_duration = self._get_chord_duration(result_notes, rest_parts)
+        chord_duration = self._get_chord_duration(rest_parts)
         return ResultChord(chord_duration, result_notes)
 
-    def _get_chord_duration(
-        self, result_notes: list[ResultNote], rest_parts: list[str]
-    ) -> ResultDuration:
+    def _get_chord_duration(self, rest_parts: list[TransformerSymbol]) -> ResultDuration | None:
         """
         This definition was put together based on some examples:
         If there is a rest in a chord then we assume that this was done by intention to reduce
-        the chord length.
-        Otherwise we take the min note length.
+        the chord length. Without rests the note values will later determine the chord duration.
         """
-        chord_duration = get_min_duration(result_notes)
+        chord_duration: ResultDuration | None = None
         for rest_part in rest_parts:
             rest = self.parse_rest(rest_part)
-            if rest.duration.duration < chord_duration.duration:
+            if chord_duration is None or rest.duration.duration < chord_duration.duration:
                 chord_duration = rest.duration
         return chord_duration
 
-    def parse_rest(self, rest: str) -> ResultChord:
-        rest = rest.split("|")[0]
-        duration = re.split("-|_", rest)[1]
-        return ResultChord(
-            self.parse_duration(duration),
-            [],
-        )
+    def parse_rest(self, rest: TransformerSymbol) -> ResultChord:
+        (best_duration, alternative) = self.parse_duration(rest)
+        return ResultChord(best_duration, [], alternative_duration=alternative)
 
-    def parse_tr_omr_output(self, output: str) -> ResultStaff:  # noqa: C901
-        parts = output.split("+")
+    def parse_tr_omr_output(self, output: list[TransformerChord]) -> ResultStaff:  # noqa: C901
         measures = []
         current_measure = ResultMeasure([])
 
         parse_functions = {
             "clef": self.parse_clef,
             "timeSignature": self.parse_time_signature,
-            "rest": self.parse_rest,
         }
 
-        for part in parts:
+        for chord in output:
+            part = str(chord)
             if part == "barline":
                 measures.append(current_measure)
                 current_measure = ResultMeasure([])
@@ -200,8 +212,8 @@ class TrOMRParser:
                     self.parse_key_signature(part, current_measure.symbols[-1])
             elif part.startswith("multirest"):
                 eprint("Skipping over multirest")
-            elif part.startswith("note") or "|" in part:
-                note_result = self.parse_notes(part)
+            elif part.startswith(("note", "rest")) or "|" in part:
+                note_result = self.parse_notes(chord)
                 if note_result is not None:
                     current_measure.symbols.append(note_result)
             else:

@@ -7,7 +7,7 @@ import numpy as np
 from homr import constants
 from homr.debug import AttentionDebug
 from homr.model import Staff
-from homr.results import ClefType, ResultStaff, ResultTimeSignature
+from homr.results import ClefType, ResultStaff, ResultTimeSignature, TransformerChord
 from homr.simple_logging import eprint
 from homr.tr_omr_parser import TrOMRParser
 from homr.transformer.configs import default_config
@@ -70,18 +70,18 @@ def predict_best(
             debug=debug,
         )
         parser = TrOMRParser()
-        result_staff = parser.parse_tr_omr_output(str.join("+", result))
+        result_staff = parser.parse_tr_omr_output(result)
 
-        clef_type = _get_clef_type(result[0])
+        clef_type = _get_clef_type(result)
         if clef_type is None:
             # Returning early is no clef is found is not optimal,
             # but it makes sure that we get a result and it's a corner case,
             # which is not worth the effort to handle right now.
             eprint("Failed to find clef type in", result)
             return result_staff
-        actual = [symbol for symbol in result[0].split("+") if symbol.startswith("note")]
+        actual_symbols = [symbol for symbol in result if str(symbol).startswith("note")]
         expected = [note.to_tr_omr_note(clef_type) for note in notes]
-        actual = _flatten_result(actual)
+        actual = _flatten_result([str(s) for s in actual_symbols])
         expected = _flatten_result(expected)
         distance = _differences(actual, expected)
         diff_accidentals = abs(
@@ -125,20 +125,22 @@ def _number_of_accidentals_in_model(staff: Staff) -> int:
     return len(staff.get_accidentals())
 
 
-def _get_clef_type(result: str) -> ClefType | None:
-    match = re.search(r"clef-([A-G])([0-9])", result)
-    if match is None:
-        return None
-    return ClefType(match.group(1), int(match.group(2)))
+def _get_clef_type(result: list[TransformerChord]) -> ClefType | None:
+    for chord in result:
+        for symbol in chord.symbols:
+            match = re.search(r"clef-([A-G])([0-9])", symbol.symbol)
+            if match is None:
+                continue
+            return ClefType(match.group(1), int(match.group(2)))
+    return None
 
 
 def _flatten_result(result: list[str]) -> list[str]:
     notes = []
-    for group in result:
-        for symbol in group.split("|"):
-            just_pitch = symbol.split("_")[0]
-            just_pitch = just_pitch.replace("#", "").replace("b", "")
-            notes.append(just_pitch)
+    for symbol in result:
+        just_pitch = symbol.split("_")[0]
+        just_pitch = just_pitch.replace("#", "").replace("b", "")
+        notes.append(just_pitch)
     return notes
 
 

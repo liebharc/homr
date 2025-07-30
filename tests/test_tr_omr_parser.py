@@ -12,6 +12,8 @@ from homr.results import (
     ResultPitch,
     ResultStaff,
     ResultTimeSignature,
+    TransformerChord,
+    TransformerSymbol,
 )
 from homr.tr_omr_parser import TrOMRParser
 
@@ -31,6 +33,16 @@ def single_note(pitch: ResultPitch, duration: ResultDuration) -> ResultChord:
 
 def note_chord(notes: list[ResultNote], duration: ResultDuration | None = None) -> ResultChord:
     return ResultChord(duration if duration is not None else notes[0].duration, notes)
+
+
+def to_symbols(data: str) -> list[TransformerSymbol]:
+    cells = data.split("|")
+    return [TransformerSymbol(c, 1, "", 0) for c in cells]
+
+
+def to_chords(data: str) -> list[TransformerChord]:
+    cells = data.split("+")
+    return [TransformerChord(to_symbols(c)) for c in cells]
 
 
 class TestTrOmrParser(unittest.TestCase):
@@ -81,7 +93,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_parsing_no_final_bar_line(self) -> None:
@@ -126,7 +138,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_rest_parsing(self) -> None:
@@ -158,7 +170,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_note_group_parsing(self) -> None:
@@ -292,7 +304,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_accidental_parsing(self) -> None:
@@ -336,7 +348,7 @@ class TestTrOmrParser(unittest.TestCase):
         )
 
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_parsing_chords_with_rests(self) -> None:
@@ -363,7 +375,7 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)
 
     def test_parse_chords_with_unexpected_symbols(self) -> None:
@@ -381,5 +393,5 @@ class TestTrOmrParser(unittest.TestCase):
             ]
         )
         parser = TrOMRParser()
-        actual = parser.parse_tr_omr_output(data)
+        actual = parser.parse_tr_omr_output(to_chords(data))
         self.assertEqual(actual, expected)

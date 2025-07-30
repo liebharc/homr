@@ -1,9 +1,51 @@
 from enum import Enum
+from fractions import Fraction
 
 import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
+
+
+class TransformerSymbol:
+    def __init__(
+        self, symbol: str, confidence: float, alternative: str, alternative_confidence: float
+    ) -> None:
+        self.symbol = symbol
+        self.confidence = confidence
+        self.alternative = alternative
+        self.alternative_confidence = alternative_confidence
+
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, TransformerSymbol):
+            return self.symbol == __value.symbol
+        else:
+            return False
+
+    def __hash__(self) -> int:
+        return hash(self.symbol)
+
+    def __str__(self) -> str:
+        return f"{self.symbol}"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class TransformerChord:
+    def __init__(self, symbols: list[TransformerSymbol]) -> None:
+        if len(symbols) == 0:
+            raise ValueError("At least one symbol is required")
+        self.symbols = symbols
+
+    def append(self, symbol: TransformerSymbol) -> None:
+        self.symbols.append(symbol)
+
+    def __str__(self) -> str:
+        return str.join("|", [str(sym) for sym in self.symbols])
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class ResultSymbol:
@@ -252,21 +294,27 @@ class DurationModifier(Enum):
             return "Invalid duration"
 
 
-def _adjust_duration(duration: int, modifier: DurationModifier) -> int:
+def _adjust_duration(duration: int, modifier: DurationModifier) -> Fraction:
     if modifier == DurationModifier.DOT:
-        return duration * 3 // 2
+        return Fraction(duration * 3, 2)
     elif modifier == DurationModifier.TRIPLET:
-        return duration * 2 // 3
+        return Fraction(duration * 2, 3)
     else:
-        return duration
+        return Fraction(duration, 1)
 
 
 class ResultDuration:
-    def __init__(self, base_duration: int, modifier: DurationModifier = DurationModifier.NONE):
+    def __init__(
+        self,
+        base_duration: int,
+        modifier: DurationModifier = DurationModifier.NONE,
+        confidence: float = 0,
+    ):
         self.base_duration = base_duration
         self.duration = _adjust_duration(base_duration, modifier)
         self.modifier = modifier
         self.duration_name = _get_duration_name(base_duration)
+        self.confidence = confidence
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultDuration):
@@ -285,9 +333,15 @@ class ResultDuration:
 
 
 class ResultNote:
-    def __init__(self, pitch: ResultPitch, duration: ResultDuration):
+    def __init__(
+        self,
+        pitch: ResultPitch,
+        duration: ResultDuration,
+        alternative_duration: ResultDuration | None = None,
+    ):
         self.pitch = pitch
         self.duration = duration
+        self.alternative_duration = alternative_duration
 
     def __eq__(self, __value: object) -> bool:
         if isinstance(__value, ResultNote):
@@ -319,9 +373,25 @@ class ResultChord(ResultSymbol):
     my have a different duration.
     """
 
-    def __init__(self, duration: ResultDuration, notes: list[ResultNote]):
+    def __init__(
+        self,
+        duration: ResultDuration | None,
+        notes: list[ResultNote],
+        alternative_duration: ResultDuration | None = None,
+    ):
         self.notes = notes
-        self.duration = duration
+        self._fixed_duration = duration
+        if duration is None:
+            self.duration = get_min_duration(notes)
+        elif len(notes) > 0:
+            min_duration = get_min_duration(notes)
+            if duration.duration < min_duration.duration:
+                self.duration = duration
+            else:
+                self.duration = min_duration
+        else:
+            self.duration = duration
+        self.alternative_duration = alternative_duration
 
     @property
     def is_rest(self) -> bool:
@@ -379,7 +449,9 @@ class ResultMeasure:
 
     def length_in_quarters(self) -> float:
         return sum(
-            symbol.duration.duration for symbol in self.symbols if isinstance(symbol, ResultChord)
+            float(symbol.duration.duration)
+            for symbol in self.symbols
+            if isinstance(symbol, ResultChord)
         )
 
 

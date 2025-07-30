@@ -1,4 +1,5 @@
 from collections import defaultdict
+from fractions import Fraction
 
 import musicxml.xmlelement.xmlelement as mxl
 
@@ -108,7 +109,7 @@ def build_time_signature(  # type: ignore
 def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
     note = mxl.XMLNote()
     note.add_child(mxl.XMLRest(measure="yes"))
-    note.add_child(mxl.XMLDuration(value_=model_rest.duration.duration))
+    note.add_child(mxl.XMLDuration(value_=int(model_rest.duration.duration)))
     note.add_child(mxl.XMLType(value_=model_rest.duration.duration_name))
     note.add_child(mxl.XMLStaff(value_=1))
     return note
@@ -129,7 +130,7 @@ def build_note(model_note: ResultNote, voice: int, is_chord=False) -> mxl.XMLNot
     note.add_child(pitch)
     model_duration = model_note.duration
     note.add_child(mxl.XMLType(value_=model_duration.duration_name))
-    note.add_child(mxl.XMLDuration(value_=model_duration.duration))
+    note.add_child(mxl.XMLDuration(value_=int(model_duration.duration)))
     note.add_child(mxl.XMLStaff(value_=1))
     note.add_child(mxl.XMLVoice(value_=(str(voice + 1))))
     if model_duration.modifier == DurationModifier.DOT:
@@ -145,7 +146,7 @@ def build_note(model_note: ResultNote, voice: int, is_chord=False) -> mxl.XMLNot
 def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
     by_duration = _group_notes(note_group.notes)
     result = []
-    last_duration = 0
+    last_duration: Fraction = Fraction(0)
     for i, group_duration in enumerate(sorted(by_duration)):
         is_first = True
         for note in by_duration[group_duration]:
@@ -153,23 +154,23 @@ def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ign
             is_first = False
         if i != len(by_duration) - 1:
             backup = mxl.XMLBackup()
-            backup.add_child(mxl.XMLDuration(value_=group_duration))
+            backup.add_child(mxl.XMLDuration(value_=int(group_duration)))
             result.append(backup)
         else:
             last_duration = group_duration
 
     if note_group.duration.duration < last_duration:
         backup = mxl.XMLBackup()
-        backup.add_child(mxl.XMLDuration(value_=last_duration - note_group.duration.duration))
+        backup.add_child(mxl.XMLDuration(value_=int(last_duration - note_group.duration.duration)))
         result.append(backup)
     elif note_group.duration.duration > last_duration:
         backup = mxl.XMLForward()
-        backup.add_child(mxl.XMLDuration(value_=note_group.duration.duration - last_duration))
+        backup.add_child(mxl.XMLDuration(value_=int(note_group.duration.duration - last_duration)))
         result.append(backup)
     return result
 
 
-def _group_notes(notes: list[ResultNote]) -> dict[int, list[ResultNote]]:
+def _group_notes(notes: list[ResultNote]) -> dict[Fraction, list[ResultNote]]:
     groups_by_duration = defaultdict(list)
     for note in notes:
         duration = note.duration.duration
