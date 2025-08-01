@@ -128,8 +128,9 @@ def create_all_alternatives_limited(
     result: list[tuple[list[ResultSymbol | None], int]] = [([], 0)]  # (sequence, mutation_count)
 
     for symbol in symbols:
+        alternatives: list[ResultSymbol | None] = []
         if isinstance(symbol, ResultChord):
-            alternatives = create_alternatives(symbol)
+            alternatives += create_alternatives(symbol)
         else:
             alternatives = [symbol]
 
