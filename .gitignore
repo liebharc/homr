@@ -45,3 +45,4 @@ _build/
 
 /lightning_logs
 /*.safetensors
+/runs

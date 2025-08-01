@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 186 after adding triplet correction
+
+Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
+Day: 01 Aug 2025
+SER: 8%
+Validation result: 8.0
+
+Larger encoder.
+
 ## Run 186
 
 Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
