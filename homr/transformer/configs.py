@@ -13,7 +13,7 @@ class FilePaths:
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
         self.pitchtokenizer = os.path.join(workspace, "tokenizer_pitch.json")
-        self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
+        self.modifiertokenizer = os.path.join(workspace, "tokenizer_modifier.json")
         self.notetokenizer = os.path.join(workspace, "tokenizer_note.json")
 
     def to_dict(self) -> dict[str, Any]:
@@ -23,6 +23,7 @@ class FilePaths:
             "lifttokenizer": self.lifttokenizer,
             "pitchtokenizer": self.pitchtokenizer,
             "notetokenizer": self.notetokenizer,
+            "modifiertokenizer": self.modifiertokenizer,
         }
 
     def to_json_string(self) -> str:
@@ -62,10 +63,11 @@ class Config:
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 93
+        self.num_rhythm_tokens = 72
         self.num_note_tokens = 2
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
+        self.num_modifier_tokens = 4
         self.encoder_structure = "hybrid"
         self.encoder_depth = 6
         self.backbone_layers = [3, 4, 6, 3]
@@ -80,6 +82,7 @@ class Config:
         self.pitch_vocab = json.load(open(self.filepaths.pitchtokenizer))["model"]["vocab"]
         self.note_vocab = json.load(open(self.filepaths.notetokenizer))["model"]["vocab"]
         self.rhythm_vocab = json.load(open(self.filepaths.rhythmtokenizer))["model"]["vocab"]
+        self.modfier_vocab = json.load(open(self.filepaths.modifiertokenizer))["model"]["vocab"]
         self.noteindexes = self._get_values_of_keys_starting_with("note-")
         self.restindexes = self._get_values_of_keys_starting_with(
             "rest-"

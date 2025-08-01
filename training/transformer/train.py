@@ -138,7 +138,7 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:  # noqa: C9
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
-        label_names=["rhythms_seq", "note_seq", "lifts_seq", "pitchs_seq"],
+        label_names=["rhythms_seq", "note_seq", "lifts_seq", "pitchs_seq", "modfiers_seq"],
         fp16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
