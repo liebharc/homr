@@ -16,6 +16,8 @@ from homr.transformer.configs import default_config
 from homr.transformer.staff2score import readimg
 from homr.transformer.tromr_arch import TrOMR
 
+MAX_NUMBER_OF_SAMPLES_WITH_IMAGES = 1000
+
 
 def load_model(config):
     """Load model from checkpoint."""
@@ -52,7 +54,7 @@ def extract_embedding(model, img_tensor):
         return emb
 
 
-def load_and_prepare_image_for_tensorboard(img_path, max_size=800):
+def load_and_prepare_image_for_tensorboard(img_path, max_size=200):
     """
     Load image and prepare it for TensorBoard visualization.
     Preserves aspect ratio and ensures good resolution for viewing.
@@ -78,10 +80,6 @@ def load_and_prepare_image_for_tensorboard(img_path, max_size=800):
                 new_h = max_size
                 new_w = int(w * max_size / h)
 
-            # Ensure minimum dimensions for readability
-            new_w = max(new_w, 200)
-            new_h = max(new_h, 200)
-
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         # Convert to tensor (C, H, W) with values in [0, 1]
@@ -98,12 +96,10 @@ def load_and_prepare_image_for_tensorboard(img_path, max_size=800):
         return None
 
 
-def create_simple_metadata(index_file):
+def create_simple_metadata(index):
     """
     Create simple, clean metadata for TensorBoard.
     """
-    with open(index_file) as f:
-        index = f.readlines()
 
     metadata = []
     for i, entry in enumerate(index):
@@ -128,6 +124,12 @@ def main(index_file, logdir, max_image_size, include_images):
     with open(index_file) as f:
         index = f.readlines()
 
+    if include_images and len(index) > MAX_NUMBER_OF_SAMPLES_WITH_IMAGES:
+        index = list(np.random.choice(index, MAX_NUMBER_OF_SAMPLES_WITH_IMAGES, replace=False))
+        print(
+            f"⚠️ Dataset too large, sampling {MAX_NUMBER_OF_SAMPLES_WITH_IMAGES} random entries for TensorBoard."  # noqa: E501
+        )
+
     embeddings = []
     images_for_tensorboard = []
 
@@ -151,7 +153,7 @@ def main(index_file, logdir, max_image_size, include_images):
                     images_for_tensorboard.append(tb_img)
                 else:
                     # Create a placeholder black image if loading fails
-                    placeholder = torch.zeros(3, 64, 64)
+                    placeholder = torch.zeros(3, 200, 800)
                     images_for_tensorboard.append(placeholder)
 
         except Exception as e:
@@ -164,7 +166,7 @@ def main(index_file, logdir, max_image_size, include_images):
     embeddings = np.stack(embeddings)
 
     # Create simple metadata for TensorBoard
-    metadata = create_simple_metadata(index_file)
+    metadata = create_simple_metadata(index)
 
     # Prepare images tensor for TensorBoard if requested
     label_img = None
@@ -214,8 +216,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-image-size",
         type=int,
-        default=800,
-        help="Maximum size for images in TensorBoard (default: 800)",
+        default=200,
+        help="Maximum size for images in TensorBoard (default: 200)",
     )
     parser.add_argument(
         "--include-images",
