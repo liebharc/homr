@@ -106,7 +106,7 @@ def create_simple_metadata(index):
         try:
             img_path = entry.split(",")[0].strip()
             filename = os.path.basename(img_path)
-            metadata.append(f"{i:04d}_{filename}")
+            metadata.append(filename)
         except Exception:
             metadata.append(f"{i:04d}_ERROR")
 
@@ -135,7 +135,7 @@ def main(index_file, logdir, max_image_size, include_images):
 
     print(f"Processing {len(index)} images...")
 
-    for _i, entry in enumerate(tqdm(index, desc="Processing images")):
+    for entry in tqdm(index, desc="Processing images"):
         try:
             img_path = entry.split(",")[0].strip()
 
