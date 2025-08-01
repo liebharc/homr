@@ -15,6 +15,15 @@ The training process itself takes depending on the hardware you use a 1-2 days.
 
 ## Run 186
 
+Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
+Day: 01 Aug 2025
+SER: 8%
+Validation result: 8.3
+
+Larger encoder.
+
+## Run 186
+
 Commit: 3f0631db15012e928ad3d4da739817f92d958979
 Day: 30 Jul 2025
 SER: 10%
