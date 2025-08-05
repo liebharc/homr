@@ -38,6 +38,7 @@ XMLBackup([XMLDuration(value: 16)])
     def test_chord_is_longer_than_notes(self) -> None:
         self.maxDiff = None
         chord = ResultChord(half, [ResultNote(a4, quarter), ResultNote(d4, quarter)])
+        chord.duration = half
         note = build_note_group(chord)
         expected = """
 XMLNote([XMLPitch([XMLStep(value: A)]),XMLDuration(value: 16)]),

@@ -6,6 +6,7 @@ import safetensors
 import torch
 
 from homr.debug import AttentionDebug
+from homr.results import TransformerChord
 from homr.transformer.configs import Config
 from homr.transformer.tromr_arch import TrOMR
 from homr.type_definitions import NDArray
@@ -42,7 +43,9 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(self, image: NDArray, debug: AttentionDebug | None = None) -> list[str]:
+    def predict(
+        self, image: NDArray, debug: AttentionDebug | None = None
+    ) -> list[TransformerChord]:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         imgs_tensor = self._image_to_tensor(image)
         return self._generate(
@@ -59,7 +62,7 @@ class Staff2Score:
         self,
         imgs_tensor: torch.Tensor,
         debug: AttentionDebug | None = None,
-    ) -> list[str]:
+    ) -> list[TransformerChord]:
         return self.model.generate(
             imgs_tensor,
             debug=debug,

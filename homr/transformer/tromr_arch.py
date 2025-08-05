@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from homr.debug import AttentionDebug
+from homr.results import TransformerChord
 from homr.transformer.configs import Config
 from homr.transformer.decoder import get_decoder
 from homr.transformer.encoder import get_encoder
@@ -37,7 +38,7 @@ class TrOMR(nn.Module):
         return loss
 
     @torch.no_grad()
-    def generate(self, x: torch.Tensor, debug: AttentionDebug | None) -> list[str]:
+    def generate(self, x: torch.Tensor, debug: AttentionDebug | None) -> list[TransformerChord]:
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 

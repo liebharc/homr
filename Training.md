@@ -13,6 +13,71 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 197
+
+Commit: 4c8d68b941c647c96f82d977ac0bb59d4f2b7a8c
+Day: 05 Aug 2025
+SER: 10%
+Validation result: 9.1
+
+New decoder branch just for triplets and dots. The result works mostly fine but it's too eager to detect triplets.
+
+## Run 186 after adding triplet correction
+
+Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
+Day: 01 Aug 2025
+SER: 8%
+Validation result: 8.0
+
+Larger encoder.
+
+## Run 186
+
+Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
+Day: 01 Aug 2025
+SER: 8%
+Validation result: 8.3
+
+Larger encoder.
+
+## Run 186
+
+Commit: 3f0631db15012e928ad3d4da739817f92d958979
+Day: 30 Jul 2025
+SER: 10%
+Validation result: 7.9
+
+Removed cases of incorrect triplets from the dataset
+
+## Run 183
+
+Commit: 74d500a5d94e553f24dbbd57a0e71b8566e2e554
+Day: 25 Jul 2025
+SER: 11%
+Validation result: 9.6
+
+Larger encoder.
+
+Note: This branch was rebased, commit hash was updated to match the version which was merged to main.
+
+## Run 181
+
+Commit: a1ec2fff7d7ba562807f03badf5ed963b48649a5
+Day: 27 Jul 2025
+SER: 9%
+Validation result: 11.6
+
+Increased degrees of freedom in decoder.
+
+## Run 180
+
+Commit: eb5fbfd4692b56d24d615e2fa3586903ad681132
+Day: 26 Jul 2025
+SER: 8%
+Validation result: 9.7
+
+Added triplets.
+
 ## Run 161
 
 Commit: 1cd1d06543e885e4d64a74d985b4725c50054c2a

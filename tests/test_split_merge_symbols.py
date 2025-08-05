@@ -1,6 +1,7 @@
 import unittest
 
 from homr.transformer.split_merge_symbols import (
+    check_triplets,
     convert_alter_to_accidentals,
     merge_symbols,
     split_symbols,
@@ -300,3 +301,10 @@ class TestMergeSymbols(unittest.TestCase):
             readable_lift,
             ["note-F5lift_N", "note-F5lift_#", "note-F5lift_N"],
         )
+
+    def test_check_triplets(self) -> None:
+        grandstaff = "clef-G2 keySignature-BbM timeSignature-4/4 note-F4_whole barline rest-quarter note-C5_eighth³ note-A4b_eighth³ note-D5b_eighth³ note-B4_half barline rest-quarter note-C5_eighth³ note-A4b_eighth³ note-D5b_eighth³ note-B4_half barline rest-quarter note-D5b_eighth³ note-A4b_eighth³ note-F5_eighth³ note-G4b_half|note-E5_half barline"  # noqa: E501
+        self.assertTrue(check_triplets(grandstaff))
+
+        lieder = "clef-G2+keySignature-BbM+note-F4_half+note-F4_eighth³+note-A4_eighth³+note-D5_eighth+barline+note-F5_quarter+note-D5b_quarter+note-C5_quarter+barline+note-B4N_quarter+note-B4_eighth+note-B4_eighth+note-B4_eighth+note-B4_eighth+barline+note-C5_half+note-C5#_quarter+barline"  # noqa: E501
+        self.assertFalse(check_triplets(lieder))

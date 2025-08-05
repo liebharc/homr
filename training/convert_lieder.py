@@ -17,6 +17,7 @@ from PIL import Image
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
+from homr.transformer.split_merge_symbols import check_triplets
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
@@ -172,7 +173,11 @@ def _split_file_into_staffs(
             if not semantic_content.startswith("clef"):
                 semantic_content = prelude + semantic_content
             write_text_to_file(semantic_content, semantic_file_name)
-            result.append(staff_image_file_name + "," + semantic_file_name + "\n")
+            # Only add files to the index which have valid triplets
+            if check_triplets(semantic_content):
+                result.append(staff_image_file_name + "," + semantic_file_name + "\n")
+            else:
+                eprint("Incomplete triplets", staff_image_file_name)
             voice = (voice + 1) % len(semantic)
     if any(len(measure[1]) > 0 for measure in measures):
         raise ValueError("Warning: Not all measures were processed")
