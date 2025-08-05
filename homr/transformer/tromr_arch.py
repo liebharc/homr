@@ -27,21 +27,13 @@ class TrOMR(nn.Module):
         rhythms_seq: torch.Tensor,
         pitchs_seq: torch.Tensor,
         lifts_seq: torch.Tensor,
-        modfiers_seq: torch.Tensor,
         note_seq: torch.Tensor,
         mask: torch.Tensor,
         **kwargs: Any,
     ) -> Any:
         encoded = self.encoder(inputs)
         loss = self.decoder(
-            rhythms_seq,
-            pitchs_seq,
-            lifts_seq,
-            modfiers_seq,
-            note_seq,
-            context=encoded,
-            mask=mask,
-            **kwargs,
+            rhythms_seq, pitchs_seq, lifts_seq, note_seq, context=encoded, mask=mask, **kwargs
         )
         return loss
 

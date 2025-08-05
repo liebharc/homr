@@ -36,7 +36,6 @@ class DataLoader:
         pitch_vocab: Any,
         note_vocab: Any,
         lift_vocab: Any,
-        modifier_vocab: Any,
         config: Config,
     ) -> None:
         self.current_idx = 0
@@ -45,7 +44,6 @@ class DataLoader:
         self.pitch_vocab = pitch_vocab
         self.note_vocab = note_vocab
         self.lift_vocab = lift_vocab
-        self.modifier_vocab = modifier_vocab
         self.config = config
 
     def _add_mask_steps(self, corpus_list: list[str]) -> Any:
@@ -128,9 +126,9 @@ class DataLoader:
 
     def _read_semantic(
         self, path: str
-    ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
+    ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
         if path == "nosymbols":
-            return [[]], [[]], [[]], [[]], [[]]
+            return [[]], [[]], [[]], [[]]
         return split_semantic_file(path)
 
     def __getitem__(self, idx: int) -> Any:
@@ -140,8 +138,8 @@ class DataLoader:
 
         # ground truth
         sample_full_filepath = entry["semantic"]
-        liftsymbols, pitchsymbols, rhythmsymbols, modifiersymbols, note_symbols = (
-            self._read_semantic(sample_full_filepath)
+        liftsymbols, pitchsymbols, rhythmsymbols, note_symbols = self._read_semantic(
+            sample_full_filepath
         )
 
         rhythm = tokenize(
@@ -159,13 +157,6 @@ class DataLoader:
             self.pitch_vocab,
             self.config.nonote_token,
             "pitch",
-            sample_full_filepath,
-        )
-        modifier = tokenize(
-            modifiersymbols[0],
-            self.modifier_vocab,
-            self.config.nonote_token,
-            "modifier",
             sample_full_filepath,
         )
         notes = tokenize(
@@ -187,9 +178,6 @@ class DataLoader:
             "pitchs_seq": self._pad_array_to_max_seq_len(
                 self._check_seq_values(self._pad_samples(pitch), self.config.num_pitch_tokens)
             ),
-            "modfiers_seq": self._pad_array_to_max_seq_len(
-                self._check_seq_values(self._pad_samples(modifier), self.config.num_modifier_tokens)
-            ),
         }
         return result
 
@@ -199,7 +187,6 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
     pitch_tokenizer_vocab = config.pitch_vocab
     note_tokenizer_vocab = config.note_vocab
     lift_tokenizer_vocab = config.lift_vocab
-    modifier_tokenizer_vocab = config.modfier_vocab
 
     # Train and validation split
     val_idx = int(len(samples) * val_split)
@@ -219,7 +206,6 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
             pitch_tokenizer_vocab,
             note_tokenizer_vocab,
             lift_tokenizer_vocab,
-            modifier_tokenizer_vocab,
             config,
         ),
         "train_list": training_list,
@@ -229,7 +215,6 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
             pitch_tokenizer_vocab,
             note_tokenizer_vocab,
             lift_tokenizer_vocab,
-            modifier_tokenizer_vocab,
             config,
         ),
         "validation_list": validation_list,

@@ -35,10 +35,8 @@ class SymbolMerger:
                 )
             )
 
-    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str, predmodifier: str) -> bool:
-        return self.add_symbol_and_alternative(
-            predrhythm, 1, predpitch, predlift, predmodifier, "", 0
-        )
+    def add_symbol(self, predrhythm: str, predpitch: str, predlift: str) -> bool:
+        return self.add_symbol_and_alternative(predrhythm, 1, predpitch, predlift, "", 0)
 
     def add_symbol_and_alternative(
         self,
@@ -46,8 +44,7 @@ class SymbolMerger:
         rhythm_confidence: float,
         predpitch: str,
         predlift: str,
-        predmodfier: str,
-        modifier_alternative: str,
+        rhythm_alternative: str,
         alternative_confidence: float,
     ) -> bool:
         """
@@ -71,11 +68,10 @@ class SymbolMerger:
                 "lift_N",
             ):
                 lift = predlift.split("_")[-1]
-            rhythm_symbol = predrhythm.split("note-")[-1]
             self._append_symbol(
-                predpitch + lift + "_" + rhythm_symbol + self._translate_modfier(predmodfier),
+                predpitch + lift + "_" + predrhythm.split("note-")[-1],
                 rhythm_confidence,
-                rhythm_symbol + self._translate_modfier(modifier_alternative),
+                rhythm_alternative,
                 alternative_confidence,
             )
             return False
@@ -88,25 +84,18 @@ class SymbolMerger:
             self._append_symbol(
                 predrhythm,
                 rhythm_confidence,
-                "",
-                0,
+                rhythm_alternative,
+                alternative_confidence,
             )
             return False
         else:
             self._append_symbol(
                 predrhythm,
                 rhythm_confidence,
-                "",
-                0,
+                rhythm_alternative,
+                alternative_confidence,
             )
             return False
-
-    def _translate_modfier(self, modifier: str) -> str:
-        if modifier == "mod_dot":
-            return "."
-        if modifier == "mod_triplet":
-            return constants.triplet_symbol
-        return ""
 
     def _clean_and_sort_chord(self, chord: list[TransformerSymbol]) -> list[TransformerSymbol]:
         if len(chord) == 1:
@@ -120,30 +109,24 @@ class SymbolMerger:
         ]
 
 
-def merge_single_line(
-    predrhythm: list[str], predpitch: list[str], predlift: list[str], predmodifier: list[str]
-) -> str:
+def merge_single_line(predrhythm: list[str], predpitch: list[str], predlift: list[str]) -> str:
     merger = SymbolMerger()
 
     for j in range(len(predrhythm)):
-        merger.add_symbol(predrhythm[j], predpitch[j], predlift[j], predmodifier[j])
+        merger.add_symbol(predrhythm[j], predpitch[j], predlift[j])
 
     return str.join("+", [str(m) for m in merger.complete()])
 
 
 def merge_symbols(
-    predrhythms: list[list[str]],
-    predpitchs: list[list[str]],
-    predlifts: list[list[str]],
-    predmodifiers: list[list[str]],
+    predrhythms: list[list[str]], predpitchs: list[list[str]], predlifts: list[list[str]]
 ) -> list[str]:
     merges = []
     for i in range(len(predrhythms)):
         predrhythm = predrhythms[i]
         predlift = predlifts[i]
         predpitch = predpitchs[i]
-        predmodifier = predmodifiers[i]
-        merge = merge_single_line(predrhythm, predpitch, predlift, predmodifier)
+        merge = merge_single_line(predrhythm, predpitch, predlift)
         merges.append(merge)
     return merges
 
@@ -188,15 +171,13 @@ def _symbol_to_pitch(symbol: str) -> str:
     return "nonote"
 
 
-def _get_duration_modifier(duration: str) -> str:
-    if not ("note" in duration or "rest" in duration):
-        return "nonote"
+def _add_duration_modifier(duration: str) -> str:
     # TrOMR only allows one dot
     if "." in duration:
-        return "mod_dot"
+        return "."
     if constants.triplet_symbol in duration:
-        return "mod_triplet"
-    return "mod_null"
+        return constants.triplet_symbol
+    return ""
 
 
 def _translate_duration(duration: str) -> str:
@@ -213,10 +194,10 @@ def _translate_duration(duration: str) -> str:
     return duration
 
 
-def _symbol_to_rhythm(symbol: str) -> tuple[str, str]:  # noqa: PLR0911
+def _symbol_to_rhythm(symbol: str) -> str:  # noqa: PLR0911
     if symbol.startswith(("note", "gracenote")):
         note = "note-" + _translate_duration(symbol.split("_")[1])
-        return note, _get_duration_modifier(symbol)
+        return note + _add_duration_modifier(symbol)
     symbol = symbol.replace("rest-double_whole", "multirest-2")
     symbol = symbol.replace("rest-quadruple_whole", "multirest-2")
     symbol = symbol.replace("_fermata", "")
@@ -230,19 +211,19 @@ def _symbol_to_rhythm(symbol: str) -> tuple[str, str]:  # noqa: PLR0911
         # Some multirests don't exist in the rhtythm tokenizer,
         # for now it's good enough to just recognize them as any multirest
         if rest_length <= 1:
-            return "rest-whole", "mod_null"
+            return "rest-whole"
         max_supported_multi_rest = 10
         if rest_length > max_supported_multi_rest:
-            return "multirest-" + str(max_supported_multi_rest), "mod_null"
+            return "multirest-" + str(max_supported_multi_rest)
         symbol = "multirest-" + str(rest_length)
     if symbol == "timeSignature-C":
-        return "timeSignature-/4", "nonote"
+        return "timeSignature-/4"
     if symbol == "timeSignature-C/":
-        return "timeSignature-/2", "nonote"
+        return "timeSignature-/2"
     timesignature_match = re.match(r"timeSignature-(\d+)/(\d+)", symbol)
     if timesignature_match:
-        return "timeSignature-/" + timesignature_match[2], "nonote"
-    return symbol, _get_duration_modifier(symbol)
+        return "timeSignature-/" + timesignature_match[2]
+    return symbol + _add_duration_modifier(symbol)
 
 
 def _symbol_to_note(symbol: str) -> str:
@@ -279,19 +260,17 @@ def symbol_to_sortable(symbol: TransformerSymbol) -> int:
 
 
 def _sort_by_pitch(
-    lifts: list[str], pitches: list[str], rhythms: list[str], modfiers: list[str], notes: list[str]
-) -> tuple[list[str], list[str], list[str], list[str], list[str]]:
+    lifts: list[str], pitches: list[str], rhythms: list[str], notes: list[str]
+) -> tuple[list[str], list[str], list[str], list[str]]:
     lifts = lifts.copy()
     pitches = pitches.copy()
     rhythms = rhythms.copy()
-    modfiers = modfiers.copy()
     notes = notes.copy()
 
     def swap(i: int, j: int) -> None:
         lifts[i], lifts[j] = lifts[j], lifts[i]
         pitches[i], pitches[j] = pitches[j], pitches[i]
         rhythms[i], rhythms[j] = rhythms[j], rhythms[i]
-        modfiers[i], modfiers[j] = modfiers[j], modfiers[i]
         notes[i], notes[j] = notes[j], notes[i]
 
     for i in range(len(pitches)):
@@ -312,7 +291,7 @@ def _sort_by_pitch(
             if pitch_name_to_sortable(symbol_at_i) > pitch_name_to_sortable(symbol_at_j):
                 swap(i, j)
             expect_chord = True
-    return lifts, pitches, rhythms, modfiers, notes
+    return lifts, pitches, rhythms, notes
 
 
 def convert_alter_to_accidentals(merged: list[str]) -> list[str]:
@@ -357,15 +336,15 @@ def convert_alter_to_accidentals(merged: list[str]) -> list[str]:
 
 def split_semantic_file(
     file_path: str,
-) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
+) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     is_primus = "Corpus" in file_path
     with open(file_path) as f:
         return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
 
 
-def split_symbols(  # noqa: C901, PLR0912, PLR0915
+def split_symbols(  # noqa: C901, PLR0912
     merged: list[str], convert_to_modified_semantic: bool = True
-) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
+) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     """
     modified_semantic: Semantic format but with accidentals depending on how they are placed.
 
@@ -377,20 +356,17 @@ def split_symbols(  # noqa: C901, PLR0912, PLR0915
     predpitchs = []
     predrhythms = []
     prednotes = []
-    predmodifiers = []
     for line in range(len(merged)):
         predlift = []
         predpitch = []
         predrhythm = []
         prednote = []
-        predmodifier = []
         key = KeyTransformation(0) if convert_to_modified_semantic else NoKeyTransformation()
         for symbols in re.split("\\s+|\\+", merged[line].strip()):
             symbollift = []
             symbolpitch = []
             symbolrhythm = []
             symbolnote = []
-            symbolmodifier = []
             for symbol in re.split("(\\|)", symbols):
                 if symbol.startswith("keySignature"):
                     if convert_to_modified_semantic:
@@ -407,13 +383,10 @@ def split_symbols(  # noqa: C901, PLR0912, PLR0915
                     symbolpitch.append("nonote")
                     symbollift.append("nonote")
                     symbolnote.append("nonote")
-                    symbolmodifier.append("nonote")
                 else:
                     pitch = _symbol_to_pitch(symbol)
                     symbolpitch.append(pitch)
-                    rhythm, modifier = _symbol_to_rhythm(symbol)
-                    symbolrhythm.append(rhythm)
-                    symbolmodifier.append(modifier)
+                    symbolrhythm.append(_symbol_to_rhythm(symbol))
                     symbolnote.append(_symbol_to_note(symbol))
                     alter = _get_alter(symbol)
                     if alter is not None:
@@ -423,21 +396,19 @@ def split_symbols(  # noqa: C901, PLR0912, PLR0915
                     else:
                         symbollift.append("nonote")
             if len(symbolpitch) > 0:
-                symbollift, symbolpitch, symbolrhythm, symbolmodifier, symbolnote = _sort_by_pitch(
-                    symbollift, symbolpitch, symbolrhythm, symbolmodifier, symbolnote
+                symbollift, symbolpitch, symbolrhythm, symbolnote = _sort_by_pitch(
+                    symbollift, symbolpitch, symbolrhythm, symbolnote
                 )
                 predpitch += symbolpitch
                 predrhythm += symbolrhythm
                 prednote += symbolnote
                 predlift += symbollift
-                predmodifier += symbolmodifier
         if len(predpitch) > 0:
             predlifts.append(predlift)
             predpitchs.append(predpitch)
             predrhythms.append(predrhythm)
             prednotes.append(prednote)
-            predmodifiers.append(predmodifier)
-    return predlifts, predpitchs, predrhythms, predmodifiers, prednotes
+    return predlifts, predpitchs, predrhythms, prednotes
 
 
 def check_triplets(semantic: str) -> bool:

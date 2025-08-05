@@ -46,9 +46,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.rhythm_emb = TokenEmbedding(
             config.decoder_dim, config.num_rhythm_tokens, l2norm_embed=l2norm_embed
         )
-        self.modifier_emb = TokenEmbedding(
-            config.decoder_dim, config.num_modifier_tokens, l2norm_embed=l2norm_embed
-        )
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
@@ -67,7 +64,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
         self.to_logits_pitch = nn.Linear(dim, config.num_pitch_tokens)
         self.to_logits_rhythm = nn.Linear(dim, config.num_rhythm_tokens)
-        self.to_logits_modifier = nn.Linear(dim, config.num_modifier_tokens)
         self.to_logits_note = nn.Linear(dim, config.num_note_tokens)
 
     def init_(self) -> None:
@@ -75,7 +71,6 @@ class ScoreTransformerWrapper(nn.Module):
             nn.init.normal_(self.lift_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pitch_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.rhythm_emb.emb.weight, std=1e-5)
-            nn.init.normal_(self.modifier_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
             return
 
@@ -84,7 +79,6 @@ class ScoreTransformerWrapper(nn.Module):
         rhythms: torch.Tensor,
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
-        modifiers: torch.Tensor,
         mask: torch.Tensor | None = None,
         return_center_of_attention: bool = False,
         **kwargs: Any,
@@ -93,7 +87,6 @@ class ScoreTransformerWrapper(nn.Module):
             self.rhythm_emb(rhythms)
             + self.pitch_emb(pitchs)
             + self.lift_emb(lifts)
-            + self.modifier_emb(modifiers)
             + self.pos_emb(rhythms)
         )
 
@@ -113,9 +106,8 @@ class ScoreTransformerWrapper(nn.Module):
         out_lifts = self.to_logits_lift(x)
         out_pitchs = self.to_logits_pitch(x)
         out_rhythms = self.to_logits_rhythm(x)
-        out_modifiers = self.to_logits_modifier(x)
         out_notes = self.to_logits_note(x)
-        return out_rhythms, out_pitchs, out_lifts, out_modifiers, out_notes, x, center_of_attention
+        return out_rhythms, out_pitchs, out_lifts, out_notes, x, center_of_attention
 
     def calculate_center_of_attention(
         self, debug: AttentionDebug | None, intermediates: Any
@@ -158,6 +150,7 @@ class ScoreDecoder(nn.Module):
     def __init__(
         self,
         transformer: ScoreTransformerWrapper,
+        noteindexes: list[int],
         config: Config,
         ignore_index: int = -100,
     ):
@@ -171,16 +164,10 @@ class ScoreDecoder(nn.Module):
         self.inv_rhythm_vocab = {v: k for k, v in config.rhythm_vocab.items()}
         self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
-        self.inv_modifier_vocab = {v: k for k, v in config.modfier_vocab.items()}
 
         note_mask = torch.zeros(config.num_rhythm_tokens)
-        note_mask[config.noteindexes] = 1
+        note_mask[noteindexes] = 1
         self.note_mask = nn.Parameter(note_mask)
-
-        note_rest_mask = torch.zeros(config.num_rhythm_tokens)
-        note_rest_mask[config.noteindexes] = 1
-        note_rest_mask[config.restindexes] = 1
-        self.note_rest_mask = nn.Parameter(note_rest_mask)
 
         # Weight the actual lift tokens (so neither nonote nor null) higher
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -208,7 +195,6 @@ class ScoreDecoder(nn.Module):
         out_rhythm = start_tokens
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
-        out_modifier = nonote_tokens
         mask = kwargs.pop("mask", None)
         merger = SymbolMerger()
 
@@ -220,22 +206,14 @@ class ScoreDecoder(nn.Module):
             x_lift = out_lift[:, -self.max_seq_len :]
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            x_modifier = out_modifier[:, -self.max_seq_len :]
 
-            rhythmsp, pitchsp, liftsp, modifiersp, notesp, _ignored, center_of_attention = self.net(
-                x_rhythm,
-                x_pitch,
-                x_lift,
-                x_modifier,
-                mask=mask,
-                return_center_of_attention=True,
-                **kwargs,
+            rhythmsp, pitchsp, liftsp, notesp, _ignored, center_of_attention = self.net(
+                x_rhythm, x_pitch, x_lift, mask=mask, return_center_of_attention=True, **kwargs
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
-            filtered_modifier_logits = top_k(modifiersp[:, -1, :], thres=filter_thres)
 
             current_temperature = temperature
             retry = True
@@ -246,41 +224,38 @@ class ScoreDecoder(nn.Module):
                 lift_probs = F.softmax(filtered_lift_logits / current_temperature, dim=-1)
                 pitch_probs = F.softmax(filtered_pitch_logits / current_temperature, dim=-1)
                 rhythm_probs = F.softmax(filtered_rhythm_logits / current_temperature, dim=-1)
-                modifier_probs = F.softmax(filtered_modifier_logits / current_temperature, dim=-1)
 
                 lift_sample = torch.multinomial(lift_probs, 1)
                 pitch_sample = torch.multinomial(pitch_probs, 1)
                 rhythm_sample = torch.multinomial(rhythm_probs, 1)
-                modifier_sample = torch.multinomial(modifier_probs, 1)
 
-                sorted_probs, sorted_indices = torch.sort(modifier_probs, descending=True)
-                modifier_confidence = sorted_probs[0, 0].item()
+                sorted_probs, sorted_indices = torch.sort(rhythm_probs, descending=True)
+                rhythm_confidence = sorted_probs[0, 0].item()
                 alternative_confidence = sorted_probs[0, 1].item()
 
                 top_token_id = sorted_indices[0, 0].unsqueeze(0)
                 alt_token_id = sorted_indices[0, 1].unsqueeze(0)
 
-                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
+                rhythm_token = detokenize(top_token_id, self.inv_rhythm_vocab)
+                alternative_rhythm_token = detokenize(alt_token_id, self.inv_rhythm_vocab)
+
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
-                modifier_token = detokenize(top_token_id, self.inv_modifier_vocab)
-                alternative_modifier_token = detokenize(alt_token_id, self.inv_rhythm_vocab)
 
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
                     break
 
-                if len(alternative_modifier_token) == 0:
-                    alternative_modifier_token = [""]
+                if len(alternative_rhythm_token) == 0:
+                    alternative_rhythm_token = [""]
                     alternative_confidence = 0
 
                 retry = merger.add_symbol_and_alternative(
                     rhythm_token[0],
-                    modifier_confidence,
+                    rhythm_confidence,
                     pitch_token[0],
                     lift_token[0],
-                    modifier_token[0],
-                    alternative_modifier_token[0],
+                    alternative_rhythm_token[0],
                     alternative_confidence,
                 )
 
@@ -290,7 +265,6 @@ class ScoreDecoder(nn.Module):
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
             out_rhythm = torch.cat((out_rhythm, rhythm_sample), dim=-1)
-            out_modifier = torch.cat((out_modifier, modifier_sample), dim=-1)
             mask = F.pad(mask, (0, 1), value=True)
 
             if (
@@ -302,7 +276,6 @@ class ScoreDecoder(nn.Module):
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
-        out_modifier = out_modifier[:, t:]
 
         self.net.train(was_training)
         return merger.complete()
@@ -312,7 +285,6 @@ class ScoreDecoder(nn.Module):
         rhythms: torch.Tensor,
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
-        modifiers: torch.Tensor,
         notes: torch.Tensor,
         **kwargs: Any,
     ) -> dict[str, torch.Tensor]:
@@ -322,8 +294,6 @@ class ScoreDecoder(nn.Module):
         pitchso = pitchs[:, 1:]
         rhythmsi = rhythms[:, :-1]
         rhythmso = rhythms[:, 1:]
-        modifiersi = modifiers[:, :-1]
-        modifierso = modifiers[:, 1:]
         noteso = notes[:, 1:]
 
         mask = kwargs.get("mask", None)
@@ -333,27 +303,25 @@ class ScoreDecoder(nn.Module):
         if mask is None:
             raise ValueError("A mask is required")
 
-        rhythmsp, pitchsp, liftsp, modifiersp, notesp, x, _attention = self.net(
-            rhythmsi, pitchsi, liftsi, modifiersi, **kwargs
+        rhythmsp, pitchsp, liftsp, notesp, x, _attention = self.net(
+            rhythmsi, pitchsi, liftsi, **kwargs
         )  # this calls ScoreTransformerWrapper.forward
 
-        loss_consist = self.calConsistencyLoss(rhythmsp, pitchsp, liftsp, modifiersp, notesp, mask)
+        loss_consist = self.calConsistencyLoss(rhythmsp, pitchsp, liftsp, notesp, mask)
         loss_rhythm = self.masked_logits_cross_entropy(rhythmsp, rhythmso, mask)
         loss_pitch = self.masked_logits_cross_entropy(pitchsp, pitchso, mask)
         loss_lift = self.masked_logits_cross_entropy(liftsp, liftso, mask)
-        loss_modfier = self.masked_logits_cross_entropy(modifiersp, modifierso, mask)
         loss_note = self.masked_logits_cross_entropy(notesp, noteso, mask)
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
         alpha = 0.1
         beta = 1
-        loss_sum = loss_rhythm + loss_pitch + loss_lift + loss_note + loss_modfier
+        loss_sum = loss_rhythm + loss_pitch + loss_lift + loss_note
         loss = alpha * loss_sum + beta * loss_consist
 
         return {
             "loss_rhythm": loss_rhythm,
             "loss_pitch": loss_pitch,
             "loss_lift": loss_lift,
-            "loss_modfier": loss_modfier,
             "loss_consist": loss_consist,
             "loss_note": loss_note,
             "loss": loss,
@@ -364,7 +332,6 @@ class ScoreDecoder(nn.Module):
         rhythmsp: torch.Tensor,
         pitchsp: torch.Tensor,
         liftsp: torch.Tensor,
-        modifiersp: torch.Tensor,
         notesp: torch.Tensor,
         mask: torch.Tensor,
         gamma: int = 10,
@@ -374,7 +341,6 @@ class ScoreDecoder(nn.Module):
 
         rhythmsp_soft = torch.softmax(rhythmsp, dim=2)
         rhythmsp_note = torch.sum(rhythmsp_soft * self.note_mask, dim=2) * mask
-        rhythmsp_note_rest = torch.sum(rhythmsp_soft * self.note_rest_mask, dim=2) * mask
 
         pitchsp_soft = torch.softmax(pitchsp, dim=2)
         pitchsp_note = torch.sum(pitchsp_soft[:, :, 1:], dim=2) * mask
@@ -382,18 +348,14 @@ class ScoreDecoder(nn.Module):
         liftsp_soft = torch.softmax(liftsp, dim=2)
         liftsp_note = torch.sum(liftsp_soft[:, :, 1:], dim=2) * mask
 
-        modifiersp_soft_rest = torch.softmax(modifiersp, dim=2)
-        modifiersp_note_rest = torch.sum(modifiersp_soft_rest[:, :, 1:], dim=2) * mask
-
         loss = (
             gamma
             * (
                 F.l1_loss(rhythmsp_note, note_flag, reduction="none")
                 + F.l1_loss(note_flag, liftsp_note, reduction="none")
                 + F.l1_loss(note_flag, pitchsp_note, reduction="none")
-                + F.l1_loss(rhythmsp_note_rest, modifiersp_note_rest, reduction="none")
             )
-            / 4.0
+            / 3.0
         )
 
         # Apply the mask to the loss and average over the non-masked elements
@@ -438,6 +400,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
             ),
         ),
         config=config,
+        noteindexes=config.noteindexes,
     )
 
 
