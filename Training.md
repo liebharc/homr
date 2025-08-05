@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 197
+
+Commit: 4c8d68b941c647c96f82d977ac0bb59d4f2b7a8c
+Day: 05 Aug 2025
+SER: 10%
+Validation result: 9.1
+
+New decoder branch just for triplets and dots. The result works mostly fine but it's too eager to detect triplets.
+
 ## Run 186 after adding triplet correction
 
 Commit: 4915073f892f6ab199844b1bff0c968cdf8be03e
