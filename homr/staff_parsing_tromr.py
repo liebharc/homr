@@ -10,8 +10,7 @@ from homr.model import Staff
 from homr.results import ClefType, ResultStaff, ResultTimeSignature, TransformerChord
 from homr.simple_logging import eprint
 from homr.tr_omr_parser import TrOMRParser
-from homr.transformer.configs import default_config
-from homr.transformer.staff2score import Staff2Score
+from homr.inference.staff2score import Staff2Score
 from homr.type_definitions import NDArray
 
 inference: Staff2Score | None = None
@@ -53,7 +52,8 @@ def predict_best(
 ) -> ResultStaff | None:
     global inference  # noqa: PLW0603
     if inference is None:
-        inference = Staff2Score(default_config)
+        inference = Staff2Score()
+
     images = [org_image]
     if len(staff.symbols) > 0:
         images = build_image_options(org_image)
@@ -65,10 +65,8 @@ def predict_best(
         if debug is not None:
             debug.reset()
 
-        result = inference.predict(
-            image,
-            debug=debug,
-        )
+        result = inference.predict(image)
+        print(result)
         parser = TrOMRParser()
         result_staff = parser.parse_tr_omr_output(result)
 

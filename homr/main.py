@@ -35,14 +35,12 @@ from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
 from homr.results import ResultStaff
 from homr.rhythm_rules import correct_rhythm
-from homr.segmentation.config import segnet_path
-from homr.segmentation.segmentation import segmentation
+from homr.inference.inference_segnet import inference
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.title_detection import detect_title
-from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
 
@@ -67,10 +65,8 @@ class PredictedSymbols:
         self.bar_lines = bar_lines
 
 
-def get_predictions(
-    original: NDArray, preprocessed: NDArray, img_path: str, save_cache: bool
-) -> InputPredictions:
-    result = segmentation(preprocessed, img_path, use_cache=save_cache)
+def get_predictions(original: NDArray, preprocessed: NDArray, img_path: str) -> InputPredictions:
+    result = inference(preprocessed, img_path)
     original_image = cv2.resize(original, (result.staff.shape[1], result.staff.shape[0]))
     preprocessed_image = cv2.resize(preprocessed, (result.staff.shape[1], result.staff.shape[0]))
     return InputPredictions(
@@ -97,7 +93,7 @@ def load_and_preprocess_predictions(
     image = autocrop(image)
     image = resize_image(image)
     preprocessed, _background = color_adjust.color_adjust(image, 40)
-    predictions = get_predictions(image, preprocessed, image_path, enable_cache)
+    predictions = get_predictions(image, preprocessed, image_path)
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
 
@@ -315,7 +311,7 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 def download_weights() -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
-    models = [segnet_path, default_config.filepaths.checkpoint]
+    models = ['segnet.onnx', SEGNET_PATH]
     missing_models = [model for model in models if not os.path.exists(model)]
     smp.encoders.get_preprocessing_params("resnet18")
     if len(missing_models) == 0:
@@ -379,7 +375,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    download_weights()
+    #download_weights()
     if args.init:
         eprint("Init finished")
         return
