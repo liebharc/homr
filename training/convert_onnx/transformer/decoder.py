@@ -10,7 +10,7 @@ from x_transformers.x_transformers import (
     TokenEmbedding,
 )
 
-from .configs import Config
+from training.convert_onnx.transformer.configs import Config
 
 
 class ScoreTransformerWrapper(nn.Module):

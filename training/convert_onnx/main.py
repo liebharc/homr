@@ -1,8 +1,8 @@
 # Main file to convert all the models of homr to onnx format.
 
-from split_weights import split_weights
-from convert import convert_segnet, convert_encoder, convert_decoder
-from quantization import quantization_int8
+from training.convert_onnx.split_weights import split_weights
+from training.convert_onnx.convert import convert_segnet, convert_encoder, convert_decoder
+from training.convert_onnx.quantization import quantization_int8
 
 if __name__ == "__main__":
     transformer_path = None # Make sure to the filepath of the transformer!
