@@ -49,7 +49,7 @@ def convert_encoder():
     
 def convert_segnet():
     """
-    Converts the segnet model to onnx
+    Converts the segnet model to onnx. 
     """
     model = create_segnet()
     model.load_state_dict(torch.load(segnet_path, weights_only=True), strict=True)
@@ -64,7 +64,13 @@ def convert_segnet():
                     opset_version=17,
                     do_constant_folding=True,
                     input_names=['input'],
-                    output_names=['output']) 
+                    output_names=['output'],
+                    # dyamic axes are required for dynamic batch_size
+                    dynamic_axes={
+                                'input': {0: 'batch_size'},
+                                'output': {0: 'batch_size'}
+                                }
+                    )
 
 def convert_decoder():
     """

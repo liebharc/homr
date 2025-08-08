@@ -78,12 +78,25 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
     return reconstructed.astype(patches[0].dtype)
 
 
-def inference(image_org: np.ndarray, image_path: str, batch_size=1, use_gpu=True, step_size = -1, win_size: int = 320):
+def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_size: int = -1, use_gpu: bool = True, win_size: int = 320):
+    """
+    Inference function for the segementation model. 
+    Args:
+        image_org(np.ndarray): Array of the input image
+        image_path(str): Path to input image
+        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. Defaults to 8. 
+        step_size(int): How far the window moves between to input images. Defaults to win_size//2
+        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available). Defaults to True
+        win_size(int): Debug only. Defaults to 320
+
+    Returns:
+        ExtractResult class.
+    """
     print('Starting Inference.')
     t0 = perf_counter()
     if step_size < 0:
         step_size = win_size // 2
-    
+
     model = Segnet(SEGNET_PATH, use_gpu)
     data = []
     batch = []
