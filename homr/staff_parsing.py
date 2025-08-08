@@ -16,7 +16,7 @@ from homr.results import (
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
-from homr.inference.transformer.configs import default_config
+from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 
 

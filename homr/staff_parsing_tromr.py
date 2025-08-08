@@ -10,7 +10,7 @@ from homr.model import Staff
 from homr.results import ClefType, ResultStaff, ResultTimeSignature, TransformerChord
 from homr.simple_logging import eprint
 from homr.tr_omr_parser import TrOMRParser
-from homr.inference.staff2score import Staff2Score
+from homr.transformer.staff2score import Staff2Score
 from homr.type_definitions import NDArray
 
 inference: Staff2Score | None = None
@@ -66,7 +66,7 @@ def predict_best(
             debug.reset()
 
         result = inference.predict(image)
-        print(result)
+
         parser = TrOMRParser()
         result_staff = parser.parse_tr_omr_output(result)
 

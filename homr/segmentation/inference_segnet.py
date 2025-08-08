@@ -7,19 +7,25 @@ from homr.type_definitions import NDArray
 from pathlib import Path
 
 
-SEGNET_PATH = os.path.join('homr', 'inference', 'segnet.onnx')
+SEGNET_PATH = os.path.join('homr', 'segmentation', 'segnet_batch.onnx')
 
 class Segnet():
-    def __init__(self, model_path):
-        self.model = ort.InferenceSession(model_path)
-        self.input_name = self.model.get_inputs()[0].name # size: [1, 3, 320, 320]
+    def __init__(self, model_path, use_gpu):
+        if use_gpu:
+            try:
+                self.model = ort.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
+            except Exception as e:
+                print(f"Error while trying to load model using CUDA. You probably don't have a compatible gpu")
+                print(e)
+                self.model = ort.InferenceSession(model_path)
+        else:
+            self.model = ort.InferenceSession(model_path)
+        self.input_name = self.model.get_inputs()[0].name # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
 
 
     def run(self, input_data):
         out = self.model.run([self.output_name], {self.input_name: input_data})[0]
-        out = np.argmax(out, axis=1)
-        out = np.squeeze(out, axis=0)
         return out
 
 class ExtractResult:
@@ -72,30 +78,48 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
     return reconstructed.astype(patches[0].dtype)
 
 
-def inference(image_org: np.ndarray, image_path: str, win_size: int = 320, step_size = -1):
+def inference(image_org: np.ndarray, image_path: str, batch_size=1, use_gpu=True, step_size = -1, win_size: int = 320):
     print('Starting Inference.')
     t0 = perf_counter()
     if step_size < 0:
         step_size = win_size // 2
     
-    model = Segnet(SEGNET_PATH)
+    model = Segnet(SEGNET_PATH, use_gpu)
     data = []
+    batch = []
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
-    image = np.expand_dims(image, axis=0)
+    for y in range(0, image.shape[1], step_size):
+        if y + win_size > image.shape[1]:
+            y = image.shape[1] - win_size
+        for x in range(0, image.shape[2], step_size):
+            if x + win_size > image.shape[2]:
+                x = image.shape[2] - win_size 
+            hop = image[:, y : y + win_size, x : x + win_size]
+            batch.append(hop)
 
-    for y in range(0, image.shape[2], step_size):
-        if y + win_size > image.shape[2]:
-            y = image.shape[2] - win_size
-        for x in range(0, image.shape[3], step_size):
-            if x + win_size > image.shape[3]:
-                x = image.shape[3] - win_size 
-            hop = image[:, :, y : y + win_size, x : x + win_size]
-            out = model.run(hop)
+            # When there
+            if batch_size == len(batch):
+                #run model
+                batch_out = model.run(np.stack(batch, axis=0))
+                for out in batch_out:
+                    out = np.argmax(out, axis=0)
+                    data.append(out)
+                # reset the batch list so it is not full anymore
+                batch = []
+
+    # There might still be something in the batch list
+    # So we run inference one more time
+    if batch:
+        batch_out = model.run(np.stack(batch, axis=0))
+        for out in batch_out:
+            out = np.argmax(out, axis=0)
             data.append(out)
 
 
+    print(f"The segnet run in {perf_counter()- t0} seconds using onnx at a step_size of {step_size} and a batch_size of {batch_size}")
+
+
     data = merge_patches(data, (image_org.shape[0], image_org.shape[1]), win_size, step_size)
-    print(perf_counter()- t0)
     stems_layer = 1
     stems_rests = np.where(data == stems_layer, 1, 0)
     notehead_layer = 2
@@ -104,20 +128,7 @@ def inference(image_org: np.ndarray, image_path: str, win_size: int = 320, step_
     clefs_keys = np.where(data == clefs_keys_layer, 1, 0)
     staff_layer = 4
     staff = np.where(data == staff_layer, 1, 0)
-    print(staff.shape)
     symbol_layer = 5
     symbols = np.where(data == symbol_layer, 1, 0)
 
-    print(perf_counter()- t0)
-
     return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys)
-
-if __name__ == '__main__':
-    img = np.array(Image.open('test_segnet.png')).astype(np.float32)
-    img_shape = img.shape
-    t0 = perf_counter()
-    out = inference(img, step_size=320)
-    print(perf_counter()-t0)
-    out = merge_patches(out, [1855, 3118], 320, 320)
-    img = Image.fromarray(out*40)
-    img.save('out.png')
