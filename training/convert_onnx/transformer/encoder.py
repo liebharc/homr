@@ -5,7 +5,7 @@ from timm.models.resnetv2 import ResNetV2
 from timm.models.vision_transformer import VisionTransformer
 from timm.models.vision_transformer_hybrid import HybridEmbed  # type: ignore
 
-from .configs import Config
+from training.convert_onnx.transformer.configs import Config
 
 
 def get_encoder(config: Config) -> Any:

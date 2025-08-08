@@ -1,9 +1,9 @@
 import torch
-from transformer.encoder import get_encoder
-from transformer.decoder import get_decoder_onnx
-from transformer.configs import Config
-from segmentation.model import create_segnet
-from segmentation.config import segnet_path
+from training.convert_onnx.transformer.encoder import get_encoder
+from training.convert_onnx.transformer.decoder import get_decoder_onnx
+from training.convert_onnx.transformer.configs import Config
+from training.convert_onnx.segmentation.model import create_segnet
+from training.convert_onnx.segmentation.config import segnet_path
 
 class DecoderWrapper(torch.nn.Module):
     def __init__(self, model):
