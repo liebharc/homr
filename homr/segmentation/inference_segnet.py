@@ -7,7 +7,7 @@ from homr.type_definitions import NDArray
 from pathlib import Path
 
 
-SEGNET_PATH = os.path.join('homr', 'segmentation', 'segnet_batch.onnx')
+SEGNET_PATH = os.path.join('homr', 'segmentation', 'segnet.onnx')
 
 class Segnet():
     def __init__(self, model_path, use_gpu):
