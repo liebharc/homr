@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-import segmentation_models_pytorch as smp
 
 from homr import color_adjust, download_utils
 from homr.accidental_detection import add_accidentals_to_staffs
@@ -313,7 +312,9 @@ def download_weights() -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
     models = ['segnet.onnx', SEGNET_PATH]
     missing_models = [model for model in models if not os.path.exists(model)]
-    smp.encoders.get_preprocessing_params("resnet18")
+    # I removed the following line since it's not required (returns a dict which is not stored)
+    # .encoders.get_preprocessing_params("resnet18")
+    
     if len(missing_models) == 0:
         return
 
