@@ -3,7 +3,10 @@ import glob
 import os
 import sys
 from dataclasses import dataclass
+from threading import Thread
+from time import perf_counter
 
+t0 = perf_counter()
 import cv2
 import numpy as np
 import segmentation_models_pytorch as smp
@@ -41,10 +44,19 @@ from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
-from homr.title_detection import detect_title
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
+#from homr.title_detection import detect_title
+
+eprint(f"Loading imports took {perf_counter() - t0} seconds")
+
+def import_detect_title():
+    from homr.title_detection import detect_title
+
+# Load homr.title_detection inside a thread so the rest code continues to run
+Thread(target=import_detect_title).start()
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -292,6 +304,9 @@ def detect_staffs_in_image(
     debug.write_all_bounding_boxes_alternating_colors(
         "notes", multi_staffs, notes, rests, accidentals
     )
+
+    # I know that's not nice but (I think) there's no other way...
+    from homr.title_detection import detect_title
 
     title = detect_title(debug, staffs[0])
     eprint("Found title: " + title)

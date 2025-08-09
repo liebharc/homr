@@ -1,11 +1,11 @@
 import re
 
-import easyocr
+from easyocr import Reader
 
 from homr.debug import Debug
 from homr.model import Staff
 
-reader = easyocr.Reader(["de", "en"], gpu=False, verbose=False)
+reader = Reader(["de", "en"], gpu=False, verbose=False)
 
 
 def cleanup_text(text: str) -> str:
