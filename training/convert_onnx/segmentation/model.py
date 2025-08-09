@@ -1,9 +1,9 @@
 import segmentation_models_pytorch as smp
 import torch
 from torch.optim import lr_scheduler
-import torch.nn as nn
 
-class CamVidModel(nn.Module):
+
+class CamVidModel(torch.nn.Module):
     """
     Based on https://github.com/qubvel-org/segmentation_models.pytorch/blob/main/examples/camvid_segmentation_multiclass.ipynb
     """
@@ -101,7 +101,7 @@ class CamVidModel(nn.Module):
             f"{stage}_dataset_iou": dataset_iou,
         }
 
-        print("Loss", avg_loss)
+        print("Loss", avg_loss) # noqa: T201
         self.log_dict(metrics, prog_bar=True)
 
     def training_step(self, batch, batch_idx):

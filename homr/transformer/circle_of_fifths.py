@@ -1,7 +1,6 @@
 import abc
 from abc import ABC
 
-
 circle_of_fifth_notes_positive = ["F", "C", "G", "D", "A", "E", "B"]
 circle_of_fifth_notes_negative = list(reversed(circle_of_fifth_notes_positive))
 

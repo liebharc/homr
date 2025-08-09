@@ -1,14 +1,15 @@
-from typing import Any
-import numpy as np
 from math import ceil
+from typing import Any
+
+import numpy as np
 import onnxruntime as ort
 
 from homr.transformer.configs import Config
 from homr.transformer.split_merge_symbols import SymbolMerger
-
 from homr.transformer.utils import softmax
 
-class ScoreDecoder():
+
+class ScoreDecoder:
     def __init__(
         self,
         transformer,
@@ -54,14 +55,16 @@ class ScoreDecoder():
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
             context = kwargs['context']
-            
+
             inputs = {"rhythms": x_rhythm,
                     "pitchs": x_pitch,
                     "lifts": x_lift,
                     "context": context
                 }
 
-            rhythmsp, pitchsp, liftsp = self.net.run(output_names=["out_rhythms", "out_pitchs", "out_lifts"],input_feed=inputs)
+            rhythmsp, pitchsp, liftsp = self.net.run(output_names=["out_rhythms", "out_pitchs", "out_lifts"],
+                                                     input_feed=inputs
+                                                    )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :],   thres=filter_thres)
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
@@ -109,20 +112,19 @@ class ScoreDecoder():
         return merger.complete()
 
 
-
 def top_k(logits: np.ndarray, thres: float = 0.9) -> np.ndarray:
     """Numpy implementation matching torch's top_k behavior"""
     k = ceil((1 - thres) * logits.shape[-1])
-    
+
     # Get top k elements
     flat_logits = logits.ravel()
     indices = np.argpartition(flat_logits, -k)[-k:]  # Get indices of top k elements
     indices = indices[np.argsort(-flat_logits[indices])]  # Sort them in descending order
     values = flat_logits[indices]  # Get the corresponding values
-    
+
     # Create output array with -inf
     output = np.full_like(logits, -np.inf)
-    
+
     # Scatter the topk values back into the output array
     # For multi-dimensional arrays, we need to convert flat indices to multi-indices
     if logits.ndim > 1:
@@ -130,7 +132,7 @@ def top_k(logits: np.ndarray, thres: float = 0.9) -> np.ndarray:
         output[multi_indices] = values
     else:
         output[indices] = values
-    
+
     return output
 
 
@@ -140,12 +142,15 @@ def detokenize(tokens: np.ndarray, vocab: Any) -> list[str]:
     return toks
 
 def get_decoder(config: Config, path, use_gpu):
+    """
+    Returns Tromr's Decoder
+    """
     if use_gpu:
         try:
             onnx_transformer = ort.InferenceSession(path, providers=['CUDAExecutionProvider'])
         except:
             onnx_transformer = ort.InferenceSession(path)
-    
+
     else:
         onnx_transformer = ort.InferenceSession(path)
 

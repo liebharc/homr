@@ -1,9 +1,11 @@
 import torch
-from training.convert_onnx.transformer.encoder import get_encoder
-from training.convert_onnx.transformer.decoder import get_decoder_onnx
-from training.convert_onnx.transformer.configs import Config
-from training.convert_onnx.segmentation.model import create_segnet
+
 from training.convert_onnx.segmentation.config import segnet_path
+from training.convert_onnx.segmentation.model import create_segnet
+from training.convert_onnx.transformer.configs import Config
+from training.convert_onnx.transformer.decoder import get_decoder_onnx
+from training.convert_onnx.transformer.encoder import get_encoder
+
 
 class DecoderWrapper(torch.nn.Module):
     def __init__(self, model):
@@ -29,27 +31,27 @@ def convert_encoder():
                         r"encoder_weights.pt", weights_only=True, map_location=torch.device("cpu")
                     ),
                     strict=True)
-    
+
     # Set eval mode
     model.eval()
 
     # Prepare input tensor
-    input = torch.randn(1, 1, 128, 1280).float()
+    input_tensor = torch.randn(1, 1, 128, 1280).float()
 
-    # Export to onnx 
+    # Export to onnx
     torch.onnx.export(
         model,
-        input,
+        input_tensor,
         "tromr_encoder.onnx",
         export_params=True,
         opset_version=17,
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"])
-    
+
 def convert_segnet():
     """
-    Converts the segnet model to onnx. 
+    Converts the segnet model to onnx.
     """
     model = create_segnet()
     model.load_state_dict(torch.load(segnet_path, weights_only=True), strict=True)
@@ -58,8 +60,8 @@ def convert_segnet():
     # Input dimension is 1x3x320x320
     sample_inputs = torch.randn(1, 3, 320, 320)
 
-    torch.onnx.export(model, 
-                    sample_inputs, 
+    torch.onnx.export(model,
+                    sample_inputs,
                     "segnet.onnx",
                     opset_version=17,
                     do_constant_folding=True,
@@ -81,8 +83,9 @@ def convert_decoder():
     model.eval()
 
     model.load_state_dict(
-                    torch.load(
-                        r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")), strict=True)
+                        torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
+                        strict=True
+                        )
 
     # Using a wrapper model with a custom forward() function
     wrapped_model = DecoderWrapper(model)
