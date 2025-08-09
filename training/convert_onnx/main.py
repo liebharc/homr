@@ -1,8 +1,8 @@
 # Main file to convert all the models of homr to onnx format.
 
-from training.convert_onnx.split_weights import split_weights
-from training.convert_onnx.convert import convert_segnet, convert_encoder, convert_decoder
+from training.convert_onnx.convert import convert_decoder, convert_encoder, convert_segnet
 from training.convert_onnx.quantization import quantization_int8
+from training.convert_onnx.split_weights import split_weights
 
 if __name__ == "__main__":
     transformer_path = None # Make sure to the filepath of the transformer!
@@ -18,9 +18,8 @@ if __name__ == "__main__":
     convert_encoder()
     convert_decoder()
 
-    # Only the decoder gets quantized. 
-    # The segnet showed 80% worse performance on x86-64. 
+    # Only the decoder gets quantized.
+    # The segnet showed 80% worse performance on x86-64.
     # Only improved size by around 15MB without any speedups (maybe even slowing inference down).
     # FP16 slowed inference speed down (CPU).
     quantization_int8('tromr_decoder.onnx', 'tromr_decoder.onnx')
-    print('Finished')

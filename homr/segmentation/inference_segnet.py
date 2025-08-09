@@ -1,22 +1,23 @@
-import numpy as np
-from PIL import Image
-import onnxruntime as ort
-from time import perf_counter
 import os
-from homr.type_definitions import NDArray
 from pathlib import Path
+from time import perf_counter
 
+import numpy as np
+import onnxruntime as ort
+
+from homr.simple_logging import eprint
+from homr.type_definitions import NDArray
 
 SEGNET_PATH = os.path.join('homr', 'segmentation', 'segnet.onnx')
 
-class Segnet():
+class Segnet:
     def __init__(self, model_path, use_gpu):
         if use_gpu:
             try:
                 self.model = ort.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
             except Exception as e:
-                print(f"Error while trying to load model using CUDA. You probably don't have a compatible gpu")
-                print(e)
+                eprint("Error while trying to load model using CUDA. You probably don't have a compatible gpu")
+                eprint(e)
                 self.model = ort.InferenceSession(model_path)
         else:
             self.model = ort.InferenceSession(model_path)
@@ -78,7 +79,13 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
     return reconstructed.astype(patches[0].dtype)
 
 
-def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_size: int = -1, use_gpu: bool = True, win_size: int = 320):
+def inference(image_org: np.ndarray,
+              image_path: str,
+              batch_size: int = 8,
+              step_size: int = -1,
+              use_gpu: bool = True,
+              win_size: int = 320
+              ):
     """
     Inference function for the segementation model. 
     Args:
@@ -92,7 +99,7 @@ def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_
     Returns:
         ExtractResult class.
     """
-    print('Starting Inference.')
+    eprint('Starting Inference.')
     t0 = perf_counter()
     if step_size < 0:
         step_size = win_size // 2
@@ -106,7 +113,7 @@ def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_
             y = image.shape[1] - win_size
         for x in range(0, image.shape[2], step_size):
             if x + win_size > image.shape[2]:
-                x = image.shape[2] - win_size 
+                x = image.shape[2] - win_size
             hop = image[:, y : y + win_size, x : x + win_size]
             batch.append(hop)
 
@@ -115,8 +122,8 @@ def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_
                 #run model
                 batch_out = model.run(np.stack(batch, axis=0))
                 for out in batch_out:
-                    out = np.argmax(out, axis=0)
-                    data.append(out)
+                    out_filtered = np.argmax(out, axis=0)
+                    data.append(out_filtered)
                 # reset the batch list so it is not full anymore
                 batch = []
 
@@ -129,7 +136,7 @@ def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_
             data.append(out)
 
 
-    print(f"The segnet run in {perf_counter()- t0} seconds using onnx at a step_size of {step_size} and a batch_size of {batch_size}")
+    eprint(f"Segnet Inference time: {perf_counter()- t0}; batch_size of {batch_size}")
 
 
     data = merge_patches(data, (image_org.shape[0], image_org.shape[1]), win_size, step_size)
@@ -144,4 +151,4 @@ def inference(image_org: np.ndarray, image_path: str, batch_size: int = 8, step_
     symbol_layer = 5
     symbols = np.where(data == symbol_layer, 1, 0)
 
-    return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys)
+    return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys) # noqa: W292

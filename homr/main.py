@@ -35,7 +35,7 @@ from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
 from homr.results import ResultStaff
 from homr.rhythm_rules import correct_rhythm
-from homr.segmentation.inference_segnet import inference, SEGNET_PATH
+from homr.segmentation.inference_segnet import SEGNET_PATH, inference
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs

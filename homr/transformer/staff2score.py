@@ -1,13 +1,16 @@
 import os
-import cv2
-from homr.transformer.encoder_inference import Encoder
-from homr.transformer.decoder_inference import get_decoder
-import numpy as np
-from homr.transformer.configs import Config
 from time import perf_counter
 
+import cv2
+import numpy as np
 
-class Staff2Score():
+from homr.simple_logging import eprint
+from homr.transformer.configs import Config
+from homr.transformer.decoder_inference import get_decoder
+from homr.transformer.encoder_inference import Encoder
+
+
+class Staff2Score:
     """
     Inference class for Tromr. Use predict() for prediction
     """
@@ -17,19 +20,14 @@ class Staff2Score():
         self.decoder = get_decoder(self.config, self.config.filepaths.decoder_path, use_gpu)
 
         if not os.path.exists(self.config.filepaths.rhythmtokenizer):
-            raise RuntimeError("Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer)
+            raise RuntimeError("Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer) # noqa: E501
 
     def predict(self, image: np.ndarray) -> list[str]:
         """
         Inference an image (np.ndarray) using Tromr.
         """
         data = np.array(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
-        if len(data.shape) == 3:
-            data = data[:, :, 0]
-            x = data[np.newaxis, np.newaxis, :, :].astype(np.float32)
-    
-        else:
-            x = data[np.newaxis, np.newaxis, :, :].astype(np.float32)
+        x = data[np.newaxis, np.newaxis, :, :].astype(np.float32)
 
 
         t0 = perf_counter()
@@ -42,8 +40,13 @@ class Staff2Score():
         context = self.encoder.generate(x)
 
         # Make a prediction using decoder
-        out = self.decoder.generate(start_token, nonote_token, seq_len=self.config.max_seq_len, eos_token=self.config.eos_token, context=context)
+        out = self.decoder.generate(start_token,
+                                    nonote_token,
+                                    seq_len=self.config.max_seq_len,
+                                    eos_token=self.config.eos_token,
+                                    context=context
+                                    )
 
-        print(f"Inference Time: {perf_counter()-t0}")
+        eprint(f"Inference Time Tromr: {perf_counter()-t0}")
 
         return out

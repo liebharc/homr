@@ -1,6 +1,9 @@
-import torch
-from training.convert_onnx.transformer.configs import FilePaths
 import os
+
+import torch
+
+from training.convert_onnx.transformer.configs import FilePaths
+
 
 def split_weights(input_path):
     """
@@ -29,27 +32,26 @@ def split_weights(input_path):
 
     # Encoder weights can be saved directly
     torch.save(encoder_state_dict, 'encoder_weights.pt')
-    
+
     # Decoder weights need to be processed once more
     torch.save(remove_score_decoder_weights(decoder_state_dict), 'decoder_weights.pt')
 
 
-
 def remove_score_decoder_weights(full_state_dict) -> None:
     """
-    Since get_decoder_onnx() is not using ScoreDecoder() we need to change the weights so they are directly 
-    put into ScoreTransformerWrapper().
+    Since get_decoder_onnx() is not using ScoreDecoder() we need to change the weights 
+    so they are directly put into ScoreTransformerWrapper().
 
     Args:
         full_state_dict (dict): Model dictionary
-    """ 
+    """
     # Remove the net. starting
     transformer_state_dict = {}
     for key, value in full_state_dict.items():
         if key.startswith('net.'):
             new_key = key.replace('net.', '')
             transformer_state_dict[new_key] = value
-    
+
     return transformer_state_dict
 
 
