@@ -52,7 +52,7 @@ from homr.xml_generator import XmlGeneratorArguments, generate_xml
 eprint(f"Loading imports took {perf_counter() - t0} seconds")
 
 def import_detect_title():
-    from homr.title_detection import detect_title
+    from homr.title_detection import detect_title # noqa PLC0415
 
 # Load homr.title_detection inside a thread so the rest code continues to run
 Thread(target=import_detect_title).start()
