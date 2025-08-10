@@ -4,9 +4,7 @@ import os
 import sys
 from dataclasses import dataclass
 from threading import Thread
-from time import perf_counter, sleep
 
-t0 = perf_counter()
 import cv2
 import numpy as np
 import segmentation_models_pytorch as smp
@@ -258,8 +256,6 @@ def detect_staffs_in_image(
     ocr = OCR()
     Thread(target=ocr.detect_title, args=(debug, staffs[0])).start()
 
-    t0 = perf_counter()
-
     if len(staffs) == 0:
         raise Exception("No staffs found")
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
@@ -298,7 +294,7 @@ def detect_staffs_in_image(
 
     debug.write_all_bounding_boxes_alternating_colors(
         "notes", multi_staffs, notes, rests, accidentals
-    )    
+    )
     return multi_staffs, predictions.preprocessed, debug, ocr.get_result
 
 
@@ -401,9 +397,7 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
-        t0 = perf_counter()
         process_image(args.image, config, xml_generator_args)
-        print(f"it took {perf_counter() - t0} seconds")
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)

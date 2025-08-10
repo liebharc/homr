@@ -1,7 +1,5 @@
 import re
 
-from threading import Event
-
 from homr.debug import Debug
 from homr.model import Staff
 
