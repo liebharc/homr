@@ -25,7 +25,6 @@ _build/
 /homr/transformer/*
 !/homr/transformer/*.py
 
-
 # Byprodcuts of a training run
 /seg_unet.keras
 /logs
