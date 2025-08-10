@@ -96,7 +96,7 @@ def convert_decoder():
     rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 10)).long()
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
-    context = torch.randn((1, 641, 256)).float()
+    context = torch.randn((1, 641, 312)).float()
 
     dynamic_axes = {
         "rhythms": {0: "batch_size", 1: "input_seq_len"},

@@ -21,4 +21,4 @@ def convert_all(transformer_path=None, segnet_path=None):
         # The segnet showed 80% worse performance on x86-64.
         # Only improved size by around 15MB without any speedups (maybe even slowing inference down).
         # FP16 slowed inference speed down (CPU).
-        quantization_int8('tromr_decoder.onnx', 'tromr_decoder.onnx')
+        #quantization_int8('tromr_decoder.onnx', 'tromr_decoder.onnx')

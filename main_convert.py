@@ -1,3 +1,3 @@
 from training.convert_onnx.main import convert_all
 
-convert_all(transformer_path=r"C:\Users\ennoa\Documents\Python\Github Local\homr\training\convert_onnx\pytorch_model_160-bf39c935c9081d04dc1d97e25dcda68ebb0ca40c.pth")
+convert_all(transformer_path=r"C:\Users\ennoa\Documents\Python\Github Local\homr\training\convert_onnx\pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth")
