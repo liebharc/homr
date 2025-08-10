@@ -1,7 +1,12 @@
 import re
 
+from easyocr import Reader
+
 from homr.debug import Debug
 from homr.model import Staff
+
+
+reader = Reader(["de", "en"], gpu=False, verbose=False)
 
 class OCR:
     """
@@ -18,9 +23,6 @@ class OCR:
 
 
     def detect_title(self, debug: Debug, top_staff: Staff) -> str:
-        from easyocr import Reader
-
-        self.reader = Reader(["de", "en"], gpu=False, verbose=False)
         image = debug.original_image
         height = int(15 * top_staff.average_unit_size)
         y = max(int(top_staff.min_y) - height, 0)
@@ -31,7 +33,7 @@ class OCR:
         above_staff = image[y : y + height, x : x + width]
 
         tesseract_input = debug.write_model_input_image("_tesseract_input.png", above_staff)
-        result = self.reader.readtext(tesseract_input, detail=0, paragraph=True)
+        result = reader.readtext(tesseract_input, detail=0, paragraph=True)
 
         if len(result) == 0:
             self.result = ""
@@ -40,6 +42,3 @@ class OCR:
     
     def get_result(self):
         return self.result
-
-def load_easyocr():
-    from easyocr import Reader
