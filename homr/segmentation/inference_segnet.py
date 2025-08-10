@@ -104,6 +104,8 @@ def inference(image_org: np.ndarray,
     if step_size < 0:
         step_size = win_size // 2
 
+    step_size = 320 # only for working on it
+
     model = Segnet(SEGNET_PATH, use_gpu)
     data = []
     batch = []

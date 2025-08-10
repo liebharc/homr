@@ -83,6 +83,18 @@ class ScoreDecoder:
                 pitch_sample = np.array([[pitch_probs.argmax()]])
                 rhythm_sample = np.array([[rhythm_probs.argmax()]])
 
+                sorted_indices = np.argsort(rhythm_probs)[:, ::-1]
+                sorted_probs = np.take_along_axis(rhythm_probs, sorted_indices, axis=1)
+
+                rhythm_confidence = sorted_probs[0, 0].item()
+                alternative_confidence = sorted_probs[0, 1].item()
+
+                top_token_id = np.expand_dims(sorted_indices[0, 0], axis=0)
+                alt_token_id = np.expand_dims(sorted_indices[0, 1], axis=0)
+
+                rhythm_token = detokenize(top_token_id, self.inv_rhythm_vocab)
+                alternative_rhythm_token = detokenize(alt_token_id, self.inv_rhythm_vocab)
+
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
                 rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
@@ -90,7 +102,20 @@ class ScoreDecoder:
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
                     break
-                retry = merger.add_symbol(rhythm_token[0], pitch_token[0], lift_token[0])
+
+                if len(alternative_rhythm_token) == 0:
+                    alternative_rhythm_token = [""]
+                    alternative_confidence = 0
+                
+                retry = merger.add_symbol_and_alternative(
+                    rhythm_token[0],
+                    rhythm_confidence,
+                    pitch_token[0],
+                    lift_token[0],
+                    alternative_rhythm_token[0],
+                    alternative_confidence,
+                )
+                
                 current_temperature *= 3.5
                 attempt += 1
 
