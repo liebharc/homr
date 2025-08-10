@@ -50,9 +50,6 @@ class ExtractResult:
 
 
 def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int = -1):
-    if step_size < 0:
-        step_size = win_size // 2
-
     reconstructed = np.zeros(image_shape, dtype=np.float32)
     weight = np.zeros(image_shape, dtype=np.float32)
 
