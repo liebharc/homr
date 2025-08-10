@@ -4,7 +4,7 @@ import os
 import sys
 from dataclasses import dataclass
 from threading import Thread
-from time import perf_counter
+from time import perf_counter, sleep
 
 t0 = perf_counter()
 import cv2
@@ -47,19 +47,9 @@ from homr.staff_position_save_load import load_staff_positions, save_staff_posit
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
-#from homr.title_detection import detect_title
+from homr.title_detection import OCR, load_easyocr
 
-eprint(f"Loading imports took {perf_counter() - t0} seconds")
-
-def import_detect_title():
-    from homr.title_detection import detect_title # noqa PLC0415
-
-# Load homr.title_detection inside a thread so the rest code continues to run
-Thread(target=import_detect_title).start()
-
-
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
+Thread(target=load_easyocr).start()
 
 class PredictedSymbols:
     def __init__(
@@ -180,9 +170,8 @@ def process_image(  # noqa: PLR0915
             multi_staffs = load_staff_positions(
                 debug, image, staff_position_files, config.selected_staff
             )
-            title = ""
         else:
-            multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
+            multi_staffs, image, debug, get_title = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
 
         result_staffs = parse_staffs(
@@ -193,7 +182,7 @@ def process_image(  # noqa: PLR0915
         result_staffs = correct_rhythm(result_staffs)
 
         eprint("Writing XML")
-        xml = generate_xml(xml_generator_args, result_staffs, title)
+        xml = generate_xml(xml_generator_args, result_staffs, get_title())
         xml.write(xml_file)
 
         eprint(
@@ -220,7 +209,6 @@ def process_image(  # noqa: PLR0915
     finally:
         if debug_cleanup is not None:
             debug_cleanup.clean_debug_files_from_previous_runs()
-
 
 def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
@@ -265,6 +253,13 @@ def detect_staffs_in_image(
     staffs = detect_staff(
         debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
     )
+
+    # Start optical character recognition in a thread
+    ocr = OCR()
+    Thread(target=ocr.detect_title, args=(debug, staffs[0])).start()
+
+    t0 = perf_counter()
+
     if len(staffs) == 0:
         raise Exception("No staffs found")
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
@@ -303,14 +298,8 @@ def detect_staffs_in_image(
 
     debug.write_all_bounding_boxes_alternating_colors(
         "notes", multi_staffs, notes, rests, accidentals
-    )
-
-    # I know that's not nice but (I think) there's no other way...
-    from homr.title_detection import detect_title
-
-    title = detect_title(debug, staffs[0])
-    eprint("Found title: " + title)
-    return multi_staffs, predictions.preprocessed, debug, title
+    )    
+    return multi_staffs, predictions.preprocessed, debug, ocr.get_result
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
@@ -412,7 +401,9 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
+        t0 = perf_counter()
         process_image(args.image, config, xml_generator_args)
+        print(f"it took {perf_counter() - t0} seconds")
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
