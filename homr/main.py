@@ -34,7 +34,8 @@ from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
 from homr.results import ResultStaff
 from homr.rhythm_rules import correct_rhythm
-from homr.segmentation.inference_segnet import inference
+from homr.segmentation.config import segnet_path
+from homr.segmentation.segmentation import segmentation
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
@@ -311,8 +312,8 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 
 def download_weights() -> None:
-    base_url = "https://github.com/aicelen/homr/releases/download/v0.4.0/"
-    models = [segnet_path, default_config.filepaths.decoder_path, default_config.filepaths.encoder_path]
+    base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
+    models = [segnet_path, default_config.filepaths.checkpoint]
     missing_models = [model for model in models if not os.path.exists(model)]
 
     # I removed the following line since it's not required (returns a dict which is not stored)

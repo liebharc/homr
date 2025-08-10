@@ -55,7 +55,6 @@ def convert_encoder():
         input_names=["input"],
         output_names=["output"])
 
-
 def convert_decoder():
     """
     Converts the decoder to onnx.
