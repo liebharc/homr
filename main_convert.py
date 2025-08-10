@@ -1,3 +1,6 @@
 from training.convert_onnx.main import convert_all
+from training.convert_onnx.transformer.configs import Config
+from training.convert_onnx.segmentation.config import segnet_path
 
-convert_all(transformer_path=r"C:\Users\ennoa\Documents\Python\Github Local\homr\training\convert_onnx\pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth")
+
+convert_all(transformer_path=Config().filepaths.checkpoint, segnet_path=segnet_path)

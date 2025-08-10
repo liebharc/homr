@@ -1,4 +1,5 @@
 import torch
+import os
 
 from training.convert_onnx.segmentation.config import segnet_path
 from training.convert_onnx.segmentation.model import create_segnet
@@ -21,9 +22,14 @@ def convert_encoder():
     """
     Converts the encoder to onnx
     """
+    config = Config()
+
+    dir_path = os.path.dirname(config.filepaths.checkpoint)
+    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
+    path_out = os.path.join(dir_path, f"encoder_{filename}.onnx")
 
     # Get Encoder
-    model = get_encoder(Config())
+    model = get_encoder(config)
 
     # Load weights
     model.load_state_dict(
@@ -42,37 +48,13 @@ def convert_encoder():
     torch.onnx.export(
         model,
         input_tensor,
-        "tromr_encoder.onnx",
+        path_out,
         export_params=True,
         opset_version=17,
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"])
 
-def convert_segnet():
-    """
-    Converts the segnet model to onnx.
-    """
-    model = create_segnet()
-    model.load_state_dict(torch.load(segnet_path, weights_only=True), strict=True)
-    model.eval()
-
-    # Input dimension is 1x3x320x320
-    sample_inputs = torch.randn(1, 3, 320, 320)
-
-    torch.onnx.export(model,
-                    sample_inputs,
-                    "segnet.onnx",
-                    opset_version=17,
-                    do_constant_folding=True,
-                    input_names=['input'],
-                    output_names=['output'],
-                    # dyamic axes are required for dynamic batch_size
-                    dynamic_axes={
-                                'input': {0: 'batch_size'},
-                                'output': {0: 'batch_size'}
-                                }
-                    )
 
 def convert_decoder():
     """
@@ -81,6 +63,10 @@ def convert_decoder():
     config = Config()
     model = get_decoder_onnx(config)
     model.eval()
+
+    dir_path = os.path.dirname(config.filepaths.checkpoint)
+    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
+    path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
 
     model.load_state_dict(
                         torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
@@ -111,7 +97,7 @@ def convert_decoder():
     torch.onnx.export(
         wrapped_model,
         (rhythms, pitchs, lifts, context),
-        "tromr_decoder.onnx",
+        path_out,
         input_names=["rhythms", "pitchs", "lifts", "context"],
         output_names=[
             "out_rhythms",
@@ -123,3 +109,29 @@ def convert_decoder():
         do_constant_folding=True,
         export_params=True
     )
+    return path_out
+
+def convert_segnet():
+    """
+    Converts the segnet model to onnx.
+    """
+    model = create_segnet()
+    model.load_state_dict(torch.load(segnet_path, weights_only=True), strict=True)
+    model.eval()
+
+    # Input dimension is 1x3x320x320
+    sample_inputs = torch.randn(1, 3, 320, 320)
+
+    torch.onnx.export(model,
+                    sample_inputs,
+                    f"{os.path.splitext(segnet_path)[0]}.onnx",
+                    opset_version=17,
+                    do_constant_folding=True,
+                    input_names=['input'],
+                    output_names=['output'],
+                    # dyamic axes are required for dynamic batch_size
+                    dynamic_axes={
+                                'input': {0: 'batch_size'},
+                                'output': {0: 'batch_size'}
+                                }
+                    )

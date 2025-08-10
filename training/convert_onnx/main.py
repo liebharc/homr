@@ -10,15 +10,15 @@ def convert_all(transformer_path=None, segnet_path=None):
 
     # Warnings might occur
     if segnet_path is not None:
-       convert_segnet(segnet_path) # Make sure to the filepath of the segnet!
+       convert_segnet() # Make sure to the filepath of the segnet!
     
     if transformer_path is not None:
         split_weights(transformer_path) # Make sure to the filepath of the transformer!
         convert_encoder()
-        convert_decoder()
+        path_to_decoder = convert_decoder()
 
         # Only the decoder gets quantized.
         # The segnet showed 80% worse performance on x86-64.
         # Only improved size by around 15MB without any speedups (maybe even slowing inference down).
         # FP16 slowed inference speed down (CPU).
-        #quantization_int8('tromr_decoder.onnx', 'tromr_decoder.onnx')
+        quantization_int8(path_to_decoder)
