@@ -42,6 +42,7 @@ from homr.staff_position_save_load import load_staff_positions, save_staff_posit
 from homr.title_detection import detect_title
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
+from homr.transformer.configs import default_config
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -65,7 +66,7 @@ class PredictedSymbols:
 
 
 def get_predictions(original: NDArray, preprocessed: NDArray, img_path: str) -> InputPredictions:
-    result = inference(preprocessed, img_path, step_size=240)
+    result = inference(preprocessed, img_path)
     original_image = cv2.resize(original, (result.staff.shape[1], result.staff.shape[0]))
     preprocessed_image = cv2.resize(preprocessed, (result.staff.shape[1], result.staff.shape[0]))
     return InputPredictions(
@@ -309,9 +310,10 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 
 def download_weights() -> None:
-    base_url = "https://github.com/liebharc/homr/releases/download/checkpoints/"
-    models = ['segnet.onnx', SEGNET_PATH]
+    base_url = "https://github.com/aicelen/homr/releases/download/v0.4.0/"
+    models = [SEGNET_PATH, default_config.filepaths.decoder_path, default_config.filepaths.encoder_path]
     missing_models = [model for model in models if not os.path.exists(model)]
+
     # I removed the following line since it's not required (returns a dict which is not stored)
     # .encoders.get_preprocessing_params("resnet18")
     
@@ -376,7 +378,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    #download_weights()
+    download_weights()
     if args.init:
         eprint("Init finished")
         return
