@@ -2,10 +2,10 @@ from typing import Any
 
 import torch
 from torch import nn
-from time import perf_counter
 
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
+
 from training.architecture.transformer.configs import Config
 from training.architecture.transformer.decoder import get_decoder
 from training.architecture.transformer.encoder import get_encoder
@@ -43,7 +43,6 @@ class TrOMR(nn.Module):
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 
-        t0 = perf_counter()
         context = self.encoder(x)
         out = self.decoder.generate(
             start_token,
@@ -54,5 +53,4 @@ class TrOMR(nn.Module):
             debug=debug,
         )
 
-        print(perf_counter() -t0)
         return out

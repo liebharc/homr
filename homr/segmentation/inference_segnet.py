@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from time import perf_counter
 
@@ -7,7 +6,6 @@ import onnxruntime as ort
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-
 from homr.segmentation.config import segnet_path
 
 class Segnet:
@@ -16,7 +14,7 @@ class Segnet:
             try:
                 self.model = ort.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
             except Exception as e:
-                eprint("Error while trying to load model using CUDA. You probably don't have a compatible gpu")
+                eprint("Error while trying to load model using CUDA. You probably don't have a compatible gpu") # noqa: E501
                 eprint(e)
                 self.model = ort.InferenceSession(model_path)
         else:
@@ -84,11 +82,11 @@ def inference(image_org: np.ndarray,
               win_size: int = 320
               ):
     """
-    Inference function for the segementation model. 
+    Inference function for the segementation model.
     Args:
         image_org(np.ndarray): Array of the input image
         image_path(str): Path to input image
-        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. Defaults to 8. 
+        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. Defaults to 8.
         step_size(int): How far the window moves between to input images. Defaults to win_size//2
         use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available). Defaults to True
         win_size(int): Debug only. Defaults to 320

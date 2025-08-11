@@ -7,9 +7,10 @@ import torch
 
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
+from homr.type_definitions import NDArray
+
 from training.architecture.transformer.configs import Config
 from training.architecture.transformer.tromr_arch import TrOMR
-from homr.type_definitions import NDArray
 
 
 class Staff2Score:

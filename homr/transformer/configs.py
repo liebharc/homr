@@ -7,8 +7,8 @@ workspace = os.path.join(os.path.dirname(__file__))
 
 class FilePaths:
     def __init__(self) -> None:
-        self.encoder_path = os.path.join(workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx")
-        self.decoder_path = os.path.join(workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx")
+        self.encoder_path = os.path.join(workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
+        self.decoder_path = os.path.join(workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
         self.pitchtokenizer = os.path.join(workspace, "tokenizer_pitch.json")

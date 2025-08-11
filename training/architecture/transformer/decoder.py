@@ -230,8 +230,6 @@ class ScoreDecoder(nn.Module):
                 rhythm_sample = torch.multinomial(rhythm_probs, 1)
 
                 sorted_probs, sorted_indices = torch.sort(rhythm_probs, descending=True)
-                
-                print(sorted_indices.shape)
 
                 rhythm_confidence = sorted_probs[0, 0].item()
                 alternative_confidence = sorted_probs[0, 1].item()

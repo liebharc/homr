@@ -44,7 +44,6 @@ from homr.title_detection import detect_title
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
 from homr.transformer.configs import default_config
-from homr.segmentation.config import segnet_path
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -318,7 +317,7 @@ def download_weights() -> None:
 
     # I removed the following line since it's not required (returns a dict which is not stored)
     # .encoders.get_preprocessing_params("resnet18")
-    
+
     if len(missing_models) == 0:
         return
 

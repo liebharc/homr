@@ -62,7 +62,7 @@ class ScoreDecoder:
                     "context": context
                 }
 
-            rhythmsp, pitchsp, liftsp = self.net.run(output_names=["out_rhythms", "out_pitchs", "out_lifts"],
+            rhythmsp, pitchsp, liftsp = self.net.run(output_names=["out_rhythms", "out_pitchs", "out_lifts"], # noqa: E501
                                                      input_feed=inputs
                                                     )
 
@@ -106,7 +106,7 @@ class ScoreDecoder:
                 if len(alternative_rhythm_token) == 0:
                     alternative_rhythm_token = [""]
                     alternative_confidence = 0
-                
+
                 retry = merger.add_symbol_and_alternative(
                     rhythm_token[0],
                     rhythm_confidence,
@@ -115,7 +115,7 @@ class ScoreDecoder:
                     alternative_rhythm_token[0],
                     alternative_confidence,
                 )
-                
+
                 current_temperature *= 3.5
                 attempt += 1
 
@@ -173,7 +173,7 @@ def get_decoder(config: Config, path, use_gpu):
     if use_gpu:
         try:
             onnx_transformer = ort.InferenceSession(path, providers=['CUDAExecutionProvider'])
-        except:
+        except Exception:
             onnx_transformer = ort.InferenceSession(path)
 
     else:

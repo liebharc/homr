@@ -3,6 +3,7 @@ import os
 
 from training.architecture.segmentation.config import segnet_path
 from training.architecture.segmentation.model import create_segnet
+
 from training.architecture.transformer.configs import Config
 from training.architecture.transformer.decoder import get_decoder_onnx
 from training.architecture.transformer.encoder import get_encoder
@@ -34,7 +35,9 @@ def convert_encoder():
     # Load weights
     model.load_state_dict(
                     torch.load(
-                        r"encoder_weights.pt", weights_only=True, map_location=torch.device("cpu")
+                                r"encoder_weights.pt",
+                                weights_only=True,
+                                map_location=torch.device("cpu")
                     ),
                     strict=True)
 

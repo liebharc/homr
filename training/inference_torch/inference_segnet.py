@@ -6,18 +6,16 @@ import numpy as np
 from PIL import Image
 from training.architecture.segmentation import config
 from training.architecture.segmentation.inference import inference
-from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 from homr.color_adjust import color_adjust
 
 
 def generate_pred(image: NDArray, ouput_path, num_classes) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
-    eprint("Extracting layers of different symbols")
     sep = inference(config.segnet_path, image)
 
     if ouput_path is not None:
-        print(f"output shape: {sep.shape}, output_type{sep.dtype}")
-        output = sep * floor(255 / num_classes) # multiplying this so we have values ranging from 0 to 255
+        # multiplying sep so we have values ranging from 0 to 255
+        output = sep * floor(255 / num_classes)
         out_img = Image.fromarray(output.astype(np.uint8))
         out_img.save(ouput_path)
 
@@ -80,5 +78,7 @@ def test_segnet(image_path, num_classes=None, output_path=None):
     """
     img = cv2.imread(image_path)
     preprocessed, _background = color_adjust(img, 40)
-    assert preprocessed.shape[0] >= 320 and preprocessed.shape[1] >= 320, "Input image is too small; minimum size is 320 by 320"
+    if preprocessed.shape[0] >= 320 or preprocessed.shape[1] >= 320: # 320 is win_size
+        raise ValueError(f"Input image is too small ({preprocessed.shape[0]} x {preprocessed.shape[1]}); minimum size is 320 by 320")
+
     return extract(preprocessed, image_path,  output_path, num_classes)

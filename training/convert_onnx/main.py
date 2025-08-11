@@ -1,9 +1,9 @@
 # Main file to convert all the models of homr to onnx format.
 import os
 
+from training.convert_onnx.split_weights import split_weights
 from training.convert_onnx.convert import convert_decoder, convert_encoder, convert_segnet
 from training.convert_onnx.quantization import quantization_int8
-from training.convert_onnx.split_weights import split_weights
 
 def convert_all(transformer_path=None, segnet_path=None):
     if transformer_path is None and segnet_path is None:
@@ -22,7 +22,7 @@ def convert_all(transformer_path=None, segnet_path=None):
         # The segnet showed 80% worse performance on x86-64.
         # Only improved size by around 15MB without any speedups (maybe even slowing inference down).
         # FP16 slowed inference speed down (CPU).
-        #quantization_int8(path_to_decoder)
+        quantization_int8(path_to_decoder)
 
     os.remove('decoder_weights.pt')
     os.remove('encoder_weights.pt')

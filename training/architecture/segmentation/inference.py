@@ -1,9 +1,8 @@
 import numpy as np
 import torch
 
-from training.architecture.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.type_definitions import NDArray
-
+from training.architecture.segmentation.model import create_segnet, create_unet  # type: ignore
 
 def split_into_patches(image: NDArray, win_size: int, step_size: int = -1) -> NDArray:
     if step_size < 0:
