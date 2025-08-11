@@ -15,8 +15,7 @@ from training.music_xml import group_in_measures, music_xml_to_semantic
 
 def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
     model = Staff2Score(config)
-    checkpoint_file = Path(config.filepaths.checkpoint).resolve()
-    result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
+    result_file = "onnx_ser.txt"
     all_sers = []
     i = 0
     total = len(dataset)
@@ -129,11 +128,10 @@ def index_folder(folder: str, index_file: str) -> None:
                 total_staffs_in_previous_files += len(svg_file.staffs)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
-    parser.add_argument("checkpoint_file", type=str, help="Path to the checkpoint file.")
-    args = parser.parse_args()
-
+def main():
+    """
+    Validates the .onnx transformer of homr. It uses the model located in homr/transformer.
+    """
     script_location = os.path.dirname(os.path.realpath(__file__))
     data_set_location = os.path.join(script_location, "..", "datasets")
     validation_data_set_location = os.path.join(data_set_location, "validation")
@@ -154,14 +152,8 @@ if __name__ == "__main__":
 
     with open(index_file) as f:
         index = f.readlines()
-    config = Config()
-    is_dir = os.path.isdir(args.checkpoint_file)
-    if is_dir:
-        # glob recursive for all model.safetensors file in the directory
-        checkpoint_files = list(Path(args.checkpoint_file).rglob("model.safetensors"))
-    else:
-        checkpoint_files = [Path(args.checkpoint_file)]
 
-    for checkpoint_file in checkpoint_files:
-        config.filepaths.checkpoint = str(checkpoint_file)
-        calc_symbol_error_rate_for_list(index, config)
+    calc_symbol_error_rate_for_list(index, Config())
+
+if __name__ == '__main__':
+    main()
