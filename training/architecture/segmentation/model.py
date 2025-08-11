@@ -1,9 +1,14 @@
+# type: ignore
+
+import pytorch_lightning as pl
 import segmentation_models_pytorch as smp
 import torch
 from torch.optim import lr_scheduler
 
+from homr.simple_logging import eprint
 
-class CamVidModel(torch.nn.Module):
+
+class CamVidModel(pl.LightningModule):
     """
     Based on https://github.com/qubvel-org/segmentation_models.pytorch/blob/main/examples/camvid_segmentation_multiclass.ipynb
     """
@@ -101,7 +106,7 @@ class CamVidModel(torch.nn.Module):
             f"{stage}_dataset_iou": dataset_iou,
         }
 
-        print("Loss", avg_loss) # noqa: T201
+        eprint("Loss", avg_loss)
         self.log_dict(metrics, prog_bar=True)
 
     def training_step(self, batch, batch_idx):

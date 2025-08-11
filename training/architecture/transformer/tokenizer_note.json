@@ -1,0 +1,17 @@
+{
+	"version": "1.0",
+	"truncation": null,
+	"padding": null,
+	"normalizer": null,
+	"pre_tokenizer": null,
+	"post_processor": null,
+	"decoder": null,
+	"model": {
+		"type": "WordLevel",
+		"vocab": {
+			"nonote": 0,
+			"note": 1
+		},
+		"unk_token": "<unk>"
+	}
+}

@@ -22,8 +22,9 @@ _build/
 /homr/segmentation/*
 !/homr/segmentation/*.py
 
-/homr/transformer/*
-!/homr/transformer/*.py
+*.pth
+*.onnx
+*.pt
 
 # Byprodcuts of a training run
 /seg_unet.keras

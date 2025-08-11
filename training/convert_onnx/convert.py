@@ -1,11 +1,11 @@
 import torch
 import os
 
-from training.convert_onnx.segmentation.config import segnet_path
-from training.convert_onnx.segmentation.model import create_segnet
-from training.convert_onnx.transformer.configs import Config
-from training.convert_onnx.transformer.decoder import get_decoder_onnx
-from training.convert_onnx.transformer.encoder import get_encoder
+from training.architecture.segmentation.config import segnet_path
+from training.architecture.segmentation.model import create_segnet
+from training.architecture.transformer.configs import Config
+from training.architecture.transformer.decoder import get_decoder_onnx
+from training.architecture.transformer.encoder import get_encoder
 
 
 class DecoderWrapper(torch.nn.Module):
