@@ -78,7 +78,7 @@ def test_segnet(image_path, num_classes=None, output_path=None):
     """
     img = cv2.imread(image_path)
     preprocessed, _background = color_adjust(img, 40)
-    if preprocessed.shape[0] >= 320 or preprocessed.shape[1] >= 320: # 320 is win_size
+    if preprocessed.shape[0] < 320 or preprocessed.shape[1] < 320: # 320 is win_size
         raise ValueError(f"Input image is too small ({preprocessed.shape[0]} x {preprocessed.shape[1]}); minimum size is 320 by 320")
 
     return extract(preprocessed, image_path,  output_path, num_classes)
