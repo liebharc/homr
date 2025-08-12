@@ -55,6 +55,7 @@ def merge_patches(
 def inference(
     model_path: str,
     image: NDArray,
+    step_size: int = 160
 ) -> NDArray:
     if "segnet" in model_path:
         model = create_segnet(skip_weights_download=True)
@@ -63,7 +64,7 @@ def inference(
     else:
         raise ValueError("Unknown model type: " + model_path)
     model.load_state_dict(torch.load(model_path, weights_only=True), strict=False)
-    images = split_into_patches(image, win_size=320, step_size=320)
+    images = split_into_patches(image, win_size=320, step_size=step_size)
 
     # Switch the model to evaluation mode
     with torch.inference_mode():
@@ -78,5 +79,5 @@ def inference(
     pr_masks = pr_masks.argmax(dim=1)  # Shape: [batch_size, H, W]
 
     return merge_patches(
-        pr_masks.cpu().detach().numpy(), image.shape[0:2], win_size=320, step_size=320
+        pr_masks.cpu().detach().numpy(), image.shape[0:2], win_size=320, step_size=step_size
     )
