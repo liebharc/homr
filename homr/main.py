@@ -67,7 +67,7 @@ class PredictedSymbols:
 
 
 def get_predictions(original: NDArray, preprocessed: NDArray, img_path: str) -> InputPredictions:
-    result = inference(preprocessed, img_path)
+    result = inference(preprocessed, img_path, step_size=320)
     original_image = cv2.resize(original, (result.staff.shape[1], result.staff.shape[0]))
     preprocessed_image = cv2.resize(preprocessed, (result.staff.shape[1], result.staff.shape[0]))
     return InputPredictions(

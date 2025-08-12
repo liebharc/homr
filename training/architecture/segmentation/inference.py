@@ -55,7 +55,7 @@ def merge_patches(
 def inference(
     model_path: str,
     image: NDArray,
-    step_size: int = 160
+    step_size: int = 320
 ) -> NDArray:
     if "segnet" in model_path:
         model = create_segnet(skip_weights_download=True)
