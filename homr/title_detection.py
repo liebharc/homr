@@ -1,12 +1,9 @@
 import re
 
-from easyocr import Reader
-
 from homr.debug import Debug
 from homr.model import Staff
 
-
-reader = Reader(["de", "en"], gpu=False, verbose=False)
+reader = None
 
 class OCR:
     """
@@ -23,6 +20,12 @@ class OCR:
 
 
     def detect_title(self, debug: Debug, top_staff: Staff) -> str:
+        global reader
+        if reader is None:
+            # load the reader if it's not already loaded from a prior run
+            from easyocr import Reader
+            reader = Reader(["de", "en"], gpu=False, verbose=False)
+
         image = debug.original_image
         height = int(15 * top_staff.average_unit_size)
         y = max(int(top_staff.min_y) - height, 0)
@@ -39,6 +42,6 @@ class OCR:
             self.result = ""
         else:
             self.result = self.cleanup_text(result[0])
-    
+
     def get_result(self):
         return self.result

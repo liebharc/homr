@@ -46,11 +46,9 @@ from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
 
-def load_easyocr():
-    from homr.title_detection import OCR
-
-# Threaded loading of easyocr for better performance
-Thread(target=load_easyocr).start()
+# this loads basically instead because from easyocr import Reader
+# is now located in OCR.detect_title()
+from homr.title_detection import OCR
 
 class PredictedSymbols:
     def __init__(
@@ -182,8 +180,11 @@ def process_image(  # noqa: PLR0915
         result_staffs = maintain_accidentals(result_staffs)
         result_staffs = correct_rhythm(result_staffs)
 
+        title = get_title()
+        eprint("Found title: " + title)
+        
         eprint("Writing XML")
-        xml = generate_xml(xml_generator_args, result_staffs, get_title())
+        xml = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
 
         eprint(
@@ -255,9 +256,6 @@ def detect_staffs_in_image(
         debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
     )
 
-    # I know that's really ugly but it's needed for the threaded loading of title_detection
-    from homr.title_detection import OCR
-    
     # Start optical character recognition in a thread
     ocr = OCR()
     Thread(target=ocr.detect_title, args=(debug, staffs[0])).start()
