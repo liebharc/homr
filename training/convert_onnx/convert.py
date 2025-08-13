@@ -57,6 +57,8 @@ def convert_encoder():
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"])
+    
+    return path_out
 
 def convert_decoder():
     """
@@ -137,3 +139,4 @@ def convert_segnet():
                                 'output': {0: 'batch_size'}
                                 }
                     )
+    return f"{os.path.splitext(segnet_path)[0]}.onnx"

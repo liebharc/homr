@@ -22,6 +22,8 @@ _build/
 /homr/segmentation/*
 !/homr/segmentation/*.py
 
+/datasets/*
+
 *.pth
 *.onnx
 *.pt
