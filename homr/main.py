@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+from concurrent.futures import Future
 from dataclasses import dataclass
 
 import cv2
@@ -41,7 +42,7 @@ from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
-from homr.title_detection import detect_title
+from homr.title_detection import detect_title, download_ocr_weights
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
@@ -170,7 +171,7 @@ def process_image(  # noqa: PLR0915
             )
             title = ""
         else:
-            multi_staffs, image, debug, title = detect_staffs_in_image(image_path, config)
+            multi_staffs, image, debug, title_future = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
 
         result_staffs = parse_staffs(
@@ -179,6 +180,9 @@ def process_image(  # noqa: PLR0915
 
         result_staffs = maintain_accidentals(result_staffs)
         result_staffs = correct_rhythm(result_staffs)
+
+        title = title_future.result(60)
+        eprint("Found title:", title)
 
         eprint("Writing XML")
         xml = generate_xml(xml_generator_args, result_staffs, title)
@@ -212,7 +216,7 @@ def process_image(  # noqa: PLR0915
 
 def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
-) -> tuple[list[MultiStaff], NDArray, Debug, str]:
+) -> tuple[list[MultiStaff], NDArray, Debug, Future[str]]:
     predictions, debug = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache
     )
@@ -255,6 +259,7 @@ def detect_staffs_in_image(
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")
+    title_future = detect_title(debug, staffs[0])
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
     global_unit_size = np.mean([staff.average_unit_size for staff in staffs])
@@ -293,9 +298,7 @@ def detect_staffs_in_image(
         "notes", multi_staffs, notes, rests, accidentals
     )
 
-    title = detect_title(debug, staffs[0])
-    eprint("Found title: " + title)
-    return multi_staffs, predictions.preprocessed, debug, title
+    return multi_staffs, predictions.preprocessed, debug, title_future
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
@@ -381,6 +384,7 @@ def main() -> None:
 
     download_weights()
     if args.init:
+        download_ocr_weights()
         eprint("Init finished")
         return
 
