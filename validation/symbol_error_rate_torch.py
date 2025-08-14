@@ -7,16 +7,24 @@ import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
-from training.architecture.transformer.configs import Config
-from training.architecture.transformer.staff2score import Staff2Score
+from training.architecture.transformer.configs import Config as ConfigTorch
+from homr.transformer.configs import Config as ConfigOnnx
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
 
 
-def calc_symbol_error_rate_for_list(dataset: list[str], config: Config) -> None:
-    model = Staff2Score(config)
-    checkpoint_file = Path(config.filepaths.checkpoint).resolve()
-    result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
+def calc_symbol_error_rate_for_list(dataset: list[str], config, onnx) -> None:
+    if onnx:
+        from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
+        model = Staff2ScoreOnnx(config)
+        result_file = "onnx_ser.txt"
+    
+    else:
+        from training.architecture.transformer.staff2score import Staff2Score as Staff2ScoreTorch
+        model = Staff2ScoreTorch(config)
+        checkpoint_file = Path(config.filepaths.checkpoint).resolve()
+        result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
+
     all_sers = []
     i = 0
     total = len(dataset)
@@ -131,11 +139,12 @@ def index_folder(folder: str, index_file: str) -> None:
 
 def main():
     """
-    Validates the torch transformer of homr. It uses a model specified by the user
+    Validates the transformer of homr. It uses a model specified by the user
     with the original inference code located in homr/transformer.
     """
     parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
-    parser.add_argument("checkpoint_file", type=str, help="Path to the checkpoint file.")
+    # optional: if no path is given it uses the onnx backend with the model located in homr/transformer
+    parser.add_argument("--checkpoint_file", type=str, default=None, help="Path to the checkpoint file.")
     args = parser.parse_args()
 
     script_location = os.path.dirname(os.path.realpath(__file__))
@@ -158,17 +167,26 @@ def main():
 
     with open(index_file) as f:
         index = f.readlines()
-    config = Config()
-    is_dir = os.path.isdir(args.checkpoint_file)
-    if is_dir:
-        # glob recursive for all model.safetensors file in the directory
-        checkpoint_files = list(Path(args.checkpoint_file).rglob("model.safetensors"))
-    else:
-        checkpoint_files = [Path(args.checkpoint_file)]
+    
+    if args.checkpoint_file is None:
+        # use onnx backend
+        eprint('Running with onnx backend')
+        config = ConfigOnnx()
+        calc_symbol_error_rate_for_list(index, config, onnx=True)
 
-    for checkpoint_file in checkpoint_files:
-        config.filepaths.checkpoint = str(checkpoint_file)
-        calc_symbol_error_rate_for_list(index, config)
+    else:
+        eprint('Running with torch backend')
+        config = ConfigTorch()
+        is_dir = os.path.isdir(args.checkpoint_file)
+        if is_dir:
+            # glob recursive for all model.safetensors file in the directory
+            checkpoint_files = list(Path(args.checkpoint_file).rglob("model.safetensors"))
+        else:
+            checkpoint_files = [Path(args.checkpoint_file)]
+
+        for checkpoint_file in checkpoint_files:
+            config.filepaths.checkpoint = str(checkpoint_file)
+            calc_symbol_error_rate_for_list(index, config, onnx=False)
 
 if __name__ == '__main__':
     main()
