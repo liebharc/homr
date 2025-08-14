@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "homr"
-version = "0.3.0-post.12+e0b4333"
+version = "0.1.0"
 description = "End-to-end Optical Music Recognition (OMR) system build on top of vision transformers."
 authors = ["Christian Liebhardt <christian.liebhardt@arcor.de>"]
 license = "AGPL-3.0"
@@ -49,7 +49,7 @@ myst-parser = "2.0.0"
 myst-nb = "1.1.0"
 
 [tool.poetry-dynamic-versioning]
-enable = false
+enable = true
 vcs = "git"
 style = "semver"
 pattern  = "^v(?P<base>\\d+\\.\\d+\\.\\d+)(-?((?P<stage>[a-zA-Z]+)\\.?(?P<revision>\\d+)?))?"
