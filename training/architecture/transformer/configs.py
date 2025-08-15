@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Any
-
+from homr.transformer.configs import default_config
 workspace = os.path.join(os.path.dirname(__file__))
 
 
@@ -10,11 +10,10 @@ class FilePaths:
         self.checkpoint = os.path.join(
             workspace, "pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth"
         )
-        self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
-        self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
-        self.pitchtokenizer = os.path.join(workspace, "tokenizer_pitch.json")
-        self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
-        self.notetokenizer = os.path.join(workspace, "tokenizer_note.json")
+        self.rhythmtokenizer = default_config.filepaths.rhythmtokenizer
+        self.lifttokenizer = default_config.filepaths.lifttokenizer
+        self.pitchtokenizer = default_config.filepaths.pitchtokenizer
+        self.notetokenizer = default_config.filepaths.notetokenizer
 
     def to_dict(self) -> dict[str, Any]:
         return {

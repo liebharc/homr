@@ -12,7 +12,7 @@ from homr.transformer.utils import softmax
 class ScoreDecoder:
     def __init__(
         self,
-        transformer,
+        transformer: ort.InferenceSession,
         config: Config,
         ignore_index: int = -100,
     ):

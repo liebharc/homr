@@ -8,7 +8,7 @@ from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder_inference import get_decoder
 from homr.transformer.encoder_inference import Encoder
-
+from homr.type_definitions import NDArray
 
 class Staff2Score:
     """
@@ -26,9 +26,8 @@ class Staff2Score:
         """
         Inference an image (np.ndarray) using Tromr.
         """
-        data = np.array(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
-        x = data[np.newaxis, np.newaxis, :, :].astype(np.float32)
-
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        x = _transform(image=image)
 
         t0 = perf_counter()
 
@@ -50,3 +49,18 @@ class Staff2Score:
         eprint(f"Inference Time Tromr: {perf_counter()-t0}")
 
         return out
+
+class ConvertToArray:
+    def __init__(self):
+        self.mean = np.array([0.7931]).reshape(1, 1, 1)
+        self.std = np.array([0.1738]).reshape(1, 1, 1)
+
+    def normalize(self, array: NDArray):
+        return (array - self.mean) / self.std
+
+    def __call__(self, image: NDArray):
+        arr = np.array(image) / 255
+        arr = arr[np.newaxis, np.newaxis, :, :]
+        return self.normalize(arr).astype(np.float32)
+
+_transform = ConvertToArray()

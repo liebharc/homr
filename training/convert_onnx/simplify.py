@@ -20,7 +20,3 @@ def main(input_path, output_path=None):
 
     # Save the simplified model
     onnx.save(model_simp, output_path)
-
-
-if __name__ == '__main__':
-    main(r"C:\Users\ennoa\Documents\Python\Github Local\homr\homr\transformer\encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx", 'encoder_sim.onnx')

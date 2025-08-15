@@ -315,9 +315,6 @@ def download_weights() -> None:
     models = [segnet_path, default_config.filepaths.encoder_path, default_config.filepaths.decoder_path]
     missing_models = [model for model in models if not os.path.exists(model)]
 
-    # I removed the following line since it's not required (returns a dict which is not stored)
-    # .encoders.get_preprocessing_params("resnet18")
-
     if len(missing_models) == 0:
         return
 

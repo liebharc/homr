@@ -146,4 +146,5 @@ def inference(image_org: np.ndarray,
     symbol_layer = 5
     symbols = np.where(data == symbol_layer, 1, 0)
 
-    return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys) # noqa: W292
+    return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys)
+

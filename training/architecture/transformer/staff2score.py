@@ -4,10 +4,12 @@ import cv2
 import numpy as np
 import safetensors
 import torch
+from PIL import Image
 
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
 from homr.type_definitions import NDArray
+from homr.simple_logging import eprint
 
 from training.architecture.transformer.configs import Config
 from training.architecture.transformer.tromr_arch import TrOMR
@@ -114,3 +116,14 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     img = cv2.resize(img, (new_w, new_h))
     tensor = _transform(image=img)
     return tensor
+
+def test_transformer_on_image(path_to_img: str):
+    """
+    Tests the transformer on an image and prints the results.
+    Args:
+        path_to_img(str): Path to the image to test
+    """
+    model = Staff2Score(Config())
+    image = Image.open(path_to_img).resize((1280, 128), Image.LANCZOS)
+    out = model.predict(np.array(image))
+    eprint(out)
