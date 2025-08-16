@@ -17,9 +17,7 @@ class ScoreDecoder:
         ignore_index: int = -100,
     ):
         super().__init__()
-        self.pad_value = (config.pad_token,)
         self.ignore_index = ignore_index
-        self.config = config
         self.net = transformer
         self.max_seq_len = config.max_seq_len
 
@@ -166,7 +164,7 @@ def detokenize(tokens: np.ndarray, vocab: Any) -> list[str]:
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
 
-def get_decoder(config: Config, path, use_gpu):
+def get_decoder(config: Config, path: str, use_gpu: bool):
     """
     Returns Tromr's Decoder
     """

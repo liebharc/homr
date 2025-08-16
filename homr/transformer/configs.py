@@ -3,16 +3,18 @@ import os
 from typing import Any
 
 workspace = os.path.join(os.path.dirname(__file__))
-
+root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
         self.encoder_path = os.path.join(workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
         self.decoder_path = os.path.join(workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
+        self.checkpoint = os.path.join(root_dir, "training", "architecture", "transformer", 
+                                        "pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth")
+
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")
         self.pitchtokenizer = os.path.join(workspace, "tokenizer_pitch.json")
-        self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.notetokenizer = os.path.join(workspace, "tokenizer_note.json")
 
     def to_dict(self) -> dict[str, Any]:
@@ -61,17 +63,17 @@ class Config:
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 87
+        self.num_rhythm_tokens = 93
         self.num_note_tokens = 2
         self.num_pitch_tokens = 71
         self.num_lift_tokens = 5
         self.encoder_structure = "hybrid"
         self.encoder_depth = 6
-        self.backbone_layers = [2, 3, 7]
-        self.encoder_dim = 256
+        self.backbone_layers = [3, 4, 6, 3]
+        self.encoder_dim = 312
         self.encoder_heads = 8
-        self.decoder_dim = 256
-        self.decoder_depth = 6
+        self.decoder_dim = 312
+        self.decoder_depth = 8
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()

@@ -2,7 +2,7 @@ import os
 
 import torch
 
-from training.architecture.transformer.configs import FilePaths
+from homr.transformer.configs import FilePaths
 
 
 def split_weights(input_path):

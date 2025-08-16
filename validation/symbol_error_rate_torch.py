@@ -7,7 +7,7 @@ import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
-from training.architecture.transformer.configs import Config as ConfigTorch
+from homr.transformer.configs import Config as ConfigTorch
 from homr.transformer.configs import Config as ConfigOnnx
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic

@@ -1,10 +1,10 @@
 import torch
 import os
 
-from training.architecture.segmentation.config import segnet_path
+from homr.segmentation.config import segnet_path_torch
 from training.architecture.segmentation.model import create_segnet
 
-from training.architecture.transformer.configs import Config
+from homr.transformer.configs import Config
 from training.architecture.transformer.decoder import get_decoder_onnx
 from training.architecture.transformer.encoder import get_encoder
 
@@ -120,7 +120,7 @@ def convert_segnet():
     Converts the segnet model to onnx.
     """
     model = create_segnet()
-    model.load_state_dict(torch.load(segnet_path, weights_only=True), strict=True)
+    model.load_state_dict(torch.load(segnet_path_torch, weights_only=True), strict=True)
     model.eval()
 
     # Input dimension is 1x3x320x320
@@ -128,7 +128,7 @@ def convert_segnet():
 
     torch.onnx.export(model,
                     sample_inputs,
-                    f"{os.path.splitext(segnet_path)[0]}.onnx",
+                    f"{os.path.splitext(segnet_path_torch)[0]}.onnx",
                     opset_version=17,
                     do_constant_folding=True,
                     input_names=['input'],
@@ -139,4 +139,4 @@ def convert_segnet():
                                 'output': {0: 'batch_size'}
                                 }
                     )
-    return f"{os.path.splitext(segnet_path)[0]}.onnx"
+    return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"

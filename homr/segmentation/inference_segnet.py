@@ -6,7 +6,7 @@ import onnxruntime as ort
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-from homr.segmentation.config import segnet_path
+from homr.segmentation.config import segnet_path_onnx
 
 class Segnet:
     def __init__(self, model_path, use_gpu):
@@ -99,7 +99,7 @@ def inference(image_org: np.ndarray,
     if step_size < 0:
         step_size = win_size // 2
 
-    model = Segnet(segnet_path, use_gpu)
+    model = Segnet(segnet_path_onnx, use_gpu)
     data = []
     batch = []
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)

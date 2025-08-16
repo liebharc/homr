@@ -41,6 +41,7 @@ pytorch-lightning = "^2.5.2"
 x-transformers = "^2.4.9"
 torch = "^2.7.1"
 onnx="^1.18.0"
+onnx-simplifier="^0.4.36"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]

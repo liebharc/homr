@@ -37,8 +37,8 @@ if __name__ == '__main__':
     # onnx models are saved in training/architecture/transformer and training/architecture/segmentation
 
     from training.convert_onnx.main import convert_all
-    from training.architecture.transformer.configs import Config
-    from training.architecture.segmentation.config import segnet_path
+    from homr.transformer.configs import Config
+    from homr.segmentation.config import segnet_path_torch
 
 
-    convert_all(transformer_path=Config().filepaths.checkpoint, segnet_path=segnet_path)
+    convert_all(transformer_path=Config().filepaths.checkpoint, segnet_path=segnet_path_torch)

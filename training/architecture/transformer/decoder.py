@@ -15,7 +15,7 @@ from x_transformers.x_transformers import (
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
 from homr.simple_logging import eprint
-from training.architecture.transformer.configs import Config
+from homr.transformer.configs import Config
 from training.architecture.transformer.split_merge_symbols import SymbolMerger
 
 

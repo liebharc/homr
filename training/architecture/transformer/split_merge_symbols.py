@@ -8,7 +8,7 @@ from homr.circle_of_fifths import (
 )
 from homr.results import TransformerChord, TransformerSymbol
 from homr.simple_logging import eprint
-from training.architecture.transformer.configs import default_config
+from homr.transformer.configs import default_config
 
 
 class SymbolMerger:
