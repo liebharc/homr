@@ -8,7 +8,7 @@ from transformers import Trainer, TrainingArguments  # type: ignore
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.tromr_arch import TrOMR
+from training.architecture.transformer.tromr_arch import TrOMR
 from training.convert_grandstaff import convert_grandstaff, grandstaff_train_index
 from training.convert_lieder import convert_lieder, lieder_train_index
 from training.convert_primus import (

@@ -16,7 +16,7 @@ from homr.debug import AttentionDebug
 from homr.results import TransformerChord
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.split_merge_symbols import SymbolMerger
+from training.architecture.transformer.split_merge_symbols import SymbolMerger
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -230,6 +230,7 @@ class ScoreDecoder(nn.Module):
                 rhythm_sample = torch.multinomial(rhythm_probs, 1)
 
                 sorted_probs, sorted_indices = torch.sort(rhythm_probs, descending=True)
+
                 rhythm_confidence = sorted_probs[0, 0].item()
                 alternative_confidence = sorted_probs[0, 1].item()
 
@@ -402,6 +403,19 @@ def get_decoder(config: Config) -> ScoreDecoder:
         config=config,
         noteindexes=config.noteindexes,
     )
+
+
+def get_decoder_onnx(config: Config):
+    return ScoreTransformerWrapper(
+            config=config,
+            attn_layers=Decoder(
+                dim=config.decoder_dim,
+                depth=config.decoder_depth,
+                heads=config.decoder_heads,
+                attn_flash=True,
+                **config.decoder_args.to_dict(),
+            ),
+        )
 
 
 def detokenize(tokens: torch.Tensor, vocab: Any) -> list[str]:

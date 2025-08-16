@@ -359,7 +359,8 @@ def music_xml_string_to_semantic(content: str) -> list[list[str]]:
 
 
 def music_xml_to_semantic(file_path: str) -> list[list[str]]:
-    with open(file_path) as file:
+    # 'rb' is needed (on windows) to get around a UnicodeDecodeError
+    with open(file_path, 'rb') as file:
         xml = ET.parse(file)  # noqa: S314
     return _music_xml_content_to_semantic(xml.getroot())
 

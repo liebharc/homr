@@ -1,115 +1,66 @@
 import os
+from time import perf_counter
 
 import cv2
 import numpy as np
-import safetensors
-import torch
 
-from homr.debug import AttentionDebug
-from homr.results import TransformerChord
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.tromr_arch import TrOMR
+from homr.transformer.decoder_inference import get_decoder
+from homr.transformer.encoder_inference import Encoder
 from homr.type_definitions import NDArray
 
-
 class Staff2Score:
-    def __init__(self, config: Config) -> None:
-        self.config = config
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = TrOMR(config)
-        self.model.eval_mode()
-        checkpoint_file_path = config.filepaths.checkpoint
-        if not os.path.exists(checkpoint_file_path):
-            raise RuntimeError("Please download the model first to " + checkpoint_file_path)
-        if ".safetensors" in checkpoint_file_path:
-            tensors = {}
-            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:  # type: ignore
-                for k in f.keys():
-                    tensors[k] = f.get_tensor(k)
-            self.model.load_state_dict(tensors, strict=False)
-        elif torch.cuda.is_available():
-            self.model.load_state_dict(
-                torch.load(checkpoint_file_path, weights_only=True), strict=False
-            )
-        else:
-            self.model.load_state_dict(
-                torch.load(
-                    checkpoint_file_path, weights_only=True, map_location=torch.device("cpu")
-                ),
-                strict=False,
-            )
-        self.model.to(self.device)
+    """
+    Inference class for Tromr. Use predict() for prediction
+    """
+    def __init__(self, use_gpu: bool = True) -> None:
+        self.config = Config()
+        self.encoder = Encoder(self.config.filepaths.encoder_path, use_gpu)
+        self.decoder = get_decoder(self.config, self.config.filepaths.decoder_path, use_gpu)
 
-        if not os.path.exists(config.filepaths.rhythmtokenizer):
-            raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
+        if not os.path.exists(self.config.filepaths.rhythmtokenizer):
+            raise RuntimeError("Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer) # noqa: E501
 
-    def predict(
-        self, image: NDArray, debug: AttentionDebug | None = None
-    ) -> list[TransformerChord]:
+    def predict(self, image: np.ndarray) -> list[str]:
+        """
+        Inference an image (np.ndarray) using Tromr.
+        """
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        imgs_tensor = self._image_to_tensor(image)
-        return self._generate(
-            imgs_tensor,
-            debug=debug,
-        )
+        x = _transform(image=image)
 
-    def _image_to_tensor(self, image: NDArray) -> torch.Tensor:
-        transformed = _transform(image=image)
-        imgs_tensor = transformed.float().unsqueeze(1)
-        return imgs_tensor.to(self.device)
+        t0 = perf_counter()
 
-    def _generate(
-        self,
-        imgs_tensor: torch.Tensor,
-        debug: AttentionDebug | None = None,
-    ) -> list[TransformerChord]:
-        return self.model.generate(
-            imgs_tensor,
-            debug=debug,
-        )
+        # Create special tokens
+        start_token = np.full((len(x), 1), self.config.bos_token, dtype=np.int64)
+        nonote_token = np.full((len(x), 1), self.config.nonote_token, dtype=np.int64)
 
+        # Generate context with encoder
+        context = self.encoder.generate(x)
 
-class ConvertToTensor:
-    def __init__(self) -> None:
-        self.mean = torch.tensor([0.7931]).view(1, 1, 1)
-        self.std = torch.tensor([0.1738]).view(1, 1, 1)
+        # Make a prediction using decoder
+        out = self.decoder.generate(start_token,
+                                    nonote_token,
+                                    seq_len=self.config.max_seq_len,
+                                    eos_token=self.config.eos_token,
+                                    context=context
+                                    )
 
-    def to_tensor(self, img: NDArray) -> torch.Tensor:
-        img_array = img.astype(np.float32) / 255.0
-        return torch.tensor(img_array)
+        eprint(f"Inference Time Tromr: {perf_counter()-t0}")
 
-    def normalize(self, tensor: torch.Tensor) -> torch.Tensor:
-        return (tensor - self.mean) / self.std
+        return out
 
-    def __call__(self, image: NDArray) -> torch.Tensor:
-        tensor = self.to_tensor(image)
-        tensor = self.normalize(tensor)
-        return tensor
+class ConvertToArray:
+    def __init__(self):
+        self.mean = np.array([0.7931]).reshape(1, 1, 1)
+        self.std = np.array([0.1738]).reshape(1, 1, 1)
 
+    def normalize(self, array: NDArray):
+        return (array - self.mean) / self.std
 
-_transform = ConvertToTensor()
+    def __call__(self, image: NDArray):
+        arr = np.array(image) / 255
+        arr = arr[np.newaxis, np.newaxis, :, :]
+        return self.normalize(arr).astype(np.float32)
 
-
-def readimg(config: Config, path: str) -> torch.Tensor:
-    img: NDArray = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # type: ignore
-    if img is None:
-        raise ValueError("Failed to read image from " + path)
-
-    if img.shape[-1] == 4:  # noqa: PLR2004
-        img = 255 - img[:, :, 3]
-    elif img.shape[-1] == 3:  # noqa: PLR2004
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    elif len(img.shape) == 2:  # noqa: PLR2004
-        # Image is already gray scale
-        pass
-    else:
-        raise RuntimeError("Unsupport image type!")
-
-    h, w = img.shape
-    size_h = config.max_height
-    new_h = size_h
-    new_w = int(size_h / h * w)
-    new_w = new_w // config.patch_size * config.patch_size
-    img = cv2.resize(img, (new_w, new_h))
-    tensor = _transform(image=img)
-    return tensor
+_transform = ConvertToArray()

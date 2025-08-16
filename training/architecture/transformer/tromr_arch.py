@@ -6,8 +6,9 @@ from torch import nn
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
 from homr.transformer.configs import Config
-from homr.transformer.decoder import get_decoder
-from homr.transformer.encoder import get_encoder
+
+from training.architecture.transformer.decoder import get_decoder
+from training.architecture.transformer.encoder import get_encoder
 
 
 class TrOMR(nn.Module):
@@ -43,7 +44,7 @@ class TrOMR(nn.Module):
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 
         context = self.encoder(x)
-        return self.decoder.generate(
+        out = self.decoder.generate(
             start_token,
             nonote_token,
             self.config.max_seq_len,
@@ -51,3 +52,5 @@ class TrOMR(nn.Module):
             context=context,
             debug=debug,
         )
+
+        return out
