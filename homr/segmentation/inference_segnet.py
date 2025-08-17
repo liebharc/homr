@@ -6,7 +6,12 @@ import onnxruntime as ort
 
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-from homr.segmentation.config import segnet_path_onnx
+from homr.segmentation.config import segnet_path_onnx, segmentation_version
+
+import os 
+import lzma
+import hashlib
+import cv2
 
 class Segnet:
     def __init__(self, model_path, use_gpu):
@@ -75,21 +80,19 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
 
 
 def inference(image_org: np.ndarray,
-              image_path: str,
-              batch_size: int = 8,
-              step_size: int = -1,
-              use_gpu: bool = True,
-              win_size: int = 320
+              batch_size: int,
+              step_size: int,
+              use_gpu: bool,
+              win_size: int
               ):
     """
     Inference function for the segementation model.
     Args:
         image_org(np.ndarray): Array of the input image
-        image_path(str): Path to input image
-        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. Defaults to 8.
-        step_size(int): How far the window moves between to input images. Defaults to win_size//2
-        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available). Defaults to True
-        win_size(int): Debug only. Defaults to 320
+        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. 
+        step_size(int): How far the window moves between to input images. 
+        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available). 
+        win_size(int): Debug only.
 
     Returns:
         ExtractResult class.
@@ -130,9 +133,7 @@ def inference(image_org: np.ndarray,
             out = np.argmax(out, axis=0)
             data.append(out)
 
-
     eprint(f"Segnet Inference time: {perf_counter()- t0}; batch_size of {batch_size}")
-
 
     data = merge_patches(data, (image_org.shape[0], image_org.shape[1]), win_size, step_size)
     stems_layer = 1
@@ -146,5 +147,63 @@ def inference(image_org: np.ndarray,
     symbol_layer = 5
     symbols = np.where(data == symbol_layer, 1, 0)
 
-    return ExtractResult(Path(image_path), image_org, staff, symbols, stems_rests, notehead, clefs_keys)
+    return staff, symbols, stems_rests, notehead, clefs_keys
 
+def extract(original_image: NDArray, 
+            img_path_str: str, 
+            use_cache: bool = False,
+            batch_size: int = 8,
+            step_size: int = -1,
+            use_gpu: bool = True,
+            win_size: int = 320
+            ):
+    img_path = Path(img_path_str)
+    f_name = os.path.splitext(img_path.name)[0]
+    npy_path = img_path.parent / f"{f_name}.npy"
+    loaded_from_cache = False
+    if npy_path.exists() and use_cache:
+        eprint("Found a cache")
+        file_hash = hashlib.sha256(original_image).hexdigest()  # type: ignore
+        with lzma.open(npy_path, "rb") as f:
+            staff = np.load(f)
+            notehead = np.load(f)
+            symbols = np.load(f)
+            stems_rests = np.load(f)
+            clefs_keys = np.load(f)
+            cached_file_hash = f.readline().decode().strip()
+            model_name = f.readline().decode().strip()
+            if cached_file_hash == "" or model_name == "":
+                eprint("Cache is missing meta information, skipping cache")
+            elif file_hash != cached_file_hash:
+                eprint("File hash mismatch, skipping cache")
+            elif model_name != segmentation_version:
+                eprint("Models have been updated, skipping cache")
+            else:
+                loaded_from_cache = True
+                eprint("Loading from cache")
+
+    if not loaded_from_cache:
+        staff, symbols, stems_rests, notehead, clefs_keys = inference(original_image, 
+                                                                      img_path_str,
+                                                                      batch_size=batch_size,
+                                                                      step_size=step_size,
+                                                                      use_gpu=use_gpu,
+                                                                      win_size=win_size
+                                                                      )
+        if use_cache:
+            eprint("Saving cache")
+            file_hash = hashlib.sha256(original_image).hexdigest()  # type: ignore
+            with lzma.open(npy_path, "wb") as f:
+                np.save(f, staff)
+                np.save(f, notehead)
+                np.save(f, symbols)
+                np.save(f, stems_rests)
+                np.save(f, clefs_keys)
+                f.write((file_hash + "\n").encode())
+                f.write((segmentation_version + "\n").encode())
+
+    original_image = cv2.resize(original_image, (staff.shape[1], staff.shape[0]))
+
+    return ExtractResult(
+        img_path, original_image, staff, symbols, stems_rests, notehead, clefs_keys
+    )
