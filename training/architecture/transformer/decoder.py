@@ -407,15 +407,15 @@ def get_decoder(config: Config) -> ScoreDecoder:
 
 def get_decoder_onnx(config: Config):
     return ScoreTransformerWrapper(
-            config=config,
-            attn_layers=Decoder(
-                dim=config.decoder_dim,
-                depth=config.decoder_depth,
-                heads=config.decoder_heads,
-                attn_flash=True,
-                **config.decoder_args.to_dict(),
-            ),
-        )
+        config=config,
+        attn_layers=Decoder(
+            dim=config.decoder_dim,
+            depth=config.decoder_depth,
+            heads=config.decoder_heads,
+            attn_flash=True,
+            **config.decoder_args.to_dict(),
+        ),
+    )
 
 
 def detokenize(tokens: torch.Tensor, vocab: Any) -> list[str]:

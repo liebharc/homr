@@ -1,6 +1,7 @@
 import onnx
 from onnxsim import simplify
 
+
 def main(input_path, output_path=None):
     """
     Simplifies an onnx model to reduce it's size.

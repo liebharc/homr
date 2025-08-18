@@ -6,7 +6,6 @@ from torch import nn
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
 from homr.transformer.configs import Config
-
 from training.architecture.transformer.decoder import get_decoder
 from training.architecture.transformer.encoder import get_encoder
 

@@ -42,9 +42,9 @@ from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.title_detection import detect_title, download_ocr_weights
+from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 from homr.xml_generator import XmlGeneratorArguments, generate_xml
-from homr.transformer.configs import default_config
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -315,7 +315,11 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 def download_weights() -> None:
     base_url = "https://github.com/aicelen/homr/releases/download/v0.4.0/"
-    models = [segnet_path_onnx, default_config.filepaths.encoder_path, default_config.filepaths.decoder_path]
+    models = [
+        segnet_path_onnx,
+        default_config.filepaths.encoder_path,
+        default_config.filepaths.decoder_path,
+    ]
     missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:

@@ -1,10 +1,10 @@
-import torch
 import os
 
-from homr.segmentation.config import segnet_path_torch
-from training.architecture.segmentation.model import create_segnet
+import torch
 
+from homr.segmentation.config import segnet_path_torch
 from homr.transformer.configs import Config
+from training.architecture.segmentation.model import create_segnet
 from training.architecture.transformer.decoder import get_decoder_onnx
 from training.architecture.transformer.encoder import get_encoder
 
@@ -34,12 +34,9 @@ def convert_encoder():
 
     # Load weights
     model.load_state_dict(
-                    torch.load(
-                                r"encoder_weights.pt",
-                                weights_only=True,
-                                map_location=torch.device("cpu")
-                    ),
-                    strict=True)
+        torch.load(r"encoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
+        strict=True,
+    )
 
     # Set eval mode
     model.eval()
@@ -56,9 +53,11 @@ def convert_encoder():
         opset_version=17,
         do_constant_folding=True,
         input_names=["input"],
-        output_names=["output"])
-    
+        output_names=["output"],
+    )
+
     return path_out
+
 
 def convert_decoder():
     """
@@ -73,9 +72,9 @@ def convert_decoder():
     path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
 
     model.load_state_dict(
-                        torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
-                        strict=True
-                        )
+        torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
+        strict=True,
+    )
 
     # Using a wrapper model with a custom forward() function
     wrapped_model = DecoderWrapper(model)
@@ -111,9 +110,10 @@ def convert_decoder():
         dynamic_axes=dynamic_axes,
         opset_version=17,
         do_constant_folding=True,
-        export_params=True
+        export_params=True,
     )
     return path_out
+
 
 def convert_segnet():
     """
@@ -126,17 +126,15 @@ def convert_segnet():
     # Input dimension is 1x3x320x320
     sample_inputs = torch.randn(1, 3, 320, 320)
 
-    torch.onnx.export(model,
-                    sample_inputs,
-                    f"{os.path.splitext(segnet_path_torch)[0]}.onnx",
-                    opset_version=17,
-                    do_constant_folding=True,
-                    input_names=['input'],
-                    output_names=['output'],
-                    # dyamic axes are required for dynamic batch_size
-                    dynamic_axes={
-                                'input': {0: 'batch_size'},
-                                'output': {0: 'batch_size'}
-                                }
-                    )
+    torch.onnx.export(
+        model,
+        sample_inputs,
+        f"{os.path.splitext(segnet_path_torch)[0]}.onnx",
+        opset_version=17,
+        do_constant_folding=True,
+        input_names=["input"],
+        output_names=["output"],
+        # dyamic axes are required for dynamic batch_size
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+    )
     return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"

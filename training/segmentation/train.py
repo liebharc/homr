@@ -16,10 +16,13 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as BaseDataset
 
 from homr.resize import calc_target_image_size, resize_image
-from training.architecture.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.simple_logging import eprint
 from homr.staff_detection import make_lines_stronger
 from homr.type_definitions import NDArray
+from training.architecture.segmentation.model import (  # type: ignore
+    create_segnet,
+    create_unet,
+)
 from training.run_id import get_run_id
 from training.segmentation.build_label import (
     HALF_WHOLE_NOTE,

@@ -5,12 +5,22 @@ from typing import Any
 workspace = os.path.join(os.path.dirname(__file__))
 root_dir = os.getcwd()
 
+
 class FilePaths:
     def __init__(self) -> None:
-        self.encoder_path = os.path.join(workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
-        self.decoder_path = os.path.join(workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx") # noqa: E501
-        self.checkpoint = os.path.join(root_dir, "training", "architecture", "transformer", 
-                                        "pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth")
+        self.encoder_path = os.path.join(
+            workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx"
+        )  # noqa: E501
+        self.decoder_path = os.path.join(
+            workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx"
+        )  # noqa: E501
+        self.checkpoint = os.path.join(
+            root_dir,
+            "training",
+            "architecture",
+            "transformer",
+            "pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth",
+        )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
         self.lifttokenizer = os.path.join(workspace, "tokenizer_lift.json")

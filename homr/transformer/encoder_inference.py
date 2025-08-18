@@ -5,7 +5,7 @@ class Encoder:
     def __init__(self, path, use_gpu):
         if use_gpu:
             try:
-                self.encoder = ort.InferenceSession(path, providers=['CUDAExecutionProvider'])
+                self.encoder = ort.InferenceSession(path, providers=["CUDAExecutionProvider"])
             except Exception:
                 self.encoder = ort.InferenceSession(path)
 

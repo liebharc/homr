@@ -7,8 +7,8 @@ import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
-from homr.transformer.configs import Config as ConfigTorch
 from homr.transformer.configs import Config as ConfigOnnx
+from homr.transformer.configs import Config as ConfigTorch
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
 
@@ -16,11 +16,15 @@ from training.music_xml import group_in_measures, music_xml_to_semantic
 def calc_symbol_error_rate_for_list(dataset: list[str], config, onnx) -> None:
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
+
         model = Staff2ScoreOnnx(config)
         result_file = "onnx_ser.txt"
-    
+
     else:
-        from training.architecture.transformer.staff2score import Staff2Score as Staff2ScoreTorch
+        from training.architecture.transformer.staff2score import (
+            Staff2Score as Staff2ScoreTorch,
+        )
+
         model = Staff2ScoreTorch(config)
         checkpoint_file = Path(config.filepaths.checkpoint).resolve()
         result_file = str(checkpoint_file).split(".")[0] + "_ser.txt"
@@ -144,7 +148,9 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
     # optional: if no path is given it uses the onnx backend with the model located in homr/transformer
-    parser.add_argument("--checkpoint_file", type=str, default=None, help="Path to the checkpoint file.")
+    parser.add_argument(
+        "--checkpoint_file", type=str, default=None, help="Path to the checkpoint file."
+    )
     args = parser.parse_args()
 
     script_location = os.path.dirname(os.path.realpath(__file__))
@@ -167,15 +173,15 @@ def main():
 
     with open(index_file) as f:
         index = f.readlines()
-    
+
     if args.checkpoint_file is None:
         # use onnx backend
-        eprint('Running with onnx backend')
+        eprint("Running with onnx backend")
         config = ConfigOnnx()
         calc_symbol_error_rate_for_list(index, config, onnx=True)
 
     else:
-        eprint('Running with torch backend')
+        eprint("Running with torch backend")
         config = ConfigTorch()
         is_dir = os.path.isdir(args.checkpoint_file)
         if is_dir:
@@ -188,5 +194,6 @@ def main():
             config.filepaths.checkpoint = str(checkpoint_file)
             calc_symbol_error_rate_for_list(index, config, onnx=False)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
