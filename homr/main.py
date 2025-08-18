@@ -316,7 +316,7 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 
 def download_weights() -> None:
-    base_url = "https://github.com/aicelen/homr/releases/download/v0.4.0/"
+    base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
     models = [
         segnet_path_onnx,
         default_config.filepaths.encoder_path,

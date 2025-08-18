@@ -1,4 +1,5 @@
-# Main file to convert all the models of homr to onnx format.
+# ruff: noqa: T201
+
 import os
 
 from training.convert_onnx.convert import (
@@ -19,10 +20,13 @@ def convert_all(transformer_path: str | None = None, segnet_path: str | None = N
     if segnet_path is not None:
         path_to_segnet = convert_segnet()
         simplify_onnx_model(path_to_segnet)
+        print(path_to_segnet)
 
     if transformer_path is not None:
         split_weights(transformer_path)  # Make sure to the filepath of the transformer!
-        simplify_onnx_model(convert_encoder())
+        path_to_encoder = convert_encoder()
+        simplify_onnx_model(path_to_encoder)
+        print(path_to_encoder)
 
         path_to_decoder = convert_decoder()
         simplify_onnx_model(path_to_decoder)
@@ -33,6 +37,7 @@ def convert_all(transformer_path: str | None = None, segnet_path: str | None = N
         # (maybe even slowing inference down).
         # FP16 slowed inference speed down (CPU).
         quantization_int8(path_to_decoder)
+        print(path_to_decoder)
 
     os.remove("decoder_weights.pt")
     os.remove("encoder_weights.pt")
