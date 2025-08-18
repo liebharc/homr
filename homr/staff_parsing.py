@@ -16,6 +16,7 @@ from homr.results import (
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
+from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
 
@@ -143,22 +144,24 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
     return bgr
 
 
-def _calculate_region(staff: Staff) -> NDArray:
+def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     x_min = staff.min_x - 2 * staff.average_unit_size
     x_max = staff.max_x + 2 * staff.average_unit_size
-    y_min = staff.min_y - 3.7 * staff.average_unit_size
-    y_max = staff.max_y + 3.7 * staff.average_unit_size
+    y_min = max(
+        staff.min_y - 4 * staff.average_unit_size,
+        regions.get_start_of_closest_staff_above(staff.min_y),
+    )
+    y_max = min(
+        staff.max_y + 4 * staff.average_unit_size,
+        regions.get_start_of_closest_staff_below(staff.max_y),
+    )
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
 def prepare_staff_image(
-    debug: Debug,
-    index: int,
-    staff: Staff,
-    staff_image: NDArray,
-    perform_dewarp: bool,
+    debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
-    region = _calculate_region(staff)
+    region = _calculate_region(staff, regions)
     image_dimensions = get_tr_omr_canvas_size(
         (int(region[3] - region[1]), int(region[2] - region[0]))
     )
@@ -168,26 +171,23 @@ def prepare_staff_image(
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
     region = np.round(region * scaling_factor)
-    if perform_dewarp:
-        eprint("Dewarping staff", index)
-        region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
-        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step1)
-        region_step2 = np.array(region) - np.array([*top_left, *top_left])
-        top_left = top_left / scaling_factor
-        staff = _dewarp_staff(staff, None, top_left, scaling_factor)
-        dewarp = dewarp_staff_image(staff_image, staff, index, debug)
-        staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
-        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
-        scaling_factor = 1
+    eprint("Dewarping staff", index)
+    region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
+    staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step1)
+    region_step2 = np.array(region) - np.array([*top_left, *top_left])
+    top_left = top_left / scaling_factor
+    staff = _dewarp_staff(staff, None, top_left, scaling_factor)
+    dewarp = dewarp_staff_image(staff_image, staff, index, debug)
+    staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
+    staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
+    scaling_factor = 1
 
-        eprint("Dewarping staff", index, "done")
-    else:
-        staff_image, top_left = crop_image_and_return_new_top(staff_image, *region)
+    eprint("Dewarping staff", index, "done")
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
-    if debug.debug and perform_dewarp:
+    if debug.debug:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
         transformed_staff_image = staff_image.copy()
         for symbol in transformed_staff.symbols:
@@ -237,14 +237,10 @@ def _dewarp_staff(
 
 
 def parse_staff_image(
-    debug: Debug,
-    index: int,
-    staff: Staff,
-    image: NDArray,
-    perform_dewarp: bool,
+    debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions
 ) -> ResultStaff | None:
     staff_image, transformed_staff = prepare_staff_image(
-        debug, index, staff, image, perform_dewarp=perform_dewarp
+        debug, index, staff, image, regions=regions
     )
     attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
@@ -357,11 +353,7 @@ def remember_new_line(measures: list[ResultMeasure]) -> None:
 
 
 def parse_staffs(
-    debug: Debug,
-    staffs: list[MultiStaff],
-    image: NDArray,
-    selected_staff: int = -1,
-    perform_dewarp: bool = True,
+    debug: Debug, staffs: list[MultiStaff], image: NDArray, selected_staff: int = -1
 ) -> list[ResultStaff]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
@@ -373,6 +365,7 @@ def parse_staffs(
     number_of_voices = _get_number_of_voices(staffs)
     i = 0
     voices = []
+    regions = StaffRegions(staffs)
     for voice in range(number_of_voices):
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
         result_for_voice = []
@@ -381,7 +374,7 @@ def parse_staffs(
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
-            result_staff = parse_staff_image(debug, i, staff, image, perform_dewarp)
+            result_staff = parse_staff_image(debug, i, staff, image, regions)
             if result_staff is None:
                 eprint("Staff was filtered out", i)
                 i += 1
