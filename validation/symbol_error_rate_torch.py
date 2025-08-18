@@ -1,6 +1,7 @@
 import argparse
 import os
 from pathlib import Path
+from typing import Any
 
 import cv2
 import editdistance
@@ -15,7 +16,7 @@ from training.music_xml import group_in_measures, music_xml_to_semantic
 def calc_symbol_error_rate_for_list(
     dataset: list[str], config: ConfigTorch | None, onnx: bool
 ) -> None:
-    model: Staff2ScoreOnnx | Staff2ScoreTorch
+    model: Any
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
 
@@ -152,7 +153,8 @@ def main() -> None:
     with the original inference code located in homr/transformer.
     """
     parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
-    # optional: if no path is given it uses the onnx backend with the model located in homr/transformer
+    # optional: if no path is given it uses the onnx backend with
+    # the model located in homr/transformer
     parser.add_argument(
         "--checkpoint_file", type=str, default=None, help="Path to the checkpoint file."
     )

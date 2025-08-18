@@ -20,8 +20,8 @@ class Segnet:
                 self.model = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"])
             except Exception as e:
                 eprint(
-                    "Error while trying to load model using CUDA. You probably don't have a compatible gpu"
-                )  # noqa: E501
+                    "Error while trying to load model using CUDA. You probably don't have a compatible gpu"  # noqa: E501
+                )
                 eprint(e)
                 self.model = ort.InferenceSession(model_path)
         else:
@@ -92,7 +92,7 @@ def inference(
         image_org(NDArray): Array of the input image
         batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed.
         step_size(int): How far the window moves between to input images.
-        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available).
+        use_gpu(bool): Use gpu for inference. Only for debugging purposes.
         win_size(int): Debug only.
 
     Returns:
@@ -107,12 +107,16 @@ def inference(
     data = []
     batch = []
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
-    for y in range(0, image.shape[1], step_size):
-        if y + win_size > image.shape[1]:
+    for y_loop in range(0, image.shape[1], step_size):
+        if y_loop + win_size > image.shape[1]:
             y = image.shape[1] - win_size
-        for x in range(0, image.shape[2], step_size):
-            if x + win_size > image.shape[2]:
+        else:
+            y = y_loop
+        for x_loop in range(0, image.shape[2], step_size):
+            if x_loop + win_size > image.shape[2]:
                 x = image.shape[2] - win_size
+            else:
+                x = x_loop
             hop = image[:, y : y + win_size, x : x + win_size]
             batch.append(hop)
 
@@ -131,8 +135,8 @@ def inference(
     if batch:
         batch_out = model.run(np.stack(batch, axis=0))
         for out in batch_out:
-            out = np.argmax(out, axis=0)
-            data.append(out)
+            out_max = np.argmax(out, axis=0)
+            data.append(out_max)
 
     eprint(f"Segnet Inference time: {perf_counter()- t0}; batch_size of {batch_size}")
 

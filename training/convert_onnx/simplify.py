@@ -17,7 +17,8 @@ def main(input_path: str, output_path: str | None = None) -> None:
 
     # Simplify
     model_simp, check = simplify(model)
-    assert check, "Simplified ONNX model could not be validated"
+    if not check:
+        raise ValueError("Simplified ONNX model could not be validated")
 
     # Save the simplified model
     onnx.save(model_simp, output_path)

@@ -12,7 +12,8 @@ def quantization_int8(
     Args:
         model_path(str): Path to onnx model
         out_path(str): Path for saving the quantized model
-        preprocess(bool): For better quantization results it is recommended to use preprocessing. Default True
+        preprocess(bool): For better quantization results it
+            is recommended to use preprocessing. Default True
     """
     if out_path is None:
         out_path = model_path

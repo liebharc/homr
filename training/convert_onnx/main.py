@@ -29,7 +29,8 @@ def convert_all(transformer_path: str | None = None, segnet_path: str | None = N
 
         # Only the decoder gets quantized.
         # The segnet showed 80% worse performance on x86-64.
-        # Only improved size by around 15MB without any speedups (maybe even slowing inference down).
+        # Only improved size by around 15MB without any speedups
+        # (maybe even slowing inference down).
         # FP16 slowed inference speed down (CPU).
         quantization_int8(path_to_decoder)
 
@@ -39,7 +40,6 @@ def convert_all(transformer_path: str | None = None, segnet_path: str | None = N
 
 if __name__ == "__main__":
     # Converts pytorch models used by homr to onnx
-    # onnx models are saved in training/architecture/transformer and training/architecture/segmentation
 
     from homr.segmentation.config import segnet_path_torch
     from homr.transformer.configs import Config
