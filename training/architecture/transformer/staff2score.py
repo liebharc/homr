@@ -25,7 +25,7 @@ class Staff2Score:
             raise RuntimeError("Please download the model first to " + checkpoint_file_path)
         if ".safetensors" in checkpoint_file_path:
             tensors = {}
-            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:  # type: ignore
+            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:
                 for k in f.keys():
                     tensors[k] = f.get_tensor(k)
             self.model.load_state_dict(tensors, strict=False)

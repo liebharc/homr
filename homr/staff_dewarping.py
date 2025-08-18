@@ -16,7 +16,7 @@ class StaffDewarping:
     def dewarp(self, image: NDArray, fill_color: int = 1, order: int = 1) -> NDArray:
         if self.tform is None:
             return image
-        return transform.warp(  # type: ignore
+        return transform.warp(
             image,
             self.tform.inverse,
             output_shape=image.shape,
@@ -120,8 +120,8 @@ def calculate_dewarp_transformation(
     source_conc = np.concatenate(source)
     destination_conc = np.concatenate(destination)
 
-    tform = FastPiecewiseAffineTransform() if fast else transform.PiecewiseAffineTransform()  # type: ignore
-    tform.estimate(source_conc, destination_conc)  # type: ignore
+    tform = FastPiecewiseAffineTransform() if fast else transform.PiecewiseAffineTransform()
+    tform.estimate(source_conc, destination_conc)
     return StaffDewarping(tform)
 
 

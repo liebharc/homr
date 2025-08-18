@@ -155,7 +155,7 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:  # noqa: C9
         return
 
     try:
-        trainer = Trainer(  # type: ignore
+        trainer = Trainer(
             model,
             train_args,
             train_dataset=datasets["train"],
