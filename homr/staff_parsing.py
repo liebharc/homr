@@ -146,8 +146,8 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
 def _calculate_region(staff: Staff) -> NDArray:
     x_min = staff.min_x - 2 * staff.average_unit_size
     x_max = staff.max_x + 2 * staff.average_unit_size
-    y_min = staff.min_y - 4 * staff.average_unit_size
-    y_max = staff.max_y + 4 * staff.average_unit_size
+    y_min = staff.min_y - 3.7 * staff.average_unit_size
+    y_max = staff.max_y + 3.7 * staff.average_unit_size
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 

@@ -8,10 +8,9 @@ from PIL import Image
 
 from homr.debug import AttentionDebug
 from homr.results import TransformerChord
-from homr.type_definitions import NDArray
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-
+from homr.type_definitions import NDArray
 from training.architecture.transformer.tromr_arch import TrOMR
 
 
@@ -117,6 +116,7 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     tensor = _transform(image=img)
     return tensor
 
+
 def test_transformer_on_image(path_to_img: str):
     """
     Tests the transformer on an image and prints the results.
@@ -124,6 +124,12 @@ def test_transformer_on_image(path_to_img: str):
         path_to_img(str): Path to the image to test
     """
     model = Staff2Score(Config())
-    image = Image.open(path_to_img).resize((1280, 128), Image.LANCZOS)
+    image = Image.open(path_to_img)
     out = model.predict(np.array(image))
     eprint(out)
+
+
+if __name__ == "__main__":
+    import sys
+
+    test_transformer_on_image(sys.argv[1])

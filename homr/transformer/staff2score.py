@@ -10,17 +10,21 @@ from homr.transformer.decoder_inference import get_decoder
 from homr.transformer.encoder_inference import Encoder
 from homr.type_definitions import NDArray
 
+
 class Staff2Score:
     """
     Inference class for Tromr. Use predict() for prediction
     """
+
     def __init__(self, use_gpu: bool = True) -> None:
         self.config = Config()
         self.encoder = Encoder(self.config.filepaths.encoder_path, use_gpu)
         self.decoder = get_decoder(self.config, self.config.filepaths.decoder_path, use_gpu)
 
         if not os.path.exists(self.config.filepaths.rhythmtokenizer):
-            raise RuntimeError("Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer) # noqa: E501
+            raise RuntimeError(
+                "Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer
+            )  # noqa: E501
 
     def predict(self, image: np.ndarray) -> list[str]:
         """
@@ -39,16 +43,18 @@ class Staff2Score:
         context = self.encoder.generate(x)
 
         # Make a prediction using decoder
-        out = self.decoder.generate(start_token,
-                                    nonote_token,
-                                    seq_len=self.config.max_seq_len,
-                                    eos_token=self.config.eos_token,
-                                    context=context
-                                    )
+        out = self.decoder.generate(
+            start_token,
+            nonote_token,
+            seq_len=self.config.max_seq_len,
+            eos_token=self.config.eos_token,
+            context=context,
+        )
 
         eprint(f"Inference Time Tromr: {perf_counter()-t0}")
 
         return out
+
 
 class ConvertToArray:
     def __init__(self):
@@ -63,4 +69,25 @@ class ConvertToArray:
         arr = arr[np.newaxis, np.newaxis, :, :]
         return self.normalize(arr).astype(np.float32)
 
+
 _transform = ConvertToArray()
+
+
+def test_transformer_on_image(path_to_img: str):
+    """
+    Tests the transformer on an image and prints the results.
+    Args:
+        path_to_img(str): Path to the image to test
+    """
+    from PIL import Image
+
+    model = Staff2Score(Config())
+    image = Image.open(path_to_img)
+    out = model.predict(np.array(image))
+    eprint(out)
+
+
+if __name__ == "__main__":
+    import sys
+
+    test_transformer_on_image(sys.argv[1])

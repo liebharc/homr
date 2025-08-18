@@ -1,36 +1,38 @@
+import hashlib
+import lzma
+import os
 from pathlib import Path
 from time import perf_counter
 
+import cv2
 import numpy as np
 import onnxruntime as ort
 
+from homr.segmentation.config import segmentation_version, segnet_path_onnx
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-from homr.segmentation.config import segnet_path_onnx, segmentation_version
 
-import os 
-import lzma
-import hashlib
-import cv2
 
 class Segnet:
     def __init__(self, model_path, use_gpu):
         if use_gpu:
             try:
-                self.model = ort.InferenceSession(model_path, providers=['CUDAExecutionProvider'])
+                self.model = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"])
             except Exception as e:
-                eprint("Error while trying to load model using CUDA. You probably don't have a compatible gpu") # noqa: E501
+                eprint(
+                    "Error while trying to load model using CUDA. You probably don't have a compatible gpu"
+                )  # noqa: E501
                 eprint(e)
                 self.model = ort.InferenceSession(model_path)
         else:
             self.model = ort.InferenceSession(model_path)
-        self.input_name = self.model.get_inputs()[0].name # size: [batch_size, 3, 320, 320]
+        self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
-
 
     def run(self, input_data):
         out = self.model.run([self.output_name], {self.input_name: input_data})[0]
         return out
+
 
 class ExtractResult:
     def __init__(
@@ -79,25 +81,20 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
     return reconstructed.astype(patches[0].dtype)
 
 
-def inference(image_org: np.ndarray,
-              batch_size: int,
-              step_size: int,
-              use_gpu: bool,
-              win_size: int
-              ):
+def inference(image_org: np.ndarray, batch_size: int, step_size: int, use_gpu: bool, win_size: int):
     """
     Inference function for the segementation model.
     Args:
         image_org(np.ndarray): Array of the input image
-        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed. 
-        step_size(int): How far the window moves between to input images. 
-        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available). 
+        batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed.
+        step_size(int): How far the window moves between to input images.
+        use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available).
         win_size(int): Debug only.
 
     Returns:
         ExtractResult class.
     """
-    eprint('Starting Inference.')
+    eprint("Starting Inference.")
     t0 = perf_counter()
     if step_size < 0:
         step_size = win_size // 2
@@ -117,7 +114,7 @@ def inference(image_org: np.ndarray,
 
             # When there
             if batch_size == len(batch):
-                #run model
+                # run model
                 batch_out = model.run(np.stack(batch, axis=0))
                 for out in batch_out:
                     out_filtered = np.argmax(out, axis=0)
@@ -149,14 +146,16 @@ def inference(image_org: np.ndarray,
 
     return staff, symbols, stems_rests, notehead, clefs_keys
 
-def extract(original_image: NDArray, 
-            img_path_str: str, 
-            use_cache: bool = False,
-            batch_size: int = 8,
-            step_size: int = -1,
-            use_gpu: bool = True,
-            win_size: int = 320
-            ):
+
+def extract(
+    original_image: NDArray,
+    img_path_str: str,
+    use_cache: bool = False,
+    batch_size: int = 8,
+    step_size: int = -1,
+    use_gpu: bool = True,
+    win_size: int = 320,
+):
     img_path = Path(img_path_str)
     f_name = os.path.splitext(img_path.name)[0]
     npy_path = img_path.parent / f"{f_name}.npy"
@@ -183,13 +182,13 @@ def extract(original_image: NDArray,
                 eprint("Loading from cache")
 
     if not loaded_from_cache:
-        staff, symbols, stems_rests, notehead, clefs_keys = inference(original_image, 
-                                                                      img_path_str,
-                                                                      batch_size=batch_size,
-                                                                      step_size=step_size,
-                                                                      use_gpu=use_gpu,
-                                                                      win_size=win_size
-                                                                      )
+        staff, symbols, stems_rests, notehead, clefs_keys = inference(
+            original_image,
+            batch_size=batch_size,
+            step_size=step_size,
+            use_gpu=use_gpu,
+            win_size=win_size,
+        )
         if use_cache:
             eprint("Saving cache")
             file_hash = hashlib.sha256(original_image).hexdigest()  # type: ignore

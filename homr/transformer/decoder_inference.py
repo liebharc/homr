@@ -29,7 +29,7 @@ class ScoreDecoder:
         self,
         start_tokens: np.ndarray,
         nonote_tokens: np.ndarray,
-        seq_len: int=256,
+        seq_len: int = 256,
         eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
@@ -47,24 +47,20 @@ class ScoreDecoder:
         out_lift = nonote_tokens
         merger = SymbolMerger()
 
-
         for _position_in_seq in range(seq_len):
             x_lift = out_lift[:, -self.max_seq_len :]
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            context = kwargs['context']
+            context = kwargs["context"]
 
-            inputs = {"rhythms": x_rhythm,
-                    "pitchs": x_pitch,
-                    "lifts": x_lift,
-                    "context": context
-                }
+            inputs = {"rhythms": x_rhythm, "pitchs": x_pitch, "lifts": x_lift, "context": context}
 
-            rhythmsp, pitchsp, liftsp = self.net.run(output_names=["out_rhythms", "out_pitchs", "out_lifts"], # noqa: E501
-                                                     input_feed=inputs
-                                                    )
+            rhythmsp, pitchsp, liftsp = self.net.run(
+                output_names=["out_rhythms", "out_pitchs", "out_lifts"],  # noqa: E501
+                input_feed=inputs,
+            )
 
-            filtered_lift_logits = top_k(liftsp[:, -1, :],   thres=filter_thres)
+            filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
 
@@ -95,7 +91,6 @@ class ScoreDecoder:
 
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
-                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
 
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
@@ -117,15 +112,11 @@ class ScoreDecoder:
                 current_temperature *= 3.5
                 attempt += 1
 
-
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
 
-            if (
-                eos_token is not None
-                and (np.cumsum(out_rhythm == eos_token, 1)[:, -1] >= 1).all()
-                ):
+            if eos_token is not None and (np.cumsum(out_rhythm == eos_token, 1)[:, -1] >= 1).all():
                 break
 
         out_lift = out_lift[:, t:]
@@ -164,13 +155,14 @@ def detokenize(tokens: np.ndarray, vocab: Any) -> list[str]:
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
 
+
 def get_decoder(config: Config, path: str, use_gpu: bool):
     """
     Returns Tromr's Decoder
     """
     if use_gpu:
         try:
-            onnx_transformer = ort.InferenceSession(path, providers=['CUDAExecutionProvider'])
+            onnx_transformer = ort.InferenceSession(path, providers=["CUDAExecutionProvider"])
         except Exception:
             onnx_transformer = ort.InferenceSession(path)
 

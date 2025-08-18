@@ -45,6 +45,7 @@ _build/
 *Zone.Identifier
 
 /*.txt
+*_ser.txt
 
 /lightning_logs
 /*.safetensors
