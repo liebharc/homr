@@ -403,7 +403,7 @@ class RotatedBoundingBox(AngledBoundingBox):
         )
 
     def get_center_extrapolated(self, x: float) -> float:
-        return (x - self.box[0][0]) * np.tan(self.box[2] / 180 * np.pi) + self.box[0][1]  # type: ignore
+        return (x - self.box[0][0]) * np.tan(self.box[2] / 180 * np.pi) + self.box[0][1]
 
     def _get_intersection_point_extrapolated(
         self, other: "RotatedBoundingBox", unit_size: float
@@ -446,7 +446,7 @@ class RotatedBoundingBox(AngledBoundingBox):
         # Use the mask to index the image
         points = img[mask == 1]
 
-        return points  # type: ignore
+        return points
 
     def to_bounding_box(self) -> BoundingBox:
         return BoundingBox(
@@ -512,7 +512,7 @@ class BoundingEllipse(AngledBoundingBox):
         # Use the mask to index the image
         points = img[mask == 1]
 
-        return points  # type: ignore
+        return points
 
 
 def create_bounding_boxes(img: NDArray) -> list[BoundingBox]:

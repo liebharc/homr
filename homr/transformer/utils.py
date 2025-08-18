@@ -1,7 +1,9 @@
 import numpy as np
 
+from homr.type_definitions import NDArray
 
-def softmax(z, dim=-1):
+
+def softmax(z: NDArray, dim: int = -1) -> NDArray:
     """Computes softmax function with support for dimension parameter.
 
     Args:

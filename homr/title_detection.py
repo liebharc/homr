@@ -8,7 +8,7 @@ from homr.debug import Debug
 from homr.model import Staff
 
 # Globals
-_reader: RapidOCR | None = None  # type: ignore
+_reader: RapidOCR | None = None
 _reader_lock = threading.Lock()
 _executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=1)
 
@@ -53,7 +53,7 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
 
     # Each result is (bbox, text, confidence)
     # Pick the text with the largest bbox area
-    def bbox_area(bbox: list[list[float]]) -> int:
+    def bbox_area(bbox: list[list[float]]) -> float:
         # bbox = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
         xs = [p[0] for p in bbox]
         ys = [p[1] for p in bbox]

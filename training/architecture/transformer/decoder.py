@@ -405,7 +405,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
     )
 
 
-def get_decoder_onnx(config: Config):
+def get_decoder_onnx(config: Config) -> ScoreTransformerWrapper:
     return ScoreTransformerWrapper(
         config=config,
         attn_layers=Decoder(

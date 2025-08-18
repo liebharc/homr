@@ -12,7 +12,7 @@ def estimate_noise(gray: NDArray) -> int:
     H, W = gray.shape
     M = np.array([[1, -2, 1], [-2, 4, -2], [1, -2, 1]])
     sigma = np.sum(np.sum(np.absolute(cv2.filter2D(gray, cv2.CV_64F, M)))) / (H * W)
-    return sigma  # type: ignore
+    return sigma
 
 
 def create_noise_grid(gray: NDArray, debug: Debug) -> NDArray | None:  # noqa: C901, PLR0912

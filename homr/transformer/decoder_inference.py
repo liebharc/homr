@@ -4,9 +4,11 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 
+from homr.results import TransformerChord
 from homr.transformer.configs import Config
 from homr.transformer.split_merge_symbols import SymbolMerger
 from homr.transformer.utils import softmax
+from homr.type_definitions import NDArray
 
 
 class ScoreDecoder:
@@ -27,14 +29,14 @@ class ScoreDecoder:
 
     def generate(  # noqa: PLR0915
         self,
-        start_tokens: np.ndarray,
-        nonote_tokens: np.ndarray,
+        start_tokens: NDArray,
+        nonote_tokens: NDArray,
         seq_len: int = 256,
         eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
         **kwargs: Any,
-    ) -> list[str]:
+    ) -> list[TransformerChord]:
         num_dims = len(start_tokens.shape)
 
         if num_dims == 1:
@@ -126,7 +128,7 @@ class ScoreDecoder:
         return merger.complete()
 
 
-def top_k(logits: np.ndarray, thres: float = 0.9) -> np.ndarray:
+def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:
     """Numpy implementation matching torch's top_k behavior"""
     k = ceil((1 - thres) * logits.shape[-1])
 
@@ -150,13 +152,13 @@ def top_k(logits: np.ndarray, thres: float = 0.9) -> np.ndarray:
     return output
 
 
-def detokenize(tokens: np.ndarray, vocab: Any) -> list[str]:
+def detokenize(tokens: NDArray, vocab: Any) -> list[str]:
     toks = [vocab[tok.item()] for tok in tokens]
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
 
 
-def get_decoder(config: Config, path: str, use_gpu: bool):
+def get_decoder(config: Config, path: str, use_gpu: bool) -> ScoreDecoder:
     """
     Returns Tromr's Decoder
     """

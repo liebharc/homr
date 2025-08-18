@@ -117,7 +117,7 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     return tensor
 
 
-def test_transformer_on_image(path_to_img: str):
+def test_transformer_on_image(path_to_img: str) -> None:
     """
     Tests the transformer on an image and prints the results.
     Args:

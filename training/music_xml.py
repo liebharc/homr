@@ -145,7 +145,7 @@ class TripletState:
     def __init__(self) -> None:
         self.started = False
 
-    def get_triplet_mark(self, note: mxl.XMLNote) -> str:  # type: ignore
+    def get_triplet_mark(self, note: mxl.XMLNote) -> str:
         notations = note.get_children_of_type(mxl.XMLNotations)
         if len(notations) > 0:
             tuplets = notations[0].get_children_of_type(mxl.XMLTuplet)
@@ -194,7 +194,7 @@ def _translate_duration(duration: str) -> str:
     return definition[duration]
 
 
-def _get_alter(note: mxl.XMLPitch) -> str:  # type: ignore
+def _get_alter(note: mxl.XMLPitch) -> str:
     alter = note.get_children_of_type(mxl.XMLAlter)
     if len(alter) == 0:
         return ""
@@ -208,7 +208,7 @@ def _get_alter(note: mxl.XMLPitch) -> str:  # type: ignore
     return ""
 
 
-def _get_alter_from_courtesey(accidental: mxl.XMLAccidental) -> str:  # type: ignore
+def _get_alter_from_courtesey(accidental: mxl.XMLAccidental) -> str:
     value = accidental.value_
     if value == "sharp":
         return "#"
@@ -219,12 +219,12 @@ def _get_alter_from_courtesey(accidental: mxl.XMLAccidental) -> str:  # type: ig
     return ""
 
 
-def _count_dots(note: mxl.XMLNote) -> str:  # type: ignore
+def _count_dots(note: mxl.XMLNote) -> str:
     dots = note.get_children_of_type(mxl.XMLDot)
     return "." * len(dots)
 
 
-def _process_attributes(  # type: ignore
+def _process_attributes(
     semantic: SemanticPart, attribute: mxl.XMLAttributes, key: KeyTransformation
 ) -> KeyTransformation:
     clefs = attribute.get_children_of_type(mxl.XMLClef)
@@ -248,7 +248,7 @@ def _process_attributes(  # type: ignore
     return key
 
 
-def _process_note(  # type: ignore
+def _process_note(
     semantic: SemanticPart, note: mxl.XMLNote, key: KeyTransformation, triplet: TripletState
 ) -> KeyTransformation:
     staff = 0
@@ -303,17 +303,17 @@ def _process_note(  # type: ignore
     return key
 
 
-def _process_backup(semantic: SemanticPart, backup: mxl.XMLBackup) -> None:  # type: ignore
+def _process_backup(semantic: SemanticPart, backup: mxl.XMLBackup) -> None:
     backup_value = int(backup.get_children_of_type(mxl.XMLDuration)[0].value_)
     semantic.append_position_change(-backup_value)
 
 
-def _process_forward(semantic: SemanticPart, backup: mxl.XMLBackup) -> None:  # type: ignore
+def _process_forward(semantic: SemanticPart, backup: mxl.XMLBackup) -> None:
     forward_value = int(backup.get_children_of_type(mxl.XMLDuration)[0].value_)
     semantic.append_position_change(forward_value)
 
 
-def _music_part_to_semantic(part: mxl.XMLPart) -> list[list[str]]:  # type: ignore
+def _music_part_to_semantic(part: mxl.XMLPart) -> list[list[str]]:
     semantic = SemanticPart()
     key = KeyTransformation(0)
     for measure in part.get_children_of_type(mxl.XMLMeasure):

@@ -7,23 +7,28 @@ import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
-from homr.transformer.configs import Config as ConfigOnnx
 from homr.transformer.configs import Config as ConfigTorch
 from training.musescore_svg import get_position_from_multiple_svg_files
 from training.music_xml import group_in_measures, music_xml_to_semantic
 
 
-def calc_symbol_error_rate_for_list(dataset: list[str], config, onnx) -> None:
+def calc_symbol_error_rate_for_list(
+    dataset: list[str], config: ConfigTorch | None, onnx: bool
+) -> None:
+    model: Staff2ScoreOnnx | Staff2ScoreTorch
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
 
-        model = Staff2ScoreOnnx(config)
+        model = Staff2ScoreOnnx(False)
         result_file = "onnx_ser.txt"
 
     else:
         from training.architecture.transformer.staff2score import (
             Staff2Score as Staff2ScoreTorch,
         )
+
+        if config is None:
+            raise ValueError("Config must not be None")
 
         model = Staff2ScoreTorch(config)
         checkpoint_file = Path(config.filepaths.checkpoint).resolve()
@@ -141,7 +146,7 @@ def index_folder(folder: str, index_file: str) -> None:
                 total_staffs_in_previous_files += len(svg_file.staffs)
 
 
-def main():
+def main() -> None:
     """
     Validates the transformer of homr. It uses a model specified by the user
     with the original inference code located in homr/transformer.
@@ -177,8 +182,7 @@ def main():
     if args.checkpoint_file is None:
         # use onnx backend
         eprint("Running with onnx backend")
-        config = ConfigOnnx()
-        calc_symbol_error_rate_for_list(index, config, onnx=True)
+        calc_symbol_error_rate_for_list(index, None, onnx=True)
 
     else:
         eprint("Running with torch backend")

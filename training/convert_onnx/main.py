@@ -11,7 +11,7 @@ from training.convert_onnx.simplify import main as simplify_onnx_model
 from training.convert_onnx.split_weights import split_weights
 
 
-def convert_all(transformer_path=None, segnet_path=None):
+def convert_all(transformer_path: str | None = None, segnet_path: str | None = None) -> None:
     if transformer_path is None and segnet_path is None:
         raise FileExistsError("You did not specify the path of your pytorch models")
 

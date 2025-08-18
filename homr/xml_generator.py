@@ -22,7 +22,7 @@ class XmlGeneratorArguments:
         self.tempo = tempo
 
 
-def build_work(title_text: str) -> mxl.XMLWork:  # type: ignore
+def build_work(title_text: str) -> mxl.XMLWork:
     work = mxl.XMLWork()
     title = mxl.XMLWorkTitle()
     title._value = title_text
@@ -30,7 +30,7 @@ def build_work(title_text: str) -> mxl.XMLWork:  # type: ignore
     return work
 
 
-def build_defaults(args: XmlGeneratorArguments) -> mxl.XMLDefaults:  # type: ignore
+def build_defaults(args: XmlGeneratorArguments) -> mxl.XMLDefaults:
     if not args.large_page:
         return mxl.XMLDefaults()
     # These values are larger than a letter or A4 format so that
@@ -53,7 +53,7 @@ def get_part_id(index: int) -> str:
     return "P" + str(index + 1)
 
 
-def build_part_list(staffs: int) -> mxl.XMLPartList:  # type: ignore
+def build_part_list(staffs: int) -> mxl.XMLPartList:
     part_list = mxl.XMLPartList()
     for part in range(staffs):
         part_id = get_part_id(part)
@@ -76,7 +76,7 @@ def build_part_list(staffs: int) -> mxl.XMLPartList:  # type: ignore
     return part_list
 
 
-def build_or_get_attributes(measure: mxl.XMLMeasure) -> mxl.XMLAttributes:  # type: ignore
+def build_or_get_attributes(measure: mxl.XMLMeasure) -> mxl.XMLAttributes:
     for child in measure.get_children_of_type(mxl.XMLAttributes):
         return child
 
@@ -85,7 +85,7 @@ def build_or_get_attributes(measure: mxl.XMLMeasure) -> mxl.XMLAttributes:  # ty
     return attributes
 
 
-def build_clef(model_clef: ResultClef, attributes: mxl.XMLAttributes) -> None:  # type: ignore
+def build_clef(model_clef: ResultClef, attributes: mxl.XMLAttributes) -> None:
     attributes.add_child(mxl.XMLDivisions(value_=constants.duration_of_quarter))
     key = mxl.XMLKey()
     fifth = mxl.XMLFifths(value_=model_clef.circle_of_fifth)
@@ -97,7 +97,7 @@ def build_clef(model_clef: ResultClef, attributes: mxl.XMLAttributes) -> None:  
     clef.add_child(mxl.XMLLine(value_=model_clef.clef_type.line))
 
 
-def build_time_signature(  # type: ignore
+def build_time_signature(
     model_time_signature: ResultTimeSignature, attributes: mxl.XMLAttributes
 ) -> None:
     time = mxl.XMLTime()
@@ -106,7 +106,7 @@ def build_time_signature(  # type: ignore
     time.add_child(mxl.XMLBeatType(value_=str(model_time_signature.denominator)))
 
 
-def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
+def build_rest(model_rest: ResultChord) -> mxl.XMLNote:
     note = mxl.XMLNote()
     note.add_child(mxl.XMLRest(measure="yes"))
     note.add_child(mxl.XMLDuration(value_=int(model_rest.duration.duration)))
@@ -115,7 +115,7 @@ def build_rest(model_rest: ResultChord) -> mxl.XMLNote:  # type: ignore
     return note
 
 
-def build_note(model_note: ResultNote, voice: int, is_chord=False) -> mxl.XMLNote:  # type: ignore
+def build_note(model_note: ResultNote, voice: int, is_chord: bool = False) -> mxl.XMLNote:
     note = mxl.XMLNote()
     if is_chord:
         note.add_child(mxl.XMLChord())
@@ -143,7 +143,7 @@ def build_note(model_note: ResultNote, voice: int, is_chord=False) -> mxl.XMLNot
     return note
 
 
-def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
+def build_note_group(note_group: ResultChord) -> list[mxl.XMLNote]:
     by_duration = _group_notes(note_group.notes)
     result = []
     last_duration: Fraction = Fraction(0)
@@ -178,13 +178,13 @@ def _group_notes(notes: list[ResultNote]) -> dict[Fraction, list[ResultNote]]:
     return groups_by_duration
 
 
-def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:  # type: ignore
+def build_chord(chord: ResultChord) -> list[mxl.XMLNote]:
     if chord.is_rest:
         return [build_rest(chord)]
     return build_note_group(chord)
 
 
-def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection | None:  # type: ignore
+def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection | None:
     if not args.metronome:
         return None
     direction = mxl.XMLDirection()
@@ -203,7 +203,7 @@ def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection | 
     return direction
 
 
-def build_measure(  # type: ignore
+def build_measure(
     args: XmlGeneratorArguments, measure: ResultMeasure, is_first_part: bool, measure_number: int
 ) -> mxl.XMLMeasure:
     result = mxl.XMLMeasure(number=str(measure_number))
@@ -227,9 +227,7 @@ def build_measure(  # type: ignore
     return result
 
 
-def build_part(  # type: ignore
-    args: XmlGeneratorArguments, staff: ResultStaff, index: int
-) -> mxl.XMLPart:
+def build_part(args: XmlGeneratorArguments, staff: ResultStaff, index: int) -> mxl.XMLPart:
     part = mxl.XMLPart(id=get_part_id(index))
     measure_number = 1
     is_first_part = index == 0
@@ -239,7 +237,7 @@ def build_part(  # type: ignore
     return part
 
 
-def generate_xml(  # type: ignore
+def generate_xml(
     args: XmlGeneratorArguments, staffs: list[ResultStaff], title: str
 ) -> mxl.XMLElement:
     root = mxl.XMLScorePartwise()

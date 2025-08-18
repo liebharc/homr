@@ -341,7 +341,7 @@ class StaffPoint:
             + distance_in_unit_sizes
             - 1
         )
-        return position  # type: ignore
+        return position
 
     def transform_coordinates(
         self, transformation: Callable[[tuple[float, float]], tuple[float, float]]

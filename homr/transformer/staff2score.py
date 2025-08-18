@@ -4,6 +4,7 @@ from time import perf_counter
 import cv2
 import numpy as np
 
+from homr.results import TransformerChord
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder_inference import get_decoder
@@ -26,9 +27,9 @@ class Staff2Score:
                 "Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer
             )  # noqa: E501
 
-    def predict(self, image: np.ndarray) -> list[str]:
+    def predict(self, image: NDArray) -> list[TransformerChord]:
         """
-        Inference an image (np.ndarray) using Tromr.
+        Inference an image (NDArray) using Tromr.
         """
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x = _transform(image=image)
@@ -57,14 +58,14 @@ class Staff2Score:
 
 
 class ConvertToArray:
-    def __init__(self):
+    def __init__(self) -> None:
         self.mean = np.array([0.7931]).reshape(1, 1, 1)
         self.std = np.array([0.1738]).reshape(1, 1, 1)
 
-    def normalize(self, array: NDArray):
+    def normalize(self, array: NDArray) -> NDArray:
         return (array - self.mean) / self.std
 
-    def __call__(self, image: NDArray):
+    def __call__(self, image: NDArray) -> NDArray:
         arr = np.array(image) / 255
         arr = arr[np.newaxis, np.newaxis, :, :]
         return self.normalize(arr).astype(np.float32)
@@ -73,7 +74,7 @@ class ConvertToArray:
 _transform = ConvertToArray()
 
 
-def test_transformer_on_image(path_to_img: str):
+def test_transformer_on_image(path_to_img: str) -> None:
     """
     Tests the transformer on an image and prints the results.
     Args:
@@ -81,7 +82,7 @@ def test_transformer_on_image(path_to_img: str):
     """
     from PIL import Image
 
-    model = Staff2Score(Config())
+    model = Staff2Score(False)
     image = Image.open(path_to_img)
     out = model.predict(np.array(image))
     eprint(out)

@@ -2,7 +2,7 @@ import onnx
 from onnxsim import simplify
 
 
-def main(input_path, output_path=None):
+def main(input_path: str, output_path: str | None = None) -> None:
     """
     Simplifies an onnx model to reduce it's size.
     Args:

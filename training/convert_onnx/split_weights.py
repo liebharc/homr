@@ -1,11 +1,12 @@
 import os
+from typing import Any
 
 import torch
 
 from homr.transformer.configs import FilePaths
 
 
-def split_weights(input_path):
+def split_weights(input_path: str) -> None:
     """
     Splits weights between Encoder and Decoder
     Args:
@@ -37,7 +38,7 @@ def split_weights(input_path):
     torch.save(remove_score_decoder_weights(decoder_state_dict), "decoder_weights.pt")
 
 
-def remove_score_decoder_weights(full_state_dict) -> None:
+def remove_score_decoder_weights(full_state_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Since get_decoder_onnx() is not using ScoreDecoder() we need to change the weights
     so they are directly put into ScoreTransformerWrapper().

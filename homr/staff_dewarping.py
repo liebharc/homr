@@ -28,7 +28,7 @@ class StaffDewarping:
     def dewarp_point(self, point: tuple[float, float]) -> tuple[float, float]:
         if self.tform is None:
             return point
-        return self.tform(point)  # type: ignore
+        return self.tform(point)
 
 
 def is_point_on_image(pts: tuple[int, int], image: NDArray) -> bool:

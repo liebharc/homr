@@ -201,7 +201,7 @@ def blend_with_gradient(image: NDArray, gradient: NDArray, alpha: float = 0.3) -
     return blended
 
 
-class AddGrayGradient(A.ImageOnlyTransform):  # type: ignore
+class AddGrayGradient(A.ImageOnlyTransform):
     def __init__(
         self,
         alpha: float = 0.3,

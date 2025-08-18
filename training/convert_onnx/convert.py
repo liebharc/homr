@@ -4,22 +4,31 @@ import torch
 
 from homr.segmentation.config import segnet_path_torch
 from homr.transformer.configs import Config
-from training.architecture.segmentation.model import create_segnet
-from training.architecture.transformer.decoder import get_decoder_onnx
+from training.architecture.segmentation.model import create_segnet  # type: ignore
+from training.architecture.transformer.decoder import (
+    ScoreTransformerWrapper,
+    get_decoder_onnx,
+)
 from training.architecture.transformer.encoder import get_encoder
 
 
 class DecoderWrapper(torch.nn.Module):
-    def __init__(self, model):
+    def __init__(self, model: ScoreTransformerWrapper) -> None:
         super().__init__()
         self.model = model
 
-    def forward(self, rhythms, pitchs, lifts, context):
+    def forward(
+        self,
+        rhythms: torch.Tensor,
+        pitchs: torch.Tensor,
+        lifts: torch.Tensor,
+        context: torch.Tensor,
+    ) -> torch.Tensor:
         result = self.model(rhythms, pitchs, lifts, mask=None, context=context)
         return result
 
 
-def convert_encoder():
+def convert_encoder() -> str:
     """
     Converts the encoder to onnx
     """
@@ -47,7 +56,7 @@ def convert_encoder():
     # Export to onnx
     torch.onnx.export(
         model,
-        input_tensor,
+        input_tensor,  # type: ignore
         path_out,
         export_params=True,
         opset_version=17,
@@ -59,7 +68,7 @@ def convert_encoder():
     return path_out
 
 
-def convert_decoder():
+def convert_decoder() -> str:
     """
     Converts the decoder to onnx.
     """
@@ -115,7 +124,7 @@ def convert_decoder():
     return path_out
 
 
-def convert_segnet():
+def convert_segnet() -> str:
     """
     Converts the segnet model to onnx.
     """
@@ -128,7 +137,7 @@ def convert_segnet():
 
     torch.onnx.export(
         model,
-        sample_inputs,
+        sample_inputs,  # type: ignore
         f"{os.path.splitext(segnet_path_torch)[0]}.onnx",
         opset_version=17,
         do_constant_folding=True,

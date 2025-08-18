@@ -14,7 +14,7 @@ from homr.type_definitions import NDArray
 
 
 class Segnet:
-    def __init__(self, model_path, use_gpu):
+    def __init__(self, model_path: str, use_gpu: bool) -> None:
         if use_gpu:
             try:
                 self.model = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"])
@@ -29,7 +29,7 @@ class Segnet:
         self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
 
-    def run(self, input_data):
+    def run(self, input_data: NDArray) -> NDArray:
         out = self.model.run([self.output_name], {self.input_name: input_data})[0]
         return out
 
@@ -54,7 +54,9 @@ class ExtractResult:
         self.clefs_keys = clefs_keys
 
 
-def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int = -1):
+def merge_patches(
+    patches: list[NDArray], image_shape: tuple[int, int], win_size: int, step_size: int = -1
+) -> NDArray:
     reconstructed = np.zeros(image_shape, dtype=np.float32)
     weight = np.zeros(image_shape, dtype=np.float32)
 
@@ -81,11 +83,13 @@ def merge_patches(patches, image_shape: list[int], win_size: int, step_size: int
     return reconstructed.astype(patches[0].dtype)
 
 
-def inference(image_org: np.ndarray, batch_size: int, step_size: int, use_gpu: bool, win_size: int):
+def inference(
+    image_org: NDArray, batch_size: int, step_size: int, use_gpu: bool, win_size: int
+) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
     """
     Inference function for the segementation model.
     Args:
-        image_org(np.ndarray): Array of the input image
+        image_org(NDArray): Array of the input image
         batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed.
         step_size(int): How far the window moves between to input images.
         use_gpu(bool): Use gpu for inference. Only for debugging purposes (uses try-except to check if gpu is available).
@@ -132,17 +136,19 @@ def inference(image_org: np.ndarray, batch_size: int, step_size: int, use_gpu: b
 
     eprint(f"Segnet Inference time: {perf_counter()- t0}; batch_size of {batch_size}")
 
-    data = merge_patches(data, (image_org.shape[0], image_org.shape[1]), win_size, step_size)
+    merged = merge_patches(
+        data, (int(image_org.shape[0]), int(image_org.shape[1])), win_size, step_size
+    )
     stems_layer = 1
-    stems_rests = np.where(data == stems_layer, 1, 0)
+    stems_rests = np.where(merged == stems_layer, 1, 0)
     notehead_layer = 2
-    notehead = np.where(data == notehead_layer, 1, 0)
+    notehead = np.where(merged == notehead_layer, 1, 0)
     clefs_keys_layer = 3
-    clefs_keys = np.where(data == clefs_keys_layer, 1, 0)
+    clefs_keys = np.where(merged == clefs_keys_layer, 1, 0)
     staff_layer = 4
-    staff = np.where(data == staff_layer, 1, 0)
+    staff = np.where(merged == staff_layer, 1, 0)
     symbol_layer = 5
-    symbols = np.where(data == symbol_layer, 1, 0)
+    symbols = np.where(merged == symbol_layer, 1, 0)
 
     return staff, symbols, stems_rests, notehead, clefs_keys
 
@@ -155,7 +161,7 @@ def extract(
     step_size: int = -1,
     use_gpu: bool = True,
     win_size: int = 320,
-):
+) -> ExtractResult:
     img_path = Path(img_path_str)
     f_name = os.path.splitext(img_path.name)[0]
     npy_path = img_path.parent / f"{f_name}.npy"
