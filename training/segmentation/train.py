@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset as BaseDataset
 
 from homr.resize import calc_target_image_size, resize_image
-from homr.segmentation.model import create_segnet, create_unet  # type: ignore
+from training.architecture.segmentation.model import create_segnet, create_unet  # type: ignore
 from homr.simple_logging import eprint
 from homr.staff_detection import make_lines_stronger
 from homr.type_definitions import NDArray
