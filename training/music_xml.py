@@ -169,12 +169,8 @@ class TripletState:
         normal_notes = time_modification[0].get_children_of_type(mxl.XMLNormalNotes)
         if len(normal_notes) == 0:
             return ""
-        is_triplet = (
-            int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2  # noqa: PLR2004
-        )
-        is_sixtuplet = (
-            int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4  # noqa: PLR2004
-        )
+        is_triplet = int(actual_notes[0].value_) == 3 and int(normal_notes[0].value_) == 2
+        is_sixtuplet = int(actual_notes[0].value_) == 6 and int(normal_notes[0].value_) == 4
         if is_triplet or is_sixtuplet:
             return constants.triplet_symbol
         return ""
@@ -194,15 +190,19 @@ def _translate_duration(duration: str) -> str:
     return definition[duration]
 
 
-def _get_alter(note: mxl.XMLPitch) -> str:
+def _get_alter(note: mxl.XMLPitch) -> str:  # noqa: PLR0911
     alter = note.get_children_of_type(mxl.XMLAlter)
     if len(alter) == 0:
         return ""
     alter_value = int(alter[0].value_)
     if alter_value == 1:
         return "#"
+    if alter_value > 1:
+        return "##"
     if alter_value == -1:
         return "b"
+    if alter_value < -1:
+        return "bb"
     if alter_value == 0:
         return "N"
     return ""

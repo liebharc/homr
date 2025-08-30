@@ -1,6 +1,7 @@
 import unittest
 
-from training.humdrum_kern import convert_kern_to_semantic
+from training.humdrum_kern import convert_kern_to_tokens
+from training.transformer.training_vocabulary import token_lines_to_str
 
 
 class TestHumdrumKern(unittest.TestCase):
@@ -30,10 +31,34 @@ class TestHumdrumKern(unittest.TestCase):
 ==:|!\t==:|!
 *-\t*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-C#M timeSignature-2/4 note-D5_thirty_second note-C5_thirty_second note-B4_sixteenth note-C5_thirty_second note-B4_thirty_second note-A4_sixteenth note-A4_eighth|note-C5_eighth note-G4_eighth|note-B4_eighth barline note-A4_half barline"  # noqa: E501
-        lower = "clef-F4 keySignature-C#M timeSignature-2/4 note-B2_eighth|note-B3_eighth note-A2_eighth|note-A3_eighth note-E2_eighth|note-E3_eighth note-E2_eighth|note-E3_eighth barline note-A2_half barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_7 . . .
+timeSignature/4 . . .
+note_32 D5 # _
+note_32 C5 # _
+note_16 B4 # _
+note_32 C5 # _
+note_32 B4 # _
+note_16 A4 # _
+note_8 A4 # _&note_8 C5 # _
+note_8 G4 ## _&note_8 B4 # _
+barline . . .
+note_2 A4 # _
+repeatEnd . . .
+barline . . ."""
+        lower = """clef_F4 . . .
+keySignature_7 . . .
+timeSignature/4 . . .
+note_8 B2 # _&note_8 B3 # _
+note_8 A2 # _&note_8 A3 # _
+note_8 E2 # _&note_8 E3 # _
+note_8 E2 # _&note_8 E3 # _
+barline . . .
+note_2 A2 # _
+repeatEnd . . .
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic, [upper, lower])
@@ -68,10 +93,41 @@ class TestHumdrumKern(unittest.TestCase):
 ==:|!\t==:|!
 *-\t*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-BbM timeSignature-4/4 note-G4_eighth|rest-quarter note-D5_sixteenth note-D4_sixteenth note-E4_eighth|rest-quarter note-C5_sixteenth note-F4#_sixteenth note-G4_quarter.|note-G4_eighth note-E4_sixteenth note-C4_sixteenth note-B3_eighth note-F4_eighth|note-A3_eighth|note-C4_eighth|note-D4_eighth barline note-B3_whole|note-D4_whole barline"  # noqa: E501
-        lower = "clef-F4 keySignature-BbM timeSignature-4/4 rest-quarter|note-G2_eighth|note-G3_eighth note-B2_eighth|note-G3_eighth rest-quarter|note-C3_eighth|note-G3_eighth note-A2_eighth|note-A3_eighth note-G3_quarter|note-B2_eighth note-C3_eighth note-D3_eighth|rest-quarter note-D2_eighth barline note-G2_whole barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_-2 . . .
+timeSignature/4 . . .
+note_8 G4 _ _&rest_4 _ _ _
+note_16 D5 _ _
+note_16 D4 _ _
+note_8 E4 b _&rest_4 _ _ _
+note_16 C5 _ _
+note_16 F4 # _
+note_4. G4 _ _&note_8 G4 _ _
+note_16 E4 b _
+note_16 C4 _ _
+note_8 B3 b _
+note_8 A3 _ _&note_8 C4 _ _&note_8 D4 _ _&note_8 F4 # _
+barline . . .
+note_1 B3 b _&note_1 D4 _ _
+repeatEnd . . .
+barline . . ."""
+        lower = """clef_F4 . . .
+keySignature_-2 . . .
+timeSignature/4 . . .
+note_8 G2 _ _&note_8 G3 _ _&rest_4 _ _ _
+note_8 B2 b _&note_8 G3 _ _
+note_8 C3 _ _&note_8 G3 _ _&rest_4 _ _ _
+note_8 A2 _ _&note_8 A3 _ _
+note_8 B2 b _&note_4 G3 _ _
+note_8 C3 _ _
+note_8 D3 _ _&rest_4 _ _ _
+note_8 D2 _ _
+barline . . .
+note_1 G2 _ _
+repeatEnd . . .
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic, [upper, lower])
@@ -123,9 +179,43 @@ class TestHumdrumKern(unittest.TestCase):
 =\t=
 *-\t*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-DM timeSignature-3/4 note-G5_eighth³ note-F5_eighth³ note-E5_eighth³ note-E5_quarter rest-quarter barline rest-quarter note-E5_quarter note-E5_quarter barline note-E5_eighth³ note-F5_eighth³ note-C5_eighth³ note-D5_quarter note-D5_quarter barline note-D5_eighth³ note-C5_eighth³ note-D5_eighth³ note-E5_eighth³ note-F5_eighth³ note-G5_eighth³ note-G5_eighth³ note-F5_eighth³ note-E5_eighth³ barline note-F5_eighth³ note-E5_eighth³ note-D5_eighth³ note-D5_quarter rest-quarter barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_2 . . .
+timeSignature/4 . . .
+note_12 G5 _ _
+note_12 F5 # _
+note_12 E5 _ _
+note_4 E5 _ _
+rest_4 _ _ _
+barline . . .
+rest_4 _ _ _
+note_4 E5 _ _
+note_4 E5 _ _
+barline . . .
+note_12 E5 _ _
+note_12 F5 # _
+note_12 C5 # _
+note_4 D5 _ _
+note_4 D5 _ _
+barline . . .
+note_12 D5 _ _
+note_12 C5 # _
+note_12 D5 _ _
+note_12 E5 _ _
+note_12 F5 # _
+note_12 G5 _ _
+note_12 G5 _ _
+note_12 F5 # _
+note_12 E5 _ _
+barline . . .
+note_12 F5 # _
+note_12 E5 _ _
+note_12 D5 _ _
+note_4 D5 _ _
+rest_4 _ _ _
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic[0], upper)
@@ -184,9 +274,55 @@ class TestHumdrumKern(unittest.TestCase):
 =:|!\t=:|!
 *-\t*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-BbM timeSignature-3/4 note-D5_sixteenth note-B4_sixteenth note-E5_sixteenth note-C5_sixteenth note-F5_sixteenth note-D5_sixteenth note-G5_sixteenth note-E5_sixteenth note-F5_eighth note-B5_eighth barline note-B5_eighth note-C5_eighth note-C5_quarter. note-B4_sixteenth note-C5_sixteenth barline note-D5_sixteenth note-B4_sixteenth note-E5_sixteenth note-C5_sixteenth note-F5_sixteenth note-D5_sixteenth note-G5_sixteenth note-E5_sixteenth note-F5_eighth note-B5_eighth barline note-B5_eighth note-C5_eighth note-C5_quarter. note-B4_sixteenth note-A4_sixteenth barline note-B4_eighth note-F4_eighth note-B3_eighth note-C4_eighth note-D4_eighth note-E4N_eighth barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_-2 . . .
+timeSignature/4 . . .
+note_16 D5 _ _
+note_16 B4 b _
+note_16 E5 b _
+note_16 C5 _ _
+note_16 F5 _ _
+note_16 D5 _ _
+note_16 G5 _ _
+note_16 E5 b _
+note_8 F5 _ _
+note_8 B5 b _
+tieSlur . . .
+barline . . .
+note_8 B5 b _
+note_8 C5 _ _
+note_4. C5 _ _
+note_16 B4 b _
+note_16 C5 _ _
+barline . . .
+note_16 D5 _ _
+note_16 B4 b _
+note_16 E5 b _
+note_16 C5 _ _
+note_16 F5 _ _
+note_16 D5 _ _
+note_16 G5 _ _
+note_16 E5 b _
+note_8 F5 _ _
+note_8 B5 b _
+tieSlur . . .
+barline . . .
+note_8 B5 b _
+note_8 C5 _ _
+note_4. C5 _ _
+note_16 B4 b _
+note_16 A4 _ _
+barline . . .
+note_8 B4 b _
+note_8 F4 _ _
+note_8 B3 b _
+note_8 C4 _ _
+note_8 D4 _ _
+note_8 E4 _ _
+repeatEnd . . .
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic[0], upper)
@@ -244,9 +380,53 @@ class TestHumdrumKern(unittest.TestCase):
 =	=
 *-	*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-EbM timeSignature-3/8 note-D5b_sixteenth note-E5N_sixteenth note-F5_sixteenth note-E5_sixteenth note-E5_sixteenth note-F5_sixteenth barline rest-sixteenth note-F5_sixteenth note-F4_sixteenth note-G4_sixteenth note-A4N_sixteenth note-B4_sixteenth barline note-C5_sixteenth note-D5_sixteenth note-E5_sixteenth note-D5_sixteenth note-D5_sixteenth note-E5_sixteenth barline rest-sixteenth note-E5_sixteenth note-A4N_sixteenth note-B4_sixteenth note-E4_sixteenth note-G4b_sixteenth barline note-F4_sixteenth note-E5_sixteenth note-D5b_sixteenth note-C5_sixteenth note-F5_sixteenth note-B4_sixteenth barline rest-sixteenth note-E5_sixteenth note-A4N_sixteenth note-B4_sixteenth note-E4_sixteenth note-G4b_sixteenth barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_-3 . . .
+timeSignature/8 . . .
+note_16 D5 b _
+note_16 E5 _ _
+note_16 F5 _ _
+note_16 E5 _ _
+note_16 E5 _ _
+note_16 F5 _ _
+barline . . .
+rest_16 _ _ _
+note_16 F5 _ _
+note_16 F4 _ _
+note_16 G4 _ _
+note_16 A4 _ _
+note_16 B4 b _
+barline . . .
+note_16 C5 _ _
+note_16 D5 _ _
+note_16 E5 b _
+note_16 D5 _ _
+note_16 D5 _ _
+note_16 E5 b _
+barline . . .
+rest_16 _ _ _
+note_16 E5 b _
+note_16 A4 _ _
+note_16 B4 b _
+note_16 E4 b _
+note_16 G4 b _
+barline . . .
+note_16 F4 _ _
+note_16 E5 b _
+note_16 D5 b _
+note_16 C5 _ _
+note_16 F5 _ _
+note_16 B4 b _
+barline . . .
+rest_16 _ _ _
+note_16 E5 b _
+note_16 A4 _ _
+note_16 B4 b _
+note_16 E4 b _
+note_16 G4 b _
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic[0], upper)
@@ -286,9 +466,23 @@ class TestHumdrumKern(unittest.TestCase):
 =\t=
 *-\t*-
 """
-        semantic = convert_kern_to_semantic(kern.splitlines())
+        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
 
-        upper = "clef-G2 keySignature-AM timeSignature-3/8 note-E4_quarter. barline note-E5_hundred_twenty_eighth|note-E5_quarter. barline note-E5_quarter. barline note-E5_quarter. barline"  # noqa: E501
+        upper = """clef_G2 . . .
+keySignature_3 . . .
+timeSignature/8 . . .
+note_4. E4 _ _
+barline . . .
+note_4G E5 _ _
+note_4. E5 _ _
+tieSlur . . .
+barline . . .
+note_4. E5 _ _
+tieSlur . . .
+barline . . .
+note_4. E5 _ _
+tieSlur . . .
+barline . . ."""
 
         self.maxDiff = None
         self.assertEqual(semantic[0], upper)

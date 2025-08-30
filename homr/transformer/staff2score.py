@@ -4,11 +4,11 @@ from time import perf_counter
 import cv2
 import numpy as np
 
-from homr.results import TransformerChord
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder_inference import get_decoder
 from homr.transformer.encoder_inference import Encoder
+from homr.transformer.vocabulary import SplitSymbol
 from homr.type_definitions import NDArray
 
 
@@ -27,7 +27,7 @@ class Staff2Score:
                 "Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer
             )  # noqa: E501
 
-    def predict(self, image: NDArray) -> list[TransformerChord]:
+    def predict(self, image: NDArray) -> list[SplitSymbol]:
         """
         Inference an image (NDArray) using Tromr.
         """

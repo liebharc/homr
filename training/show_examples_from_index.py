@@ -1,7 +1,6 @@
 # ruff: noqa: T201
 
 import argparse
-import os
 from typing import Any
 
 import cv2
@@ -52,16 +51,18 @@ if args.max_ser is not None:
 
 
 def print_color(text: str, highlights: list[str], color: Any) -> None:
-    words = text.split()
-    for word in words:
-        if any(highlight in word for highlight in highlights):
-            print(colored(word, color), end=" ")
-        else:
-            print(word, end=" ")
-    print()
+    for line in text.splitlines():
+        words = line.split()
+        for word in words:
+            if any(highlight in word for highlight in highlights):
+                print(colored(word, color), end=" ")
+            else:
+                print(word, end=" ")
+        print()
 
 
-while True:
+done = False
+while not done:
     batch: list[str] = []
     while len(batch) < number_of_samples_per_iteration:
         if len(index_lines) == 0:
@@ -81,21 +82,15 @@ while True:
     for line in batch:
         cells = line.strip().split(",")
         image_path = cells[0]
-        semantic_path = cells[1]
+        tokens_path = cells[1]
         ser: None | int = None
         if len(cells) > ser_position:
             ser = int(cells[ser_position])
-        agnostic_path = semantic_path.replace(".semantic", ".agnostic")
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError("Failed to read " + image_path)
-        with open(semantic_path) as file:
-            semantic = file.readline().strip().replace("+", " ")
-        if os.path.exists(agnostic_path):
-            with open(agnostic_path) as file:
-                original_agnostic = file.readline().strip().replace("+", " ")
-        else:
-            original_agnostic = agnostic_path
+        with open(tokens_path) as file:
+            tokens = str.join("", file.readlines())
         if images is None:
             images = image
         else:
@@ -105,8 +100,15 @@ while True:
             print(">>> " + image_path + f" SER: {ser}%")
         else:
             print(">>> " + image_path)
-        print_color(semantic, ["barline", "#", "N", "b"], "green")
+        print_color(tokens, ["barline", "#", "N", "b"], "green")
     cv2.imshow("Images", images)  # type: ignore
     escKey = 27
-    if cv2.waitKey(0) == escKey:
-        break
+    spaceKey = 32
+    enterKey = 13
+    while True:
+        key = cv2.waitKey(0)
+        if key == escKey:
+            done = True
+            break
+        if key in (spaceKey, enterKey):
+            break

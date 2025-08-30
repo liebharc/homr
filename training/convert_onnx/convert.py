@@ -7,7 +7,7 @@ from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
 from training.architecture.transformer.decoder import (
     ScoreTransformerWrapper,
-    get_decoder_onnx,
+    get_score_wrapper,
 )
 from training.architecture.transformer.encoder import get_encoder
 
@@ -73,7 +73,7 @@ def convert_decoder() -> str:
     Converts the decoder to onnx.
     """
     config = Config()
-    model = get_decoder_onnx(config)
+    model = get_score_wrapper(config)
     model.eval()
 
     dir_path = os.path.dirname(config.filepaths.checkpoint)

@@ -1,20 +1,20 @@
 import re
 
-from homr import constants
 from homr.circle_of_fifths import (
     AbstractKeyTransformation,
     KeyTransformation,
     NoKeyTransformation,
-    key_signature_to_circle_of_fifth,
 )
+from homr.transformer.vocabulary import SplitSymbol, empty
+from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 
-def convert_kern_to_semantic(lines: list[str]) -> list[str]:
+def convert_kern_to_tokens(lines: list[str]) -> list[list[SplitSymbol]]:
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
     return [_convert_single_staff(staff) for staff in reversed(staffs)]
 
 
-def _merge_multiple_voices_on_the_same_staff(  # noqa: C901, PLR0912
+def _merge_multiple_voices_on_the_same_staff(
     lines: list[str],
 ) -> list[list[str]]:
     """
@@ -81,156 +81,215 @@ def _merge_multiple_voices_on_the_same_staff(  # noqa: C901, PLR0912
     return staff_lines
 
 
-def _convert_single_staff(lines: list[str]) -> str:
+def _convert_single_staff(lines: list[str]) -> list[SplitSymbol]:
     converter = HumdrumKernConverter()
     return converter.convert_humdrum_kern(lines)
 
 
 class HumdrumKernConverter:
-
     def __init__(self) -> None:
         self.key: AbstractKeyTransformation = NoKeyTransformation()
+        # Grandstaff definitions: https://link.springer.com/article/10.1007/s10032-023-00432-z#Tab1
+        self.ignore_beams = ("L", "J", "K", "k")
+        self.ignore_alteration_displays = ("x", "X", "i", "I", "j", "Z", "y", "Y")
+        self.ignore_tie_continue = "_"
+        # According to the grandstaff paper angleBracketOpen & Close stands for tieStart and tieEnd
+        # but there is no tie visible
+        self.angled_brackets = ("<", ">")
 
-    def parse_clef(self, clef: str) -> str:
-        return clef.split()[0].replace("*clef", "clef-")
+        self.slur_level = 0
 
-    def parse_key_signature(self, key_signature: str) -> str:
-        key_signature_mapping = {
-            "*k[b-e-a-d-g-c-f-]": "CbM",
-            "*k[b-e-a-d-g-c-]": "GbM",
-            "*k[b-e-a-d-g-]": "DbM",
-            "*k[b-e-a-d-]": "AbM",
-            "*k[b-e-a-]": "EbM",
-            "*k[b-e-]": "BbM",
-            "*k[b-]": "FM",
-            "*k[]": "CM",
-            "*k[f#]": "GM",
-            "*k[f#c#]": "DM",
-            "*k[f#c#g#]": "AM",
-            "*k[f#c#g#d#]": "EM",
-            "*k[f#c#g#d#a#]": "BM",
-            "*k[f#c#g#d#a#e#]": "F#M",
-            "*k[f#c#g#d#a#e#b#]": "C#M",
+    def _accidental_to_lift(self, accidental: str) -> str:
+        return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
+
+    def _articulation_from_suffix(self, suffix: str) -> str:
+        for symbol in self.ignore_beams:
+            suffix = suffix.replace(symbol, "")
+        for symbol in self.ignore_alteration_displays:
+            suffix = suffix.replace(symbol, "")
+        for symbol in self.angled_brackets:
+            suffix = suffix.replace(symbol, "")
+        suffix = suffix.replace(self.ignore_tie_continue, "")
+
+        if not suffix:
+            return empty
+
+        mapping = {":": "arpeggiate"}
+        return mapping[suffix]
+
+    def parse_clef(self, clef: str) -> SplitSymbol:
+        clef_name = clef.split()[0].replace("*clef", "clef_")
+        return SplitSymbol(clef_name)
+
+    def parse_key_signature(self, key_signature: str) -> SplitSymbol:
+        mapping = {
+            "*k[b-e-a-d-g-c-f-]": -7,
+            "*k[b-e-a-d-g-c-]": -6,
+            "*k[b-e-a-d-g-]": -5,
+            "*k[b-e-a-d-]": -4,
+            "*k[b-e-a-]": -3,
+            "*k[b-e-]": -2,
+            "*k[b-]": -1,
+            "*k[]": 0,
+            "*k[f#]": 1,
+            "*k[f#c#]": 2,
+            "*k[f#c#g#]": 3,
+            "*k[f#c#g#d#]": 4,
+            "*k[f#c#g#d#a#]": 5,
+            "*k[f#c#g#d#a#e#]": 6,
+            "*k[f#c#g#d#a#e#b#]": 7,
         }
-        key = key_signature_mapping[key_signature.split()[0]]
-        circle = key_signature_to_circle_of_fifth(key)
+        circle = mapping[key_signature.split()[0]]
         self.key = KeyTransformation(circle)
-        return "keySignature-" + key
+        return SplitSymbol(f"keySignature_{circle}")
 
-    def parse_time_signature(self, time_signature: str) -> str:
-        return time_signature.split()[0].replace("*M", "timeSignature-")
+    def parse_time_signature(self, ts: str) -> SplitSymbol:
+        ts_val = ts.split()[0].replace("*M", "")
+        parts = ts_val.split("/")
+        return SplitSymbol(f"timeSignature/{parts[1]}")
 
-    def parse_duration(self, duration: str) -> str:
-        if not duration:
-            # TODO: Proper grace note handling
-            return "hundred_twenty_eighth"
-        has_dot = "." in duration
-        suffix = "." if has_dot else ""
-        duration_value = int(duration.replace(".", ""))
-        standard_durations = {
-            1: "whole",
-            2: "half",
-            4: "quarter",
-            8: "eighth",
-            16: "sixteenth",
-            32: "thirty_second",
-            64: "sixty_fourth",
-            128: "hundred_twenty_eighth",
-        }
+    def parse_duration(self, dur: str, is_rest: bool = False, is_grace: bool = False) -> str:
+        if not dur:
+            raise ValueError("Missing duration " + dur)
+        has_dot = dur.endswith(".")
+        dur_val = int(dur.replace(".", ""))
+        grace = "G" if is_grace else ""
+        base = "rest" if is_rest else "note"
+        return f"{base}_{dur_val}{grace}{'.' if has_dot else ''}"
 
-        if duration_value in standard_durations:
-            return standard_durations[duration_value] + suffix
-
-        if duration_value % 3 == 0:
-            base = 2 * duration_value // 3
-            return standard_durations[base] + constants.triplet_symbol
-
-        if duration_value % 5 == 0:
-            base = 4 * duration_value // 5
-            return standard_durations[base]  # We have no symbol for quintuplets
-
-        if duration_value % 7 == 0:
-            base = 6 * duration_value // 7
-            return standard_durations[base]  # We also have no symbol for this case
-
-        raise Exception("Unknown duration " + str(duration))
-
-    def kern_note_to_scientific(self, kern_note: str, alter: str) -> str:
-        if kern_note == "r":
-            return "rest"
-
+    def kern_note_to_pitch(self, kern_note: str) -> str:
         letter = kern_note[0].upper()
         count = len(kern_note)
+        return f"{letter}{3 + count}" if kern_note[0].islower() else f"{letter}{4 - count}"
 
-        if kern_note[0].islower():
-            octave = 3 + count  # c = C4
-        else:
-            octave = 4 - count  # C = C3
-
-        alter = self.key.add_accidental(letter + str(octave), alter)
-
-        return "note-" + letter + str(octave) + alter
-
-    def parse_note_or_rest(self, note: str) -> str:
-        match = re.match("(\\d*[q\\.]*)([a-gA-Gr]+)(-|--|n|#|##)?(q?)", note)
+    def parse_note_or_rest(self, token: str) -> SplitSymbol:
+        match = re.match(r"(\d*\.*)([a-grA-GR]+)(--|-|n|##|#)?([^#]*)", token)
         if not match:
-            raise Exception("Invalid note " + note)
-        duration = match[1]
-        alter = ""
-        accidental = match[3]
-        is_grace = match[4]
-        grace_suffix = "Q" if is_grace else ""
-        if accidental:
-            if accidental.startswith("-"):
-                alter = "b"
-            elif accidental.startswith("#"):
-                alter = "#"
-            elif accidental.startswith("n"):
-                alter = "N"
+            raise Exception(f"Invalid note {token}")
 
-        note_name = self.kern_note_to_scientific(match[2], alter)
-        if note_name == "rest":
-            return note_name + "-" + self.parse_duration(duration) + grace_suffix
-        return note_name + "_" + self.parse_duration(duration) + grace_suffix
+        dur, pitch, accidental, suffix = match[1], match[2], match[3], match[4]
+        is_rest = pitch == "r"
+        is_grace = "q" in suffix
+        suffix = suffix.replace("q", "")
 
-    def parse_notes_and_rests(self, notes: str) -> str:
-        note_parts = notes.split()
-        note_parts = [n for n in note_parts if n != "."]
-        result_notes = [self.parse_note_or_rest(note_part) for note_part in note_parts]
-        return str.join("|", result_notes)
+        rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
+        if is_rest:
+            return SplitSymbol(rhythm_key, empty, empty, empty)
 
-    def convert_humdrum_kern(self, lines: list[str]) -> str:  # noqa: C901
-        symbols = []
-        any_notes_in_bar = False
+        lift_val = self._accidental_to_lift(accidental)
+        pitch_val = self.kern_note_to_pitch(pitch)
+        if "[" in suffix:
+            self.slur_level += 1
+            suffix = suffix.replace("[", "")
+        if "]" in suffix:
+            self.slur_level -= 1
+            suffix = suffix.replace("]", "")
+        articulation_val = self._articulation_from_suffix(suffix)
+        return SplitSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
 
-        parse_functions = {"*clef": self.parse_clef, "*M": self.parse_time_signature}
-        grace_note = ""
+    def parse_barline(self, line: str) -> list[SplitSymbol]:
+        symbol = line.split(" ")[0]
+        mapping = {
+            "=:|!|:": ["repeatEnd", "barline", "repeatStart"],
+            "=": ["barline"],
+            "=-": [],
+            "==:|!": ["repeatEnd", "barline"],
+            "==": ["bolddoublebarline"],
+            "=:|!": ["repeatEnd", "barline"],
+            "=!|:": ["repeatEnd", "barline"],
+            "=||": ["doublebarline"],
+            "=|!": ["barline"],
+        }
+        return [SplitSymbol(s) for s in mapping[symbol]]
+
+    def interleave_chord_symbol(self, notes: list[SplitSymbol]) -> list[SplitSymbol]:
+        result = []
+        for i, note in enumerate(notes):
+            last_note = i == len(notes) - 1
+            result.append(note)
+            if not last_note:
+                result.append(SplitSymbol("chord"))
+        return result
+
+    def _swap_with_previous(self, results: list[SplitSymbol], swap: tuple[str, ...]) -> None:
+        if len(results) < 2:
+            return
+
+        item = results[-1]
+        previous = results[-2]
+        if previous.rhythm.startswith(swap):
+            results.pop()
+            results.pop()
+            results.append(item)
+            results.append(previous)
+
+    def convert_humdrum_kern(self, lines: list[str]) -> list[SplitSymbol]:  # noqa: C901
+        result: list[SplitSymbol] = []
+
+        clef = SplitSymbol("clef_G2")
+        keySignature = SplitSymbol("keySignature_0")
+        timeSignature = SplitSymbol("timeSignature/4")
+        initial_signature_was_added = False
 
         for line in lines:
             if line.startswith("="):
-                if any_notes_in_bar:
-                    symbols.append("barline")
-                    self.key = self.key.reset_at_end_of_measure()
+                if initial_signature_was_added:
+                    parsed = self.parse_barline(line)
+                    result.extend(parsed)
             elif line.startswith("*k"):
-                symbols.append(self.parse_key_signature(line))
+                keySignature = self.parse_key_signature(line)
+                if initial_signature_was_added:
+                    result.append(keySignature)
+                self._swap_with_previous(result, tuple("timeSignature"))
+            elif line.startswith("*M"):
+                timeSignature = self.parse_time_signature(line)
+                if initial_signature_was_added:
+                    result.append(timeSignature)
+            elif line.startswith("*clef"):
+                clef = self.parse_clef(line)
+                if initial_signature_was_added:
+                    result.append(clef)
+                self._swap_with_previous(result, ("timeSignature", "keySignature"))
             elif line.startswith("*"):
-                for prefix, parse_function in parse_functions.items():
-                    if line.startswith(prefix):
-                        symbols.append(parse_function(line))
-                        break
+                # All other control instructions can be ignored
+                pass
             else:
-                note_result = self.parse_notes_and_rests(line)
-                if note_result != "":
-                    all_graces = all(n.endswith("Q") for n in note_result.split("|"))
-                    if all_graces:
-                        # Encode grace notes as a chord on the following note
-                        grace_note = note_result
-                    else:
-                        if grace_note != "":
-                            chord_notes = note_result.split("|")
-                            chord_notes.insert(0, grace_note)
-                            note_result = str.join("|", chord_notes)
-                            grace_note = ""
-                        symbols.append(note_result.replace("Q", ""))
-                    any_notes_in_bar = True
-        return str.join(" ", symbols)
+                if not initial_signature_was_added:
+                    # Symbols can be appear in various order
+                    # and duplicated (in which the latest wins)
+                    result.append(clef)
+                    result.append(keySignature)
+                    result.append(timeSignature)
+                    initial_signature_was_added = True
+                symbols = line.split()
+                chord = []
+                for token in symbols:
+                    if token != ".":
+                        chord.append(self.parse_note_or_rest(token))
+
+                result.extend(self.interleave_chord_symbol(chord))
+
+                if self.slur_level > 0 and len(chord) > 0:
+                    result.append(SplitSymbol("tieSlur"))
+
+        if result[-1].rhythm != "barline":
+            result.append(SplitSymbol("barline"))
+
+        return result
+
+
+if __name__ == "__main__":
+    import glob
+    import os
+
+    from homr.simple_logging import eprint
+
+    stats = VocabularyStats()
+    for file in glob.glob(os.path.join("datasets", "grandstaff", "**", "**.krn"), recursive=True):
+        with open(file, encoding="utf-8", errors="ignore") as f:
+            eprint(file, file.replace(".krn", ".jpg"))
+            staffs = convert_kern_to_tokens(f.readlines())
+            for tokens in staffs:
+                check_token_lines(tokens)
+                stats.add_lines(tokens)
+    eprint("Stats", stats)

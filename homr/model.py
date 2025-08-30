@@ -482,6 +482,15 @@ class Staff(DebugDrawable):
                 result.append(symbol)
         return result
 
+    def get_number_of_notes(self) -> int:
+        result = 0
+        for symbol in self.symbols:
+            if isinstance(symbol, Note):
+                result += 1
+            if isinstance(symbol, NoteGroup):
+                result += len(symbol.notes)
+        return result
+
     def get_all_except_notes(self) -> list[SymbolOnStaff]:
         result = []
         for symbol in self.symbols:

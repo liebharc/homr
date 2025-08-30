@@ -15,7 +15,6 @@ from training.segmentation.dense_dataset_definitions import (
 HALF_WHOLE_NOTE = DEF.NOTEHEADS_HOLLOW + DEF.NOTEHEADS_WHOLE + [42]
 
 
-# ruff: noqa: C901, PLR0912
 def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
     if tar_color not in HALF_WHOLE_NOTE:
         raise ValueError("The color is not a notehead color")

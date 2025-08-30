@@ -10,7 +10,6 @@ import numpy as np
 
 from homr import color_adjust, download_utils
 from homr.accidental_detection import add_accidentals_to_staffs
-from homr.accidental_rules import maintain_accidentals
 from homr.autocrop import autocrop
 from homr.bar_line_detection import (
     add_bar_lines_to_staffs,
@@ -29,12 +28,11 @@ from homr.brace_dot_detection import (
 )
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff
+from homr.musicxml_gen import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
 from homr.rest_detection import add_rests_to_staffs
-from homr.results import ResultStaff
-from homr.rhythm_rules import correct_rhythm
 from homr.segmentation.config import segnet_path_onnx
 from homr.segmentation.inference_segnet import extract
 from homr.simple_logging import eprint
@@ -44,7 +42,6 @@ from homr.staff_position_save_load import load_staff_positions, save_staff_posit
 from homr.title_detection import detect_title, download_ocr_weights
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
-from homr.xml_generator import XmlGeneratorArguments, generate_xml
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -149,11 +146,11 @@ class ProcessingConfig:
     selected_staff: int
 
 
-def process_image(  # noqa: PLR0915
+def process_image(
     image_path: str,
     config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
-) -> list[ResultStaff]:
+) -> None:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
     debug_cleanup: Debug | None = None
@@ -177,9 +174,6 @@ def process_image(  # noqa: PLR0915
             debug, multi_staffs, image, selected_staff=config.selected_staff
         )
 
-        result_staffs = maintain_accidentals(result_staffs)
-        result_staffs = correct_rhythm(result_staffs)
-
         title = title_future.result(60)
         eprint("Found title:", title)
 
@@ -187,13 +181,7 @@ def process_image(  # noqa: PLR0915
         xml = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
 
-        eprint(
-            "Finished parsing "
-            + str(len(result_staffs))
-            + " voices over "
-            + str(sum(staff.number_of_new_lines() for staff in result_staffs))
-            + " staves"
-        )
+        eprint("Finished parsing " + str(len(result_staffs)) + " staves")
         teaser_file = replace_extension(image_path, "_teaser.png")
         if config.write_staff_positions:
             staff_position_files = replace_extension(image_path, ".txt")
@@ -202,8 +190,6 @@ def process_image(  # noqa: PLR0915
         debug.clean_debug_files_from_previous_runs()
 
         eprint("Result was written to", xml_file)
-
-        return result_staffs
     except:
         if os.path.exists(xml_file):
             os.remove(xml_file)

@@ -18,6 +18,7 @@ from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
+from homr.transformer.vocabulary import SplitSymbol
 from homr.type_definitions import NDArray
 
 
@@ -39,7 +40,7 @@ def _is_close_to_image_top_or_bottom(staff: MultiStaff, image: NDArray) -> bool:
 def _ensure_same_number_of_staffs(staffs: list[MultiStaff], image: NDArray) -> list[MultiStaff]:
     if _have_all_the_same_number_of_staffs(staffs):
         return staffs
-    if len(staffs) > 2:  # noqa: PLR2004
+    if len(staffs) > 2:
         if _is_close_to_image_top_or_bottom(
             staffs[0], image
         ) and _have_all_the_same_number_of_staffs(staffs[1:]):
@@ -238,7 +239,7 @@ def _dewarp_staff(
 
 def parse_staff_image(
     debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions
-) -> ResultStaff | None:
+) -> list[SplitSymbol]:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
@@ -254,7 +255,7 @@ def parse_staff_image(
     return result
 
 
-def _pick_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, PLR0912
+def _pick_dominant_clef(staff: ResultStaff) -> ResultStaff:
     clefs = [clef for clef in staff.get_symbols() if isinstance(clef, ResultClef)]
     clef_types = [clef.clef_type for clef in clefs]
     if len(clef_types) == 0:
@@ -331,19 +332,24 @@ def _remove_all_but_first_time_signature(measures: list[ResultMeasure]) -> None:
                     last_sig = symbol
 
 
-def merge_and_clean(staffs: list[ResultStaff], force_single_clef_type: bool) -> ResultStaff:
+def merge_and_clean(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
     """
     Merge all staffs of a voice into a single staff.
+    Every staff starts with a clef and a key, but we only need to keep
+    them if they are different to the previous value.
     """
-    result = ResultStaff([])
-    for staff in staffs:
-        result = result.merge(staff)
-    if force_single_clef_type:
-        _pick_dominant_clef(result)
-    _pick_dominant_key_signature(result)
-    _remove_redundant_clefs(result.measures)
-    _remove_all_but_first_time_signature(result.measures)
-    result.measures = [measure for measure in result.measures if not measure.is_empty()]
+    result = []
+    last_values = {"clef": "", "keySignature": "", "timeSignature": ""}
+
+    for symbol in symbols:
+        for symbol_type in last_values.keys():  # noqa: PLC0206
+            if symbol.rhythm.startswith(symbol_type):
+                if symbol.rhythm == last_values[symbol_type]:
+                    continue
+                else:
+                    result.append(symbol)
+                    last_values[symbol_type] = symbol.rhythm
+
     return result
 
 
@@ -354,7 +360,7 @@ def remember_new_line(measures: list[ResultMeasure]) -> None:
 
 def parse_staffs(
     debug: Debug, staffs: list[MultiStaff], image: NDArray, selected_staff: int = -1
-) -> list[ResultStaff]:
+) -> list[list[SplitSymbol]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -375,21 +381,13 @@ def parse_staffs(
                 i += 1
                 continue
             result_staff = parse_staff_image(debug, i, staff, image, regions)
-            if result_staff is None:
-                eprint("Staff was filtered out", i)
-                i += 1
-                continue
-            if result_staff.is_empty():
+            if len(result_staff) == 0:
                 eprint("Skipping empty staff", i)
                 i += 1
                 continue
-            remember_new_line(result_staff.measures)
-            result_for_voice.append(result_staff)
+            result_staff.append(SplitSymbol("newline"))
+            result_for_voice.extend(result_staff)
             i += 1
 
-        # Piano music can have a change of clef, while for other instruments
-        # we assume that the clef is the same for all staffs.
-        # The number of voices is the only way we can distinguish between the two.
-        force_single_clef_type = number_of_voices == 1
-        voices.append(merge_and_clean(result_for_voice, force_single_clef_type))
+        voices.append(merge_and_clean(result_for_voice))
     return voices

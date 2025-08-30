@@ -15,7 +15,7 @@ def estimate_noise(gray: NDArray) -> int:
     return sigma
 
 
-def create_noise_grid(gray: NDArray, debug: Debug) -> NDArray | None:  # noqa: C901, PLR0912
+def create_noise_grid(gray: NDArray, debug: Debug) -> NDArray | None:
     imgheight, imgwidth = gray.shape
     M, N = imgheight // 20, imgwidth // 20
 

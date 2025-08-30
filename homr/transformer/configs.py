@@ -2,6 +2,8 @@ import json
 import os
 from typing import Any
 
+from homr.transformer.vocabulary import Vocabulary
+
 workspace = os.path.join(os.path.dirname(__file__))
 root_dir = os.getcwd()
 
@@ -19,7 +21,7 @@ class FilePaths:
             "training",
             "architecture",
             "transformer",
-            "pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.pth",
+            "pytorch_model_230-e162807968c352763b4f35761e9c5fed17d93a54.pth",
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
@@ -63,20 +65,22 @@ class DecoderArgs:
 
 class Config:
     def __init__(self) -> None:
+        self.vocab = Vocabulary()
         self.filepaths = FilePaths()
         self.channels = 1
         self.patch_size = 16
         self.max_height = 128
         self.max_width = 1280
-        self.max_seq_len = 256
+        self.max_seq_len = 512
         self.pad_token = 0
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
-        self.num_rhythm_tokens = 93
-        self.num_note_tokens = 2
-        self.num_pitch_tokens = 71
-        self.num_lift_tokens = 5
+        self.num_rhythm_tokens = len(self.vocab.rhythm)
+        self.num_note_tokens = len(self.vocab.note)
+        self.num_pitch_tokens = len(self.vocab.pitch)
+        self.num_lift_tokens = len(self.vocab.lift)
+        self.num_articulation_tokens = len(self.vocab.articulation)
         self.encoder_structure = "hybrid"
         self.encoder_depth = 6
         self.backbone_layers = [3, 4, 6, 3]
@@ -87,19 +91,11 @@ class Config:
         self.decoder_heads = 8
         self.temperature = 0.01
         self.decoder_args = DecoderArgs()
-        self.lift_vocab = json.load(open(self.filepaths.lifttokenizer))["model"]["vocab"]
-        self.pitch_vocab = json.load(open(self.filepaths.pitchtokenizer))["model"]["vocab"]
-        self.note_vocab = json.load(open(self.filepaths.notetokenizer))["model"]["vocab"]
-        self.rhythm_vocab = json.load(open(self.filepaths.rhythmtokenizer))["model"]["vocab"]
-        self.noteindexes = self._get_values_of_keys_starting_with("note-")
-        self.restindexes = self._get_values_of_keys_starting_with(
-            "rest-"
-        ) + self._get_values_of_keys_starting_with("multirest-")
-        self.chordindex = self.rhythm_vocab["|"]
-        self.barlineindex = self.rhythm_vocab["barline"]
-
-    def _get_values_of_keys_starting_with(self, prefix: str) -> list[int]:
-        return [value for key, value in self.rhythm_vocab.items() if key.startswith(prefix)]
+        self.lift_vocab = self.vocab.lift
+        self.pitch_vocab = self.vocab.pitch
+        self.note_vocab = self.vocab.note
+        self.rhythm_vocab = self.vocab.rhythm
+        self.articulation_vocab = self.vocab.articulation
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,7 +109,6 @@ class Config:
             "bos_token": self.bos_token,
             "eos_token": self.eos_token,
             "nonote_token": self.nonote_token,
-            "noteindexes": self.noteindexes,
             "encoder_structure": self.encoder_structure,
             "encoder_depth": self.encoder_depth,
             "backbone_layers": self.backbone_layers,

@@ -6,12 +6,12 @@ import safetensors
 import torch
 from PIL import Image
 
-from homr.debug import AttentionDebug
-from homr.results import TransformerChord
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
+from homr.transformer.vocabulary import SplitSymbol
 from homr.type_definitions import NDArray
 from training.architecture.transformer.tromr_arch import TrOMR
+from training.transformer.training_vocabulary import token_lines_to_str
 
 
 class Staff2Score:
@@ -45,14 +45,11 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(
-        self, image: NDArray, debug: AttentionDebug | None = None
-    ) -> list[TransformerChord]:
+    def predict(self, image: NDArray) -> list[SplitSymbol]:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         imgs_tensor = self._image_to_tensor(image)
         return self._generate(
             imgs_tensor,
-            debug=debug,
         )
 
     def _image_to_tensor(self, image: NDArray) -> torch.Tensor:
@@ -63,11 +60,9 @@ class Staff2Score:
     def _generate(
         self,
         imgs_tensor: torch.Tensor,
-        debug: AttentionDebug | None = None,
-    ) -> list[TransformerChord]:
+    ) -> list[SplitSymbol]:
         return self.model.generate(
             imgs_tensor,
-            debug=debug,
         )
 
 
@@ -97,11 +92,11 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     if img is None:
         raise ValueError("Failed to read image from " + path)
 
-    if img.shape[-1] == 4:  # noqa: PLR2004
+    if img.shape[-1] == 4:
         img = 255 - img[:, :, 3]
-    elif img.shape[-1] == 3:  # noqa: PLR2004
+    elif img.shape[-1] == 3:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    elif len(img.shape) == 2:  # noqa: PLR2004
+    elif len(img.shape) == 2:
         # Image is already gray scale
         pass
     else:
@@ -117,19 +112,10 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     return tensor
 
 
-def test_transformer_on_image(path_to_img: str) -> None:
-    """
-    Tests the transformer on an image and prints the results.
-    Args:
-        path_to_img(str): Path to the image to test
-    """
-    model = Staff2Score(Config())
-    image = Image.open(path_to_img)
-    out = model.predict(np.array(image))
-    eprint(out)
-
-
 if __name__ == "__main__":
     import sys
 
-    test_transformer_on_image(sys.argv[1])
+    model = Staff2Score(Config())
+    image = Image.open(sys.argv[1])
+    out = model.predict(np.array(image))
+    eprint(token_lines_to_str(out))

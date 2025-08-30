@@ -342,7 +342,7 @@ def split_semantic_file(
         return split_symbols(f.readlines(), convert_to_modified_semantic=is_primus)
 
 
-def split_symbols(  # noqa: C901, PLR0912
+def split_symbols(
     merged: list[str], convert_to_modified_semantic: bool = True
 ) -> tuple[list[list[str]], list[list[str]], list[list[str]], list[list[str]]]:
     """

@@ -190,16 +190,16 @@ class AngledBoundingBox(AnyPolygon):
         self.contours = contours
         angle = box[2]
         self.box: cvt.RotatedRect
-        if angle > 135:  # noqa: PLR2004
+        if angle > 135:
             angle = angle - 180
             self.box = ((box[0][0], box[0][1]), (box[1][0], box[1][1]), angle)
-        elif angle < -135:  # noqa: PLR2004
+        elif angle < -135:
             angle = angle + 180
             self.box = ((box[0][0], box[0][1]), (box[1][0], box[1][1]), angle)
-        elif angle > 45:  # noqa: PLR2004
+        elif angle > 45:
             angle = angle - 90
             self.box = ((box[0][0], box[0][1]), (box[1][1], box[1][0]), angle)
-        elif angle < -45:  # noqa: PLR2004
+        elif angle < -45:
             angle = angle + 90
             self.box = ((box[0][0], box[0][1]), (box[1][1], box[1][0]), angle)
         else:
