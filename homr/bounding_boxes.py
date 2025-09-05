@@ -343,9 +343,6 @@ class RotatedBoundingBox(AngledBoundingBox):
 
         return dx, dy
 
-    def is_overlapping_extrapolated(self, other: "RotatedBoundingBox", unit_size: float) -> bool:
-        return self._get_intersection_point_extrapolated(other, unit_size) is not None
-
     def ensure_min_dimension(self, min_width: int, min_height: int) -> "RotatedBoundingBox":
         return RotatedBoundingBox(
             (
@@ -405,33 +402,32 @@ class RotatedBoundingBox(AngledBoundingBox):
     def get_center_extrapolated(self, x: float) -> float:
         return (x - self.box[0][0]) * np.tan(self.box[2] / 180 * np.pi) + self.box[0][1]
 
-    def _get_intersection_point_extrapolated(
-        self, other: "RotatedBoundingBox", unit_size: float
-    ) -> tuple[float, float] | None:
+    def is_overlapping_extrapolated(self, other: "RotatedBoundingBox", unit_size: float) -> bool:
+        # Pick left and right by x-coordinate of the first box corner
         if self.box[0][0] > other.box[0][0]:
             left, right = other, self
         else:
             left, right = self, other
-        center: float = float(np.mean([left.center[0], right.center[0]]))
+
+        center_x = (left.center[0] + right.center[0]) * 0.5
 
         tolerance = constants.tolerance_for_staff_line_detection(unit_size)
         max_gap = constants.max_line_gap_size(unit_size)
-        distance_between_left_and_center_considering_size = (
-            center - left.center[0] - left.size[0] // 2
-        )
-        distance_between_right_and_center_considering_size = (
-            right.center[0] - center - right.size[0] // 2
-        )
+
         if (
-            distance_between_left_and_center_considering_size > max_gap
-            or distance_between_right_and_center_considering_size > max_gap
+            center_x - left.center[0] - (left.size[0] // 2) > max_gap
+            or right.center[0] - center_x - (right.size[0] // 2) > max_gap
         ):
-            return None
-        left_at_center = left.get_center_extrapolated(center)
-        right_at_center = right.get_center_extrapolated(center)
-        if abs(left_at_center - right_at_center) > tolerance:
-            return None
-        return (center, (left_at_center + right_at_center) / 2)
+            return False
+
+        # Compute extrapolated y-values, same as get_center_extrapolated but inlined
+        left_angle = math.tan(left.box[2] * math.pi / 180.0)
+        right_angle = math.tan(right.box[2] * math.pi / 180.0)
+
+        left_y = (center_x - left.box[0][0]) * left_angle + left.box[0][1]
+        right_y = (center_x - right.box[0][0]) * right_angle + right.box[0][1]
+
+        return abs(left_y - right_y) <= tolerance
 
     def extract_point_sequence_from_image(self, img: NDArray) -> NDArray:
         rectangle = self.box

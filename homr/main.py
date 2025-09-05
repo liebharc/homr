@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 
 from homr import color_adjust, download_utils
-from homr.accidental_detection import add_accidentals_to_staffs
 from homr.autocrop import autocrop
 from homr.bar_line_detection import (
     add_bar_lines_to_staffs,
@@ -32,7 +31,6 @@ from homr.musicxml_gen import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
-from homr.rest_detection import add_rests_to_staffs
 from homr.segmentation.config import segnet_path_onnx
 from homr.segmentation.inference_segnet import extract
 from homr.simple_logging import eprint
@@ -52,14 +50,12 @@ class PredictedSymbols:
         noteheads: list[BoundingEllipse],
         staff_fragments: list[RotatedBoundingBox],
         clefs_keys: list[RotatedBoundingBox],
-        accidentals: list[RotatedBoundingBox],
         stems_rest: list[RotatedBoundingBox],
         bar_lines: list[RotatedBoundingBox],
     ) -> None:
         self.noteheads = noteheads
         self.staff_fragments = staff_fragments
         self.clefs_keys = clefs_keys
-        self.accidentals = accidentals
         self.stems_rest = stems_rest
         self.bar_lines = bar_lines
 
@@ -121,10 +117,6 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     clefs_keys = create_rotated_bounding_boxes(
         predictions.clefs_keys, min_size=(20, 40), max_size=(1000, 1000)
     )
-    eprint("Creating bounds for accidentals")
-    accidentals = create_rotated_bounding_boxes(
-        predictions.clefs_keys, min_size=(5, 5), max_size=(100, 100)
-    )
     eprint("Creating bounds for stems_rest")
     stems_rest = create_rotated_bounding_boxes(predictions.stems_rest)
     eprint("Creating bounds for bar_lines")
@@ -132,9 +124,7 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     debug.write_threshold_image("bar_line_img", bar_line_img)
     bar_lines = create_rotated_bounding_boxes(bar_line_img, skip_merging=True, min_size=(1, 5))
 
-    return PredictedSymbols(
-        noteheads, staff_fragments, clefs_keys, accidentals, stems_rest, bar_lines
-    )
+    return PredictedSymbols(noteheads, staff_fragments, clefs_keys, stems_rest, bar_lines)
 
 
 @dataclass
@@ -252,12 +242,6 @@ def detect_staffs_in_image(
     bar_lines_found = add_bar_lines_to_staffs(staffs, bar_line_boxes)
     eprint("Found " + str(len(bar_lines_found)) + " bar lines")
 
-    possible_rests = [
-        rest for rest in bar_lines_or_rests if not rest.is_overlapping_with_any(bar_line_boxes)
-    ]
-    rests = add_rests_to_staffs(staffs, possible_rests)
-    eprint("Found", len(rests), "rests")
-
     all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
     brace_dot_img = prepare_brace_dot_image(
         predictions.symbols, predictions.staff, all_classified, global_unit_size
@@ -268,8 +252,6 @@ def detect_staffs_in_image(
     notes = add_notes_to_staffs(
         staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
     )
-    accidentals = add_accidentals_to_staffs(staffs, symbols.accidentals)
-    eprint("Found", len(accidentals), "accidentals")
 
     multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
     eprint(
@@ -279,9 +261,7 @@ def detect_staffs_in_image(
         [len(staff.staffs) for staff in multi_staffs],
     )
 
-    debug.write_all_bounding_boxes_alternating_colors(
-        "notes", multi_staffs, notes, rests, accidentals
-    )
+    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
 
     return multi_staffs, predictions.preprocessed, debug, title_future
 
