@@ -55,7 +55,6 @@ def load_and_mix_training_sets(
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 
-vocabulary = os.path.join(script_location, "vocabulary_semantic.txt")
 git_root = os.path.join(script_location, "..", "..")
 
 

@@ -48,9 +48,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
-        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
-        self.attention_width = config.max_width // config.patch_size
-        self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
 
         self.project_emb = (

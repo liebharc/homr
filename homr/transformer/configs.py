@@ -1,5 +1,5 @@
-import json
 import os
+import json
 from typing import Any
 
 from homr.transformer.vocabulary import Vocabulary
@@ -11,13 +11,13 @@ root_dir = os.getcwd()
 class FilePaths:
     def __init__(self) -> None:
         self.encoder_path = os.path.join(
-            workspace, "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
+            workspace, "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx"
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace, "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
         )  # noqa: E501
         self.checkpoint = os.path.join(
-            root_dir, "current_training", "checkpoint-318648", "model.safetensors"
+            root_dir, "training", "architecture", "transformer", "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55"
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
@@ -36,6 +36,7 @@ class FilePaths:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
+
 
 
 class DecoderArgs:
@@ -57,6 +58,7 @@ class DecoderArgs:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
+
 
 
 class Config:
@@ -89,7 +91,6 @@ class Config:
         self.decoder_args = DecoderArgs()
         self.lift_vocab = self.vocab.lift
         self.pitch_vocab = self.vocab.pitch
-        self.note_vocab = self.vocab.note
         self.rhythm_vocab = self.vocab.rhythm
         self.articulation_vocab = self.vocab.articulation
 
@@ -120,6 +121,7 @@ class Config:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
+
 
 
 # Initialize the Config class

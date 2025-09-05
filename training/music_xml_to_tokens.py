@@ -25,10 +25,6 @@ ARTIC_MAPPING: dict[str, str] = {
 }
 
 
-class MusicXmlValidationError(Exception):
-    pass
-
-
 class SymbolWithPosition:
     def __init__(self, position: int, symbol: SplitSymbol, insert_before: bool = False) -> None:
         self.position = position

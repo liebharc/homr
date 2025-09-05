@@ -8,9 +8,7 @@ from homr.model import MultiStaff, Staff
 from homr.type_definitions import NDArray
 
 
-def prepare_brace_dot_image(
-    symbols: NDArray, staff: NDArray, all_other: NDArray, unit_size: float
-) -> NDArray:
+def prepare_brace_dot_image(symbols: NDArray, staff: NDArray) -> NDArray:
     brace_dot = cv2.subtract(symbols, staff)
     """
     Remove horizontal lines and Make elements larger.
@@ -157,29 +155,3 @@ def find_braces_brackets_and_grand_staff_lines(
             result.append(MultiStaff([staff], []))
 
     return _merge_multi_staff_if_they_share_a_staff(result)
-
-
-def _is_tiny_square(symbol: RotatedBoundingBox, unit_size: float) -> bool:
-    return symbol.size[0] < 0.5 * unit_size and symbol.size[1] < 0.5 * unit_size
-
-
-def find_dots(
-    staffs: list[Staff], brace_dot: list[RotatedBoundingBox], unit_size: float
-) -> list[RotatedBoundingBox]:
-    brace_dot = [symbol for symbol in brace_dot if _is_tiny_square(symbol, unit_size)]
-    result = []
-    for staff in staffs:
-        for symbol in brace_dot:
-            if not staff.is_on_staff_zone(symbol):
-                continue
-            point = staff.get_at(symbol.center[0])
-            if point is None:
-                continue
-            position = point.find_position_in_unit_sizes(symbol)
-            is_even_position = position % 2 == 0
-            # Dots are never on staff lines which would be indicated by an odd position
-            if not is_even_position:
-                continue
-            result.append(symbol)
-
-    return result

@@ -1,6 +1,5 @@
 import cv2
 
-from homr.debug import AttentionDebug
 from homr.model import Staff
 from homr.simple_logging import eprint
 from homr.transformer.staff2score import Staff2Score
@@ -10,10 +9,8 @@ from homr.type_definitions import NDArray
 inference: Staff2Score | None = None
 
 
-def parse_staff_tromr(
-    staff: Staff, staff_image: NDArray, debug: AttentionDebug | None
-) -> list[SplitSymbol]:
-    return predict_best(staff_image, debug=debug, staff=staff)
+def parse_staff_tromr(staff: Staff, staff_image: NDArray) -> list[SplitSymbol]:
+    return predict_best(staff_image, staff=staff)
 
 
 def apply_clahe(staff_image: NDArray, clip_limit: float = 2.0, kernel_size: int = 8) -> NDArray:
@@ -33,9 +30,7 @@ def build_image_options(staff_image: NDArray) -> list[NDArray]:
     ]
 
 
-def predict_best(
-    org_image: NDArray, staff: Staff, debug: AttentionDebug | None = None
-) -> list[SplitSymbol]:
+def predict_best(org_image: NDArray, staff: Staff) -> list[SplitSymbol]:
     global inference  # noqa: PLW0603
     if inference is None:
         inference = Staff2Score()
@@ -48,9 +43,6 @@ def predict_best(
     best_attempt = 0
     best_result: list[SplitSymbol] = []
     for attempt, image in enumerate(images):
-        if debug is not None:
-            debug.reset()
-
         result = inference.predict(image)
         actual_notes = len([symbol for symbol in result if "note" in symbol.rhythm])
         distance = abs(expected_notes - actual_notes)

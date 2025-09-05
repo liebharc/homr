@@ -294,7 +294,7 @@ def train_segnet(visualize: bool = False) -> None:
 
     train_dataset = D2DenseDataset(train_images, augmentation=get_training_augmentation())
 
-    if visualize or True:
+    if visualize:
         visualize_dataset(train_dataset)
 
     validation_dataset = D2DenseDataset(val_images, augmentation=None)

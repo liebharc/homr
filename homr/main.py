@@ -11,7 +11,6 @@ import numpy as np
 from homr import color_adjust, download_utils
 from homr.autocrop import autocrop
 from homr.bar_line_detection import (
-    add_bar_lines_to_staffs,
     detect_bar_lines,
     prepare_bar_line_image,
 )
@@ -201,7 +200,7 @@ def detect_staffs_in_image(
     debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)
     eprint("Found " + str(len(symbols.staff_fragments)) + " staff line fragments")
 
-    noteheads_with_stems, likely_bar_or_rests_lines = combine_noteheads_with_stems(
+    noteheads_with_stems = combine_noteheads_with_stems(
         symbols.noteheads, symbols.stems_rest
     )
     debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
@@ -237,15 +236,7 @@ def detect_staffs_in_image(
     title_future = detect_title(debug, staffs[0])
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
-    global_unit_size = np.mean([staff.average_unit_size for staff in staffs])
-
-    bar_lines_found = add_bar_lines_to_staffs(staffs, bar_line_boxes)
-    eprint("Found " + str(len(bar_lines_found)) + " bar lines")
-
-    all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
-    brace_dot_img = prepare_brace_dot_image(
-        predictions.symbols, predictions.staff, all_classified, global_unit_size
-    )
+    brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
     debug.write_threshold_image("brace_dot", brace_dot_img)
     brace_dot = create_rotated_bounding_boxes(brace_dot_img, skip_merging=True, max_size=(100, -1))
 
@@ -295,7 +286,7 @@ def download_weights() -> None:
 
     eprint("Downloading", len(missing_models), "models - this is only required once")
     for model in missing_models:
-        if not os.path.exists(model) or True:
+        if not os.path.exists(model):
             base_name = os.path.basename(model).split(".")[0]
             eprint(f"Downloading {base_name}")
             try:

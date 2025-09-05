@@ -17,16 +17,11 @@ git_root = os.path.join(script_location, "..", "..")
 
 
 class DataLoader:
-    gt_element_separator = "-"
-    PAD_COLUMN = 0
-    validation_dict = None
-
     def __init__(
         self,
         corpus_list: list[str],
         config: Config,
     ) -> None:
-        self.current_idx = 0
         self.corpus_list = self._add_mask_steps(corpus_list)
         self.vocab = Vocabulary()
         self.config = config

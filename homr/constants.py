@@ -31,10 +31,6 @@ def min_height_for_brace(unit_size: float) -> float:
     return 4 * unit_size
 
 
-def tolerance_for_touching_bar_lines(unit_size: float) -> int:
-    return int(round(unit_size * 2))
-
-
 def tolerance_for_touching_clefs(unit_size: float) -> int:
     return int(round(unit_size * 2))
 
@@ -55,19 +51,11 @@ def bar_line_min_height(unit_size: float) -> float:
     return 3 * unit_size
 
 
-def bar_line_to_staff_tolerance(unit_size: float) -> float:
-    return 4 * unit_size
-
-
 def black_spot_removal_threshold(unit_size: float) -> float:
     return 2 * unit_size
 
 
 staff_line_segment_x_tolerance = 10
-
-notehead_type_threshold = 0.8
-
-max_color_distance_of_staffs = 0.25
 
 # We don't have to worried about mis-detections,
 # because if not all staffs group the same way then we break the staffs up again
@@ -83,22 +71,6 @@ max_angle_for_lines_to_be_parallel = 5
 
 
 NOTEHEAD_SIZE_RATIO = 1.285714  # width/height
-
-
-def minimum_rest_width_or_height(unit_size: float) -> float:
-    return 0.7 * unit_size
-
-
-def maximum_rest_width_or_height(unit_size: float) -> float:
-    return 3.5 * unit_size
-
-
-def minimum_accidental_width_or_height(unit_size: float) -> float:
-    return 0.5 * unit_size
-
-
-def maximum_accidental_width_or_height(unit_size: float) -> float:
-    return 3 * unit_size
 
 
 # We use ³ as triplet indicator as it's not a valid duration name

@@ -175,10 +175,6 @@ def is_valid_combination(rhythm: str, lift: str, articulation: str, pitch: str, 
     return all(item == rhythm_cat for item in other_cats)
 
 
-def calc_duration(base_duration: float, number_of_dots: int) -> float:
-    return base_duration * ((pow(2, number_of_dots + 1) - 1) / pow(2, number_of_dots))
-
-
 class Vocabulary:
     def __init__(self) -> None:
         self.rhythm = build_rhythm()

@@ -476,10 +476,6 @@ def resample_staffs(staffs: list[RawStaff]) -> list[Staff]:
     return result
 
 
-def range_intersect(r1: range, r2: range) -> range | None:
-    return range(max(r1.start, r2.start), min(r1.stop, r2.stop)) or None
-
-
 def filter_edge_of_vision(staffs: list[Staff], image_shape: tuple[int, ...]) -> list[Staff]:
     """
     Removes staffs which begin in at the right edge or at the lower edge of the image,

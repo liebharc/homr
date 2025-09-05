@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from homr.bounding_boxes import BoundingBox, BoundingEllipse, RotatedBoundingBox
+from homr.bounding_boxes import BoundingEllipse, RotatedBoundingBox
 
 empty = np.array([])
 
@@ -55,23 +55,3 @@ class TestBoundingBoxes(unittest.TestCase):
         )
         ellipse2 = BoundingEllipse(((536.93896484375, 470.5845947265625), (13, 17), 5), empty)
         self.assertFalse(box2.is_overlapping(ellipse2))
-
-    def test_partial_overlap(self) -> None:
-        box1 = BoundingBox((10, 10, 50, 50), contours=empty)
-        box2 = BoundingBox((30, 30, 70, 70), contours=empty)
-        overlap_area = box1.get_overlapping_area_size(box2)
-        expected_area = (50 - 30) * (50 - 30)
-        self.assertEqual(overlap_area, expected_area)
-
-    def test_no_overlap(self) -> None:
-        box1 = BoundingBox((10, 10, 50, 50), contours=empty)
-        box3 = BoundingBox((100, 100, 150, 150), contours=empty)
-        overlap_area = box1.get_overlapping_area_size(box3)
-        self.assertEqual(overlap_area, 0)
-
-    def test_full_overlap(self) -> None:
-        box1 = BoundingBox((10, 10, 50, 50), contours=empty)
-        box4 = BoundingBox((10, 10, 50, 50), contours=empty)
-        overlap_area = box1.get_overlapping_area_size(box4)
-        expected_area = (50 - 10) * (50 - 10)
-        self.assertEqual(overlap_area, expected_area)

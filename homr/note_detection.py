@@ -119,7 +119,7 @@ def split_clumps_of_noteheads(
 
 def combine_noteheads_with_stems(
     noteheads: list[BoundingEllipse], stems: list[RotatedBoundingBox]
-) -> tuple[list[NoteheadWithStem], list[RotatedBoundingBox]]:
+) -> list[NoteheadWithStem]:
     """
     Combines noteheads with their stems as this tells us
     what vertical lines are stems and which are bar lines.
@@ -143,9 +143,7 @@ def combine_noteheads_with_stems(
                 break
         if not found_stem:
             result.append(NoteheadWithStem(notehead, None, None))
-
-    unaccounted_stems_or_bars = [stem for stem in stems if stem not in used_stems]
-    return result, unaccounted_stems_or_bars
+    return result
 
 
 def _are_notes_likely_a_chord(note1: Note, note2: Note, tolerance: float) -> bool:

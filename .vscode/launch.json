@@ -16,7 +16,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/homr/main.py",
 			"console": "integratedTerminal",
-			"args": ["--debug", "--cache", "test.jpg"]
+			"args": ["--debug", "--cache", "tabi.jpg"]
 		},
 		{
 			"name": "Python Debugger: Train Transformer",

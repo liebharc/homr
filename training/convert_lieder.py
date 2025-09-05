@@ -17,7 +17,7 @@ from PIL import Image
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.transformer.vocabulary import SplitSymbol, calc_duration
+from homr.transformer.vocabulary import SplitSymbol
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
 from training.music_xml_to_tokens import music_xml_file_to_tokens
@@ -229,39 +229,6 @@ def check_triplets(measure: list[SplitSymbol]) -> bool:
                 number_of_triplets += 1
 
     return number_of_triplets % 3 == 0
-
-
-def check_duration(measure: list[SplitSymbol]) -> bool:
-    last_symbol_was_chord = False
-    duration_sum = 0.0
-    timeSigBase = 4
-    for symbol in measure:
-        if symbol.rhythm.startswith("timeSignature"):
-            timeSigBase = int(symbol.rhythm.split("/")[1])
-            continue
-        if "chord" in symbol.rhythm:
-            last_symbol_was_chord = True
-            continue
-
-        if last_symbol_was_chord:
-            last_symbol_was_chord = False
-            continue
-
-        if "note" in symbol.rhythm or "rest" in symbol.rhythm:
-            duration = symbol.rhythm.split("_")[1]
-            if "G" in duration:
-                continue
-            dots = duration.count(".")
-            duration = duration.replace(".", "")
-            dur = int(duration)
-            if not dur:
-                continue
-            duration_sum += calc_duration(1.0 / dur, dots) * timeSigBase
-
-    eps = 1e-6
-    is_integer_duration = abs(duration_sum - round(duration_sum)) < eps
-
-    return is_integer_duration
 
 
 def convert_xml_and_svg_file(

@@ -1,10 +1,5 @@
 import re
 
-from homr.circle_of_fifths import (
-    AbstractKeyTransformation,
-    KeyTransformation,
-    NoKeyTransformation,
-)
 from homr.transformer.vocabulary import SplitSymbol, empty
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
@@ -88,7 +83,6 @@ def _convert_single_staff(lines: list[str]) -> list[SplitSymbol]:
 
 class HumdrumKernConverter:
     def __init__(self) -> None:
-        self.key: AbstractKeyTransformation = NoKeyTransformation()
         # Grandstaff definitions: https://link.springer.com/article/10.1007/s10032-023-00432-z#Tab1
         self.ignore_beams = ("L", "J", "K", "k")
         self.ignore_alteration_displays = ("x", "X", "i", "I", "j", "Z", "y", "Y")
@@ -140,7 +134,6 @@ class HumdrumKernConverter:
             "*k[f#c#g#d#a#e#b#]": 7,
         }
         circle = mapping[key_signature.split()[0]]
-        self.key = KeyTransformation(circle)
         return SplitSymbol(f"keySignature_{circle}")
 
     def parse_time_signature(self, ts: str) -> SplitSymbol:

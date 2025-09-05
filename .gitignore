@@ -50,3 +50,4 @@ _build/
 /lightning_logs
 /*.safetensors
 /runs
+/training/architecture/transformer/*/
