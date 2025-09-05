@@ -18,13 +18,16 @@ from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol
-from training.convert_grandstaff import distort_image
-from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
-from training.music_xml_parser import music_xml_file_to_tokens
+from training.datasets.convert_grandstaff import distort_image
+from training.datasets.musescore_svg import (
+    SvgMusicFile,
+    get_position_from_multiple_svg_files,
+)
+from training.datasets.music_xml_parser import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.absolute()
+git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 lieder = os.path.join(dataset_root, "Lieder-main")
 lieder_train_index = os.path.join(lieder, "index.txt")

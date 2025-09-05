@@ -16,12 +16,12 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
-from training.humdrum_kern_parser import convert_kern_to_tokens
-from training.musescore_svg import SvgValidationError
+from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
+from training.datasets.musescore_svg import SvgValidationError
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.absolute()
+git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 grandstaff_root = os.path.join(dataset_root, "grandstaff")
 grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")

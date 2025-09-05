@@ -72,24 +72,28 @@ def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
     return str.join("\n", chord_strings)
 
 
-def read_tokens(filepath: str) -> list[EncodedSymbol]:
+def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
     result = []
-    with open(filepath, encoding="utf-8") as f:
-        lines = f.readlines()
-        for line in lines:
-            entries = line.split("&")
-            for i, entry in enumerate(entries):
-                if "tieSlur" in entry:
-                    continue
-                rhythm, pitch, lift, articulation = entry.split()
-                symbol = EncodedSymbol(rhythm, pitch, lift, articulation)
-                is_first = i == 0
-                if not is_first:
-                    result.append(EncodedSymbol("chord"))
+    for line in lines:
+        entries = line.split("&")
+        for i, entry in enumerate(entries):
+            if "tieSlur" in entry:
+                continue
+            rhythm, pitch, lift, articulation = entry.strip().split()
+            symbol = EncodedSymbol(rhythm, pitch, lift, articulation)
+            is_first = i == 0
+            if not is_first:
+                result.append(EncodedSymbol("chord"))
 
-                result.append(symbol)
+            result.append(symbol)
 
     return result
+
+
+def read_tokens(filepath: str) -> list[EncodedSymbol]:
+    with open(filepath, encoding="utf-8") as f:
+        lines = f.readlines()
+        return read_token_lines(lines)
 
 
 class DecoderBranches:

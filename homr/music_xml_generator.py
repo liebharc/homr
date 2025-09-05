@@ -7,7 +7,7 @@ import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, SymbolDuration, empty, nonote
+from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
 
 
 class ConversionState:
@@ -38,7 +38,9 @@ class SymbolGroup:
 
 
 class XmlGeneratorArguments:
-    def __init__(self, large_page: bool | None, metronome: int | None, tempo: int | None):
+    def __init__(
+        self, large_page: bool | None = None, metronome: int | None = None, tempo: int | None = None
+    ):
         self.large_page = large_page
         self.metronome = metronome
         self.tempo = tempo
@@ -287,6 +289,8 @@ def build_note_or_rest(
         note.add_child(mxl.XMLType(value_=duration_name))
         note.add_child(mxl.XMLDuration(value_=int(model_duration.fraction * state.division)))
     else:
+        duration_name = DURATION_NAMES[0]
+        note.add_child(mxl.XMLType(value_=duration_name))
         note.add_child(mxl.XMLDuration(value_=state.beats))
 
     note.add_child(mxl.XMLStaff(value_=1))
@@ -383,7 +387,7 @@ def build_add_time_direction(args: XmlGeneratorArguments) -> mxl.XMLDirection | 
     return direction
 
 
-def find_common_division(durations: list[SymbolDuration]) -> int:
+def find_common_division(durations: list[Fraction]) -> int:
     """
     Find the smallest division (denominator) so that all durations
     can be expressed as integer multiples.
@@ -392,7 +396,7 @@ def find_common_division(durations: list[SymbolDuration]) -> int:
     def lcm(a: int, b: int) -> int:
         return abs(a * b) // math.gcd(a, b)
 
-    denominators = [d.fraction.denominator for d in durations if d.fraction > 0]
+    denominators = [d.denominator for d in durations if d > 0]
     if not denominators:
         return 1
     common = denominators[0]
@@ -402,13 +406,13 @@ def find_common_division(durations: list[SymbolDuration]) -> int:
 
 
 def find_division_and_time_signature_nominator(voice: list[EncodedSymbol]) -> tuple[int, Fraction]:
-    durations = []
+    durations = [Fraction(1, 4)]
     duration_in_measure = Fraction(0)
     measure_duration = []
     for symbol in voice:
         if symbol.rhythm.startswith(("note", "rest")):
             duration = symbol.get_duration()
-            durations.append(duration)
+            durations.append(duration.fraction)
             duration_in_measure += duration.fraction
         if "barline" in symbol.rhythm and duration_in_measure > Fraction(0):
             measure_duration.append(duration_in_measure)
@@ -461,6 +465,13 @@ def add_tuplet_start_stop(groups: list[SymbolGroup]) -> list[SymbolGroup]:
     return groups
 
 
+def build_divisions(division: int) -> mxl.XMLDivisions:
+    # The divisions element indicates how many divisions per quarter(!) note are
+    # used to indicate a note's duration
+    # https://usermanuals.musicxml.com/MusicXML/Content/EL-MusicXML-divisions.htm
+    return mxl.XMLDivisions(value_=division // 4)
+
+
 def build_measures(
     args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
 ) -> list[mxl.XMLMeasure]:
@@ -470,7 +481,7 @@ def build_measures(
     measures: list[mxl.XMLMeasure] = []
     current_measure = mxl.XMLMeasure(number=str(measure_number))
     first_attributes = build_or_get_attributes(current_measure, None)
-    first_attributes.add_child(mxl.XMLDivisions(value_=division))
+    first_attributes.add_child(build_divisions(division))
     if is_first_part:
         direction = build_add_time_direction(args)
         if direction:
@@ -540,3 +551,16 @@ def generate_xml(
     for index, staff in enumerate(staffs):
         root.add_child(build_part(args, staff, index))
     return root
+
+
+if __name__ == "__main__":
+    import sys
+
+    from training.transformer.training_vocabulary import read_tokens
+
+    file = "tabi_measure.tokens"
+    if len(sys.argv) > 1:
+        file = sys.argv[1]
+    tokens = read_tokens(file)
+    xml = generate_xml(XmlGeneratorArguments(True), [tokens], "")
+    xml.write(file.replace(".tokens", ".musicxml"))

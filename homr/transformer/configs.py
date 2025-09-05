@@ -15,7 +15,8 @@ class FilePaths:
             "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx",
         )  # noqa: E501
         self.decoder_path = os.path.join(
-            workspace, "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
+            workspace,
+            "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx",
         )  # noqa: E501
         self.checkpoint = os.path.join(
             root_dir,

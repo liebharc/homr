@@ -325,6 +325,9 @@ def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
         for clef in clefs:
             sign = clef.get_children_of_type(mxl.XMLSign)[0].value_
             line = clef.get_children_of_type(mxl.XMLLine)[0].value_
+            has_octave_change = len(clef.get_children_of_type(mxl.XMLClefOctaveChange)) > 0
+            if has_octave_change:
+                raise ValueError("Octave change isn't supported")
             clef_number = int(clef.attributes.get("number", "0")) - 1
             clefs_tokens.append((EncodedSymbol(f"clef_{sign}{line}"), clef_number))
         part.append_clefs(clefs_tokens)

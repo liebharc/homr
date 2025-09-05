@@ -8,12 +8,12 @@ import cv2
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from training.convert_grandstaff import distort_image
-from training.primus_semantic_parser import convert_primus_semantic_to_tokens
+from training.datasets.convert_grandstaff import distort_image
+from training.datasets.primus_semantic_parser import convert_primus_semantic_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.absolute()
+git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 primus = os.path.join(dataset_root, "Corpus")
 primus_train_index = os.path.join(primus, "index.txt")

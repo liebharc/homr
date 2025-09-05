@@ -10,7 +10,7 @@ from homr import download_utils
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config as ConfigTorch
 from homr.transformer.vocabulary import EncodedSymbol
-from training.convert_lieder import convert_xml_and_svg_file
+from training.datasets.convert_lieder import convert_xml_and_svg_file
 from training.transformer.training_vocabulary import (
     read_tokens,
     sort_token_chords,

@@ -1,7 +1,15 @@
-import unittest
+# ruff: noqa: E501
 
+import re
+import unittest
+from typing import Any
+
+from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from training.datasets.music_xml_parser import music_xml_string_to_tokens
-from training.transformer.training_vocabulary import token_lines_to_str
+from training.transformer.training_vocabulary import (
+    read_token_lines,
+    token_lines_to_str,
+)
 
 
 class TestMusicXml(unittest.TestCase):
@@ -10,6 +18,66 @@ class TestMusicXml(unittest.TestCase):
     This script requires that the data sets are downloaded and converted and uses
     the data sets to check that back and forth conversion works.
     """
+
+    def test_chord_with_different_duratons(self) -> None:
+        tabi_measure_18_upper = """clef_G2 . . .
+keySignature_4 . . .
+timeSignature/8 . . .
+note_4. G3 # _&note_4. C4 # _&note_16 E4 # _
+note_16 F4 # _
+note_4 E4 # _
+note_8 E4 # _
+note_8 C4 # _
+note_8 D4 # _
+barline . . ."""
+        tokens = read_token_lines(tabi_measure_18_upper.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        actual = self._xml_to_str(xml)
+        expected = """XMLScorePartwise([XMLWork([XMLWorkTitle()]),
+XMLPart([XMLMeasure([XMLAttributes([XMLDivisions(value: 4)]),
+XMLAttributes([XMLKey([XMLFifths(value: 4)]),
+XMLTime([XMLBeats(value: 12),
+XMLBeatType(value: 8)]),
+XMLClef([XMLSign(value: G),
+XMLLine(value: 2)])]),
+XMLNote([XMLPitch([XMLStep(value: E)]),
+XMLDuration(value: 1),
+XMLVoice(value: 1),
+XMLNotations()]),
+XMLBackup([XMLDuration(value: 1)]),
+XMLNote([XMLPitch([XMLStep(value: G)]),
+XMLDuration(value: 6),
+XMLVoice(value: 2),
+XMLDot(),
+XMLNotations()]),
+XMLNote([XMLChord(),
+XMLPitch([XMLStep(value: C)]),
+XMLDuration(value: 6),
+XMLVoice(value: 2),
+XMLDot(),
+XMLNotations()]),
+XMLBackup([XMLDuration(value: 5)]),
+XMLNote([XMLPitch([XMLStep(value: F)]),
+XMLDuration(value: 1),
+XMLVoice(value: 1),
+XMLNotations()]),
+XMLNote([XMLPitch([XMLStep(value: E)]),
+XMLDuration(value: 4),
+XMLVoice(value: 1),
+XMLNotations()]),
+XMLNote([XMLPitch([XMLStep(value: E)]),
+XMLDuration(value: 2),
+XMLVoice(value: 1),
+XMLNotations()]),
+XMLNote([XMLPitch([XMLStep(value: C)]),
+XMLDuration(value: 2),
+XMLVoice(value: 1),
+XMLNotations()]),
+XMLNote([XMLPitch([XMLStep(value: D)]),
+XMLDuration(value: 2),
+XMLVoice(value: 1),
+XMLNotations()])])])])"""
+        self.assertEqual(self._norm_expected(expected), actual)
 
     def test_parse_xml_with_backup(self) -> None:
         self.maxDiff = None
@@ -159,3 +227,57 @@ rest_4 _ _ _
 note_2 C2 _ _
 barline . . ."""
         self.assertEqual(token_str, expected)
+
+    def _norm_expected(self, expected: str) -> str:
+        norm = expected.replace("\n", "")
+        norm = re.sub(r",\s+", ",", norm)
+        norm = re.sub(r"\[\s+", "[", norm)
+        return norm
+
+    def _xml_to_str(self, xml: Any) -> str:
+        def recurse(node_or_list: Any) -> str:
+            if isinstance(node_or_list, list):
+                return (
+                    "["
+                    + ",".join(recurse(child) for child in node_or_list if child is not None)
+                    + "]"
+                )
+
+            node = node_or_list
+            name = node.__class__.__name__
+
+            ignore_nodes = (
+                "XMLAlter",
+                "XMLOctave",
+                "XMLType",
+                "XMLStaff",
+                "XMLPartList",
+                "XMLDefaults",
+            )
+
+            if name in ignore_nodes:
+                return ""
+            value = getattr(node, "value_", None)
+
+            if hasattr(node, "children"):
+                children = node.children
+            elif hasattr(node, "get_children"):
+                children = node.get_children()
+            else:
+                children = []
+
+            child_strs = [recurse(child) for child in children if child is not None]
+            child_strs = [child for child in child_strs if child != ""]
+
+            parts = []
+            if value is not None and value != "":
+                parts.append(f"value: {value}")
+            if child_strs:
+                parts.append(f"[{','.join(child_strs)}]")
+
+            if parts:
+                return f"{name}({','.join(parts)})"
+            else:
+                return f"{name}()"
+
+        return recurse(xml)
