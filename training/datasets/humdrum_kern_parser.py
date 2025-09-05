@@ -189,7 +189,7 @@ class HumdrumKernConverter:
             "==:|!": ["repeatEnd", "barline"],
             "==": ["bolddoublebarline"],
             "=:|!": ["repeatEnd", "barline"],
-            "=!|:": ["repeatEnd", "barline"],
+            "=!|:": ["repeatStart", "barline"],
             "=||": ["doublebarline"],
             "=|!": ["barline"],
         }
