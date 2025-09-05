@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import cv2
 import numpy as np
@@ -14,6 +15,19 @@ from training.architecture.transformer.tromr_arch import TrOMR
 from training.transformer.training_vocabulary import token_lines_to_str
 
 
+def load_model_weights(checkpoint_file_path: str) -> Any:
+    if ".safetensors" in checkpoint_file_path:
+        tensors = {}
+        with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:
+            for k in f.keys():
+                tensors[k] = f.get_tensor(k)
+        return tensors
+    elif torch.cuda.is_available():
+        return torch.load(checkpoint_file_path, weights_only=True)
+    else:
+        return torch.load(checkpoint_file_path, weights_only=True, map_location=torch.device("cpu"))
+
+
 class Staff2Score:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -21,25 +35,7 @@ class Staff2Score:
         self.model = TrOMR(config)
         self.model.eval_mode()
         checkpoint_file_path = config.filepaths.checkpoint
-        if not os.path.exists(checkpoint_file_path):
-            raise RuntimeError("Please download the model first to " + checkpoint_file_path)
-        if ".safetensors" in checkpoint_file_path:
-            tensors = {}
-            with safetensors.safe_open(checkpoint_file_path, framework="pt", device=0) as f:
-                for k in f.keys():
-                    tensors[k] = f.get_tensor(k)
-            self.model.load_state_dict(tensors, strict=False)
-        elif torch.cuda.is_available():
-            self.model.load_state_dict(
-                torch.load(checkpoint_file_path, weights_only=True), strict=False
-            )
-        else:
-            self.model.load_state_dict(
-                torch.load(
-                    checkpoint_file_path, weights_only=True, map_location=torch.device("cpu")
-                ),
-                strict=False,
-            )
+        self.model.load_state_dict(load_model_weights(checkpoint_file_path), strict=False)
         self.model.to(self.device)
 
         if not os.path.exists(config.filepaths.rhythmtokenizer):

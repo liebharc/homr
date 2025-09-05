@@ -7,7 +7,7 @@ import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import SplitSymbol, SymbolDuration, empty
+from homr.transformer.vocabulary import SplitSymbol, SymbolDuration, empty, nonote
 
 
 class ConversionState:
@@ -200,6 +200,8 @@ def build_articulations(
     for articulation in articualations.split("_"):
         if articulation == "":
             continue
+        elif articulation == nonote:
+            eprint("WARNING note without valid articulation", articualations)
         elif articulation == "fermata":
             notation.add_child(mxl.XMLFermata())
         elif articulation == "arpeggiate":
@@ -261,11 +263,16 @@ def build_note_or_rest(
             note.add_child(mxl.XMLRest(measure="yes"))
         else:
             note.add_child(mxl.XMLRest())
+    elif model_pitch == nonote:
+        eprint("WARNING note without pitch", model_note)
+        note.add_child(mxl.XMLRest())
     else:
         pitch = mxl.XMLPitch()
         pitch.add_child(mxl.XMLStep(value_=model_pitch[0]))
         pitch.add_child(mxl.XMLOctave(value_=int(model_pitch[1])))
-        if model_note.lift != empty:
+        if model_note.lift == nonote:
+            eprint("WARNING note with invalid lift", model_note)
+        elif model_note.lift != empty:
             pitch.add_child(mxl.XMLAlter(value_=LIFT_TO_ALTER[model_note.lift]))
         note.add_child(pitch)
 

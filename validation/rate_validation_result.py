@@ -1,4 +1,3 @@
-# mypy: disable-error-code="no-any-return, no-any-unimported"
 import argparse
 import glob
 import os
@@ -7,28 +6,18 @@ from itertools import chain
 import editdistance
 
 from homr.simple_logging import eprint
+from homr.staff_parsing import remove_duplicated_symbols
 from homr.transformer.vocabulary import SplitSymbol
 from training.music_xml_to_tokens import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import sort_token_chords
 
 
-def _remove_duplicated_symbols(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
-    result = []
-    state = {"clef": "", "timeSignature": "", "keySignature": ""}
-
-    for symbol in symbols:
-        ignore_symbol = False
-        for category in state:  # noqa: PLC0206
-            if symbol.rhythm.startswith(category):
-                if state[category] == symbol.rhythm:
-                    ignore_symbol = True
-                else:
-                    state[category] = symbol.rhythm
-
-        if ignore_symbol:
-            continue
-        result.append(symbol)
-    return result
+def _ignore_articulation(symbol: SplitSymbol) -> SplitSymbol:
+    """
+    We ignore articulations for now to get results which are compareable
+    to previous versions of the model without articulations.
+    """
+    return SplitSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
 
 
 class MusicFile:
@@ -38,11 +27,15 @@ class MusicFile:
         voices_in_deq = list(chain.from_iterable(voices))
         symbols = [symbol for measure in voices_in_deq for symbol in measure]
         sorted_chords = sort_token_chords(symbols, keep_chord_symbol=True)
-        self.symbols = _remove_duplicated_symbols(
+        self.symbols = remove_duplicated_symbols(
             [symbol for chord in sorted_chords for symbol in chord]
         )
         self.keys = [str(s) for s in self.symbols if s.rhythm.startswith("keySignature")]
-        self.notestr = [str(s) for s in self.symbols if s.rhythm.startswith(("note", "rest"))]
+        self.notestr = [
+            str(_ignore_articulation(s))
+            for s in self.symbols
+            if s.rhythm.startswith(("note", "rest"))
+        ]
         self.symbolstr = [str(s) for s in self.symbols]
         self.is_reference = "reference" in filename
 

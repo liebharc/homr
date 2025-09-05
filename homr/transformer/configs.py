@@ -17,11 +17,7 @@ class FilePaths:
             workspace, "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
         )  # noqa: E501
         self.checkpoint = os.path.join(
-            root_dir,
-            "training",
-            "architecture",
-            "transformer",
-            "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.pth",
+            root_dir, "current_training", "checkpoint-318648", "model.safetensors"
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")

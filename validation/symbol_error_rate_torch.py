@@ -112,13 +112,30 @@ def index_folder(folder: str, index_file: str) -> None:
             )
             for i, line in enumerate(lines):
                 token_file = line.split(",")[1].strip()
-                staff_image = os.path.join(dirname, f"staff-{i}.jpg")
+                staff_index = map_staff_index(file, i, token_file)
+                staff_image = os.path.join(dirname, f"staff-{staff_index}.jpg")
                 if not os.path.exists(staff_image):
                     continue
                 index.write(staff_image)
                 index.write(",")
                 index.write(token_file)
                 index.write("\n")
+
+
+def map_staff_index(file: str, line: int, token_file: str) -> int:
+    if "Playing_With_Fire_BlackPink" not in file:
+        return line
+    parts = token_file.replace(".tokens", "").split("-")
+    page = int(parts[1]) - 1
+    staff = int(parts[2])
+    staff_orders = [
+        [0, 5, 1, 6, 2, 7, 3, 8, 4, 9],
+        [10, 16, 11, 17, 12, 18, 13, 19, 14, 20, 15, 21],
+        [22, 27, 23, 28, 24, 29, 25, 30, 26, 31],
+        [32, 33],
+    ]
+
+    return staff_orders[page][staff]
 
 
 def main() -> None:

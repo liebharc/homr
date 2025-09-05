@@ -332,28 +332,27 @@ def _remove_all_but_first_time_signature(measures: list[ResultMeasure]) -> None:
                     last_sig = symbol
 
 
-def merge_and_clean(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
+def remove_duplicated_symbols(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
     """
     Merge all staffs of a voice into a single staff.
     Every staff starts with a clef and a key, but we only need to keep
     them if they are different to the previous value.
     """
     result = []
-    last_values = {"clef": "", "keySignature": "", "timeSignature": ""}
+    last_values = {"clef": "", "timeSignature": "", "keySignature": ""}
 
     for symbol in symbols:
-        handled = False
-        for symbol_type in last_values.keys():  # noqa: PLC0206
-            if symbol.rhythm.startswith(symbol_type):
-                handled = True
-                if symbol.rhythm == last_values[symbol_type]:
-                    continue
+        ignore_symbol = False
+        for category in last_values:  # noqa: PLC0206
+            if symbol.rhythm.startswith(category):
+                if last_values[category] == symbol.rhythm:
+                    ignore_symbol = True
                 else:
-                    result.append(symbol)
-                    last_values[symbol_type] = symbol.rhythm
-        if not handled:
-            result.append(symbol)
+                    last_values[category] = symbol.rhythm
 
+        if ignore_symbol:
+            continue
+        result.append(symbol)
     return result
 
 
@@ -393,5 +392,5 @@ def parse_staffs(
             result_for_voice.extend(result_staff)
             i += 1
 
-        voices.append(merge_and_clean(result_for_voice))
+        voices.append(remove_duplicated_symbols(result_for_voice))
     return voices

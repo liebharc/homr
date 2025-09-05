@@ -54,7 +54,7 @@ def sort_token_chords(
     for symbol in symbols:
         if symbol.rhythm == "chord":
             is_in_chord = True
-        elif is_in_chord:
+        elif is_in_chord and len(chords) > 0:
             if keep_chord_symbol:
                 chords[1].append(SplitSymbol("chord"))
             chords[-1].append(symbol)

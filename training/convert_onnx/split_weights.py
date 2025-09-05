@@ -4,6 +4,7 @@ from typing import Any
 import torch
 
 from homr.transformer.configs import FilePaths
+from training.architecture.transformer.staff2score import load_model_weights
 
 
 def split_weights(input_path: str) -> None:
@@ -13,7 +14,7 @@ def split_weights(input_path: str) -> None:
         input_path(str): Path to complete weights
     """
     # Load model
-    state_dict = torch.load(input_path, map_location=torch.device("cpu"))
+    state_dict = load_model_weights(input_path)
 
     encoder_state_dict = {}
     decoder_state_dict = {}
