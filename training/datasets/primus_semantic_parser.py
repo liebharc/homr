@@ -1,7 +1,7 @@
 import re
 
 from homr.circle_of_fifths import key_signature_to_circle_of_fifth
-from homr.transformer.vocabulary import SplitSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 # --- Mapping helpers ---
@@ -47,7 +47,7 @@ class PrimusConverter:
         return duration, empty
 
     @staticmethod
-    def parse_note(symbol: str) -> SplitSymbol:
+    def parse_note(symbol: str) -> EncodedSymbol:
         base = symbol.split("note-")[-1]
         parts = base.split("_")
         pitch_part = parts[0]
@@ -58,37 +58,37 @@ class PrimusConverter:
         rhythm_key = PrimusConverter.parse_duration(duration, is_grace_note)
         rhythm_val = "note_" + rhythm_key
 
-        return SplitSymbol(rhythm_val, base_pitch, lift, articulation)
+        return EncodedSymbol(rhythm_val, base_pitch, lift, articulation)
 
     @staticmethod
-    def parse_rest(symbol: str) -> SplitSymbol:
+    def parse_rest(symbol: str) -> EncodedSymbol:
         duration = symbol.split("rest-")[1]
         duration, articulation = PrimusConverter.get_articulations(duration)
         rhythm_key = PrimusConverter.parse_duration(duration)
         rhythm_val = "rest_" + rhythm_key
-        return SplitSymbol(rhythm_val, empty, empty, articulation)
+        return EncodedSymbol(rhythm_val, empty, empty, articulation)
 
     @staticmethod
-    def parse_multirest(symbol: str) -> SplitSymbol:
+    def parse_multirest(symbol: str) -> EncodedSymbol:
         _, measures = symbol.split("-")
         num = min(int(measures), 10)
         if num == 1:
             # Return a whole rest instead
-            return SplitSymbol("rest_0", empty, empty, empty)
-        return SplitSymbol(f"rest_{num}m", empty, empty, empty)
+            return EncodedSymbol("rest_0", empty, empty, empty)
+        return EncodedSymbol(f"rest_{num}m", empty, empty, empty)
 
     @staticmethod
-    def parse_clef(symbol: str) -> SplitSymbol:
-        return SplitSymbol(symbol.replace("-", "_"))
+    def parse_clef(symbol: str) -> EncodedSymbol:
+        return EncodedSymbol(symbol.replace("-", "_"))
 
     @staticmethod
-    def parse_key_signature(symbol: str) -> SplitSymbol:
+    def parse_key_signature(symbol: str) -> EncodedSymbol:
         key = symbol.split("-")[1]
         circle = key_signature_to_circle_of_fifth(key)
-        return SplitSymbol(f"keySignature_{circle}")
+        return EncodedSymbol(f"keySignature_{circle}")
 
     @staticmethod
-    def parse_time_signature(symbol: str) -> SplitSymbol:
+    def parse_time_signature(symbol: str) -> EncodedSymbol:
         _, fraction = symbol.split("-")
         if fraction == "C":
             denom = "4"
@@ -96,18 +96,18 @@ class PrimusConverter:
             denom = "2"
         else:
             num, denom = fraction.split("/")
-        return SplitSymbol(f"timeSignature/{denom}")
+        return EncodedSymbol(f"timeSignature/{denom}")
 
     @staticmethod
-    def parse_barline(symbol: str) -> SplitSymbol:
-        return SplitSymbol("barline")
+    def parse_barline(symbol: str) -> EncodedSymbol:
+        return EncodedSymbol("barline")
 
     @staticmethod
-    def parse_tie(symbol: str) -> SplitSymbol:
-        return SplitSymbol("tieSlur")
+    def parse_tie(symbol: str) -> EncodedSymbol:
+        return EncodedSymbol("tieSlur")
 
     @classmethod
-    def convert_symbol(cls, symbol: str) -> SplitSymbol:  # noqa: PLR0911
+    def convert_symbol(cls, symbol: str) -> EncodedSymbol:  # noqa: PLR0911
         if symbol.startswith(("note-", "gracenote-")):
             return cls.parse_note(symbol)
         elif symbol.startswith("rest-"):
@@ -125,14 +125,14 @@ class PrimusConverter:
         elif symbol == "tie":
             return cls.parse_tie(symbol)
         else:
-            return SplitSymbol(symbol)
+            return EncodedSymbol(symbol)
 
 
-def convert_primus_semantic_to_tokens(semantic: str) -> list[SplitSymbol]:
+def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     symbols = re.split("\\s+", semantic.strip())
     tokens = [PrimusConverter.convert_symbol(sym) for sym in symbols]
     if tokens[-1].rhythm != "barline":
-        tokens.append(SplitSymbol("barline"))
+        tokens.append(EncodedSymbol("barline"))
     return tokens
 
 

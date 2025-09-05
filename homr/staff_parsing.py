@@ -10,7 +10,7 @@ from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
 
@@ -223,7 +223,7 @@ def _dewarp_staff(
 
 def parse_staff_image(
     debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions
-) -> list[SplitSymbol]:
+) -> list[EncodedSymbol]:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
@@ -232,7 +232,7 @@ def parse_staff_image(
     return result
 
 
-def remove_duplicated_symbols(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
+def remove_duplicated_symbols(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
     """
     Merge all staffs of a voice into a single staff.
     Every staff starts with a clef and a key, but we only need to keep
@@ -258,7 +258,7 @@ def remove_duplicated_symbols(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
 
 def parse_staffs(
     debug: Debug, staffs: list[MultiStaff], image: NDArray, selected_staff: int = -1
-) -> list[list[SplitSymbol]]:
+) -> list[list[EncodedSymbol]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -283,7 +283,7 @@ def parse_staffs(
                 eprint("Skipping empty staff", i)
                 i += 1
                 continue
-            result_staff.append(SplitSymbol("newline"))
+            result_staff.append(EncodedSymbol("newline"))
             result_for_voice.extend(result_staff)
             i += 1
 

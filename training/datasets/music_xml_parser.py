@@ -5,7 +5,7 @@ from musicxml.parser.parser import _parse_node
 
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import SplitSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 DURATION_NUMBER = {v: k for k, v in DURATION_NAMES.items()}
@@ -26,7 +26,7 @@ ARTIC_MAPPING: dict[str, str] = {
 
 
 class SymbolWithPosition:
-    def __init__(self, position: int, symbol: SplitSymbol, insert_before: bool = False) -> None:
+    def __init__(self, position: int, symbol: EncodedSymbol, insert_before: bool = False) -> None:
         self.position = position
         self.symbol = symbol
         self.insert_before = insert_before
@@ -50,7 +50,7 @@ class TokensMeasure:
         self.current_position = 0
         self.slurred_tied_positions: list[set[int]] = [set() for _ in range(number_of_clefs)]
 
-    def append_symbol(self, symbol: SplitSymbol) -> None:
+    def append_symbol(self, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
         else:
@@ -58,7 +58,7 @@ class TokensMeasure:
             for staff in self.staffs:
                 staff.append(SymbolWithPosition(self.current_position + offset, symbol, True))
 
-    def append_symbol_to_staff(self, staff: int, symbol: SplitSymbol) -> None:
+    def append_symbol_to_staff(self, staff: int, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
         else:
@@ -75,12 +75,12 @@ class TokensMeasure:
         self.current_position = new_position
 
     def append_rest(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: SplitSymbol
+        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         self.append_note(staff, is_chord, duration, invisible, symbol)
 
     def append_note(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: SplitSymbol
+        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         if len(self.staffs) == 0:
             raise ValueError("Expected to get clefs as first symbol")
@@ -128,12 +128,12 @@ class TokensMeasure:
                     art = str.join("_", sorted(art_parts))
                     symbol.symbol.articulation = art
 
-    def complete_measure(self) -> list[list[SplitSymbol]]:  # noqa: C901
+    def complete_measure(self) -> list[list[EncodedSymbol]]:  # noqa: C901
         self._fill_in_arpeggiate(self.staffs)
-        result: list[list[SplitSymbol]] = []
+        result: list[list[EncodedSymbol]] = []
         for _staff_no, staff in enumerate(self.staffs):
             has_barline = False
-            result_staff: list[SplitSymbol] = []
+            result_staff: list[EncodedSymbol] = []
             grouped_symbols: dict[int, list[SymbolWithPosition]] = {}
             for symbol in staff:
                 if "barline" in symbol.symbol.rhythm:
@@ -155,11 +155,11 @@ class TokensMeasure:
                 for i, symbol_in_group in enumerate(group_pos):
                     result_staff.append(symbol_in_group)
                     if i < len(group_pos) - 1:
-                        result_staff.append(SplitSymbol("chord"))
+                        result_staff.append(EncodedSymbol("chord"))
                 # if position in self.slurred_tied_positions[staff_no]:
-                #    result_staff.append(SplitSymbol("tieSlur"))
+                #    result_staff.append(EncodedSymbol("tieSlur"))
             if not has_barline:
-                result_staff.append(SplitSymbol("barline"))
+                result_staff.append(EncodedSymbol("barline"))
             result.append(result_staff)
         return result
 
@@ -231,11 +231,11 @@ class TripletState:
 class TokensPart:
     def __init__(self) -> None:
         self.current_measure: TokensMeasure | None = None
-        self.staffs: list[list[list[SplitSymbol]]] = []
+        self.staffs: list[list[list[EncodedSymbol]]] = []
         self.triplets = TripletState()
         self.slur_tie: list[SlurTieState] = []
 
-    def append_clefs(self, clefs: list[tuple[SplitSymbol, int]]) -> None:
+    def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         current_measure = self.current_measure
         if current_measure is not None:
             for staff, clef in enumerate(clefs):
@@ -251,20 +251,20 @@ class TokensPart:
                 measure.append_symbol_to_staff(staff, clef[0])
             self.current_measure = measure
 
-    def append_symbol(self, symbol: SplitSymbol) -> None:
+    def append_symbol(self, symbol: EncodedSymbol) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_symbol(symbol)
 
     def append_rest(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: SplitSymbol
+        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_rest(staff, is_chord, duration, invisible, symbol)
 
     def append_note(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: SplitSymbol
+        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
@@ -296,7 +296,7 @@ class TokensPart:
             self.staffs[staff].append(result)
         self.current_measure = TokensMeasure(len(self.current_measure.staffs))
 
-    def get_staffs(self) -> list[list[list[SplitSymbol]]]:
+    def get_staffs(self) -> list[list[list[EncodedSymbol]]]:
         return self.staffs
 
 
@@ -321,21 +321,21 @@ def _count_dots(note: mxl.XMLNote) -> int:
 def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
     clefs = attribute.get_children_of_type(mxl.XMLClef)
     if len(clefs) > 0:
-        clefs_tokens: list[tuple[SplitSymbol, int]] = []
+        clefs_tokens: list[tuple[EncodedSymbol, int]] = []
         for clef in clefs:
             sign = clef.get_children_of_type(mxl.XMLSign)[0].value_
             line = clef.get_children_of_type(mxl.XMLLine)[0].value_
             clef_number = int(clef.attributes.get("number", "0")) - 1
-            clefs_tokens.append((SplitSymbol(f"clef_{sign}{line}"), clef_number))
+            clefs_tokens.append((EncodedSymbol(f"clef_{sign}{line}"), clef_number))
         part.append_clefs(clefs_tokens)
     keys = attribute.get_children_of_type(mxl.XMLKey)
     if len(keys) > 0:
         fifths = keys[0].get_children_of_type(mxl.XMLFifths)[0].value_
-        part.append_symbol(SplitSymbol(f"keySignature_{int(fifths)}"))
+        part.append_symbol(EncodedSymbol(f"keySignature_{int(fifths)}"))
     times = attribute.get_children_of_type(mxl.XMLTime)
     if len(times) > 0:
         beat_type = times[0].get_children_of_type(mxl.XMLBeatType)[0].value_
-        part.append_symbol(SplitSymbol(f"timeSignature/{beat_type}"))
+        part.append_symbol(EncodedSymbol(f"timeSignature/{beat_type}"))
 
     style = attribute.get_children_of_type(mxl.XMLMeasureStyle)
     if len(style) > 0:
@@ -447,18 +447,18 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
     if len(rest) > 0:
         if rest[0] and rest[0].attributes.get("measure", None):
             part.append_rest(
-                staff, is_chord, duration, invisible, SplitSymbol("rest_0", empty, empty, empty)
+                staff, is_chord, duration, invisible, EncodedSymbol("rest_0", empty, empty, empty)
             )
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
-            sym = SplitSymbol(rhythm, empty, empty, art)
+            sym = EncodedSymbol(rhythm, empty, empty, art)
             part.append_rest(staff, is_chord, duration, invisible, sym)
     pitch = note.get_children_of_type(mxl.XMLPitch)
     if len(pitch) > 0:
         pitch_name = _pitch_name(pitch[0])
         lift = _lift_from_pitch_or_accidental(pitch[0], note)
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
-        sym = SplitSymbol(rhythm, pitch_name, lift, art)
+        sym = EncodedSymbol(rhythm, pitch_name, lift, art)
 
         part.append_note(staff, is_chord, max(duration, 1), invisible, sym)
 
@@ -485,13 +485,13 @@ def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
         direction = repeat_nodes[0].attributes.get("direction", "")
 
     if direction == "forward":
-        part.append_symbol(SplitSymbol("repeatStart"))
+        part.append_symbol(EncodedSymbol("repeatStart"))
     elif direction == "backward":
-        part.append_symbol(SplitSymbol("repeatEnd"))
+        part.append_symbol(EncodedSymbol("repeatEnd"))
     elif "heavy" in bar_style:
-        part.append_symbol(SplitSymbol("bolddoublebarline"))
+        part.append_symbol(EncodedSymbol("bolddoublebarline"))
     elif "light" in bar_style:
-        part.append_symbol(SplitSymbol("doublebarline"))
+        part.append_symbol(EncodedSymbol("doublebarline"))
     else:
         # "barline" elments without style or repeat are automatically added with measures
         pass
@@ -503,10 +503,10 @@ def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -
         return
     rest = rests[0]
     rest_duration = min(rest.value_, 10)
-    part.append_symbol(SplitSymbol(f"rest_{rest_duration}m", empty, empty, empty))
+    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty))
 
 
-def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[list[SplitSymbol]]]:
+def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[list[EncodedSymbol]]]:
     tokens = TokensPart()
     for measure in part.get_children_of_type(mxl.XMLMeasure):
         for child in measure.get_children():
@@ -524,27 +524,27 @@ def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[list[SplitSymbol]]]:
     return tokens.get_staffs()
 
 
-def music_xml_element_to_split_symbols(
+def music_xml_element_to_symbols(
     root: ET.Element,
-) -> list[list[list[SplitSymbol]]]:
+) -> list[list[list[EncodedSymbol]]]:
     _remove_dynamics_attribute_from_nodes_recursive(root)
     parsed = _parse_node(root)
-    result: list[list[list[SplitSymbol]]] = []
+    result: list[list[list[EncodedSymbol]]] = []
     for part in parsed.get_children_of_type(mxl.XMLPart):
         tokens = _music_part_to_tokens(part)
         result.extend(tokens)
     return result
 
 
-def music_xml_string_to_tokens(content: str) -> list[list[list[SplitSymbol]]]:
+def music_xml_string_to_tokens(content: str) -> list[list[list[EncodedSymbol]]]:
     xml = ET.fromstring(content)  # noqa: S314
-    return music_xml_element_to_split_symbols(xml)
+    return music_xml_element_to_symbols(xml)
 
 
-def music_xml_file_to_tokens(file_path: str) -> list[list[list[SplitSymbol]]]:
+def music_xml_file_to_tokens(file_path: str) -> list[list[list[EncodedSymbol]]]:
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
-    return music_xml_element_to_split_symbols(xml.getroot())
+    return music_xml_element_to_symbols(xml.getroot())
 
 
 def _remove_dynamics_attribute_from_nodes_recursive(node: ET.Element) -> None:
@@ -582,7 +582,7 @@ if __name__ == "__main__":
         recursive=True,
     )
 
-    def process_file(file: str) -> tuple[str, list[list[SplitSymbol]], Exception | None]:
+    def process_file(file: str) -> tuple[str, list[list[EncodedSymbol]], Exception | None]:
         try:
             voices = music_xml_file_to_tokens(file)
             tokens_list = []

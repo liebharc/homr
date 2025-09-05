@@ -5,7 +5,7 @@ import torch
 
 from homr.transformer.configs import default_config
 from homr.transformer.vocabulary import (
-    SplitSymbol,
+    EncodedSymbol,
     Vocabulary,
     is_valid_combination,
     rhythm_to_category,
@@ -14,7 +14,7 @@ from homr.transformer.vocabulary import (
 vocab = Vocabulary()
 
 
-def check_token_line(line: SplitSymbol) -> None:
+def check_token_line(line: EncodedSymbol) -> None:
     if (
         line.rhythm not in vocab.rhythm
         or line.lift not in vocab.lift
@@ -28,12 +28,12 @@ def check_token_line(line: SplitSymbol) -> None:
         raise ValueError("Invalid combination " + str(line))
 
 
-def check_token_lines(lines: list[SplitSymbol]) -> None:
+def check_token_lines(lines: list[EncodedSymbol]) -> None:
     for line in lines:
         check_token_line(line)
 
 
-def _split_symbol_to_sortable(symbol: SplitSymbol) -> int:
+def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
     if "note" in symbol.rhythm:
         return vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm]
     if "rest" in symbol.rhythm:
@@ -41,22 +41,22 @@ def _split_symbol_to_sortable(symbol: SplitSymbol) -> int:
     return 1000000
 
 
-def _chord_to_str(chord: list[SplitSymbol]) -> str:
-    sorted_chord = sorted(chord, key=_split_symbol_to_sortable)
+def _chord_to_str(chord: list[EncodedSymbol]) -> str:
+    sorted_chord = sorted(chord, key=_symbol_to_sortable)
     return str.join("&", [str(c) for c in sorted_chord])
 
 
 def sort_token_chords(
-    symbols: list[SplitSymbol], keep_chord_symbol: bool = False
-) -> list[list[SplitSymbol]]:
-    chords: list[list[SplitSymbol]] = []
+    symbols: list[EncodedSymbol], keep_chord_symbol: bool = False
+) -> list[list[EncodedSymbol]]:
+    chords: list[list[EncodedSymbol]] = []
     is_in_chord = False
     for symbol in symbols:
         if symbol.rhythm == "chord":
             is_in_chord = True
         elif is_in_chord and len(chords) > 0:
             if keep_chord_symbol:
-                chords[1].append(SplitSymbol("chord"))
+                chords[1].append(EncodedSymbol("chord"))
             chords[-1].append(symbol)
             is_in_chord = False
         else:
@@ -64,7 +64,7 @@ def sort_token_chords(
     return chords
 
 
-def token_lines_to_str(symbols: list[SplitSymbol]) -> str:
+def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
     # TODO convert lifts, sort symbols in chords, but also e.g. slur vs cres start
     chords = sort_token_chords(symbols)
 
@@ -72,7 +72,7 @@ def token_lines_to_str(symbols: list[SplitSymbol]) -> str:
     return str.join("\n", chord_strings)
 
 
-def read_tokens(filepath: str) -> list[SplitSymbol]:
+def read_tokens(filepath: str) -> list[EncodedSymbol]:
     result = []
     with open(filepath, encoding="utf-8") as f:
         lines = f.readlines()
@@ -82,10 +82,10 @@ def read_tokens(filepath: str) -> list[SplitSymbol]:
                 if "tieSlur" in entry:
                     continue
                 rhythm, pitch, lift, articulation = entry.split()
-                symbol = SplitSymbol(rhythm, pitch, lift, articulation)
+                symbol = EncodedSymbol(rhythm, pitch, lift, articulation)
                 is_first = i == 0
                 if not is_first:
-                    result.append(SplitSymbol("chord"))
+                    result.append(EncodedSymbol("chord"))
 
                 result.append(symbol)
 
@@ -110,7 +110,7 @@ class DecoderBranches:
         self.mask = mask
 
 
-def to_decoder_branches(symbols: list[SplitSymbol]) -> DecoderBranches:
+def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     nonote_token = default_config.nonote_token
     begin_of_seq = vocab.rhythm["BOS"]
     end_of_seq = vocab.rhythm["EOS"]
@@ -161,7 +161,7 @@ class VocabularyStats:
         self.pitch: dict[str, int] = defaultdict(int)
         self.max_seq_len = 0
 
-    def add_lines(self, lines: list[SplitSymbol]) -> None:
+    def add_lines(self, lines: list[EncodedSymbol]) -> None:
         for line in lines:
             self.rhythm[line.rhythm] += 1
             self.lift[line.lift] += 1

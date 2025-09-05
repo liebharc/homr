@@ -12,7 +12,7 @@ from x_transformers.x_transformers import (
 )
 
 from homr.transformer.configs import Config
-from homr.transformer.vocabulary import SplitSymbol, rhythm_to_category
+from homr.transformer.vocabulary import EncodedSymbol, rhythm_to_category
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -147,7 +147,7 @@ class ScoreDecoder(nn.Module):
         temperature: float = 1.0,
         filter_thres: float = 0.7,
         **kwargs: Any,
-    ) -> list[SplitSymbol]:
+    ) -> list[EncodedSymbol]:
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -166,7 +166,7 @@ class ScoreDecoder(nn.Module):
         if mask is None:
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
 
-        symbols: list[SplitSymbol] = []
+        symbols: list[EncodedSymbol] = []
 
         for _ in range(self.max_seq_len):
             mask = mask[:, -self.max_seq_len :]
@@ -216,7 +216,7 @@ class ScoreDecoder(nn.Module):
                 if is_eos == 0:
                     break
 
-                symbol = SplitSymbol(
+                symbol = EncodedSymbol(
                     rhythm=rhythm_token[0],
                     pitch=pitch_token[0],
                     lift=lift_token[0],

@@ -9,7 +9,7 @@ from PIL import Image
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 from training.architecture.transformer.tromr_arch import TrOMR
 from training.transformer.training_vocabulary import token_lines_to_str
@@ -41,7 +41,7 @@ class Staff2Score:
         if not os.path.exists(config.filepaths.rhythmtokenizer):
             raise RuntimeError("Failed to find tokenizer config" + config.filepaths.rhythmtokenizer)
 
-    def predict(self, image: NDArray) -> list[SplitSymbol]:
+    def predict(self, image: NDArray) -> list[EncodedSymbol]:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         imgs_tensor = self._image_to_tensor(image)
         return self._generate(
@@ -56,7 +56,7 @@ class Staff2Score:
     def _generate(
         self,
         imgs_tensor: torch.Tensor,
-    ) -> list[SplitSymbol]:
+    ) -> list[EncodedSymbol]:
         return self.model.generate(
             imgs_tensor,
         )

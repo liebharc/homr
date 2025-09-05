@@ -7,21 +7,21 @@ import editdistance
 
 from homr.simple_logging import eprint
 from homr.staff_parsing import remove_duplicated_symbols
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from training.music_xml_parser import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import sort_token_chords
 
 
-def _ignore_articulation(symbol: SplitSymbol) -> SplitSymbol:
+def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
     """
     We ignore articulations for now to get results which are compareable
     to previous versions of the model without articulations.
     """
-    return SplitSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
+    return EncodedSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
 
 
 class MusicFile:
-    def __init__(self, filename: str, voices: list[list[list[SplitSymbol]]]) -> None:
+    def __init__(self, filename: str, voices: list[list[list[EncodedSymbol]]]) -> None:
         self.filename = filename
         self.voices = voices
         voices_in_deq = list(chain.from_iterable(voices))

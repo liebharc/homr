@@ -7,7 +7,7 @@ import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import SplitSymbol, SymbolDuration, empty, nonote
+from homr.transformer.vocabulary import EncodedSymbol, SymbolDuration, empty, nonote
 
 
 class ConversionState:
@@ -26,7 +26,7 @@ class ConversionState:
 
 
 class SymbolGroup:
-    def __init__(self, symbols: list[SplitSymbol]) -> None:
+    def __init__(self, symbols: list[EncodedSymbol]) -> None:
         self.symbols = symbols
         self.tuplet_mark = ""
 
@@ -119,7 +119,7 @@ def build_or_get_barline(measure: mxl.XMLMeasure) -> mxl.XMLBarline:
     return barline
 
 
-def build_key(model_key: SplitSymbol, attributes: mxl.XMLAttributes) -> None:
+def build_key(model_key: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
     key = mxl.XMLKey()
     circle_of_fifth = model_key.rhythm.split("_")[1]
     fifth = mxl.XMLFifths(value_=int(circle_of_fifth))
@@ -127,7 +127,7 @@ def build_key(model_key: SplitSymbol, attributes: mxl.XMLAttributes) -> None:
     key.add_child(fifth)
 
 
-def build_clef(model_clef: SplitSymbol, attributes: mxl.XMLAttributes) -> None:
+def build_clef(model_clef: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
     sign_and_line = model_clef.rhythm.split("_")[1]
     sign = sign_and_line[0]
     line = sign_and_line[1]
@@ -138,7 +138,7 @@ def build_clef(model_clef: SplitSymbol, attributes: mxl.XMLAttributes) -> None:
 
 
 def build_time_signature(
-    model_time_signature: SplitSymbol, attributes: mxl.XMLAttributes, state: ConversionState
+    model_time_signature: EncodedSymbol, attributes: mxl.XMLAttributes, state: ConversionState
 ) -> None:
     time = mxl.XMLTime()
 
@@ -150,13 +150,13 @@ def build_time_signature(
     state.beats = beats
 
 
-def build_barline_style(barline: SplitSymbol, xml: mxl.XMLBarline) -> None:
+def build_barline_style(barline: EncodedSymbol, xml: mxl.XMLBarline) -> None:
     style_value = "heavy-heavy" if barline.rhythm == "bolddoublebarline" else "light-light"
     style = mxl.XMLBarStyle(value_=style_value)
     xml.add_child(style)
 
 
-def build_repeat(barline: SplitSymbol, xml: mxl.XMLBarline) -> None:
+def build_repeat(barline: EncodedSymbol, xml: mxl.XMLBarline) -> None:
     if len(xml.get_children_of_type(mxl.XMLRepeat)) > 0:
         eprint("barline already has a repeat")
         return
@@ -251,7 +251,7 @@ def build_articulations(
 
 
 def build_note_or_rest(
-    model_note: SplitSymbol, voice: int, is_chord: bool, state: ConversionState, tuplet_mark: str
+    model_note: EncodedSymbol, voice: int, is_chord: bool, state: ConversionState, tuplet_mark: str
 ) -> mxl.XMLNote:
     note = mxl.XMLNote()
     if is_chord:
@@ -306,7 +306,7 @@ def build_note_or_rest(
 
 
 def build_multi_measure_rest(
-    symbol: SplitSymbol, attributes: mxl.XMLAttributes
+    symbol: EncodedSymbol, attributes: mxl.XMLAttributes
 ) -> mxl.XMLMeasureStyle:
     other_styles = attributes.get_children_of_type(mxl.XMLMeasureStyle)
     if len(other_styles) > 0:
@@ -347,7 +347,7 @@ def build_note_group(note_group: SymbolGroup, state: ConversionState) -> list[mx
     return result
 
 
-def _group_notes(notes: list[SplitSymbol]) -> dict[Fraction, list[SplitSymbol]]:
+def _group_notes(notes: list[EncodedSymbol]) -> dict[Fraction, list[EncodedSymbol]]:
     groups_by_duration = defaultdict(list)
     max_duration = max([n.get_duration().fraction for n in notes])
     for note in notes:
@@ -401,7 +401,7 @@ def find_common_division(durations: list[SymbolDuration]) -> int:
     return common
 
 
-def find_division_and_time_signature_nominator(voice: list[SplitSymbol]) -> tuple[int, Fraction]:
+def find_division_and_time_signature_nominator(voice: list[EncodedSymbol]) -> tuple[int, Fraction]:
     durations = []
     duration_in_measure = Fraction(0)
     measure_duration = []
@@ -426,7 +426,7 @@ def find_division_and_time_signature_nominator(voice: list[SplitSymbol]) -> tupl
     return find_common_division(durations), nominator
 
 
-def group_into_chords(voice: list[SplitSymbol]) -> list[SymbolGroup]:
+def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolGroup]:
     chords: list[SymbolGroup] = []
     is_in_chord = False
     for symbol in voice:
@@ -462,7 +462,7 @@ def add_tuplet_start_stop(groups: list[SymbolGroup]) -> list[SymbolGroup]:
 
 
 def build_measures(
-    args: XmlGeneratorArguments, voice: list[SplitSymbol], is_first_part: bool
+    args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
 ) -> list[mxl.XMLMeasure]:
     measure_number = 1
     division, nominator = find_division_and_time_signature_nominator(voice)
@@ -521,7 +521,7 @@ def build_measures(
     return measures
 
 
-def build_part(args: XmlGeneratorArguments, voice: list[SplitSymbol], index: int) -> mxl.XMLPart:
+def build_part(args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int) -> mxl.XMLPart:
     part = mxl.XMLPart(id=get_part_id(index))
     is_first_part = index == 0
     measures = build_measures(args, voice, is_first_part)
@@ -531,7 +531,7 @@ def build_part(args: XmlGeneratorArguments, voice: list[SplitSymbol], index: int
 
 
 def generate_xml(
-    args: XmlGeneratorArguments, staffs: list[list[SplitSymbol]], title: str
+    args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
 ) -> mxl.XMLElement:
     root = mxl.XMLScorePartwise()
     root.add_child(build_work(title))

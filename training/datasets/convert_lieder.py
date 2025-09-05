@@ -17,7 +17,7 @@ from PIL import Image
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
 from training.music_xml_parser import music_xml_file_to_tokens
@@ -129,15 +129,15 @@ def write_text_to_file(text: str, path: str) -> None:
 
 
 def _split_file_into_staffs(
-    voices: list[list[list[SplitSymbol]]],
+    voices: list[list[list[EncodedSymbol]]],
     svg_files: list[SvgMusicFile],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
 ) -> list[str]:
     voice = 0
 
-    clefs = [SplitSymbol("clef_G2") for _ in range(len(voices))]
-    keys = [SplitSymbol("keySignature_0") for _ in range(len(voices))]
+    clefs = [EncodedSymbol("clef_G2") for _ in range(len(voices))]
+    keys = [EncodedSymbol("keySignature_0") for _ in range(len(voices))]
     result: list[str] = []
     for svg_file in svg_files:
         png_file = svg_file.filename.replace(".svg", ".png")
@@ -171,7 +171,7 @@ def _split_file_into_staffs(
                 raise ValueError(f"File {staff_image_file_name} not found")
 
             token_file_name = png_file.replace(".png", f"-{staff_number}.tokens")
-            selected_measures: list[SplitSymbol] = []
+            selected_measures: list[EncodedSymbol] = []
             clef = clefs[voice]
             key = keys[voice]
             for i in range(staff.number_of_measures):
@@ -206,7 +206,7 @@ def _split_file_into_staffs(
     return result
 
 
-def check_triplets(measure: list[SplitSymbol]) -> bool:
+def check_triplets(measure: list[EncodedSymbol]) -> bool:
     last_symbol_was_chord = False
     number_of_triplets = 0
     for symbol in measure:

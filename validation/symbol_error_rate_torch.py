@@ -9,7 +9,7 @@ import editdistance
 from homr import download_utils
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config as ConfigTorch
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from training.convert_lieder import convert_xml_and_svg_file
 from training.transformer.training_vocabulary import (
     read_tokens,
@@ -50,7 +50,7 @@ def calc_symbol_error_rate_for_list(
         image = cv2.imread(img_path)
         if image is None:
             raise ValueError("Failed to read " + img_path)
-        actual: list[SplitSymbol] = model.predict(image)
+        actual: list[EncodedSymbol] = model.predict(image)
         # Calculate the SER only based on notes and rests
         relevant_symbols = ("note", "rest", "keySignature")
         actual = [
@@ -91,12 +91,12 @@ def calc_symbol_error_rate_for_list(
         f.write(f"SER avg: {ser_avg}%\n")
 
 
-def _ignore_articulation(symbol: SplitSymbol) -> SplitSymbol:
+def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
     """
     We ignore articulations for now to get results which are compareable
     to previous versions of the model without articulations.
     """
-    return SplitSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
+    return EncodedSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
 
 
 def index_folder(folder: str, index_file: str) -> None:

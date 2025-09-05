@@ -1,10 +1,10 @@
 import re
 
-from homr.transformer.vocabulary import SplitSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 
-def convert_kern_to_tokens(lines: list[str]) -> list[list[SplitSymbol]]:
+def convert_kern_to_tokens(lines: list[str]) -> list[list[EncodedSymbol]]:
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
     return [_convert_single_staff(staff) for staff in reversed(staffs)]
 
@@ -76,7 +76,7 @@ def _merge_multiple_voices_on_the_same_staff(
     return staff_lines
 
 
-def _convert_single_staff(lines: list[str]) -> list[SplitSymbol]:
+def _convert_single_staff(lines: list[str]) -> list[EncodedSymbol]:
     converter = HumdrumKernConverter()
     return converter.convert_humdrum_kern(lines)
 
@@ -111,11 +111,11 @@ class HumdrumKernConverter:
         mapping = {":": "arpeggiate"}
         return mapping[suffix]
 
-    def parse_clef(self, clef: str) -> SplitSymbol:
+    def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split()[0].replace("*clef", "clef_")
-        return SplitSymbol(clef_name)
+        return EncodedSymbol(clef_name)
 
-    def parse_key_signature(self, key_signature: str) -> SplitSymbol:
+    def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
         mapping = {
             "*k[b-e-a-d-g-c-f-]": -7,
             "*k[b-e-a-d-g-c-]": -6,
@@ -134,12 +134,12 @@ class HumdrumKernConverter:
             "*k[f#c#g#d#a#e#b#]": 7,
         }
         circle = mapping[key_signature.split()[0]]
-        return SplitSymbol(f"keySignature_{circle}")
+        return EncodedSymbol(f"keySignature_{circle}")
 
-    def parse_time_signature(self, ts: str) -> SplitSymbol:
+    def parse_time_signature(self, ts: str) -> EncodedSymbol:
         ts_val = ts.split()[0].replace("*M", "")
         parts = ts_val.split("/")
-        return SplitSymbol(f"timeSignature/{parts[1]}")
+        return EncodedSymbol(f"timeSignature/{parts[1]}")
 
     def parse_duration(self, dur: str, is_rest: bool = False, is_grace: bool = False) -> str:
         if not dur:
@@ -155,7 +155,7 @@ class HumdrumKernConverter:
         count = len(kern_note)
         return f"{letter}{3 + count}" if kern_note[0].islower() else f"{letter}{4 - count}"
 
-    def parse_note_or_rest(self, token: str) -> SplitSymbol:
+    def parse_note_or_rest(self, token: str) -> EncodedSymbol:
         match = re.match(r"(\d*\.*)([a-grA-GR]+)(--|-|n|##|#)?([^#]*)", token)
         if not match:
             raise Exception(f"Invalid note {token}")
@@ -167,7 +167,7 @@ class HumdrumKernConverter:
 
         rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
         if is_rest:
-            return SplitSymbol(rhythm_key, empty, empty, empty)
+            return EncodedSymbol(rhythm_key, empty, empty, empty)
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
@@ -178,9 +178,9 @@ class HumdrumKernConverter:
             self.slur_level -= 1
             suffix = suffix.replace("]", "")
         articulation_val = self._articulation_from_suffix(suffix)
-        return SplitSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
+        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
 
-    def parse_barline(self, line: str) -> list[SplitSymbol]:
+    def parse_barline(self, line: str) -> list[EncodedSymbol]:
         symbol = line.split(" ")[0]
         mapping = {
             "=:|!|:": ["repeatEnd", "barline", "repeatStart"],
@@ -193,18 +193,18 @@ class HumdrumKernConverter:
             "=||": ["doublebarline"],
             "=|!": ["barline"],
         }
-        return [SplitSymbol(s) for s in mapping[symbol]]
+        return [EncodedSymbol(s) for s in mapping[symbol]]
 
-    def interleave_chord_symbol(self, notes: list[SplitSymbol]) -> list[SplitSymbol]:
+    def interleave_chord_symbol(self, notes: list[EncodedSymbol]) -> list[EncodedSymbol]:
         result = []
         for i, note in enumerate(notes):
             last_note = i == len(notes) - 1
             result.append(note)
             if not last_note:
-                result.append(SplitSymbol("chord"))
+                result.append(EncodedSymbol("chord"))
         return result
 
-    def _swap_with_previous(self, results: list[SplitSymbol], swap: tuple[str, ...]) -> None:
+    def _swap_with_previous(self, results: list[EncodedSymbol], swap: tuple[str, ...]) -> None:
         if len(results) < 2:
             return
 
@@ -216,12 +216,12 @@ class HumdrumKernConverter:
             results.append(item)
             results.append(previous)
 
-    def convert_humdrum_kern(self, lines: list[str]) -> list[SplitSymbol]:  # noqa: C901
-        result: list[SplitSymbol] = []
+    def convert_humdrum_kern(self, lines: list[str]) -> list[EncodedSymbol]:  # noqa: C901
+        result: list[EncodedSymbol] = []
 
-        clef = SplitSymbol("clef_G2")
-        keySignature = SplitSymbol("keySignature_0")
-        timeSignature = SplitSymbol("timeSignature/4")
+        clef = EncodedSymbol("clef_G2")
+        keySignature = EncodedSymbol("keySignature_0")
+        timeSignature = EncodedSymbol("timeSignature/4")
         initial_signature_was_added = False
 
         for line in lines:
@@ -263,10 +263,10 @@ class HumdrumKernConverter:
                 result.extend(self.interleave_chord_symbol(chord))
 
                 if self.slur_level > 0 and len(chord) > 0:
-                    result.append(SplitSymbol("tieSlur"))
+                    result.append(EncodedSymbol("tieSlur"))
 
         if result[-1].rhythm != "barline":
-            result.append(SplitSymbol("barline"))
+            result.append(EncodedSymbol("barline"))
 
         return result
 

@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from homr.transformer.configs import Config
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from training.architecture.transformer.decoder import get_decoder
 from training.architecture.transformer.encoder import get_encoder
 
@@ -45,7 +45,7 @@ class TrOMR(nn.Module):
         return loss
 
     @torch.no_grad()
-    def generate(self, x: torch.Tensor) -> list[SplitSymbol]:
+    def generate(self, x: torch.Tensor) -> list[EncodedSymbol]:
         start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
         nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
 

@@ -6,7 +6,7 @@ import onnxruntime as ort
 
 from homr.transformer.configs import Config
 from homr.transformer.utils import softmax
-from homr.transformer.vocabulary import SplitSymbol
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
 
@@ -35,7 +35,7 @@ class ScoreDecoder:
         temperature: float = 1.0,
         filter_thres: float = 0.7,
         **kwargs: Any,
-    ) -> list[SplitSymbol]:
+    ) -> list[EncodedSymbol]:
         num_dims = len(start_tokens.shape)
 
         if num_dims == 1:
@@ -48,7 +48,7 @@ class ScoreDecoder:
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
 
-        symbols: list[SplitSymbol] = []
+        symbols: list[EncodedSymbol] = []
 
         for _ in range(self.max_seq_len):
             x_lift = out_lift[:, -self.max_seq_len :]
@@ -101,7 +101,7 @@ class ScoreDecoder:
                 if is_eos == 0:
                     break
 
-                symbol = SplitSymbol(
+                symbol = EncodedSymbol(
                     rhythm=rhythm_token[0],
                     pitch=pitch_token[0],
                     lift=lift_token[0],

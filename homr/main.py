@@ -24,9 +24,9 @@ from homr.brace_dot_detection import (
     find_braces_brackets_and_grand_staff_lines,
     prepare_brace_dot_image,
 )
-from homr.datasets.musicxml_gen import XmlGeneratorArguments, generate_xml
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff
+from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image

@@ -255,7 +255,7 @@ def kern_to_symbol_duration(kern: str) -> SymbolDuration:
         return SymbolDuration(base_duration, dots, actual_notes, normal_notes, normal_notes)
 
 
-class SplitSymbol:
+class EncodedSymbol:
     """
     A musical symbol split into the different decoder branches.
     """
@@ -304,7 +304,7 @@ class SplitSymbol:
         return str(self)
 
     def __eq__(self, __value: object) -> bool:
-        if isinstance(__value, SplitSymbol):
+        if isinstance(__value, EncodedSymbol):
             return (
                 self.rhythm == __value.rhythm
                 and self.pitch == __value.pitch
