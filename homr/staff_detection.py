@@ -81,6 +81,15 @@ class StaffLineSegment(DebugDrawable):
             cv2.LINE_AA,
         )
 
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, StaffLineSegment):
+            return frozenset(self.staff_fragments) == frozenset(__value.staff_fragments)
+        else:
+            return False
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self.staff_fragments))
+
 
 class StaffAnchor(DebugDrawable):
     """

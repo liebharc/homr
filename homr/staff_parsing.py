@@ -342,13 +342,17 @@ def merge_and_clean(symbols: list[SplitSymbol]) -> list[SplitSymbol]:
     last_values = {"clef": "", "keySignature": "", "timeSignature": ""}
 
     for symbol in symbols:
+        handled = False
         for symbol_type in last_values.keys():  # noqa: PLC0206
             if symbol.rhythm.startswith(symbol_type):
+                handled = True
                 if symbol.rhythm == last_values[symbol_type]:
                     continue
                 else:
                     result.append(symbol)
                     last_values[symbol_type] = symbol.rhythm
+        if not handled:
+            result.append(symbol)
 
     return result
 

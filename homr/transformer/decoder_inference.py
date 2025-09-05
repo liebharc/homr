@@ -111,12 +111,13 @@ class ScoreDecoder:
                 current_temperature *= 3.5
                 attempt += 1
                 retry = not symbol.is_valid() and attempt < max_attempts
-                if not retry:
+                if not retry and not symbol.is_control_symbol():
                     symbols.append(symbol)
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
+            out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
 
             if (
                 self.eos_token is not None
@@ -127,6 +128,7 @@ class ScoreDecoder:
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
+        out_articulations = out_articulations[:, t:]
 
         return symbols
 

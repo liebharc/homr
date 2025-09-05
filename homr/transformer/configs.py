@@ -11,17 +11,17 @@ root_dir = os.getcwd()
 class FilePaths:
     def __init__(self) -> None:
         self.encoder_path = os.path.join(
-            workspace, "encoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx"
+            workspace, "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
         )  # noqa: E501
         self.decoder_path = os.path.join(
-            workspace, "decoder_pytorch_model_188-4915073f892f6ab199844b1bff0c968cdf8be03e.onnx"
+            workspace, "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
         )  # noqa: E501
         self.checkpoint = os.path.join(
             root_dir,
             "training",
             "architecture",
             "transformer",
-            "pytorch_model_230-e162807968c352763b4f35761e9c5fed17d93a54.pth",
+            "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.pth",
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")

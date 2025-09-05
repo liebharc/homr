@@ -9,8 +9,13 @@ import editdistance
 from homr import download_utils
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config as ConfigTorch
-from training.musescore_svg import get_position_from_multiple_svg_files
-from training.music_xml import group_in_measures, music_xml_to_semantic
+from homr.transformer.vocabulary import SplitSymbol
+from training.convert_lieder import convert_xml_and_svg_file
+from training.transformer.training_vocabulary import (
+    read_tokens,
+    sort_token_chords,
+    token_lines_to_str,
+)
 
 
 def calc_symbol_error_rate_for_list(
@@ -40,27 +45,37 @@ def calc_symbol_error_rate_for_list(
     total = len(dataset)
     interesting_results: list[tuple[str, str]] = []
     for sample in dataset:
-        img_path, semantic_path = sample.strip().split(",")
-        expected_str = _load_semantic_file(semantic_path)[0].strip()
+        img_path, token_path = sample.strip().split(",")
+        expected = read_tokens(token_path)
         image = cv2.imread(img_path)
         if image is None:
             raise ValueError("Failed to read " + img_path)
-        actual = [str(sym) for sym in model.predict(image)]
+        actual: list[SplitSymbol] = model.predict(image)
+        # Calculate the SER only based on notes and rests
+        relevant_symbols = ("note", "rest", "keySignature")
         actual = [
-            symbol for symbol in actual if not symbol.startswith("timeSignature")
-        ]  # reference data has no time signature
-        expected = expected_str.split("+")
-        actual = sort_chords(actual)
-        expected = sort_chords(expected)
+            _ignore_articulation(t)
+            for chord in sort_token_chords(actual)
+            for t in chord
+            if t.rhythm.startswith(relevant_symbols)
+        ]
+        expected = [
+            _ignore_articulation(t)
+            for chord in sort_token_chords(expected)
+            for t in chord
+            if t.rhythm.startswith(relevant_symbols)
+        ]
         distance = editdistance.eval(expected, actual)
         ser = distance / len(expected)
         all_sers.append(ser)
         ser = round(100 * ser)
         ser_avg = round(100 * sum(all_sers) / len(all_sers))
         i += 1
-        is_staff_with_accidentals = "Polyphonic_tude_No" in img_path and "staff-3" in img_path
-        if is_staff_with_accidentals:
-            interesting_results.append((str.join(" ", expected), str.join(" ", actual)))
+        has_usually_high_ser = (
+            "Playing_With_Fire_BlackPink" in img_path and "staff-1.jpg" in img_path
+        )
+        if has_usually_high_ser:
+            interesting_results.append((token_lines_to_str(expected), token_lines_to_str(actual)))
         percentage = round(i / total * 100)
         img_path_rel = os.path.relpath(img_path)
         eprint(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}% ({img_path_rel})")
@@ -76,16 +91,12 @@ def calc_symbol_error_rate_for_list(
         f.write(f"SER avg: {ser_avg}%\n")
 
 
-def _load_semantic_file(semantic_path: str) -> list[str]:
-    with open(semantic_path) as f:
-        return f.readlines()
-
-
-def sort_chords(symbols: list[str]) -> list[str]:
-    result = []
-    for symbol in symbols:
-        result.append(str.join("|", sorted(symbol.split("|"))))
-    return result
+def _ignore_articulation(symbol: SplitSymbol) -> SplitSymbol:
+    """
+    We ignore articulations for now to get results which are compareable
+    to previous versions of the model without articulations.
+    """
+    return SplitSymbol(symbol.rhythm, symbol.pitch, symbol.lift)
 
 
 def index_folder(folder: str, index_file: str) -> None:
@@ -95,56 +106,19 @@ def index_folder(folder: str, index_file: str) -> None:
             if not os.path.isdir(full_name):
                 continue
             file = os.path.join(full_name, "music.musicxml")
-            semantic = music_xml_to_semantic(file)
-            measures = [group_in_measures(voice) for voice in semantic]
-            svg_files = get_position_from_multiple_svg_files(file)
-            number_of_voices = len(semantic)
-            total_number_of_measures = semantic[0].count("barline")
-            measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
-            sum_of_measures_in_xml = total_number_of_measures * number_of_voices
-            if sum(measures_in_svg) != sum_of_measures_in_xml:
-                eprint(
-                    file,
-                    "INFO: Number of measures in SVG files",
-                    sum(measures_in_svg),
-                    "does not match number of measures in XML",
-                    sum_of_measures_in_xml,
-                )
-                continue
-            voice = 0
-            total_staffs_in_previous_files = 0
-            for svg_file in svg_files:
-                for staff_idx, staff in enumerate(svg_file.staffs):
-                    selected_measures: list[str] = []
-                    staffs_per_voice = len(svg_file.staffs) // number_of_voices
-                    for _ in range(staff.number_of_measures):
-                        selected_measures.append(str.join("+", measures[voice][1].pop(0)))
-
-                    prelude = measures[voice][0]
-                    semantic_content = str.join("+", selected_measures) + "\n"
-
-                    if not semantic_content.startswith("clef"):
-                        semantic_content = prelude + semantic_content
-
-                    file_number = (
-                        total_staffs_in_previous_files
-                        + voice * staffs_per_voice
-                        + staff_idx // number_of_voices
-                    )
-
-                    file_name = f"staff-{file_number}.jpg"
-                    staff_image = os.path.join(full_name, file_name)
-                    with open(os.path.join(full_name, f"staff-{file_number}.semantic"), "w") as f:
-                        f.write(semantic_content)
-                    voice = (voice + 1) % number_of_voices
-                    if os.path.exists(staff_image):
-                        index.write(
-                            staff_image
-                            + ","
-                            + os.path.join(full_name, f"staff-{file_number}.semantic")
-                            + "\n"
-                        )
-                total_staffs_in_previous_files += len(svg_file.staffs)
+            dirname = os.path.dirname(file)
+            lines = convert_xml_and_svg_file(
+                Path(file), just_token_files=True, fail_if_image_is_missing=False
+            )
+            for i, line in enumerate(lines):
+                token_file = line.split(",")[1].strip()
+                staff_image = os.path.join(dirname, f"staff-{i}.jpg")
+                if not os.path.exists(staff_image):
+                    continue
+                index.write(staff_image)
+                index.write(",")
+                index.write(token_file)
+                index.write("\n")
 
 
 def main() -> None:
@@ -156,7 +130,7 @@ def main() -> None:
     # optional: if no path is given it uses the onnx backend with
     # the model located in homr/transformer
     parser.add_argument(
-        "--checkpoint_file", type=str, default=None, help="Path to the checkpoint file."
+        "checkpoint_file", type=str, default=None, nargs="?", help="Path to the checkpoint file."
     )
     args = parser.parse_args()
 

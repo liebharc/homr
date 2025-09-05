@@ -229,12 +229,13 @@ class ScoreDecoder(nn.Module):
                 current_temperature *= 3.5
                 attempt += 1
                 retry = not symbol.is_valid() and attempt < max_attempts
-                if not retry:
+                if not retry and not symbol.is_control_symbol():
                     symbols.append(symbol)
 
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
             out_rhythm = torch.cat((out_rhythm, rhythm_sample), dim=-1)
+            out_articulations = torch.cat((out_articulations, articulation_sample), dim=-1)
             mask = F.pad(mask, (0, 1), value=True)
 
             if (
@@ -246,6 +247,7 @@ class ScoreDecoder(nn.Module):
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
+        out_articulations = out_articulations[:, t:]
 
         self.net.train(was_training)
         return symbols

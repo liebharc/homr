@@ -3,6 +3,7 @@ import os
 import torch
 
 from homr.segmentation.config import segnet_path_torch
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
 from training.architecture.transformer.decoder import (
@@ -22,10 +23,18 @@ class DecoderWrapper(torch.nn.Module):
         rhythms: torch.Tensor,
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
+        articulations: torch.Tensor,
         context: torch.Tensor,
-    ) -> torch.Tensor:
-        result = self.model(rhythms, pitchs, lifts, mask=None, context=context)
-        return result
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        out_rhythms, out_pitchs, out_lifts, _out_notes, out_articulations, _x = self.model(
+            rhythms=rhythms,
+            pitchs=pitchs,
+            lifts=lifts,
+            articulations=articulations,
+            mask=None,
+            context=context,
+        )
+        return out_rhythms, out_pitchs, out_lifts, out_articulations
 
 
 def convert_encoder() -> str:
@@ -34,9 +43,13 @@ def convert_encoder() -> str:
     """
     config = Config()
 
-    dir_path = os.path.dirname(config.filepaths.checkpoint)
+    dir_path = os.path.dirname(config.filepaths.encoder_path)
     filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
     path_out = os.path.join(dir_path, f"encoder_{filename}.onnx")
+
+    if os.path.exists(path_out):
+        eprint(path_out, "is already present")
+        return path_out
 
     # Get Encoder
     model = get_encoder(config)
@@ -76,9 +89,13 @@ def convert_decoder() -> str:
     model = get_score_wrapper(config)
     model.eval()
 
-    dir_path = os.path.dirname(config.filepaths.checkpoint)
+    dir_path = os.path.dirname(config.filepaths.decoder_path)
     filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
     path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
+
+    if os.path.exists(path_out):
+        eprint(path_out, "is already present")
+        return path_out
 
     model.load_state_dict(
         torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
@@ -94,27 +111,31 @@ def convert_decoder() -> str:
     rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 10)).long()
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
+    articulations = torch.randint(0, config.num_articulation_tokens, (1, 10)).long()
     context = torch.randn((1, 641, 312)).float()
 
     dynamic_axes = {
         "rhythms": {0: "batch_size", 1: "input_seq_len"},
         "pitchs": {0: "batch_size", 1: "input_seq_len"},
         "lifts": {0: "batch_size", 1: "input_seq_len"},
+        "articulations": {0: "batch_size", 1: "input_seq_len"},
         "context": {0: "batch_size"},
         "out_rhythms": {0: "batch_size", 1: "output_seq_len"},
         "out_pitchs": {0: "batch_size", 1: "output_seq_len"},
         "out_lifts": {0: "batch_size", 1: "output_seq_len"},
+        "out_articulations": {0: "batch_size", 1: "output_seq_len"},
     }
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, context),
+        (rhythms, pitchs, lifts, articulations, context),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "context"],
+        input_names=["rhythms", "pitchs", "lifts", "articulations", "context"],
         output_names=[
             "out_rhythms",
             "out_pitchs",
             "out_lifts",
+            "out_articulations",
         ],
         dynamic_axes=dynamic_axes,
         opset_version=17,
@@ -128,6 +149,15 @@ def convert_segnet() -> str:
     """
     Converts the segnet model to onnx.
     """
+
+    dir_path = os.path.dirname(segnet_path_torch)
+    filename = os.path.splitext(os.path.basename(segnet_path_torch))[0]
+    path_out = os.path.join(dir_path, f"{filename}.onnx")
+
+    if os.path.exists(path_out):
+        eprint(path_out, "is already present")
+        return path_out
+
     model = create_segnet()
     model.load_state_dict(torch.load(segnet_path_torch, weights_only=True), strict=True)
     model.eval()
@@ -138,7 +168,7 @@ def convert_segnet() -> str:
     torch.onnx.export(
         model,
         sample_inputs,  # type: ignore
-        f"{os.path.splitext(segnet_path_torch)[0]}.onnx",
+        path_out,
         opset_version=17,
         do_constant_folding=True,
         input_names=["input"],

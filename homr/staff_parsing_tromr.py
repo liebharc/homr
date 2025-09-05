@@ -61,6 +61,9 @@ def predict_best(
 
         results_are_close = 4
         if best_distance < results_are_close:
+            eprint(
+                "Stopping at attempt", best_attempt + 1, "with distance", best_distance, best_result
+            )
             return best_result
 
     eprint("Taking attempt", best_attempt + 1, "with distance", best_distance, best_result)

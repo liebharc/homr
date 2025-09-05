@@ -129,7 +129,10 @@ def write_text_to_file(text: str, path: str) -> None:
 
 
 def _split_file_into_staffs(
-    voices: list[list[list[SplitSymbol]]], svg_files: list[SvgMusicFile], just_token_files: bool
+    voices: list[list[list[SplitSymbol]]],
+    svg_files: list[SvgMusicFile],
+    just_token_files: bool,
+    fail_if_image_is_missing: bool,
 ) -> list[str]:
     voice = 0
 
@@ -164,7 +167,7 @@ def _split_file_into_staffs(
                 preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
                 cv2.imwrite(staff_image_file_name, preprocessed)
                 staff_image_file_name = distort_image(staff_image_file_name)
-            elif not os.path.exists(staff_image_file_name):
+            elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
                 raise ValueError(f"File {staff_image_file_name} not found")
 
             token_file_name = png_file.replace(".png", f"-{staff_number}.tokens")
@@ -261,7 +264,9 @@ def check_duration(measure: list[SplitSymbol]) -> bool:
     return is_integer_duration
 
 
-def _convert_file(file: Path, just_token_files: bool) -> list[str]:
+def convert_xml_and_svg_file(
+    file: Path, just_token_files: bool, fail_if_image_is_missing: bool = True
+) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
         number_of_voices = len(voices)
@@ -286,7 +291,9 @@ def _convert_file(file: Path, just_token_files: bool) -> list[str]:
             )
 
             return []
-        return _split_file_into_staffs(voices, svg_files, just_token_files)
+        return _split_file_into_staffs(
+            voices, svg_files, just_token_files, fail_if_image_is_missing
+        )
 
     except Exception as e:
         eprint("Error while processing", file, e)
@@ -294,11 +301,11 @@ def _convert_file(file: Path, just_token_files: bool) -> list[str]:
 
 
 def _convert_file_only_token(path: Path) -> list[str]:
-    return _convert_file(path, True)
+    return convert_xml_and_svg_file(path, True)
 
 
 def _convert_token_and_image(path: Path) -> list[str]:
-    return _convert_file(path, False)
+    return convert_xml_and_svg_file(path, False)
 
 
 def convert_lieder(only_recreate_token_files: bool = False) -> None:

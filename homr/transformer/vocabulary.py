@@ -273,6 +273,9 @@ class SplitSymbol:
         self.articulation = articulation
         self._duration: SymbolDuration | None = None
 
+    def is_control_symbol(self) -> bool:
+        return self.rhythm in ("BOS", "EOS", "PAD")
+
     def is_valid(self) -> bool:
         rhythm_cat = rhythm_to_category(self.rhythm)
         other_cats = [

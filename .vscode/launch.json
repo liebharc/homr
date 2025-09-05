@@ -32,10 +32,10 @@
 			"type": "debugpy",
 			"python": "${workspaceFolder}/.venv/bin/python",
 			"request": "launch",
-			"program": "${workspaceFolder}/validation/symbol_error_rate.py",
+			"program": "${workspaceFolder}/validation/symbol_error_rate_torch.py",
 			"console": "integratedTerminal",
 			"args": [
-				"${workspaceFolder}/current_training/checkpoint-16481/model.safetensors"
+				"${workspaceFolder}/current_training/checkpoint-101388/model.safetensors"
 			]
 		},
 		{

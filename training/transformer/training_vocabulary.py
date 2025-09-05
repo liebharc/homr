@@ -46,18 +46,27 @@ def _chord_to_str(chord: list[SplitSymbol]) -> str:
     return str.join("&", [str(c) for c in sorted_chord])
 
 
-def token_lines_to_str(symbols: list[SplitSymbol]) -> str:
-    # TODO convert lifts, sort symbols in chords, but also e.g. slur vs cres start
+def sort_token_chords(
+    symbols: list[SplitSymbol], keep_chord_symbol: bool = False
+) -> list[list[SplitSymbol]]:
     chords: list[list[SplitSymbol]] = []
     is_in_chord = False
     for symbol in symbols:
         if symbol.rhythm == "chord":
             is_in_chord = True
         elif is_in_chord:
+            if keep_chord_symbol:
+                chords[1].append(SplitSymbol("chord"))
             chords[-1].append(symbol)
             is_in_chord = False
         else:
             chords.append([symbol])
+    return chords
+
+
+def token_lines_to_str(symbols: list[SplitSymbol]) -> str:
+    # TODO convert lifts, sort symbols in chords, but also e.g. slur vs cres start
+    chords = sort_token_chords(symbols)
 
     chord_strings = [_chord_to_str(c) for c in chords]
     return str.join("\n", chord_strings)
