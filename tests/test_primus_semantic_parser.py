@@ -1,6 +1,6 @@
 import unittest
 
-from training.primus_semantic_to_tokens import convert_primus_semantic_to_tokens
+from training.datasets.primus_semantic_parser import convert_primus_semantic_to_tokens
 from training.transformer.training_vocabulary import (
     check_token_lines,
     token_lines_to_str,

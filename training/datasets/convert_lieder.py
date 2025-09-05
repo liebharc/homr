@@ -20,7 +20,7 @@ from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import SplitSymbol
 from training.convert_grandstaff import distort_image
 from training.musescore_svg import SvgMusicFile, get_position_from_multiple_svg_files
-from training.music_xml_to_tokens import music_xml_file_to_tokens
+from training.music_xml_parser import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))

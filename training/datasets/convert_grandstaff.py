@@ -16,7 +16,7 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
-from training.humdrum_kern import convert_kern_to_tokens
+from training.humdrum_kern_parser import convert_kern_to_tokens
 from training.musescore_svg import SvgValidationError
 from training.transformer.training_vocabulary import token_lines_to_str
 

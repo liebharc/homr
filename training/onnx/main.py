@@ -2,14 +2,14 @@
 
 import os
 
-from training.convert_onnx.convert import (
+from training.onnx.convert import (
     convert_decoder,
     convert_encoder,
     convert_segnet,
 )
-from training.convert_onnx.quantization import quantization_int8
-from training.convert_onnx.simplify import main as simplify_onnx_model
-from training.convert_onnx.split_weights import split_weights
+from training.onnx.quantization import quantization_int8
+from training.onnx.simplify import main as simplify_onnx_model
+from training.onnx.split_weights import split_weights
 
 
 def convert_all(transformer_path: str | None = None, segnet_path: str | None = None) -> None:
@@ -48,6 +48,6 @@ if __name__ == "__main__":
 
     from homr.segmentation.config import segnet_path_torch
     from homr.transformer.configs import Config
-    from training.convert_onnx.main import convert_all
+    from training.onnx.main import convert_all
 
     convert_all(transformer_path=Config().filepaths.checkpoint, segnet_path=segnet_path_torch)

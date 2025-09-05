@@ -24,9 +24,9 @@ from homr.brace_dot_detection import (
     find_braces_brackets_and_grand_staff_lines,
     prepare_brace_dot_image,
 )
+from homr.datasets.musicxml_gen import XmlGeneratorArguments, generate_xml
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff
-from homr.musicxml_gen import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
@@ -200,9 +200,7 @@ def detect_staffs_in_image(
     debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)
     eprint("Found " + str(len(symbols.staff_fragments)) + " staff line fragments")
 
-    noteheads_with_stems = combine_noteheads_with_stems(
-        symbols.noteheads, symbols.stems_rest
-    )
+    noteheads_with_stems = combine_noteheads_with_stems(symbols.noteheads, symbols.stems_rest)
     debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
     eprint("Found " + str(len(noteheads_with_stems)) + " noteheads")
     if len(noteheads_with_stems) == 0:

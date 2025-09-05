@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from typing import Any
 
 from homr.transformer.vocabulary import Vocabulary
@@ -11,13 +11,18 @@ root_dir = os.getcwd()
 class FilePaths:
     def __init__(self) -> None:
         self.encoder_path = os.path.join(
-            workspace, "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx"
+            workspace,
+            "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx",
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace, "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e.onnx"
         )  # noqa: E501
         self.checkpoint = os.path.join(
-            root_dir, "training", "architecture", "transformer", "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55"
+            root_dir,
+            "training",
+            "architecture",
+            "transformer",
+            "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55",
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
@@ -36,7 +41,6 @@ class FilePaths:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
-
 
 
 class DecoderArgs:
@@ -58,7 +62,6 @@ class DecoderArgs:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
-
 
 
 class Config:
@@ -121,7 +124,6 @@ class Config:
 
     def to_json_string(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
-
 
 
 # Initialize the Config class

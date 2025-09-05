@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import musicxml.xmlelement.xmlelement as mxl
 from musicxml.parser.parser import _parse_node
 
-from homr.musicxml_gen import DURATION_NAMES
+from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import SplitSymbol, empty
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines

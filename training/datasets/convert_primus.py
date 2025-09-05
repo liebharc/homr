@@ -9,7 +9,7 @@ from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.convert_grandstaff import distort_image
-from training.primus_semantic_to_tokens import convert_primus_semantic_to_tokens
+from training.primus_semantic_parser import convert_primus_semantic_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))

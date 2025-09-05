@@ -185,7 +185,7 @@ class HumdrumKernConverter:
         mapping = {
             "=:|!|:": ["repeatEnd", "barline", "repeatStart"],
             "=": ["barline"],
-            "=-": [],
+            "=-": [],  # barline after clef, key and time sig
             "==:|!": ["repeatEnd", "barline"],
             "==": ["bolddoublebarline"],
             "=:|!": ["repeatEnd", "barline"],

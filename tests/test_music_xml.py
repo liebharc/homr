@@ -1,6 +1,6 @@
 import unittest
 
-from training.music_xml_to_tokens import music_xml_string_to_tokens
+from training.datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 
