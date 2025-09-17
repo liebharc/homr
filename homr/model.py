@@ -180,32 +180,6 @@ class Note(SymbolOnStaff):
         return Note(self.box, self.position, self.stem, self.stem_direction)
 
 
-class NoteGroup(SymbolOnStaff):
-    def __init__(self, notes: list[Note]) -> None:
-        average_center = np.mean([note.center for note in notes], axis=0)
-        super().__init__(average_center)
-        # sort notes by pitch, highest position first
-        self.notes = sorted(notes, key=lambda note: note.position, reverse=True)
-
-    def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
-        for note in self.notes:
-            note.draw_onto_image(img, color)
-
-    def __str__(self) -> str:
-        return "NoteGroup(" + str.join(",", [str(note) for note in self.notes]) + ")"
-
-    def __repr__(self) -> str:
-        return str(self)
-
-    def copy(self) -> "NoteGroup":
-        return NoteGroup([note.copy() for note in self.notes])
-
-    def transform_coordinates(
-        self, transformation: Callable[[tuple[float, float]], tuple[float, float]]
-    ) -> "NoteGroup":
-        return NoteGroup([note.transform_coordinates(transformation) for note in self.notes])
-
-
 class BarLine(SymbolOnStaff):
     def __init__(self, box: RotatedBoundingBox):
         super().__init__(box.center)
@@ -369,20 +343,11 @@ class Staff(DebugDrawable):
 
         return Staff(grid)
 
-    def get_note_groups(self) -> list[NoteGroup]:
-        result = []
-        for symbol in self.symbols:
-            if isinstance(symbol, NoteGroup):
-                result.append(symbol)
-        return result
-
     def get_number_of_notes(self) -> int:
         result = 0
         for symbol in self.symbols:
             if isinstance(symbol, Note):
                 result += 1
-            if isinstance(symbol, NoteGroup):
-                result += len(symbol.notes)
         return result
 
     def get_all_except_notes(self) -> list[SymbolOnStaff]:

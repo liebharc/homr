@@ -119,7 +119,7 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
         weight_decay=0.01,
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
-        load_best_model_at_end=True,
+        load_best_model_at_end=False,
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",

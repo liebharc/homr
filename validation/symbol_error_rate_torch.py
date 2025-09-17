@@ -183,7 +183,11 @@ def main() -> None:
         is_dir = os.path.isdir(args.checkpoint_file)
         if is_dir:
             # glob recursive for all model.safetensors file in the directory
-            checkpoint_files = list(Path(args.checkpoint_file).rglob("model.safetensors"))
+            checkpoint_files = sorted(
+                Path(args.checkpoint_file).rglob("model.safetensors"),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
         else:
             checkpoint_files = [Path(args.checkpoint_file)]
 

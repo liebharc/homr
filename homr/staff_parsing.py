@@ -4,7 +4,7 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
-from homr.model import MultiStaff, NoteGroup, Staff
+from homr.model import MultiStaff, Staff
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
@@ -178,14 +178,6 @@ def prepare_staff_image(
         for symbol in transformed_staff.symbols:
             center = symbol.center
             cv2.circle(transformed_staff_image, (int(center[0]), int(center[1])), 5, (0, 0, 255))
-            if isinstance(symbol, NoteGroup):
-                for note in symbol.notes:
-                    cv2.circle(
-                        transformed_staff_image,
-                        (int(note.center[0]), int(note.center[1])),
-                        3,
-                        (255, 255, 0),
-                    )
             cv2.putText(
                 transformed_staff_image,
                 type(symbol).__name__,
