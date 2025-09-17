@@ -16,11 +16,12 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
-from training.humdrum_kern import convert_kern_to_semantic
-from training.musescore_svg import SvgValidationError
+from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
+from training.datasets.musescore_svg import SvgValidationError
+from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.absolute()
+git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 grandstaff_root = os.path.join(dataset_root, "grandstaff")
 grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")
@@ -197,46 +198,28 @@ def _find_lighest_non_white_pixel(gray: NDArray) -> int:
         return pure_white
 
 
-def contains_max_one_clef(semantic: str) -> bool:
-    """
-    hum2xml sometimes generates invalid musicxml which
-    we can detect by checking for multiple clefs, e.g.
-
-    scarlatti-d/keyboard-sonatas/L481K025/min3_up_m-79-82.krn
-
-    The issue here is likely that it uses two G2 clefs, and
-    overlays them on top of each other to indicate
-    multiple notes at the same time.
-    """
-    return semantic.count("clef-") <= 1
-
-
-def _kern_to_semantic(path: str, basename: str) -> tuple[str | None, str | None]:
+def _kern_to_tokens(path: str, basename: str) -> tuple[str | None, str | None]:
     with open(path) as text_file:
-        result = convert_kern_to_semantic(text_file.readlines())
+        result = convert_kern_to_tokens(text_file.readlines())
     staffs_in_grandstaff = 2
     if len(result) != staffs_in_grandstaff:
         return None, None
-    if not all(contains_max_one_clef(line) for line in result):
-        return None, None
 
-    with open(basename + "_upper.semantic", "w") as f:
-        f.write(result[0])
-    with open(basename + "_lower.semantic", "w") as f:
-        f.write(result[1])
-    return basename + "_upper.semantic", basename + "_lower.semantic"
+    with open(basename + "_upper.tokens", "w") as f:
+        f.write(token_lines_to_str(result[0]))
+    with open(basename + "_lower.tokens", "w") as f:
+        f.write(token_lines_to_str(result[1]))
+    return basename + "_upper.tokens", basename + "_lower.tokens"
 
 
-def _convert_file(  # noqa: PLR0911
-    path: Path, ony_recreate_semantic_files: bool = False
-) -> list[str]:
+def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> list[str]:  # noqa: PLR0911
     try:
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
-        upper_semantic, lower_semantic = _kern_to_semantic(str(path), basename)
-        if upper_semantic is None or lower_semantic is None:
+        upper_tokens, lower_tokens = _kern_to_tokens(str(path), basename)
+        if upper_tokens is None or lower_tokens is None:
             return []
-        if ony_recreate_semantic_files:
+        if ony_recreate_token_files:
             upper, lower = _check_staff_image(image_file, basename)
         else:
             upper, lower = _split_staff_image(image_file, basename)
@@ -246,15 +229,15 @@ def _convert_file(  # noqa: PLR0911
             return [
                 str(Path(upper).relative_to(git_root))
                 + ","
-                + str(Path(upper_semantic).relative_to(git_root)),
+                + str(Path(upper_tokens).relative_to(git_root)),
             ]
         return [
             str(Path(upper).relative_to(git_root))
             + ","
-            + str(Path(upper_semantic).relative_to(git_root)),
+            + str(Path(upper_tokens).relative_to(git_root)),
             str(Path(lower).relative_to(git_root))
             + ","
-            + str(Path(lower_semantic).relative_to(git_root)),
+            + str(Path(lower_tokens).relative_to(git_root)),
         ]
     except SvgValidationError:
         return []
@@ -263,17 +246,17 @@ def _convert_file(  # noqa: PLR0911
         return []
 
 
-def _convert_file_only_semantic(path: Path) -> list[str]:
+def _convert_file_only_tokens(path: Path) -> list[str]:
     return _convert_file(path, True)
 
 
-def _convert_semantic_and_image(path: Path) -> list[str]:
+def _convert_tokens_and_image(path: Path) -> list[str]:
     return _convert_file(path, False)
 
 
-def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
+def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
     index_file = grandstaff_train_index
-    if only_recreate_semantic_files:
+    if only_recreate_token_files:
         index_file = os.path.join(grandstaff_root, "index_tmp.txt")
 
     eprint("Indexing Grandstaff dataset, this can up to several hours.")
@@ -284,9 +267,9 @@ def convert_grandstaff(only_recreate_semantic_files: bool = False) -> None:
         with multiprocessing.Pool() as p:
             for result in p.imap_unordered(
                 (
-                    _convert_file_only_semantic
-                    if only_recreate_semantic_files
-                    else _convert_semantic_and_image
+                    _convert_file_only_tokens
+                    if only_recreate_token_files
+                    else _convert_tokens_and_image
                 ),
                 krn_files,
             ):
@@ -308,7 +291,7 @@ if __name__ == "__main__":
     import sys
 
     multiprocessing.set_start_method("spawn")
-    only_recreate_semantic_files = False
-    if "--only-semantic" in sys.argv:
-        only_recreate_semantic_files = True
-    convert_grandstaff(only_recreate_semantic_files)
+    only_recreate_token_files = False
+    if "--only-tokens" in sys.argv:
+        only_recreate_token_files = True
+    convert_grandstaff(only_recreate_token_files)

@@ -81,6 +81,15 @@ class StaffLineSegment(DebugDrawable):
             cv2.LINE_AA,
         )
 
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, StaffLineSegment):
+            return frozenset(self.staff_fragments) == frozenset(__value.staff_fragments)
+        else:
+            return False
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self.staff_fragments))
+
 
 class StaffAnchor(DebugDrawable):
     """
@@ -465,10 +474,6 @@ def resample_staffs(staffs: list[RawStaff]) -> list[Staff]:
     for staff in staffs:
         result.append(resample_staff(staff))
     return result
-
-
-def range_intersect(r1: range, r2: range) -> range | None:
-    return range(max(r1.start, r2.start), min(r1.stop, r2.stop)) or None
 
 
 def filter_edge_of_vision(staffs: list[Staff], image_shape: tuple[int, ...]) -> list[Staff]:

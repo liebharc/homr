@@ -52,7 +52,7 @@ class SvgStaff(SvgRectangle):
         # Add the starting and ending barline
         self.bar_line_x_positions.add(self.x)
         self.bar_line_x_positions.add(self.x + self.width)
-        self.min_measure_width = 100
+        self.min_measure_width = 50
 
     def add_bar_line(self, bar_line: SvgRectangle) -> None:
         already_present = any(
@@ -145,16 +145,6 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
             staff_lines.append(_parse_paths(line.getAttribute("points")))
         if class_name == "BarLine":
             bar_lines.append(_parse_paths(line.getAttribute("points")))
-    paths = doc.getElementsByTagName("path")
 
-    number_of_clefs = 0
-    for path in paths:
-        class_name = path.getAttribute("class")
-        if class_name == "Clef":
-            number_of_clefs += 1
     combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
-    if len(combined) != number_of_clefs:
-        raise SvgValidationError(
-            f"Number of clefs {number_of_clefs} does not match the number of staffs {len(combined)}"
-        )
     return SvgMusicFile(svg_file, width, height, combined)

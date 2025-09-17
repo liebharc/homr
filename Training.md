@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 220
+
+Commit: c50aec7de6469480cf6f547695f48aed76d8422e
+Day: 05 Sep 2025
+SER: 8%
+Validation result: 8.8
+
+Added articulations and other symbols.
+
 ## Run 197
 
 Commit: 4c8d68b941c647c96f82d977ac0bb59d4f2b7a8c

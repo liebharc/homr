@@ -4,20 +4,13 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
-from homr.model import MultiStaff, NoteGroup, Staff
-from homr.results import (
-    ResultChord,
-    ResultClef,
-    ResultMeasure,
-    ResultStaff,
-    ResultTimeSignature,
-    move_pitch_to_clef,
-)
+from homr.model import MultiStaff, Staff
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
 
@@ -39,7 +32,7 @@ def _is_close_to_image_top_or_bottom(staff: MultiStaff, image: NDArray) -> bool:
 def _ensure_same_number_of_staffs(staffs: list[MultiStaff], image: NDArray) -> list[MultiStaff]:
     if _have_all_the_same_number_of_staffs(staffs):
         return staffs
-    if len(staffs) > 2:  # noqa: PLR2004
+    if len(staffs) > 2:
         if _is_close_to_image_top_or_bottom(
             staffs[0], image
         ) and _have_all_the_same_number_of_staffs(staffs[1:]):
@@ -115,14 +108,6 @@ def add_image_into_tr_omr_canvas(
     return new_image
 
 
-def copy_image_in_center_of_double_the_height_and_white_background(image: NDArray) -> NDArray:
-    height, width = image.shape[:2]
-    new_image = np.zeros((height * 2, width, 3), np.uint8)
-    new_image[:, :] = (255, 255, 255)
-    new_image[height // 2 : height // 2 + height, :] = image
-    return new_image
-
-
 def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> NDArray:
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(gray, 97, 255, cv2.THRESH_BINARY)
@@ -193,14 +178,6 @@ def prepare_staff_image(
         for symbol in transformed_staff.symbols:
             center = symbol.center
             cv2.circle(transformed_staff_image, (int(center[0]), int(center[1])), 5, (0, 0, 255))
-            if isinstance(symbol, NoteGroup):
-                for note in symbol.notes:
-                    cv2.circle(
-                        transformed_staff_image,
-                        (int(note.center[0]), int(note.center[1])),
-                        3,
-                        (255, 255, 0),
-                    )
             cv2.putText(
                 transformed_staff_image,
                 type(symbol).__name__,
@@ -238,123 +215,42 @@ def _dewarp_staff(
 
 def parse_staff_image(
     debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions
-) -> ResultStaff | None:
+) -> list[EncodedSymbol]:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
-    attention_debug = debug.build_attention_debug(staff_image, f"_staff-{index}_output.jpg")
     eprint("Running TrOmr inference on staff image", index)
-    result = parse_staff_tromr(
-        staff_image=staff_image,
-        staff=transformed_staff,
-        debug=attention_debug,
-    )
-    if attention_debug is not None:
-        attention_debug.write()
+    result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
     return result
 
 
-def _pick_dominant_clef(staff: ResultStaff) -> ResultStaff:  # noqa: C901, PLR0912
-    clefs = [clef for clef in staff.get_symbols() if isinstance(clef, ResultClef)]
-    clef_types = [clef.clef_type for clef in clefs]
-    if len(clef_types) == 0:
-        return staff
-    most_frequent_clef_type = max(set(clef_types), key=clef_types.count)
-    if most_frequent_clef_type is None:
-        return staff
-    if clef_types.count(most_frequent_clef_type) == 1:
-        return staff
-    circle_of_fifth = 0  # doesn't matter if we only look at the clef type
-    most_frequent_clef = ResultClef(most_frequent_clef_type, circle_of_fifth)
-    last_clef_was_originally = None
-    for symbol in staff.get_symbols():
-        if isinstance(symbol, ResultClef):
-            last_clef_was_originally = ResultClef(symbol.clef_type, 0)
-            symbol.clef_type = most_frequent_clef_type
-        elif isinstance(symbol, ResultChord):
-            for note in symbol.notes:
-                note.pitch = move_pitch_to_clef(
-                    note.pitch, last_clef_was_originally, most_frequent_clef
-                )
-        elif isinstance(symbol, ResultMeasure):
-            for measure_symbol in symbol.symbols:
-                if isinstance(symbol, ResultClef):
-                    last_clef_was_originally = ResultClef(symbol.clef_type, 0)
-                    symbol.clef_type = most_frequent_clef_type
-                elif isinstance(measure_symbol, ResultChord):
-                    for note in measure_symbol.notes:
-                        note.pitch = move_pitch_to_clef(
-                            note.pitch, last_clef_was_originally, most_frequent_clef
-                        )
-
-    return staff
-
-
-def _pick_dominant_key_signature(staff: ResultStaff) -> ResultStaff:
-    clefs = [clef for clef in staff.get_symbols() if isinstance(clef, ResultClef)]
-    key_signatures = [clef.circle_of_fifth for clef in clefs]
-    if len(key_signatures) == 0:
-        return staff
-    most_frequent_key = max(set(key_signatures), key=key_signatures.count)
-    if most_frequent_key is None:
-        return staff
-    if key_signatures.count(most_frequent_key) == 1:
-        return staff
-    for clef in clefs:
-        clef.circle_of_fifth = most_frequent_key
-    return staff
-
-
-def _remove_redundant_clefs(measures: list[ResultMeasure]) -> None:
-    last_clef = None
-    for measure in measures:
-        for symbol in measure.symbols:
-            if isinstance(symbol, ResultClef):
-                if last_clef is not None and last_clef == symbol:
-                    measure.remove_symbol(symbol)
-                else:
-                    last_clef = symbol
-
-
-def _remove_all_but_first_time_signature(measures: list[ResultMeasure]) -> None:
-    """
-    The transformer tends to hallucinate time signatures. In most cases there is only one
-    time signature at the beginning, so we remove all others.
-    """
-    last_sig = None
-    for measure in measures:
-        for symbol in measure.symbols:
-            if isinstance(symbol, ResultTimeSignature):
-                if last_sig is not None:
-                    measure.remove_symbol(symbol)
-                else:
-                    last_sig = symbol
-
-
-def merge_and_clean(staffs: list[ResultStaff], force_single_clef_type: bool) -> ResultStaff:
+def remove_duplicated_symbols(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
     """
     Merge all staffs of a voice into a single staff.
+    Every staff starts with a clef and a key, but we only need to keep
+    them if they are different to the previous value.
     """
-    result = ResultStaff([])
-    for staff in staffs:
-        result = result.merge(staff)
-    if force_single_clef_type:
-        _pick_dominant_clef(result)
-    _pick_dominant_key_signature(result)
-    _remove_redundant_clefs(result.measures)
-    _remove_all_but_first_time_signature(result.measures)
-    result.measures = [measure for measure in result.measures if not measure.is_empty()]
+    result = []
+    last_values = {"clef": "", "timeSignature": "", "keySignature": ""}
+
+    for symbol in symbols:
+        ignore_symbol = False
+        for category in last_values:  # noqa: PLC0206
+            if symbol.rhythm.startswith(category):
+                if last_values[category] == symbol.rhythm:
+                    ignore_symbol = True
+                else:
+                    last_values[category] = symbol.rhythm
+
+        if ignore_symbol:
+            continue
+        result.append(symbol)
     return result
-
-
-def remember_new_line(measures: list[ResultMeasure]) -> None:
-    if len(measures) > 0:
-        measures[0].is_new_line = True
 
 
 def parse_staffs(
     debug: Debug, staffs: list[MultiStaff], image: NDArray, selected_staff: int = -1
-) -> list[ResultStaff]:
+) -> list[list[EncodedSymbol]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -375,21 +271,13 @@ def parse_staffs(
                 i += 1
                 continue
             result_staff = parse_staff_image(debug, i, staff, image, regions)
-            if result_staff is None:
-                eprint("Staff was filtered out", i)
-                i += 1
-                continue
-            if result_staff.is_empty():
+            if len(result_staff) == 0:
                 eprint("Skipping empty staff", i)
                 i += 1
                 continue
-            remember_new_line(result_staff.measures)
-            result_for_voice.append(result_staff)
+            result_staff.append(EncodedSymbol("newline"))
+            result_for_voice.extend(result_staff)
             i += 1
 
-        # Piano music can have a change of clef, while for other instruments
-        # we assume that the clef is the same for all staffs.
-        # The number of voices is the only way we can distinguish between the two.
-        force_single_clef_type = number_of_voices == 1
-        voices.append(merge_and_clean(result_for_voice, force_single_clef_type))
+        voices.append(remove_duplicated_symbols(result_for_voice))
     return voices

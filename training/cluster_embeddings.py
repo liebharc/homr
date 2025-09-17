@@ -1,4 +1,4 @@
-# ruff: noqa: T201, C901, PLR0912, PLR0915
+# ruff: noqa: T201
 # type: ignore
 
 import argparse

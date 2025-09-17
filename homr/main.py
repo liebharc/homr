@@ -9,11 +9,8 @@ import cv2
 import numpy as np
 
 from homr import color_adjust, download_utils
-from homr.accidental_detection import add_accidentals_to_staffs
-from homr.accidental_rules import maintain_accidentals
 from homr.autocrop import autocrop
 from homr.bar_line_detection import (
-    add_bar_lines_to_staffs,
     detect_bar_lines,
     prepare_bar_line_image,
 )
@@ -29,12 +26,10 @@ from homr.brace_dot_detection import (
 )
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff
+from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
-from homr.rest_detection import add_rests_to_staffs
-from homr.results import ResultStaff
-from homr.rhythm_rules import correct_rhythm
 from homr.segmentation.config import segnet_path_onnx
 from homr.segmentation.inference_segnet import extract
 from homr.simple_logging import eprint
@@ -44,7 +39,6 @@ from homr.staff_position_save_load import load_staff_positions, save_staff_posit
 from homr.title_detection import detect_title, download_ocr_weights
 from homr.transformer.configs import default_config
 from homr.type_definitions import NDArray
-from homr.xml_generator import XmlGeneratorArguments, generate_xml
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -55,14 +49,12 @@ class PredictedSymbols:
         noteheads: list[BoundingEllipse],
         staff_fragments: list[RotatedBoundingBox],
         clefs_keys: list[RotatedBoundingBox],
-        accidentals: list[RotatedBoundingBox],
         stems_rest: list[RotatedBoundingBox],
         bar_lines: list[RotatedBoundingBox],
     ) -> None:
         self.noteheads = noteheads
         self.staff_fragments = staff_fragments
         self.clefs_keys = clefs_keys
-        self.accidentals = accidentals
         self.stems_rest = stems_rest
         self.bar_lines = bar_lines
 
@@ -124,10 +116,6 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     clefs_keys = create_rotated_bounding_boxes(
         predictions.clefs_keys, min_size=(20, 40), max_size=(1000, 1000)
     )
-    eprint("Creating bounds for accidentals")
-    accidentals = create_rotated_bounding_boxes(
-        predictions.clefs_keys, min_size=(5, 5), max_size=(100, 100)
-    )
     eprint("Creating bounds for stems_rest")
     stems_rest = create_rotated_bounding_boxes(predictions.stems_rest)
     eprint("Creating bounds for bar_lines")
@@ -135,9 +123,7 @@ def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSym
     debug.write_threshold_image("bar_line_img", bar_line_img)
     bar_lines = create_rotated_bounding_boxes(bar_line_img, skip_merging=True, min_size=(1, 5))
 
-    return PredictedSymbols(
-        noteheads, staff_fragments, clefs_keys, accidentals, stems_rest, bar_lines
-    )
+    return PredictedSymbols(noteheads, staff_fragments, clefs_keys, stems_rest, bar_lines)
 
 
 @dataclass
@@ -149,11 +135,11 @@ class ProcessingConfig:
     selected_staff: int
 
 
-def process_image(  # noqa: PLR0915
+def process_image(
     image_path: str,
     config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
-) -> list[ResultStaff]:
+) -> None:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
     debug_cleanup: Debug | None = None
@@ -177,9 +163,6 @@ def process_image(  # noqa: PLR0915
             debug, multi_staffs, image, selected_staff=config.selected_staff
         )
 
-        result_staffs = maintain_accidentals(result_staffs)
-        result_staffs = correct_rhythm(result_staffs)
-
         title = title_future.result(60)
         eprint("Found title:", title)
 
@@ -187,13 +170,7 @@ def process_image(  # noqa: PLR0915
         xml = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
 
-        eprint(
-            "Finished parsing "
-            + str(len(result_staffs))
-            + " voices over "
-            + str(sum(staff.number_of_new_lines() for staff in result_staffs))
-            + " staves"
-        )
+        eprint("Finished parsing " + str(len(result_staffs)) + " staves")
         teaser_file = replace_extension(image_path, "_teaser.png")
         if config.write_staff_positions:
             staff_position_files = replace_extension(image_path, ".txt")
@@ -202,8 +179,6 @@ def process_image(  # noqa: PLR0915
         debug.clean_debug_files_from_previous_runs()
 
         eprint("Result was written to", xml_file)
-
-        return result_staffs
     except:
         if os.path.exists(xml_file):
             os.remove(xml_file)
@@ -225,9 +200,7 @@ def detect_staffs_in_image(
     debug.write_bounding_boxes("staff_fragments", symbols.staff_fragments)
     eprint("Found " + str(len(symbols.staff_fragments)) + " staff line fragments")
 
-    noteheads_with_stems, likely_bar_or_rests_lines = combine_noteheads_with_stems(
-        symbols.noteheads, symbols.stems_rest
-    )
+    noteheads_with_stems = combine_noteheads_with_stems(symbols.noteheads, symbols.stems_rest)
     debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
     eprint("Found " + str(len(noteheads_with_stems)) + " noteheads")
     if len(noteheads_with_stems) == 0:
@@ -261,29 +234,13 @@ def detect_staffs_in_image(
     title_future = detect_title(debug, staffs[0])
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
-    global_unit_size = np.mean([staff.average_unit_size for staff in staffs])
-
-    bar_lines_found = add_bar_lines_to_staffs(staffs, bar_line_boxes)
-    eprint("Found " + str(len(bar_lines_found)) + " bar lines")
-
-    possible_rests = [
-        rest for rest in bar_lines_or_rests if not rest.is_overlapping_with_any(bar_line_boxes)
-    ]
-    rests = add_rests_to_staffs(staffs, possible_rests)
-    eprint("Found", len(rests), "rests")
-
-    all_classified = predictions.notehead + predictions.clefs_keys + predictions.stems_rest
-    brace_dot_img = prepare_brace_dot_image(
-        predictions.symbols, predictions.staff, all_classified, global_unit_size
-    )
+    brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
     debug.write_threshold_image("brace_dot", brace_dot_img)
     brace_dot = create_rotated_bounding_boxes(brace_dot_img, skip_merging=True, max_size=(100, -1))
 
     notes = add_notes_to_staffs(
         staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
     )
-    accidentals = add_accidentals_to_staffs(staffs, symbols.accidentals)
-    eprint("Found", len(accidentals), "accidentals")
 
     multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
     eprint(
@@ -293,9 +250,7 @@ def detect_staffs_in_image(
         [len(staff.staffs) for staff in multi_staffs],
     )
 
-    debug.write_all_bounding_boxes_alternating_colors(
-        "notes", multi_staffs, notes, rests, accidentals
-    )
+    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
 
     return multi_staffs, predictions.preprocessed, debug, title_future
 
@@ -329,7 +284,7 @@ def download_weights() -> None:
 
     eprint("Downloading", len(missing_models), "models - this is only required once")
     for model in missing_models:
-        if not os.path.exists(model) or True:
+        if not os.path.exists(model):
             base_name = os.path.basename(model).split(".")[0]
             eprint(f"Downloading {base_name}")
             try:

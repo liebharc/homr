@@ -4,46 +4,9 @@ from collections.abc import Sequence
 from itertools import chain
 
 import cv2
-import numpy as np
 
 from homr.bounding_boxes import DebugDrawable
 from homr.type_definitions import NDArray
-
-
-class AttentionDebug:
-    def __init__(self, filename: str, image: NDArray, parent: "Debug") -> None:
-        self.image = image
-        self.destname = filename
-        self.attentions: list[NDArray] = []
-        self.parent = parent
-
-    def add_attention(self, attention: NDArray, center: tuple[float, float]) -> None:
-        attention_resized = cv2.resize(attention, (self.image.shape[1], self.image.shape[0]))
-        # Apply a colormap to the attention weights
-        attention_colormap = cv2.applyColorMap(  # type: ignore
-            np.uint8(255.0 * attention_resized / attention_resized.max()), cv2.COLORMAP_JET
-        )
-        overlay = cv2.addWeighted(self.image, 0.6, attention_colormap, 0.4, 0)
-
-        # Draw the center of attention
-        center_coordinates = (int(center[1]), int(center[0]))
-        radius = 20
-        color = (0, 255, 0)
-        thickness = 2
-        cv2.circle(overlay, center_coordinates, radius, color, thickness)
-
-        self.attentions.append(overlay)
-
-    def reset(self) -> None:
-        self.attentions = []
-
-    def write(self) -> None:
-        if not self.attentions:
-            return
-        attention = cv2.vconcat(self.attentions)
-        self.parent._remember_file_name(self.destname)
-        cv2.imwrite(self.destname, attention)
-        self.attentions = []
 
 
 class Debug:
@@ -150,10 +113,3 @@ class Debug:
             self._remember_file_name(filename)
         cv2.imwrite(filename, staff_image)
         return filename
-
-    def build_attention_debug(self, image: NDArray, suffix: str) -> AttentionDebug | None:
-        if not self.debug:
-            return None
-        filename = self.base_filename + suffix
-        self._remember_file_name(filename)
-        return AttentionDebug(filename, image, self)

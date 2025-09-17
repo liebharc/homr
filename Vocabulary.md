@@ -1,30 +1,38 @@
 # About the transformer vocabulary
 
-The encoding uses in this repository is based on the encoding of [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR) which is based on the encoding of [PrIMuS](https://grfia.dlsi.ua.es/primus/).
+The encoding used in this repository is inspired by [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR), which itself is based on the encoding of [PrIMuS](https://grfia.dlsi.ua.es/primus/).
 
-PrIMus describes two types of formats:
+PrIMuS defines two types of encodings:
 
-- agnostic: the symbols on the staff without an interpretation of their meaning
-- semantic: the symbols on the staff with an interpretation of their meaning
+- **Agnostic**: describes the symbols on the staff without interpreting their meaning.
+- **Semantic**: describes the symbols on the staff with their musical meaning.
 
-E.g. agnostic describes the position of a note on the staff, semantic describes the pitch of the note.
+For example, agnostic encoding may describe the position of a note on the staff, while semantic encoding describes the actual pitch of that note.
 
-For this project we use a hybrid of the two formats. We stay close to semantic, but in
-order to reduce the vocabulary size we use agnostic symbols in some cases.
+In this project, we use a **hybrid format**. We stay close to semantic, but we borrow from agnostic encoding when it helps reduce the vocabulary size.
 
-Take this example:
+Example:
 
 ```
 clef-G2+keySignature-DM+timeSignature-4/4+note-C4_quarter+G#4_quarter+barline
 ```
 
-This describes a G-clef, D major key signature, 4/4 time signature, two quarter notes (C#4 and G#4), and a barline.
+This describes a G clef, a D major key signature, a 4/4 time signature, two quarter notes (C4 and G#4), and a barline.
 
-The following rules apply:
+## Our Vocabulary
 
-- Like in the agnostic format, accidentals are only encoded if they have a symbol visible on the image
+Our encoding splits each symbol into **four parallel vocabularies**:
 
-The following customizations have been done to reduce the vocabulary size and this way improve the model performance:
+1. **Rhythm**: includes note durations (with augmentation dots), rests, clefs, key signatures, time signatures, barlines, and general musical symbols such as repeats, dynamics, and ties.
+2. **Lift**: describes accidentals (sharp, flat, natural, etc.).
+3. **Articulation**: describes articulation markings (staccato, accent, trill, etc.).
+4. **Pitch**: describes absolute pitches (C0–B9).
 
-- For time signatures we only condider the denominator as we can easily infer the numerator from the number of notes in a measure. The transformer does't seem to make a lot of use from the time signature information.
-- multirests are only supported up to a length of 9
+### Rules and Customizations
+
+- Accidentals are only encoded if they are explicitly visible in the score image (agnostic rule).
+- For time signatures, **only the denominator is encoded**. The numerator can be inferred from the number of notes in a measure. In practice, the model makes little use of numerator information.
+- Multi-rests are supported only up to a length of 9.
+- Rhythm vocabulary also serves as a catch-all for general non-pitch symbols (e.g., barlines, ties, dynamics).
+
+This separation into four dimensions keeps the vocabulary size manageable while preserving the essential musical information for the transformer model.

@@ -3,7 +3,7 @@ import numpy as np
 
 from homr import constants
 from homr.bounding_boxes import BoundingEllipse, DebugDrawable, RotatedBoundingBox
-from homr.model import Note, NoteGroup, Staff, StemDirection, SymbolOnStaff
+from homr.model import Note, Staff, StemDirection
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
@@ -119,7 +119,7 @@ def split_clumps_of_noteheads(
 
 def combine_noteheads_with_stems(
     noteheads: list[BoundingEllipse], stems: list[RotatedBoundingBox]
-) -> tuple[list[NoteheadWithStem], list[RotatedBoundingBox]]:
+) -> list[NoteheadWithStem]:
     """
     Combines noteheads with their stems as this tells us
     what vertical lines are stems and which are bar lines.
@@ -143,45 +143,7 @@ def combine_noteheads_with_stems(
                 break
         if not found_stem:
             result.append(NoteheadWithStem(notehead, None, None))
-
-    unaccounted_stems_or_bars = [stem for stem in stems if stem not in used_stems]
-    return result, unaccounted_stems_or_bars
-
-
-def _are_notes_likely_a_chord(note1: Note, note2: Note, tolerance: float) -> bool:
-    if note1.stem is None or note2.stem is None:
-        return abs(note1.center[0] - note2.center[0]) < tolerance
-    return abs(note1.stem.center[0] - note2.stem.center[0]) < tolerance
-
-
-def _create_note_group(notes: list[Note]) -> Note | NoteGroup:
-    if len(notes) == 1:
-        return notes[0]
-    result = NoteGroup(notes)
     return result
-
-
-def _group_notes_on_staff(staff: Staff) -> None:
-    notes = staff.get_notes()
-    groups: list[list[Note]] = []
-    for note in notes:
-        group_found = False
-        for group in groups:
-            for grouped_note in group:
-                if _are_notes_likely_a_chord(
-                    note, grouped_note, constants.tolerance_note_grouping(staff.average_unit_size)
-                ):
-                    group_found = True
-                    group.append(note)
-                    break
-            if group_found:
-                break
-        if not group_found:
-            groups.append([note])
-    note_groups: list[SymbolOnStaff] = [_create_note_group(group) for group in groups]
-    note_groups.extend(staff.get_all_except_notes())
-    sorted_by_x = sorted(note_groups, key=lambda group: group.center[0])
-    staff.symbols = sorted_by_x
 
 
 def add_notes_to_staffs(
@@ -217,16 +179,7 @@ def add_notes_to_staffs(
                 result.append(note)
                 staff.add_symbol(note)
     number_of_notes = 0
-    number_of_note_groups = 0
     for staff in staffs:
-        _group_notes_on_staff(staff)
         number_of_notes += len(staff.get_notes())
-        number_of_note_groups += len(staff.get_note_groups())
-    eprint(
-        "After grouping there are",
-        number_of_notes,
-        "notes and",
-        number_of_note_groups,
-        "note groups",
-    )
+    eprint("After grouping there are", number_of_notes, "notes")
     return result

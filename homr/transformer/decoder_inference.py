@@ -4,10 +4,9 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 
-from homr.results import TransformerChord
 from homr.transformer.configs import Config
-from homr.transformer.split_merge_symbols import SymbolMerger
 from homr.transformer.utils import softmax
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
 
@@ -22,21 +21,21 @@ class ScoreDecoder:
         self.ignore_index = ignore_index
         self.net = transformer
         self.max_seq_len = config.max_seq_len
+        self.eos_token = config.eos_token
 
         self.inv_rhythm_vocab = {v: k for k, v in config.rhythm_vocab.items()}
         self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
+        self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
 
-    def generate(  # noqa: PLR0915
+    def generate(
         self,
         start_tokens: NDArray,
         nonote_tokens: NDArray,
-        seq_len: int = 256,
-        eos_token: int | None = None,
         temperature: float = 1.0,
         filter_thres: float = 0.7,
         **kwargs: Any,
-    ) -> list[TransformerChord]:
+    ) -> list[EncodedSymbol]:
         num_dims = len(start_tokens.shape)
 
         if num_dims == 1:
@@ -47,85 +46,91 @@ class ScoreDecoder:
         out_rhythm = start_tokens
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
-        merger = SymbolMerger()
+        out_articulations = nonote_tokens
 
-        for _position_in_seq in range(seq_len):
+        symbols: list[EncodedSymbol] = []
+
+        for _ in range(self.max_seq_len):
             x_lift = out_lift[:, -self.max_seq_len :]
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
+            x_articulations = out_articulations[:, -self.max_seq_len :]
             context = kwargs["context"]
 
-            inputs = {"rhythms": x_rhythm, "pitchs": x_pitch, "lifts": x_lift, "context": context}
+            inputs = {
+                "rhythms": x_rhythm,
+                "pitchs": x_pitch,
+                "lifts": x_lift,
+                "articulations": x_articulations,
+                "context": context,
+            }
 
-            rhythmsp, pitchsp, liftsp = self.net.run(
-                output_names=["out_rhythms", "out_pitchs", "out_lifts"],  # noqa: E501
+            rhythmsp, pitchsp, liftsp, articulationsp = self.net.run(
+                output_names=["out_rhythms", "out_pitchs", "out_lifts", "out_articulations"],
                 input_feed=inputs,
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
+            filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
 
             current_temperature = temperature
             retry = True
             attempt = 0
             max_attempts = 5
-            while retry and attempt < max_attempts:
+            while retry:
                 lift_probs = softmax(filtered_lift_logits / current_temperature, dim=-1)
                 pitch_probs = softmax(filtered_pitch_logits / current_temperature, dim=-1)
                 rhythm_probs = softmax(filtered_rhythm_logits / current_temperature, dim=-1)
+                articulation_probs = softmax(
+                    filtered_articulations_logits / current_temperature, dim=-1
+                )
 
                 lift_sample = np.array([[lift_probs.argmax()]])
                 pitch_sample = np.array([[pitch_probs.argmax()]])
                 rhythm_sample = np.array([[rhythm_probs.argmax()]])
-
-                sorted_indices = np.argsort(rhythm_probs)[:, ::-1]
-                sorted_probs = np.take_along_axis(rhythm_probs, sorted_indices, axis=1)
-
-                rhythm_confidence = sorted_probs[0, 0].item()
-                alternative_confidence = sorted_probs[0, 1].item()
-
-                top_token_id = np.expand_dims(sorted_indices[0, 0], axis=0)
-                alt_token_id = np.expand_dims(sorted_indices[0, 1], axis=0)
-
-                rhythm_token = detokenize(top_token_id, self.inv_rhythm_vocab)
-                alternative_rhythm_token = detokenize(alt_token_id, self.inv_rhythm_vocab)
+                articulation_sample = np.array([[articulation_probs.argmax()]])
 
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
+                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
+                articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
 
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
                     break
 
-                if len(alternative_rhythm_token) == 0:
-                    alternative_rhythm_token = [""]
-                    alternative_confidence = 0
-
-                retry = merger.add_symbol_and_alternative(
-                    rhythm_token[0],
-                    rhythm_confidence,
-                    pitch_token[0],
-                    lift_token[0],
-                    alternative_rhythm_token[0],
-                    alternative_confidence,
+                symbol = EncodedSymbol(
+                    rhythm=rhythm_token[0],
+                    pitch=pitch_token[0],
+                    lift=lift_token[0],
+                    articulation=articulation_token[0],
                 )
 
                 current_temperature *= 3.5
                 attempt += 1
+                retry = not symbol.is_valid() and attempt < max_attempts
+                if not retry and not symbol.is_control_symbol():
+                    symbols.append(symbol)
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
+            out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
 
-            if eos_token is not None and (np.cumsum(out_rhythm == eos_token, 1)[:, -1] >= 1).all():
+            if (
+                self.eos_token is not None
+                and (np.cumsum(out_rhythm == self.eos_token, 1)[:, -1] >= 1).all()
+            ):
                 break
 
         out_lift = out_lift[:, t:]
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
+        out_articulations = out_articulations[:, t:]
 
-        return merger.complete()
+        return symbols
 
 
 def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:
@@ -152,7 +157,7 @@ def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:
     return output
 
 
-def detokenize(tokens: NDArray, vocab: Any) -> list[str]:
+def detokenize(tokens: NDArray, vocab: dict[int, str]) -> list[str]:
     toks = [vocab[tok.item()] for tok in tokens]
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks
