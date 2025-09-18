@@ -1,38 +1,42 @@
 # About the transformer vocabulary
 
-The encoding used in this repository is inspired by [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR), which itself is based on the encoding of [PrIMuS](https://grfia.dlsi.ua.es/primus/).
+The vocabulary is closely linked to how the transformer operates. Symbols are divided into several branches. For example, `note_4 D5 # accent` represents a quarter note with pitch D5, a sharp accidental, and an accent articulation. The branches for each symbol are:
 
-PrIMuS defines two types of encodings:
+1. **Rhythm**: covers note durations (including augmentation dots), rests, clefs, key signatures, time signatures, barlines, and general musical symbols such as repeats, dynamics, and ties. The term _rhythm_ can therefore be misleading, as it encodes more than just rhythmic values.
+2. **Pitch**: represents absolute pitches (C0–B9).
+3. **Lift**: represents accidentals (sharp, flat, natural, etc.).
+4. **Articulation**: represents articulation markings (staccato, accent, trill, etc.).
 
-- **Agnostic**: describes the symbols on the staff without interpreting their meaning.
-- **Semantic**: describes the symbols on the staff with their musical meaning.
+The vocabulary follows these rules:
 
-For example, agnostic encoding may describe the position of a note on the staff, while semantic encoding describes the actual pitch of that note.
+1. All branches except rhythm are optional. For example, the symbol for a key signature is `keySignature_0 . . .`, where the dots indicate that a key signature has no pitch, lift, or articulation.
+2. Symbols that occur simultaneously appear on one line and are separated by `&`:
+   - notes and rests may occur at the same time
+   - multiple clefs may occur at the same time
+   - all other symbols are expected to appear sequentially
+   - `&` serves as shorthand for `chord _ _ _`
+3. Barlines and repeats mark the end of a measure.
+4. Note durations follow the conventions of [Humdrum Kern](https://www.humdrum.org/guide/ch06/), which are also related to how [MusicXML encodes durations](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/duration/):
+   - e.g. `4, 8` are quarter and eighth notes
+   - `4.` is a dotted quarter note
+   - `12` represents one note of an eighth-note triplet
+5. Key signatures follow the [circle of fifths definition](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/fifths/).
+6. Time signatures contain only the [beat type](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/time/). The number of beats is reconstructed from the median measure length.
+7. Multiple articulations may appear together, e.g. `note_4 D5 # accent_arpeggiate_tenuto`. Not all combinations are supported, since the transformer can only generate symbols it encountered during training. Refer to the vocabulary for the full list.
 
-In this project, we use a **hybrid format**. We stay close to semantic, but we borrow from agnostic encoding when it helps reduce the vocabulary size.
+The complete vocabulary is defined in `homr/transformer/vocabulary.py`.
 
-Example:
+## Full example
 
 ```
-clef-G2+keySignature-DM+timeSignature-4/4+note-C4_quarter+G#4_quarter+barline
+clef_G2 . . .
+keySignature_4 . . .
+timeSignature/8 . . .
+note_4. G3 # _&note_4. C4 # _&note_16 E4 # _
+note_16 F4 # _
+note_4 E4 # _
+note_8 E4 # _
+note_8 C4 # _
+note_8 D4 # _
+barline . . .
 ```
-
-This describes a G clef, a D major key signature, a 4/4 time signature, two quarter notes (C4 and G#4), and a barline.
-
-## Our Vocabulary
-
-Our encoding splits each symbol into **four parallel vocabularies**:
-
-1. **Rhythm**: includes note durations (with augmentation dots), rests, clefs, key signatures, time signatures, barlines, and general musical symbols such as repeats, dynamics, and ties.
-2. **Lift**: describes accidentals (sharp, flat, natural, etc.).
-3. **Articulation**: describes articulation markings (staccato, accent, trill, etc.).
-4. **Pitch**: describes absolute pitches (C0–B9).
-
-### Rules and Customizations
-
-- Accidentals are only encoded if they are explicitly visible in the score image (agnostic rule).
-- For time signatures, **only the denominator is encoded**. The numerator can be inferred from the number of notes in a measure. In practice, the model makes little use of numerator information.
-- Multi-rests are supported only up to a length of 9.
-- Rhythm vocabulary also serves as a catch-all for general non-pitch symbols (e.g., barlines, ties, dynamics).
-
-This separation into four dimensions keeps the vocabulary size manageable while preserving the essential musical information for the transformer model.
