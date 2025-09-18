@@ -55,9 +55,9 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
             return []
         margin_top = random.randint(5, 25)
         margin_bottom = random.randint(5, 25)
-        preprocessed = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+        preprocessed = add_image_into_tr_omr_canvas(image, False, margin_top, margin_bottom)
+        preprocessed = distort_image(preprocessed)
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
-        distort_image(str(preprocessed_path.absolute()))
     semantic_file = _find_semantic_file(path)
     if semantic_file is None:
         eprint("Warning: No semantic file found for", path)

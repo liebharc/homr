@@ -228,23 +228,28 @@ class Clef(SymbolOnStaff):
 
 class StaffPoint:
     def __init__(self, x: float, y: list[float], angle: float):
-        if len(y) != constants.number_of_lines_on_a_staff:
-            raise Exception("A staff must consist of exactly 5 lines")
+        if len(y) % constants.number_of_lines_on_a_staff != 0:
+            raise Exception("A staff must consist of 5, 10, ... lines")
         self.x = x
         self.y = y
         self.angle = angle
         self.average_unit_size = np.mean(np.diff(y))
+
+    def merge(self, other: "StaffPoint") -> "StaffPoint":
+        if abs(self.x - other.x) > 1e-3:
+            raise ValueError("Can't merge points at different positions")
+        y = []
+        y.extend(self.y)
+        y.extend(other.y)
+        angle = (self.angle + other.angle) / 2
+        return StaffPoint(self.x, sorted(y), angle)
 
     def find_position_in_unit_sizes(self, box: AngledBoundingBox) -> int:
         center = box.center
         idx_of_closest_y = int(np.argmin(np.abs([y_value - center[1] for y_value in self.y])))
         distance = self.y[idx_of_closest_y] - center[1]
         distance_in_unit_sizes = round(2 * distance / self.average_unit_size)
-        position = (
-            2 * (constants.number_of_lines_on_a_staff - idx_of_closest_y)
-            + distance_in_unit_sizes
-            - 1
-        )
+        position = 2 * (len(self.y) - idx_of_closest_y) + distance_in_unit_sizes - 1
         return position
 
     def transform_coordinates(
@@ -275,6 +280,7 @@ class Staff(DebugDrawable):
         self.max_y = max([max(p.y) for p in grid])
         self.average_unit_size = np.median([p.average_unit_size for p in grid])
         self.symbols: list[SymbolOnStaff] = []
+        self.is_grandstaff = False
         self._y_tolerance = constants.max_number_of_ledger_lines * self.average_unit_size
 
     def is_on_staff_zone(self, item: AngledBoundingBox) -> bool:
@@ -287,6 +293,20 @@ class Staff(DebugDrawable):
         ):
             return False
         return True
+
+    def merge(self, other: "Staff") -> "Staff":
+        grid_a: dict[int, StaffPoint] = {}
+        for p in self.grid:
+            grid_a[int(round(p.x))] = p
+        grid_b: dict[int, StaffPoint] = {}
+        for p in other.grid:
+            grid_b[int(round(p.x))] = p
+        x_positions = set(grid_a.keys()).intersection(grid_b.keys())
+
+        grid = [grid_a[x].merge(grid_b[x]) for x in sorted(x_positions)]
+        result = Staff(grid)
+        result.is_grandstaff = True
+        return result
 
     def add_symbol(self, symbol: SymbolOnStaff) -> None:
         self.symbols.append(symbol)
@@ -304,7 +324,9 @@ class Staff(DebugDrawable):
         return min([abs(y - point[1]) for y in staff_point.y])
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
-        for i in range(constants.number_of_lines_on_a_staff):
+        if len(self.grid) == 0:
+            return
+        for i in range(len(self.grid[0].y)):
             for j in range(len(self.grid) - 1):
                 p1 = self.grid[j]
                 p2 = self.grid[j + 1]
@@ -393,6 +415,14 @@ class MultiStaff(DebugDrawable):
             if connection not in unique_connections:
                 unique_connections.append(connection)
         return MultiStaff(unique_staffs, unique_connections)
+
+    def create_grandstaffs(self) -> "MultiStaff":
+        if len(self.staffs) == 0:
+            return self
+        merged = self.staffs[0]
+        for staff in self.staffs[1:]:
+            merged = merged.merge(staff)
+        return MultiStaff([merged], self.connections)
 
     def break_apart(self) -> list["MultiStaff"]:
         return [MultiStaff([staff], []) for staff in self.staffs]

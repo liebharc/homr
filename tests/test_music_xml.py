@@ -20,16 +20,16 @@ class TestMusicXml(unittest.TestCase):
     """
 
     def test_chord_with_different_duratons(self) -> None:
-        tabi_measure_18_upper = """clef_G2 . . .
-keySignature_4 . . .
-timeSignature/8 . . .
-note_4. G3 # _&note_4. C4 # _&note_16 E4 # _
-note_16 F4 # _
-note_4 E4 # _
-note_8 E4 # _
-note_8 C4 # _
-note_8 D4 # _
-barline . . ."""
+        tabi_measure_18_upper = """clef_G2 . . . upper
+keySignature_4 . . . .
+timeSignature/8 . . . .
+note_4. G3 # _ upper &note_4. C4 # _ upper&note_16 E4 # _ upper
+note_16 F4 # _ upper
+note_4 E4 # _ upper
+note_8 E4 # _ upper
+note_8 C4 # _ upper
+note_8 D4 # _ upper
+barline . . . ."""
         tokens = read_token_lines(tabi_measure_18_upper.splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
         actual = self._xml_to_str(xml)
@@ -43,39 +43,109 @@ XMLLine(value: 2)])]),
 XMLNote([XMLPitch([XMLStep(value: E)]),
 XMLDuration(value: 1),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLBackup([XMLDuration(value: 1)]),
 XMLNote([XMLPitch([XMLStep(value: G)]),
 XMLDuration(value: 6),
 XMLVoice(value: 2),
 XMLDot(),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLNote([XMLChord(),
 XMLPitch([XMLStep(value: C)]),
 XMLDuration(value: 6),
 XMLVoice(value: 2),
 XMLDot(),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLBackup([XMLDuration(value: 5)]),
 XMLNote([XMLPitch([XMLStep(value: F)]),
 XMLDuration(value: 1),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLNote([XMLPitch([XMLStep(value: E)]),
 XMLDuration(value: 4),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLNote([XMLPitch([XMLStep(value: E)]),
 XMLDuration(value: 2),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLNote([XMLPitch([XMLStep(value: C)]),
 XMLDuration(value: 2),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
 XMLNotations()]),
 XMLNote([XMLPitch([XMLStep(value: D)]),
 XMLDuration(value: 2),
 XMLVoice(value: 1),
+XMLStaff(value: 1),
+XMLNotations()])])])])"""
+        self.assertEqual(self._norm_expected(expected), actual)
+
+    def test_grand_staff_generation(self) -> None:
+        grandstaff = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_1 . . . .
+timeSignature/4 . . . .
+note_1 G4 _ _ upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ _ lower
+rest_4 _ _ _ lower
+note_2 E4 _ _ upper&note_2 C2 _ _ lower
+barline . . . ."""
+        tokens = read_token_lines(grandstaff.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        actual = self._xml_to_str(xml)
+        expected = """XMLScorePartwise([XMLWork([XMLWorkTitle()]),
+XMLPart([XMLMeasure([XMLAttributes([XMLDivisions(value: 1)]),
+XMLAttributes([XMLKey([XMLFifths(value: 1)]),
+XMLTime([XMLBeats(value: 16),
+XMLBeatType(value: 4)]),
+XMLClef([XMLSign(value: G),
+XMLLine(value: 2)]),
+XMLClef([XMLSign(value: F),
+XMLLine(value: 4)])]),
+XMLNote([XMLPitch([XMLStep(value: G)]),
+XMLDuration(value: 1),
+XMLVoice(value: 1),
+XMLStaff(value: 2),
+XMLNotations()]),
+XMLBackup([XMLDuration(value: 1)]),
+XMLNote([XMLRest(),
+XMLDuration(value: 2),
+XMLVoice(value: 2),
+XMLStaff(value: 1),
+XMLNotations()]),
+XMLBackup([XMLDuration(value: 2)]),
+XMLNote([XMLPitch([XMLStep(value: G)]),
+XMLDuration(value: 4),
+XMLVoice(value: 3),
+XMLStaff(value: 1),
+XMLNotations()]),
+XMLNote([XMLChord(),
+XMLPitch([XMLStep(value: A)]),
+XMLDuration(value: 4),
+XMLVoice(value: 3),
+XMLStaff(value: 1),
+XMLNotations()]),
+XMLBackup([XMLDuration(value: 3)]),
+XMLNote([XMLRest(),
+XMLDuration(value: 1),
+XMLVoice(value: 1),
+XMLStaff(value: 2),
+XMLNotations()]),
+XMLNote([XMLPitch([XMLStep(value: E)]),
+XMLDuration(value: 2),
+XMLVoice(value: 1),
+XMLStaff(value: 1),
+XMLNotations()]),
+XMLNote([XMLChord(),
+XMLPitch([XMLStep(value: C)]),
+XMLDuration(value: 2),
+XMLVoice(value: 1),
+XMLStaff(value: 2),
 XMLNotations()])])])])"""
         self.assertEqual(self._norm_expected(expected), actual)
 
@@ -213,19 +283,13 @@ XMLNotations()])])])])"""
         tokens = music_xml_string_to_tokens(example)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         token_str = token_lines_to_str(flat_list)
-        expected = """clef_G2 . . .
-keySignature_1 . . .
-timeSignature/4 . . .
-note_1 A3 # _&note_1 G4 _ _&rest_2 _ _ _
-note_2 E4 _ _
-barline . . .
-clef_F4 . . .
-keySignature_1 . . .
-timeSignature/4 . . .
-note_4 G3 _ _
-rest_4 _ _ _
-note_2 C2 _ _
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_1 . . . .
+timeSignature/4 . . . .
+note_1 G4 _ _ upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ _ lower
+rest_4 _ _ _ lower
+note_2 E4 _ _ upper&note_2 C2 _ _ lower
+barline . . . ."""
         self.assertEqual(token_str, expected)
 
     def _norm_expected(self, expected: str) -> str:
@@ -250,7 +314,6 @@ barline . . ."""
                 "XMLAlter",
                 "XMLOctave",
                 "XMLType",
-                "XMLStaff",
                 "XMLPartList",
                 "XMLDefaults",
             )

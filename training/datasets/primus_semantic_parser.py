@@ -1,7 +1,11 @@
 import re
 
 from homr.circle_of_fifths import key_signature_to_circle_of_fifth
-from homr.transformer.vocabulary import EncodedSymbol, empty
+from homr.transformer.vocabulary import (
+    EncodedSymbol,
+    empty,
+    has_rhythm_symbol_a_position,
+)
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 # --- Mapping helpers ---
@@ -79,7 +83,7 @@ class PrimusConverter:
 
     @staticmethod
     def parse_clef(symbol: str) -> EncodedSymbol:
-        return EncodedSymbol(symbol.replace("-", "_"))
+        return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty)
 
     @staticmethod
     def parse_key_signature(symbol: str) -> EncodedSymbol:
@@ -133,6 +137,9 @@ def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     tokens = [PrimusConverter.convert_symbol(sym) for sym in symbols]
     if tokens[-1].rhythm != "barline":
         tokens.append(EncodedSymbol("barline"))
+    for symbol in tokens:
+        if has_rhythm_symbol_a_position(symbol.rhythm):
+            symbol.position = "upper"
     return tokens
 
 
