@@ -47,9 +47,8 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
 
     ocr_input: str = debug.write_model_input_image("_tesseract_input.png", above_staff)
     ocr_results = _reader(ocr_input)
-    if not ocr_results:
+    if not ocr_results or not ocr_results[0]:
         return ""
-    ocr_results = _reader(ocr_input)
 
     # Each result is (bbox, text, confidence)
     # Pick the text with the largest bbox area
