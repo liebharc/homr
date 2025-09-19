@@ -109,7 +109,6 @@ sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
 
 [tool.mypy]
 python_version = "3.10"
-exclude = ["datasets"]
 
 cache_dir = ".mypy_cache/strict"
 show_error_codes = true

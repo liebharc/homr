@@ -4,7 +4,10 @@ import sys
 
 import torch
 import torch._dynamo
-from transformers import Trainer, TrainingArguments  # type: ignore
+from transformers import (  # type: ignore
+    Trainer,
+    TrainingArguments,
+)
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -16,7 +19,7 @@ from training.datasets.convert_grandstaff import (
 from training.datasets.convert_lieder import convert_lieder, lieder_train_index
 from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
 from training.run_id import get_run_id
-from training.transformer.data_loader import load_dataset
+from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
@@ -103,15 +106,14 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
 
     run_id = get_run_id()
 
-    batch_size = 40 if compile_model else 4
+    batch_size = 18 if compile_model else 4
 
     train_args = TrainingArguments(
         checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
-        # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
-        learning_rate=1e-4,
+        learning_rate=1e-3,
         optim="adamw_torch",  # TrOMR Paper page 3 specifies an Adam optimizer
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
@@ -123,7 +125,7 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
-        label_names=["rhythms", "notes", "lifts", "pitchs", "articulations"],
+        label_names=label_names,
         fp16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,

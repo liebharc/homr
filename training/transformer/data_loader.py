@@ -1,6 +1,7 @@
 import os
 from typing import Any
 
+from homr.circle_of_fifths import semantic_to_agnostic_accidentals
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import Vocabulary
@@ -14,6 +15,8 @@ from training.transformer.training_vocabulary import (
 script_location = os.path.dirname(os.path.realpath(__file__))
 
 git_root = os.path.join(script_location, "..", "..")
+
+label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations"]
 
 
 class DataLoader:
@@ -38,6 +41,7 @@ class DataLoader:
 
     def _read_tokens(self, path: str) -> DecoderBranches:
         tokens = read_tokens(path)
+        tokens = semantic_to_agnostic_accidentals(tokens)
         return to_decoder_branches(tokens)
 
     def __getitem__(self, idx: int) -> Any:
@@ -47,12 +51,14 @@ class DataLoader:
 
         tokens_full_filepath = entry["tokens"]
         tokens = self._read_tokens(tokens_full_filepath)
+
+        # Remember to extend label_names if you add something to the results
         result = {
             "inputs": sample_img,
             "rhythms": tokens.rhythms,
             "pitchs": tokens.pitchs,
             "lifts": tokens.lifts,
-            "notes": tokens.notes,
+            "positions": tokens.positions,
             "articulations": tokens.articulations,
             "mask": tokens.mask,
         }

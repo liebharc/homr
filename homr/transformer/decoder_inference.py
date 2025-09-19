@@ -27,6 +27,7 @@ class ScoreDecoder:
         self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
+        self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
 
     def generate(
         self,
@@ -47,6 +48,7 @@ class ScoreDecoder:
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
+        out_positions = nonote_tokens
 
         symbols: list[EncodedSymbol] = []
 
@@ -55,6 +57,7 @@ class ScoreDecoder:
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
             x_articulations = out_articulations[:, -self.max_seq_len :]
+            x_positions = out_positions[:, -self.max_seq_len :]
             context = kwargs["context"]
 
             inputs = {
@@ -62,11 +65,18 @@ class ScoreDecoder:
                 "pitchs": x_pitch,
                 "lifts": x_lift,
                 "articulations": x_articulations,
+                "positions": x_positions,
                 "context": context,
             }
 
-            rhythmsp, pitchsp, liftsp, articulationsp = self.net.run(
-                output_names=["out_rhythms", "out_pitchs", "out_lifts", "out_articulations"],
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp = self.net.run(
+                output_names=[
+                    "out_rhythms",
+                    "out_pitchs",
+                    "out_lifts",
+                    "out_positions",
+                    "out_articulations",
+                ],
                 input_feed=inputs,
             )
 
@@ -74,6 +84,7 @@ class ScoreDecoder:
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
             filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
+            filtered_positions_logits = top_k(positionsp[:, -1, :], thres=filter_thres)
 
             current_temperature = temperature
             retry = True
@@ -86,16 +97,19 @@ class ScoreDecoder:
                 articulation_probs = softmax(
                     filtered_articulations_logits / current_temperature, dim=-1
                 )
+                positions_probs = softmax(filtered_positions_logits / current_temperature, dim=-1)
 
                 lift_sample = np.array([[lift_probs.argmax()]])
                 pitch_sample = np.array([[pitch_probs.argmax()]])
                 rhythm_sample = np.array([[rhythm_probs.argmax()]])
                 articulation_sample = np.array([[articulation_probs.argmax()]])
+                position_sample = np.array([[positions_probs.argmax()]])
 
                 lift_token = detokenize(lift_sample, self.inv_lift_vocab)
                 pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
                 rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
                 articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
+                position_token = detokenize(position_sample, self.inv_position_vocab)
 
                 is_eos = len(rhythm_token)
                 if is_eos == 0:
@@ -106,6 +120,7 @@ class ScoreDecoder:
                     pitch=pitch_token[0],
                     lift=lift_token[0],
                     articulation=articulation_token[0],
+                    position=position_token[0],
                 )
 
                 current_temperature *= 3.5
@@ -118,6 +133,7 @@ class ScoreDecoder:
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
+            out_positions = np.concatenate((out_positions, position_sample), axis=-1)
 
             if (
                 self.eos_token is not None
@@ -129,6 +145,7 @@ class ScoreDecoder:
         out_pitch = out_pitch[:, t:]
         out_rhythm = out_rhythm[:, t:]
         out_articulations = out_articulations[:, t:]
+        out_positions = out_positions[:, t:]
 
         return symbols
 

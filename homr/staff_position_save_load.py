@@ -52,7 +52,7 @@ def load_staff_positions(
     for line_index, line in enumerate(lines):
         try:
             parts = line.strip().split()
-            if len(parts) != constants.number_of_lines_on_a_staff:
+            if len(parts) % constants.number_of_lines_on_a_staff != 0:
                 continue  # Ignore invalid lines
 
             _, norm_centerx, norm_centery, norm_width, norm_height = map(float, parts)
