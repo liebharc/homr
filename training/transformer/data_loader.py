@@ -15,6 +15,8 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 
 git_root = os.path.join(script_location, "..", "..")
 
+label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations", "states"]
+
 
 class DataLoader:
     def __init__(
@@ -47,13 +49,16 @@ class DataLoader:
 
         tokens_full_filepath = entry["tokens"]
         tokens = self._read_tokens(tokens_full_filepath)
+
+        # Remember to extend label_names if you add something to the results
         result = {
             "inputs": sample_img,
             "rhythms": tokens.rhythms,
             "pitchs": tokens.pitchs,
             "lifts": tokens.lifts,
-            "notes": tokens.notes,
+            "positions": tokens.positions,
             "articulations": tokens.articulations,
+            "states": tokens.states,
             "mask": tokens.mask,
         }
         return result

@@ -5,7 +5,15 @@ from musicxml.parser.parser import _parse_node
 
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty
+from homr.transformer.vocabulary import (
+    EncodedSymbol,
+    empty,
+    has_rhythm_symbol_a_position,
+)
+from training.datasets.staff_merging import (
+    EncodedSymbolWithPos,
+    merge_upper_and_lower_staff,
+)
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 DURATION_NUMBER = {v: k for k, v in DURATION_NAMES.items()}
@@ -25,19 +33,6 @@ ARTIC_MAPPING: dict[str, str] = {
 }
 
 
-class SymbolWithPosition:
-    def __init__(self, position: int, symbol: EncodedSymbol, insert_before: bool = False) -> None:
-        self.position = position
-        self.symbol = symbol
-        self.insert_before = insert_before
-
-    def __str__(self) -> str:
-        return str(self.position) + " " + str(self.symbol) + " " + str(self.insert_before)
-
-    def __repr__(self) -> str:
-        return str(self)
-
-
 class TokensMeasure:
     """
     MusicXML allows directions such as forward/backwards. For training we need
@@ -45,28 +40,28 @@ class TokensMeasure:
     using this class.
     """
 
-    def __init__(self, number_of_clefs: int) -> None:
-        self.staffs: list[list[SymbolWithPosition]] = [[] for _ in range(number_of_clefs)]
+    def __init__(self) -> None:
+        self.symbols: list[EncodedSymbolWithPos] = []
         self.current_position = 0
-        self.slurred_tied_positions: list[set[int]] = [set() for _ in range(number_of_clefs)]
+        self.slurred_tied_positions: set[int] = set()
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
         else:
+            self.current_position += 1
             offset = 1 if "barline" in symbol.rhythm else 0
-            for staff in self.staffs:
-                staff.append(SymbolWithPosition(self.current_position + offset, symbol, True))
+            self.symbols.append(EncodedSymbolWithPos(self.current_position + offset, symbol, True))
 
     def append_symbol_to_staff(self, staff: int, symbol: EncodedSymbol) -> None:
+        if has_rhythm_symbol_a_position(symbol.rhythm):
+            symbol.position = self._get_staff_position(staff)
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
         else:
-            self.staffs[staff].append(SymbolWithPosition(self.current_position, symbol, True))
+            self.symbols.append(EncodedSymbolWithPos(self.current_position, symbol, True))
 
     def append_position_change(self, duration: int) -> None:
-        if len(self.staffs) == 0:
-            raise ValueError("Expected to get clefs as first symbol")
         new_position = self.current_position + duration
         if new_position < 0:
             raise ValueError(
@@ -82,86 +77,88 @@ class TokensMeasure:
     def append_note(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
-        if len(self.staffs) == 0:
-            raise ValueError("Expected to get clefs as first symbol")
+        is_grace = "G" in symbol.rhythm
+        symbol.position = self._get_staff_position(staff)
         if is_chord:
-            if len(self.staffs[staff]) == 0:
-                raise ValueError("A chord requires a previous note")
-            previous_symbol = self.staffs[staff][-1]
+            previous_symbol = self.symbols[-1]
             if not invisible:
-                self.staffs[staff].append(SymbolWithPosition(previous_symbol.position, symbol))
+                self.symbols.append(
+                    EncodedSymbolWithPos(previous_symbol.position, symbol, insert_before=is_grace)
+                )
             self.current_position = previous_symbol.position + duration
         else:
             if not invisible:
-                self.staffs[staff].append(SymbolWithPosition(self.current_position, symbol))
+                self.symbols.append(
+                    EncodedSymbolWithPos(self.current_position, symbol, insert_before=is_grace)
+                )
             self.current_position += duration
 
     def mark_position_a_slurred_tied(self, staff: int) -> None:
-        self.slurred_tied_positions[staff].add(self.current_position)
+        self.slurred_tied_positions.add(self.current_position)
 
-    def _fill_in_arpeggiate(self, staffs: list[list[SymbolWithPosition]]) -> None:
+    def _get_staff_no(self, symbol: EncodedSymbolWithPos) -> int:
+        if symbol.symbol.position == "lower":
+            return 1
+        return 0
+
+    def _get_staff_position(self, staff: int) -> str:
+        if staff == 0:
+            return "upper"
+        return "lower"
+
+    def _fill_in_arpeggiate(self, symbols: list[EncodedSymbolWithPos]) -> None:
         """
         In the Lieder dataset we find that an arpeggiate always is rendered
         as it would affect all notes in a chord, even if the MusicXML doesn't
         reflect that.
         """
         arpegiatted_positions = set()
-        for staff in staffs:
-            for symbol in staff:
-                if "arpeggiate" in symbol.symbol.articulation:
-                    arpegiatted_positions.add(symbol.position)
+        for symbol in symbols:
+            if "arpeggiate" in symbol.symbol.articulation:
+                arpegiatted_positions.add(symbol.position)
 
-        for staff in staffs:
-            for symbol in staff:
-                if (
-                    symbol.position in arpegiatted_positions
-                    and "arpeggiate" not in symbol.symbol.articulation
-                    and symbol.symbol.rhythm.startswith(("note", "rest"))
-                    and not symbol.symbol.rhythm.startswith("note_0")
-                    and not symbol.symbol.rhythm.startswith("rest_0")
-                ):
-                    art = symbol.symbol.articulation
-                    art_parts = []
-                    if art != empty:
-                        art_parts = art.split("_")
-                    art_parts.append("arpeggiate")
-                    art = str.join("_", sorted(art_parts))
-                    symbol.symbol.articulation = art
+        for symbol in symbols:
+            if (
+                symbol.position in arpegiatted_positions
+                and "arpeggiate" not in symbol.symbol.articulation
+                and symbol.symbol.rhythm.startswith(("note", "rest"))
+                and not symbol.symbol.rhythm.startswith("note_0")
+                and not symbol.symbol.rhythm.startswith("rest_0")
+            ):
+                art = symbol.symbol.articulation
+                art_parts = []
+                if art != empty:
+                    art_parts = art.split("_")
+                art_parts.append("arpeggiate")
+                art = str.join("_", sorted(art_parts))
+                symbol.symbol.articulation = art
 
-    def complete_measure(self) -> list[list[EncodedSymbol]]:  # noqa: C901
-        self._fill_in_arpeggiate(self.staffs)
-        result: list[list[EncodedSymbol]] = []
-        for _staff_no, staff in enumerate(self.staffs):
-            has_barline = False
-            result_staff: list[EncodedSymbol] = []
-            grouped_symbols: dict[int, list[SymbolWithPosition]] = {}
-            for symbol in staff:
-                if "barline" in symbol.symbol.rhythm:
-                    has_barline = True
-                if symbol.position not in grouped_symbols:
-                    grouped_symbols[symbol.position] = []
-                grouped_symbols[symbol.position].append(symbol)
-            for position in sorted(grouped_symbols.keys()):
-                group = grouped_symbols[position]
-                group_pos = []
-                for symbol in group:
-                    if symbol.insert_before:
-                        result_staff.append(symbol.symbol)
-                    elif symbol.symbol.rhythm.endswith("G"):
-                        # Grace notes come before a group
-                        result_staff.append(symbol.symbol)
-                    else:
-                        group_pos.append(symbol.symbol)
-                for i, symbol_in_group in enumerate(group_pos):
-                    result_staff.append(symbol_in_group)
-                    if i < len(group_pos) - 1:
-                        result_staff.append(EncodedSymbol("chord"))
-                # if position in self.slurred_tied_positions[staff_no]:
-                #    result_staff.append(EncodedSymbol("tieSlur"))
-            if not has_barline:
-                result_staff.append(EncodedSymbol("barline"))
-            result.append(result_staff)
-        return result
+    def complete_measure(self) -> list[EncodedSymbol]:  # noqa: C901
+        self._fill_in_arpeggiate(self.symbols)
+        result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
+        grouped_symbols: dict[int, list[EncodedSymbolWithPos]] = {}
+        for symbol in self.symbols:
+            sort_order = symbol.sort_order()
+            if sort_order not in grouped_symbols:
+                grouped_symbols[sort_order] = []
+            grouped_symbols[sort_order].append(symbol)
+        for sort_order in sorted(grouped_symbols.keys()):
+            group = grouped_symbols[sort_order]
+            group_pos: list[EncodedSymbolWithPos] = []
+            for symbol in group:
+                if symbol.insert_before:
+                    result_staff[self._get_staff_no(symbol)].append(symbol)
+                elif symbol.symbol.rhythm.endswith("G"):
+                    # Grace notes come before a group
+                    result_staff[self._get_staff_no(symbol)].append(symbol)
+                else:
+                    group_pos.append(symbol)
+            for symbol_in_group in group_pos:
+                result_staff[self._get_staff_no(symbol_in_group)].append(symbol_in_group)
+            # if position in self.slurred_tied_positions[staff_no]:
+            #    result_staff.append(EncodedSymbol("tieSlur"))
+
+        return merge_upper_and_lower_staff(result_staff)
 
 
 class SlurTieState:
@@ -231,7 +228,7 @@ class TripletState:
 class TokensPart:
     def __init__(self) -> None:
         self.current_measure: TokensMeasure | None = None
-        self.staffs: list[list[list[EncodedSymbol]]] = []
+        self.measures: list[list[EncodedSymbol]] = []
         self.triplets = TripletState()
         self.slur_tie: list[SlurTieState] = []
 
@@ -244,9 +241,8 @@ class TokensPart:
                 else:
                     current_measure.append_symbol_to_staff(staff, clef[0])
         else:
-            self.staffs = [[] for _ in range(len(clefs))]
             self.slur_tie = [SlurTieState() for _ in range(len(clefs))]
-            measure = TokensMeasure(len(clefs))
+            measure = TokensMeasure()
             for staff, clef in enumerate(clefs):
                 measure.append_symbol_to_staff(staff, clef[0])
             self.current_measure = measure
@@ -281,6 +277,8 @@ class TokensPart:
         self.current_measure.append_position_change(duration)
 
     def is_in_slur_or_tie(self, staff: int) -> bool:
+        if len(self.slur_tie) <= staff:
+            self.slur_tie.append(SlurTieState())
         return self.slur_tie[staff].is_in_slur_or_tie()
 
     def handle_tie_type(self, staff: int, slur_tie_type: str) -> None:
@@ -292,12 +290,12 @@ class TokensPart:
     def on_end_of_measure(self) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
-        for staff, result in enumerate(self.current_measure.complete_measure()):
-            self.staffs[staff].append(result)
-        self.current_measure = TokensMeasure(len(self.current_measure.staffs))
 
-    def get_staffs(self) -> list[list[list[EncodedSymbol]]]:
-        return self.staffs
+        self.measures.append(self.current_measure.complete_measure())
+        self.current_measure = TokensMeasure()
+
+    def get_measures(self) -> list[list[EncodedSymbol]]:
+        return self.measures
 
 
 def _lift_from_pitch_or_accidental(pitch: mxl.XMLPitch, note: mxl.XMLNote) -> str:
@@ -329,7 +327,9 @@ def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
             if has_octave_change:
                 raise ValueError("Octave change isn't supported")
             clef_number = int(clef.attributes.get("number", "0")) - 1
-            clefs_tokens.append((EncodedSymbol(f"clef_{sign}{line}"), clef_number))
+            clefs_tokens.append(
+                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty), clef_number)
+            )
         part.append_clefs(clefs_tokens)
     keys = attribute.get_children_of_type(mxl.XMLKey)
     if len(keys) > 0:
@@ -506,10 +506,10 @@ def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -
         return
     rest = rests[0]
     rest_duration = min(rest.value_, 10)
-    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty))
+    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, "upper"))
 
 
-def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[list[EncodedSymbol]]]:
+def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[EncodedSymbol]]:
     tokens = TokensPart()
     for measure in part.get_children_of_type(mxl.XMLMeasure):
         for child in measure.get_children():
@@ -524,10 +524,60 @@ def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[list[EncodedSymbol]]]:
             if isinstance(child, mxl.XMLBarline):
                 _process_barline(tokens, child)
         tokens.on_end_of_measure()
-    return tokens.get_staffs()
+    return _cleanup_barlines_and_repeats(tokens.get_measures())
 
 
-def music_xml_element_to_symbols(
+def _cleanup_barlines_and_repeats(measures: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
+    def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
+        return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
+
+    def is_barline_repeat_or_other(symbol: EncodedSymbol) -> str:
+        if symbol.rhythm.startswith("repeat"):
+            return "repeat"
+        if "barline" in symbol.rhythm:
+            return "barline"
+        return "other"
+
+    def can_merge(a: EncodedSymbol, b: EncodedSymbol) -> bool:
+        a_cat = is_barline_repeat_or_other(a)
+        b_cat = is_barline_repeat_or_other(b)
+        if a_cat == "other" or b_cat == "other":
+            return False
+        if a_cat == "barline" and b_cat == "barline":
+            return False
+        return True
+
+    def merge_barlines_and_repeats(a: EncodedSymbol, b: EncodedSymbol) -> EncodedSymbol:
+        if (a.rhythm == "repeatStart" and b.rhythm == "repeatEnd") or (
+            a.rhythm == "repeatEnd" and b.rhythm == "repeatStart"
+        ):
+            return EncodedSymbol("repeatEndStart")
+        if "repeat" in a.rhythm:
+            return a
+        return b
+
+    last_symbol = EncodedSymbol("")
+    result: list[list[EncodedSymbol]] = []
+    for measure in measures:
+        measure_result: list[EncodedSymbol] = []
+        for symbol in measure:
+            if can_merge(symbol, last_symbol):
+                merged = merge_barlines_and_repeats(symbol, last_symbol)
+                if len(measure_result) == 0:
+                    result[-1][-1] = merged
+                else:
+                    measure_result[-1] = merged
+                last_symbol = merged
+            else:
+                measure_result.append(symbol)
+                last_symbol = symbol
+        if len(measure_result) == 0 or not is_barline_or_repeat(measure_result[-1]):
+            measure_result.append(EncodedSymbol("barline"))
+        result.append(measure_result)
+    return result
+
+
+def _music_xml_element_to_symbols(
     root: ET.Element,
 ) -> list[list[list[EncodedSymbol]]]:
     _remove_dynamics_attribute_from_nodes_recursive(root)
@@ -535,19 +585,19 @@ def music_xml_element_to_symbols(
     result: list[list[list[EncodedSymbol]]] = []
     for part in parsed.get_children_of_type(mxl.XMLPart):
         tokens = _music_part_to_tokens(part)
-        result.extend(tokens)
+        result.append(tokens)
     return result
 
 
 def music_xml_string_to_tokens(content: str) -> list[list[list[EncodedSymbol]]]:
     xml = ET.fromstring(content)  # noqa: S314
-    return music_xml_element_to_symbols(xml)
+    return _music_xml_element_to_symbols(xml)
 
 
 def music_xml_file_to_tokens(file_path: str) -> list[list[list[EncodedSymbol]]]:
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
-    return music_xml_element_to_symbols(xml.getroot())
+    return _music_xml_element_to_symbols(xml.getroot())
 
 
 def _remove_dynamics_attribute_from_nodes_recursive(node: ET.Element) -> None:

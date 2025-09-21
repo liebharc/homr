@@ -101,8 +101,11 @@ def center_image_on_canvas(
 
 
 def add_image_into_tr_omr_canvas(
-    image: NDArray, margin_top: int = 0, margin_bottom: int = 0
+    image: NDArray, is_grandstaff: bool, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
+    if not is_grandstaff:
+        # take half of the image height away
+        margin_bottom += tr_omr_max_height // 2
     new_shape = get_tr_omr_canvas_size(image.shape, margin_top, margin_bottom)
     new_image = center_image_on_canvas(image, new_shape, margin_top, margin_bottom)
     return new_image

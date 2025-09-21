@@ -8,6 +8,7 @@ import numpy as np
 from homr import constants
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
+from training.transformer.training_vocabulary import sort_token_chords
 
 
 class ConversionState:
@@ -44,6 +45,109 @@ class XmlGeneratorArguments:
         self.large_page = large_page
         self.metronome = metronome
         self.tempo = tempo
+
+
+def generate_xml(
+    args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
+) -> mxl.XMLElement:
+    root = mxl.XMLScorePartwise()
+    root.add_child(build_work(title))
+    root.add_child(build_defaults(args))
+    root.add_child(build_part_list(len(staffs)))
+    for index, staff in enumerate(staffs):
+        root.add_child(build_part(args, staff, index))
+    return root
+
+
+def build_part(args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int) -> mxl.XMLPart:
+    part = mxl.XMLPart(id=get_part_id(index))
+    is_first_part = index == 0
+    measures = build_measures(args, voice, is_first_part)
+    for measure in measures:
+        part.add_child(measure)
+    return part
+
+
+def build_measures(
+    args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
+) -> list[mxl.XMLMeasure]:
+    measure_number = 1
+    division, nominator = find_division_and_time_signature_nominator(voice)
+    state = ConversionState(division, nominator)
+    measures: list[mxl.XMLMeasure] = []
+    current_measure = mxl.XMLMeasure(number=str(measure_number))
+    first_attributes = build_or_get_attributes(current_measure, None)
+    first_attributes.add_child(build_divisions(division))
+    if is_first_part:
+        direction = build_add_time_direction(args)
+        if direction:
+            current_measure.add_child(direction)
+    groups = add_tuplet_start_stop(group_into_chords(voice))
+    attributes: mxl.XMLAttributes | None = first_attributes
+    for group in groups:
+        symbol = group.symbols[0]
+        rhythm = symbol.rhythm
+        last_attributes = attributes
+        attributes = None
+        if rhythm.startswith(("note", "rest")):
+            if len(group.symbols) == 1 and rhythm.endswith("m"):
+                attributes = build_or_get_attributes(current_measure, last_attributes)
+                build_multi_measure_rest(symbol, attributes)
+            else:
+                for note_xml in build_note_group(group, state):
+                    current_measure.add_child(note_xml)
+            continue
+        if rhythm == "newline":
+            measures[-1].add_child(mxl.XMLPrint(new_system="yes"))
+        elif rhythm.startswith("clef"):
+            attributes = build_or_get_attributes(current_measure, last_attributes, force_new=True)
+            for should_be_clef in group.symbols:
+                if should_be_clef.rhythm.startswith("clef"):
+                    build_clef(should_be_clef, attributes)
+        elif rhythm.startswith("keySignature"):
+            attributes = build_or_get_attributes(current_measure, last_attributes)
+            build_key(symbol, attributes)
+        elif rhythm.startswith("timeSignature"):
+            attributes = build_or_get_attributes(current_measure, last_attributes)
+            build_time_signature(symbol, attributes, state)
+        elif "barline" in rhythm:
+            if rhythm != "barline":
+                # Standard barlines don't need extra handling
+                barline = build_or_get_barline(current_measure)
+                build_barline_style(symbol, barline)
+
+            measures.append(current_measure)
+            measure_number += 1
+            current_measure = mxl.XMLMeasure(number=str(measure_number))
+        elif rhythm == "repeatStart":
+            measures.append(current_measure)
+            measure_number += 1
+            current_measure = mxl.XMLMeasure(number=str(measure_number))
+
+            barline = build_or_get_barline(current_measure)
+            build_repeat(symbol, barline)
+        elif rhythm == "repeatEnd":
+            barline = build_or_get_barline(current_measure)
+            build_repeat(symbol, barline)
+
+            measures.append(current_measure)
+            measure_number += 1
+            current_measure = mxl.XMLMeasure(number=str(measure_number))
+        elif rhythm == "repeatEndStart":
+            barline = build_or_get_barline(current_measure)
+            build_repeat(EncodedSymbol("repeatEnd"), barline)
+
+            measures.append(current_measure)
+            measure_number += 1
+            current_measure = mxl.XMLMeasure(number=str(measure_number))
+            barline = build_or_get_barline(current_measure)
+            build_repeat(EncodedSymbol("repeatStart"), barline)
+        else:
+            eprint("Symbol isn't supported yet ", symbol)
+
+    if len(current_measure.get_children()) > 0:
+        measures.append(current_measure)
+    return measures
 
 
 def build_work(title_text: str) -> mxl.XMLWork:
@@ -129,11 +233,15 @@ def build_key(model_key: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
     key.add_child(fifth)
 
 
+def get_staff(symbol: EncodedSymbol) -> int:
+    return 1 if symbol.position == "upper" else 2
+
+
 def build_clef(model_clef: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
     sign_and_line = model_clef.rhythm.split("_")[1]
     sign = sign_and_line[0]
     line = sign_and_line[1]
-    clef = mxl.XMLClef()
+    clef = mxl.XMLClef(number=get_staff(model_clef))
     attributes.add_child(clef)
     clef.add_child(mxl.XMLSign(value_=sign))
     clef.add_child(mxl.XMLLine(value_=int(line)))
@@ -293,7 +401,7 @@ def build_note_or_rest(
         note.add_child(mxl.XMLType(value_=duration_name))
         note.add_child(mxl.XMLDuration(value_=state.beats))
 
-    note.add_child(mxl.XMLStaff(value_=1))
+    note.add_child(mxl.XMLStaff(value_=get_staff(model_note)))
     note.add_child(mxl.XMLVoice(value_=(str(voice + 1))))
     for _ in range(model_duration.dots):
         note.add_child(mxl.XMLDot())
@@ -431,19 +539,7 @@ def find_division_and_time_signature_nominator(voice: list[EncodedSymbol]) -> tu
 
 
 def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolGroup]:
-    chords: list[SymbolGroup] = []
-    is_in_chord = False
-    for symbol in voice:
-        rhythm = symbol.rhythm
-        if rhythm == "chord":
-            is_in_chord = True
-            continue
-        if is_in_chord and symbol.rhythm.startswith(("rest", "note")):
-            chords[-1].symbols.append(symbol)
-        else:
-            chords.append(SymbolGroup([symbol]))
-        is_in_chord = False
-    return chords
+    return [SymbolGroup(s) for s in sort_token_chords(voice)]
 
 
 def add_tuplet_start_stop(groups: list[SymbolGroup]) -> list[SymbolGroup]:
@@ -470,87 +566,6 @@ def build_divisions(division: int) -> mxl.XMLDivisions:
     # used to indicate a note's duration
     # https://usermanuals.musicxml.com/MusicXML/Content/EL-MusicXML-divisions.htm
     return mxl.XMLDivisions(value_=division // 4)
-
-
-def build_measures(
-    args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
-) -> list[mxl.XMLMeasure]:
-    measure_number = 1
-    division, nominator = find_division_and_time_signature_nominator(voice)
-    state = ConversionState(division, nominator)
-    measures: list[mxl.XMLMeasure] = []
-    current_measure = mxl.XMLMeasure(number=str(measure_number))
-    first_attributes = build_or_get_attributes(current_measure, None)
-    first_attributes.add_child(build_divisions(division))
-    if is_first_part:
-        direction = build_add_time_direction(args)
-        if direction:
-            current_measure.add_child(direction)
-    groups = add_tuplet_start_stop(group_into_chords(voice))
-    attributes: mxl.XMLAttributes | None = first_attributes
-    for group in groups:
-        symbol = group.symbols[0]
-        rhythm = symbol.rhythm
-        last_attributes = attributes
-        attributes = None
-        if rhythm.startswith(("note", "rest")):
-            if len(group.symbols) == 1 and rhythm.endswith("m"):
-                attributes = build_or_get_attributes(current_measure, last_attributes)
-                build_multi_measure_rest(symbol, attributes)
-            else:
-                for note_xml in build_note_group(group, state):
-                    current_measure.add_child(note_xml)
-            continue
-        if rhythm == "newline":
-            measures[-1].add_child(mxl.XMLPrint(new_system="yes"))
-        elif rhythm.startswith("clef"):
-            attributes = build_or_get_attributes(current_measure, last_attributes, force_new=True)
-            build_clef(symbol, attributes)
-        elif rhythm.startswith("keySignature"):
-            attributes = build_or_get_attributes(current_measure, last_attributes)
-            build_key(symbol, attributes)
-        elif rhythm.startswith("timeSignature"):
-            attributes = build_or_get_attributes(current_measure, last_attributes)
-            build_time_signature(symbol, attributes, state)
-        elif "barline" in rhythm:
-            if rhythm != "barline":
-                # Standard barlines don't need extra handling
-                barline = build_or_get_barline(current_measure)
-                build_barline_style(symbol, barline)
-
-            measures.append(current_measure)
-            measure_number += 1
-            current_measure = mxl.XMLMeasure(number=str(measure_number))
-        elif rhythm.startswith("repeat"):
-            barline = build_or_get_barline(current_measure)
-            build_repeat(symbol, barline)
-        else:
-            eprint("Symbol isn't supported yet ", symbol)
-
-    if len(current_measure.get_children()) > 0:
-        measures.append(current_measure)
-    return measures
-
-
-def build_part(args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int) -> mxl.XMLPart:
-    part = mxl.XMLPart(id=get_part_id(index))
-    is_first_part = index == 0
-    measures = build_measures(args, voice, is_first_part)
-    for measure in measures:
-        part.add_child(measure)
-    return part
-
-
-def generate_xml(
-    args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
-) -> mxl.XMLElement:
-    root = mxl.XMLScorePartwise()
-    root.add_child(build_work(title))
-    root.add_child(build_defaults(args))
-    root.add_child(build_part_list(len(staffs)))
-    for index, staff in enumerate(staffs):
-        root.add_child(build_part(args, staff, index))
-    return root
 
 
 if __name__ == "__main__":

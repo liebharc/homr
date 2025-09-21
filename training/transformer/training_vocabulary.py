@@ -7,8 +7,6 @@ from homr.transformer.configs import default_config
 from homr.transformer.vocabulary import (
     EncodedSymbol,
     Vocabulary,
-    is_valid_combination,
-    rhythm_to_category,
 )
 
 vocab = Vocabulary()
@@ -20,11 +18,11 @@ def check_token_line(line: EncodedSymbol) -> None:
         or line.lift not in vocab.lift
         or line.articulation not in vocab.articulation
         or line.pitch not in vocab.pitch
+        or line.position not in vocab.position
     ):
         raise ValueError("Invalid symbol " + str(line))
 
-    note_branch = rhythm_to_category(line.rhythm)
-    if not is_valid_combination(line.rhythm, line.lift, line.articulation, line.pitch, note_branch):
+    if not line.is_valid():
         raise ValueError("Invalid combination " + str(line))
 
 
@@ -34,11 +32,14 @@ def check_token_lines(lines: list[EncodedSymbol]) -> None:
 
 
 def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
+    position = 10000000 if symbol.position == "lower" else 0
     if "note" in symbol.rhythm:
-        return vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm]
+        return (
+            vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm] + position
+        )
     if "rest" in symbol.rhythm:
-        return 100000 + vocab.rhythm[symbol.rhythm]
-    return 1000000
+        return 100000 + vocab.rhythm[symbol.rhythm] + position
+    return 1000000 + position
 
 
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
@@ -65,7 +66,6 @@ def sort_token_chords(
 
 
 def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
-    # TODO convert lifts, sort symbols in chords, but also e.g. slur vs cres start
     chords = sort_token_chords(symbols)
 
     chord_strings = [_chord_to_str(c) for c in chords]
@@ -79,8 +79,13 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
         for i, entry in enumerate(entries):
             if "tieSlur" in entry:
                 continue
-            rhythm, pitch, lift, articulation = entry.strip().split()
-            symbol = EncodedSymbol(rhythm, pitch, lift, articulation)
+            parts = entry.strip().split()
+            if len(parts) == 5:
+                rhythm, pitch, lift, articulation, position = parts
+            else:
+                rhythm, pitch, lift, articulation = parts
+                position = "upper"
+            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position)
             is_first = i == 0
             if not is_first:
                 result.append(EncodedSymbol("chord"))
@@ -103,14 +108,16 @@ class DecoderBranches:
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
-        notes: torch.Tensor,
+        positions: torch.Tensor,
+        states: torch.Tensor,
         mask: torch.Tensor,
     ) -> None:
         self.rhythms = rhythms
         self.pitchs = pitchs
         self.lifts = lifts
         self.articulations = articulations
-        self.notes = notes
+        self.positions = positions
+        self.states = states
         self.mask = mask
 
 
@@ -122,21 +129,34 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     pitchs = [nonote_token]
     lifts = [nonote_token]
     articulations = [nonote_token]
-    notes = [nonote_token]
+    position = [nonote_token]
     mask = [True]
+    key = "keySignature_0"
+    clef_upper = "clef_G2"
+    clef_lower = "clef_F4"
+    states = [vocab.state[f"{key}+{clef_upper}+{clef_lower}"]]
     for symbol in symbols:
         rhythms.append(vocab.rhythm[symbol.rhythm])
         pitchs.append(vocab.pitch[symbol.pitch])
         lifts.append(vocab.lift[symbol.lift])
         articulations.append(vocab.articulation[symbol.articulation])
-        notes.append(vocab.note[rhythm_to_category(symbol.rhythm)])
+        position.append(vocab.position[symbol.position])
+        states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
         mask.append(True)
+        if symbol.rhythm.startswith("keySignature"):
+            key = symbol.rhythm
+        elif symbol.rhythm.startswith("clef"):
+            if symbol.position == "upper":
+                clef_upper = symbol.rhythm
+            else:
+                clef_lower = symbol.rhythm
 
     rhythms.append(end_of_seq)
     pitchs.append(nonote_token)
     lifts.append(nonote_token)
     articulations.append(nonote_token)
-    notes.append(nonote_token)
+    position.append(nonote_token)
+    states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
     mask.append(True)
 
     while len(rhythms) < default_config.max_seq_len:
@@ -144,7 +164,8 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         pitchs.append(nonote_token)
         lifts.append(nonote_token)
         articulations.append(nonote_token)
-        notes.append(nonote_token)
+        position.append(nonote_token)
+        states.append(nonote_token)
         mask.append(False)
 
     return DecoderBranches(
@@ -152,7 +173,8 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         lifts=torch.tensor(lifts),
         articulations=torch.tensor(articulations),
         pitchs=torch.tensor(pitchs),
-        notes=torch.tensor(notes),
+        positions=torch.tensor(position),
+        states=torch.tensor(states),
         mask=torch.tensor(mask),
     )
 
@@ -198,7 +220,8 @@ if __name__ == "__main__":
     errors: set[str] = set()
     i = 0
     if len(sys.argv) > 1:
-        index_file = open(sys.argv[1])
+        file = sys.argv[1]
+        index_file = open(file)
         index_lines = index_file.readlines()
         index_file.close()
         files = [line.strip().split(",")[1] for line in index_lines]

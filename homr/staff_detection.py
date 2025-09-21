@@ -441,13 +441,19 @@ def resample_staff_segment(  # noqa: C901
 def resample_staff(staff: RawStaff) -> Staff:
     anchors_left_to_right = sorted(staff.anchors, key=lambda a: a.symbol.center[0])
     staff_density = 10
+
+    def round_to_density(x: float) -> int:
+        return int(round(x / staff_density)) * staff_density
+
     start = (staff.min_x // staff_density) * staff_density
     stop = (staff.max_x // staff_density + 1) * staff_density
 
     grid: list[StaffPoint] = []
     x = start
     for i, anchor in enumerate(anchors_left_to_right):
-        to_left = range(int(x), int(anchor.symbol.center[0]), staff_density)
+        to_left = range(
+            round_to_density(x), round_to_density(anchor.symbol.center[0]), staff_density
+        )
         if i < len(anchors_left_to_right) - 1:
             to_right = range(
                 int(anchor.symbol.center[0]),
@@ -455,7 +461,9 @@ def resample_staff(staff: RawStaff) -> Staff:
                 staff_density,
             )
         else:
-            to_right = range(int(anchor.symbol.center[0]), int(stop), staff_density)
+            to_right = range(
+                round_to_density(anchor.symbol.center[0]), round_to_density(stop), staff_density
+            )
         x = to_right.stop
         grid.extend(reversed(list(resample_staff_segment(anchor, staff, reversed(to_left)))))
         grid.extend(resample_staff_segment(anchor, staff, to_right))

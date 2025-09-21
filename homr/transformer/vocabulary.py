@@ -1,12 +1,15 @@
 import itertools
 import random
 from fractions import Fraction
+from typing import Iterable
+
+from homr.simple_logging import eprint
 
 nonote = "."
 empty = "_"  # used for decorations on note, if there is no decoration
 
 
-def build_dict(tokens: list[str]) -> dict[str, int]:
+def build_dict(tokens: Iterable[str]) -> dict[str, int]:
     result = {}
     for i, t in enumerate(tokens):
         if t in result:
@@ -30,7 +33,9 @@ def build_rhythm() -> dict[str, int]:
 
     # bar lines
     rhythm.extend(["barline", "doublebarline", "bolddoublebarline"])
-    rhythm.extend(["repeatStart", "repeatEnd"])  # , "daCapo", "daSegno", "segno", "coda"
+    rhythm.extend(
+        ["repeatStart", "repeatEnd", "repeatEndStart"]
+    )  # , "daCapo", "daSegno", "segno", "coda"
     # rhythm.extend(["voltaStart", "voltaEnd"])
 
     # clefs
@@ -81,6 +86,30 @@ def build_rhythm() -> dict[str, int]:
 def build_lift() -> dict[str, int]:
     lifts = [nonote, empty, "#", "##", "N", "b", "bb"]
     return build_dict(lifts)
+
+
+def build_position() -> dict[str, int]:
+    """
+    The staff position, applies to notes, rests and clefs
+    """
+    positions = [nonote, "upper", "lower"]
+    return build_dict(positions)
+
+
+def build_state() -> dict[str, int]:
+    """
+    States keeps track of the current clef (for upper and lower staff)
+    and the current key signature.
+    """
+    keys = [f"keySignature_{c}" for c in range(-7, 8)]
+    clefs = []
+    clefs.extend([f"clef_F{c}" for c in range(3, 6)])
+    clefs.extend([f"clef_C{c}" for c in range(1, 6)])
+    clefs.extend([f"clef_G{c}" for c in range(1, 3)])
+    states = [nonote]
+    for key, upper_clef, lower_clef in itertools.product(keys, clefs, clefs):
+        states.append(f"{key}+{upper_clef}+{lower_clef}")
+    return build_dict(states)
 
 
 def build_articulation() -> dict[str, int]:
@@ -147,32 +176,12 @@ def build_pitch() -> dict[str, int]:
     pitch = [nonote, empty]
     note_names = ["C", "D", "E", "F", "G", "A", "B"]
     octave = range(10)
-    pitch.extend([f"{n}{octave}" for octave, n in itertools.product(octave, note_names)])
+    pitch.extend(reversed([f"{n}{octave}" for octave, n in itertools.product(octave, note_names)]))
     return build_dict(pitch)
 
 
-def build_note() -> dict[str, int]:
-    return build_dict([nonote, "note"])
-
-
-def rhythm_to_category(rhythm: str) -> str:
-    if rhythm.startswith(("note", "rest")):
-        return "note"
-    return nonote
-
-
-def lift_articulation_pitch_or_note_to_category(symbol: str) -> str:
-    if symbol == nonote:
-        return nonote
-    return "note"
-
-
-def is_valid_combination(rhythm: str, lift: str, articulation: str, pitch: str, note: str) -> bool:
-    rhythm_cat = rhythm_to_category(rhythm)
-    other_cats = [
-        lift_articulation_pitch_or_note_to_category(s) for s in [lift, articulation, pitch, note]
-    ]
-    return all(item == rhythm_cat for item in other_cats)
+def has_rhythm_symbol_a_position(rhythm: str) -> bool:
+    return rhythm.startswith(("note", "rest", "clef"))
 
 
 class Vocabulary:
@@ -181,7 +190,8 @@ class Vocabulary:
         self.lift = build_lift()
         self.articulation = build_articulation()
         self.pitch = build_pitch()
-        self.note = build_note()
+        self.position = build_position()
+        self.state = build_state()
 
 
 class SymbolDuration:
@@ -261,24 +271,27 @@ class EncodedSymbol:
     """
 
     def __init__(
-        self, rhythm: str, pitch: str = nonote, lift: str = nonote, articulation: str = nonote
+        self,
+        rhythm: str,
+        pitch: str = nonote,
+        lift: str = nonote,
+        articulation: str = nonote,
+        position: str = nonote,
     ) -> None:
         self.rhythm = rhythm
         self.pitch = pitch
         self.lift = lift
         self.articulation = articulation
+        self.position = position
         self._duration: SymbolDuration | None = None
 
     def is_control_symbol(self) -> bool:
         return self.rhythm in ("BOS", "EOS", "PAD")
 
     def is_valid(self) -> bool:
-        rhythm_cat = rhythm_to_category(self.rhythm)
-        other_cats = [
-            lift_articulation_pitch_or_note_to_category(s)
-            for s in [self.lift, self.articulation, self.pitch]
-        ]
-        return all(item == rhythm_cat for item in other_cats)
+        has_position = has_rhythm_symbol_a_position(self.rhythm)
+        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position]]
+        return all(item == has_position for item in is_note)
 
     def get_duration(self) -> SymbolDuration:
         """
@@ -290,7 +303,8 @@ class EncodedSymbol:
 
         rhythm = self.rhythm
         if not rhythm.startswith(("note", "rest")):
-            raise ValueError("Only notes and rests have a duration")
+            eprint("Warning, invalid symbol in group: Only notes and rests have durations")
+            return SymbolDuration(Fraction(0), 0, 1, 1, 1)
         kern = rhythm.split("_")[1]
 
         duration = kern_to_symbol_duration(kern)
@@ -298,7 +312,7 @@ class EncodedSymbol:
         return duration
 
     def __str__(self) -> str:
-        return str.join(" ", (self.rhythm, self.pitch, self.lift, self.articulation))
+        return str.join(" ", (self.rhythm, self.pitch, self.lift, self.articulation, self.position))
 
     def __repr__(self) -> str:
         return str(self)
@@ -310,12 +324,13 @@ class EncodedSymbol:
                 and self.pitch == __value.pitch
                 and self.lift == __value.lift
                 and self.articulation == __value.articulation
+                and self.position == __value.position
             )
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash((self.rhythm, self.pitch, self.lift, self.articulation))
+        return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position))
 
 
 if __name__ == "__main__":
@@ -329,28 +344,24 @@ if __name__ == "__main__":
     eprint("Lift=", json.dumps(vocab.lift, indent=2))
     eprint("Articulation=", json.dumps(vocab.articulation, indent=2))
     eprint("Pitch=", json.dumps(vocab.pitch, indent=2))
-    # eprint(json.dumps(vocab.note, indent=2))
+    eprint("Positions=", json.dumps(vocab.position, indent=2))
+    eprint("States=", json.dumps(vocab.state, indent=2))
 
-    valid_note_combinations = []
-    valid_other_combinations = []
+    valid_combinations = []
 
-    for r, li, a, p, n in itertools.product(
-        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.note
+    for r, li, a, p, pos in itertools.product(
+        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.position
     ):
-        is_valid = is_valid_combination(r, li, a, p, n)
+        symbol = EncodedSymbol(r, li, a, p, pos)
+        is_valid = symbol.is_valid()
         if not is_valid:
             continue
-        if n == "note":
-            valid_note_combinations.append((r, li, a, p, n))
-        else:
-            valid_other_combinations.append((r, li, a, p, n))
+        valid_combinations.append(symbol)
 
     eprint(
         "Number of combinations",
-        len(valid_note_combinations) + len(valid_other_combinations),
+        len(valid_combinations),
         "- some examples:",
     )
-    for r, li, a, p, n in random.sample(valid_note_combinations, 10):
-        eprint(r, li, a, p, n)
-    for r, li, a, p, n in random.sample(valid_other_combinations, 10):
-        eprint(r, li, a, p, n)
+    for symbol in random.sample(valid_combinations, 10):
+        eprint(symbol)

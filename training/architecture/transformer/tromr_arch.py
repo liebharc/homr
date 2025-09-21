@@ -1,3 +1,4 @@
+import random
 from typing import Any
 
 import torch
@@ -27,7 +28,8 @@ class TrOMR(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
-        notes: torch.Tensor,
+        states: torch.Tensor,
+        positions: torch.Tensor,
         mask: torch.Tensor,
         **kwargs: Any,
     ) -> Any:
@@ -37,12 +39,21 @@ class TrOMR(nn.Module):
             pitchs=pitchs,
             lifts=lifts,
             articulations=articulations,
-            notes=notes,
+            states=states,
+            positions=positions,
             context=context,
             mask=mask,
             **kwargs,
         )
+        self._debug_log_loss(loss)
         return loss
+
+    def _debug_log_loss(self, loss: Any) -> None:
+        log_output = random.randint(1, 60) == 1
+        if not log_output:
+            return
+        debug_loss = {k: v.item() for k, v in loss.items()}
+        print(debug_loss)  # noqa: T201
 
     @torch.no_grad()
     def generate(self, x: torch.Tensor) -> list[EncodedSymbol]:

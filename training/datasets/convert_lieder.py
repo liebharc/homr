@@ -17,10 +17,11 @@ from PIL import Image
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, empty
 from training.datasets.convert_grandstaff import distort_image
 from training.datasets.musescore_svg import (
     SvgMusicFile,
+    SvgStaff,
     get_position_from_multiple_svg_files,
 )
 from training.datasets.music_xml_parser import music_xml_file_to_tokens
@@ -32,28 +33,6 @@ dataset_root = os.path.join(git_root, "datasets")
 lieder = os.path.join(dataset_root, "Lieder-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
-
-
-if platform.system() == "Windows":
-    eprint("Transformer training is only implemented for Linux")
-    eprint("Feel free to submit a PR to support Windows")
-    eprint("Running MuseScore with the -j parameter on Windows doesn't work")
-    eprint("https://github.com/musescore/MuseScore/issues/16221")
-    sys.exit(1)
-
-if not os.path.exists(musescore_path):
-    eprint("Downloading MuseScore from https://musescore.org/")
-    download_file(
-        "https://cdn.jsdelivr.net/musescore/v4.2.1/MuseScore-4.2.1.240230938-x86_64.AppImage",
-        musescore_path,
-    )
-    os.chmod(musescore_path, stat.S_IXUSR)
-
-if not os.path.exists(lieder):
-    eprint("Downloading Lieder from https://github.com/OpenScore/Lieder")
-    lieder_archive = os.path.join(dataset_root, "Lieder.zip")
-    download_file("https://github.com/OpenScore/Lieder/archive/refs/heads/main.zip", lieder_archive)
-    unzip_file(lieder_archive, dataset_root)
 
 
 def copy_all_mscx_files(working_dir: str, dest: str) -> None:
@@ -131,17 +110,83 @@ def write_text_to_file(text: str, path: str) -> None:
         f.write(text)
 
 
+class MeasureCutter:
+    def __init__(self, voice: list[list[EncodedSymbol]]) -> None:
+        self.voice = voice
+        self.number_of_staffs = _count_staffs(voice)
+        if self.number_of_staffs == 1:
+            self.clefs = [EncodedSymbol("clef_G2", empty, empty, empty, "upper")]
+        else:
+            self.clefs = [
+                EncodedSymbol("clef_G2", empty, empty, empty, "upper"),
+                EncodedSymbol("clef_F4", empty, empty, empty, "lower"),
+            ]
+        self.key = EncodedSymbol("keySignature_0")
+        self.time = EncodedSymbol("timeSignature/4")
+
+    def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
+        if symbol.position == "lower":
+            return 1
+        return 0
+
+    def extract_measures(self, count: int) -> list[EncodedSymbol]:
+        clefs = self.clefs.copy()
+        key = self.key
+        time = self.time
+        has_time = False
+        result: list[EncodedSymbol] = []
+        for i in range(count):
+            selected_measure = self.voice.pop(0)
+            is_first_measure = i == 0
+            first_measure_before_any_non_key_or_clef = is_first_measure
+            measure_result: list[EncodedSymbol] = []
+            for symbol in selected_measure:
+                if "clef" in symbol.rhythm:
+                    self.clefs[self._position_to_staff_no(symbol)] = symbol
+                    if not first_measure_before_any_non_key_or_clef:
+                        measure_result.append(symbol)
+                    else:
+                        clefs[self._position_to_staff_no(symbol)] = symbol
+                elif "keySignature" in symbol.rhythm:
+                    self.key = symbol
+                    if not first_measure_before_any_non_key_or_clef:
+                        measure_result.append(symbol)
+                    else:
+                        key = symbol
+                elif "chord" in symbol.rhythm:
+                    if not first_measure_before_any_non_key_or_clef:
+                        measure_result.append(symbol)
+                elif "timeSignature" in symbol.rhythm:
+                    self.time = symbol
+                    if not first_measure_before_any_non_key_or_clef:
+                        measure_result.append(symbol)
+                    else:
+                        has_time = True
+                        time = symbol
+                else:
+                    first_measure_before_any_non_key_or_clef = False
+                    measure_result.append(symbol)
+
+            if is_first_measure:
+                if has_time:
+                    measure_result.insert(0, time)
+                measure_result.insert(0, key)
+                for j, clef in enumerate(reversed(clefs)):
+                    if j > 0:
+                        measure_result.insert(0, EncodedSymbol("chord"))
+                    measure_result.insert(0, clef)
+            result.extend(measure_result)
+        return result
+
+
 def _split_file_into_staffs(
     voices: list[list[list[EncodedSymbol]]],
     svg_files: list[SvgMusicFile],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
 ) -> list[str]:
-    voice = 0
-
-    clefs = [EncodedSymbol("clef_G2") for _ in range(len(voices))]
-    keys = [EncodedSymbol("keySignature_0") for _ in range(len(voices))]
     result: list[str] = []
+    splitter = [MeasureCutter(v) for v in voices]
     for svg_file in svg_files:
         png_file = svg_file.filename.replace(".svg", ".png")
         if not just_token_files:
@@ -150,15 +195,27 @@ def _split_file_into_staffs(
             png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
             pil_img = Image.open(BytesIO(png_data))
             image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
-        for staff_number, staff in enumerate(svg_file.staffs):
+        # alternate through voices
+        staffs: list[SvgStaff] = sorted(svg_file.staffs.copy(), key=lambda x: x.y)
+        current_voice = 0
+        staff_number = 0
+        while len(staffs) > 0:
+            staff_number += 1
+            total_staff_area = staffs.pop(0)
+            first_staff_height = total_staff_area.height
+            measures = splitter[current_voice]
+            is_grandstaff = False
+            for _ in range(measures.number_of_staffs - 1):
+                total_staff_area = total_staff_area.merge_staff(staffs.pop(0))
+                is_grandstaff = True
             staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
             if not just_token_files:
-                y_offset = int(1.5 * staff.height)
+                y_offset = int(1.5 * first_staff_height)
                 x_offset = 50
-                x = staff.x - x_offset
-                y = staff.y - y_offset
-                width = staff.width + 2 * x_offset
-                height = staff.height + 2 * y_offset
+                x = total_staff_area.x - x_offset
+                y = total_staff_area.y - y_offset
+                width = total_staff_area.width + 2 * x_offset
+                height = total_staff_area.height + 2 * y_offset
                 x = int(x * scale)
                 y = int(y * scale)
                 width = int(width * scale)
@@ -167,71 +224,45 @@ def _split_file_into_staffs(
                 staff_image = image[y : y + height, x : x + width]
                 margin_top = random.randint(5, 10)
                 margin_bottom = random.randint(5, 10)
-                preprocessed = add_image_into_tr_omr_canvas(staff_image, margin_top, margin_bottom)
+                preprocessed = add_image_into_tr_omr_canvas(
+                    staff_image, is_grandstaff, margin_top, margin_bottom
+                )
+                preprocessed = distort_image(preprocessed)
                 cv2.imwrite(staff_image_file_name, preprocessed)
-                staff_image_file_name = distort_image(staff_image_file_name)
             elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
                 raise ValueError(f"File {staff_image_file_name} not found")
 
             token_file_name = png_file.replace(".png", f"-{staff_number}.tokens")
-            selected_measures: list[EncodedSymbol] = []
-            clef = clefs[voice]
-            key = keys[voice]
-            for i in range(staff.number_of_measures):
-                selected_measure = voices[voice].pop(0)
-                start_with_clef = False
-                has_key = False
-                for j, symbol in enumerate(selected_measure):
-                    if "clef" in symbol.rhythm:
-                        clefs[voice] = symbol
-                        start_with_clef = j == 0
-                    if "keySignature" in symbol.rhythm:
-                        has_key = True
-                        keys[voice] = symbol
-
-                if i == 0:
-                    if not start_with_clef:
-                        if not has_key:
-                            selected_measure.insert(0, key)
-                        selected_measure.insert(0, clef)
-                selected_measures.extend(selected_measure)
+            selected_measures: list[EncodedSymbol] = measures.extract_measures(
+                total_staff_area.number_of_measures
+            )
             tokens_content = token_lines_to_str(selected_measures)
             write_text_to_file(tokens_content, token_file_name)
-            # Only add files to the index which have valid triplets
-            if check_triplets(selected_measures):
-                result.append(staff_image_file_name + "," + token_file_name + "\n")
-            else:
-                eprint("Incomplete triplets", staff_image_file_name)
-            voice = (voice + 1) % len(voices)
+            result.append(
+                str(Path(staff_image_file_name).relative_to(git_root))
+                + ","
+                + str(Path(token_file_name).relative_to(git_root))
+                + "\n"
+            )
+            current_voice = (current_voice + 1) % len(voices)
     if any(len(measure) > 0 for measure in voices):
         raise ValueError("Warning: Not all measures were processed")
 
     return result
 
 
-def check_triplets(measure: list[EncodedSymbol]) -> bool:
-    last_symbol_was_chord = False
-    number_of_triplets = 0
-    for symbol in measure:
-        if "chord" in symbol.rhythm:
-            last_symbol_was_chord = True
-            continue
-
-        if last_symbol_was_chord:
-            last_symbol_was_chord = False
-            continue
-
-        if "note" in symbol.rhythm or "rest" in symbol.rhythm:
-            duration = symbol.rhythm.split("_")[1]
-            if "G" in duration:
-                continue
-            duration = duration.replace(".", "")
-            dur = int(duration)
-            is_triplet = dur > 0 and dur % 3 == 0
-            if is_triplet:
-                number_of_triplets += 1
-
-    return number_of_triplets % 3 == 0
+def _count_staffs(voice: list[list[EncodedSymbol]]) -> int:
+    if len(voice) == 0:
+        return 0
+    first_measure = voice[0]
+    if len(first_measure) == 0:
+        return 0
+    if len(first_measure) < 3:
+        return 0
+    third_symbol = first_measure[2]
+    if third_symbol.rhythm.startswith("clef"):
+        return 2
+    return 1
 
 
 def convert_xml_and_svg_file(
@@ -239,7 +270,7 @@ def convert_xml_and_svg_file(
 ) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
-        number_of_voices = len(voices)
+        number_of_voices = sum([_count_staffs(v) for v in voices])
         number_of_measures = len(voices[0])
         svg_files = get_position_from_multiple_svg_files(str(file))
         measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
@@ -279,6 +310,29 @@ def _convert_token_and_image(path: Path) -> list[str]:
 
 
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
+    if platform.system() == "Windows":
+        eprint("Transformer training is only implemented for Linux")
+        eprint("Feel free to submit a PR to support Windows")
+        eprint("Running MuseScore with the -j parameter on Windows doesn't work")
+        eprint("https://github.com/musescore/MuseScore/issues/16221")
+        sys.exit(1)
+
+    if not os.path.exists(musescore_path):
+        eprint("Downloading MuseScore from https://musescore.org/")
+        download_file(
+            "https://cdn.jsdelivr.net/musescore/v4.2.1/MuseScore-4.2.1.240230938-x86_64.AppImage",
+            musescore_path,
+        )
+        os.chmod(musescore_path, stat.S_IXUSR)
+
+    if not os.path.exists(lieder):
+        eprint("Downloading Lieder from https://github.com/OpenScore/Lieder")
+        lieder_archive = os.path.join(dataset_root, "Lieder.zip")
+        download_file(
+            "https://github.com/OpenScore/Lieder/archive/refs/heads/main.zip", lieder_archive
+        )
+        unzip_file(lieder_archive, dataset_root)
+
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
