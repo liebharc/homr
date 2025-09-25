@@ -77,7 +77,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
     return selected_datasets
 
 
-def train_transformer(fp32: bool = True, resume: str = "", smoke_test: bool = False) -> None:
+def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = False) -> None:
     number_of_epochs = 15 if smoke_test else 60
     resume_from_checkpoint = None
 
@@ -124,7 +124,8 @@ def train_transformer(fp32: bool = True, resume: str = "", smoke_test: bool = Fa
         overwrite_output_dir=True,
         eval_strategy="epoch",
         learning_rate=1e-4,
-        optim="adamw_torch",  # TrOMR Paper page 3 specifies an Adam optimizer
+        optim="adamw_torch_fused",
+        gradient_accumulation_steps=4,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
         num_train_epochs=number_of_epochs,
