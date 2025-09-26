@@ -340,6 +340,14 @@ def build_articulations(
             xml_articulations.append(mxl.XMLCaesura())
         elif articulation == "doit":
             xml_articulations.append(mxl.XMLDoit())
+        elif articulation == "slurStart":
+            xml_articulations.append(mxl.XMLSlur(type="start"))
+        elif articulation == "slurStop":
+            xml_articulations.append(mxl.XMLSlur(type="stop"))
+        elif articulation == "tieStart":
+            xml_articulations.append(mxl.XMLTie(type="start"))
+        elif articulation == "tieStop":
+            xml_articulations.append(mxl.XMLTie(type="stop"))
         else:
             raise ValueError("Unsupported articulation " + articulation)
 
