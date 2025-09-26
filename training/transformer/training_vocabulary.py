@@ -220,11 +220,12 @@ if __name__ == "__main__":
     errors: set[str] = set()
     i = 0
     if len(sys.argv) > 1:
-        file = sys.argv[1]
-        index_file = open(file)
-        index_lines = index_file.readlines()
-        index_file.close()
-        files = [line.strip().split(",")[1] for line in index_lines]
+        files = []
+        for index_path in sys.argv[1:]:
+            index_file = open(index_path)
+            index_lines = index_file.readlines()
+            index_file.close()
+            files.extend([line.strip().split(",")[1] for line in index_lines])
     else:
         files = glob.glob(os.path.join("datasets", "**", "**.tokens"), recursive=True)
 

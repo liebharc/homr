@@ -286,9 +286,9 @@ XMLNotations()])])])])"""
         expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
 keySignature_1 . . . .
 timeSignature/4 . . . .
-note_1 G4 _ _ upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ _ lower
+note_1 G4 _ tieStart_tieStop upper&note_1 A3 # tieStop upper&rest_2 _ _ _ upper&note_4 G3 _ slurStop lower
 rest_4 _ _ _ lower
-note_2 E4 _ _ upper&note_2 C2 _ _ lower
+note_2 E4 _ tieStart upper&note_2 C2 _ _ lower
 barline . . . ."""
         self.assertEqual(token_str, expected)
 

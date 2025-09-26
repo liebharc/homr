@@ -130,8 +130,6 @@ class HumdrumKernConverter:
         # but there is no tie visible
         self.angled_brackets = ("<", ">")
 
-        self.slur_level = 0
-
     def _accidental_to_lift(self, accidental: str) -> str:
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
 
@@ -147,8 +145,11 @@ class HumdrumKernConverter:
         if not suffix:
             return empty
 
-        mapping = {":": "arpeggiate"}
-        return mapping[suffix]
+        mapping = {":": "arpeggiate", "[": "tieStart", "]": "tieStop"}
+        articulations = []
+        for char in suffix:
+            articulations.append(mapping[char])
+        return str.join("_", articulations)
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split()[0].replace("*clef", "clef_")
@@ -210,12 +211,6 @@ class HumdrumKernConverter:
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
-        if "[" in suffix:
-            self.slur_level += 1
-            suffix = suffix.replace("[", "")
-        if "]" in suffix:
-            self.slur_level -= 1
-            suffix = suffix.replace("]", "")
         articulation_val = self._articulation_from_suffix(suffix)
         return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
 
@@ -298,9 +293,6 @@ class HumdrumKernConverter:
                 for token in symbols:
                     if token != nonote:
                         result.append(EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token)))
-
-                # if self.slur_level > 0:
-                #    result.append(EncodedSymbolWithPos(line_no, EncodedSymbol("tieSlur")))
 
         return result
 

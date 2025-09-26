@@ -43,7 +43,6 @@ class TokensMeasure:
     def __init__(self) -> None:
         self.symbols: list[EncodedSymbolWithPos] = []
         self.current_position = 0
-        self.slurred_tied_positions: set[int] = set()
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
@@ -92,9 +91,6 @@ class TokensMeasure:
                     EncodedSymbolWithPos(self.current_position, symbol, insert_before=is_grace)
                 )
             self.current_position += duration
-
-    def mark_position_a_slurred_tied(self, staff: int) -> None:
-        self.slurred_tied_positions.add(self.current_position)
 
     def _get_staff_no(self, symbol: EncodedSymbolWithPos) -> int:
         if symbol.symbol.position == "lower":
@@ -155,39 +151,8 @@ class TokensMeasure:
                     group_pos.append(symbol)
             for symbol_in_group in group_pos:
                 result_staff[self._get_staff_no(symbol_in_group)].append(symbol_in_group)
-            # if position in self.slurred_tied_positions[staff_no]:
-            #    result_staff.append(EncodedSymbol("tieSlur"))
 
         return merge_upper_and_lower_staff(result_staff)
-
-
-class SlurTieState:
-    def __init__(self) -> None:
-        self.tie_count = 0
-        self.slur_count = 0
-
-    def handle_tie_type(self, slur_tie_type: str) -> None:
-        if self._type_to_bool(slur_tie_type):
-            self.tie_count += 1
-        else:
-            self.tie_count = max(0, self.tie_count - 1)
-
-    def handle_slur_type(self, slur_tie_type: str) -> None:
-        if self._type_to_bool(slur_tie_type):
-            self.slur_count += 1
-        else:
-            self.slur_count -= 1
-
-    def _type_to_bool(self, slur_tie_type: str) -> bool:
-        if slur_tie_type == "start":
-            return True
-        elif slur_tie_type == "stop":
-            return False
-        else:
-            raise ValueError("Unknown slur/tie type " + slur_tie_type)
-
-    def is_in_slur_or_tie(self) -> bool:
-        return self.slur_count > 0 or self.tie_count > 0
 
 
 class TripletState:
@@ -230,7 +195,6 @@ class TokensPart:
         self.current_measure: TokensMeasure | None = None
         self.measures: list[list[EncodedSymbol]] = []
         self.triplets = TripletState()
-        self.slur_tie: list[SlurTieState] = []
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         current_measure = self.current_measure
@@ -241,7 +205,6 @@ class TokensPart:
                 else:
                     current_measure.append_symbol_to_staff(staff, clef[0])
         else:
-            self.slur_tie = [SlurTieState() for _ in range(len(clefs))]
             measure = TokensMeasure()
             for staff, clef in enumerate(clefs):
                 measure.append_symbol_to_staff(staff, clef[0])
@@ -266,26 +229,10 @@ class TokensPart:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_note(staff, is_chord, duration, invisible, symbol)
 
-    def mark_position_a_slurred_tied(self, staff: int) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.mark_position_a_slurred_tied(staff)
-
     def append_position_change(self, duration: int) -> None:
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_position_change(duration)
-
-    def is_in_slur_or_tie(self, staff: int) -> bool:
-        if len(self.slur_tie) <= staff:
-            self.slur_tie.append(SlurTieState())
-        return self.slur_tie[staff].is_in_slur_or_tie()
-
-    def handle_tie_type(self, staff: int, slur_tie_type: str) -> None:
-        self.slur_tie[staff].handle_tie_type(slur_tie_type)
-
-    def handle_slur_type(self, staff: int, slur_tie_type: str) -> None:
-        self.slur_tie[staff].handle_slur_type(slur_tie_type)
 
     def on_end_of_measure(self) -> None:
         if self.current_measure is None:
@@ -404,11 +351,11 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
         if isinstance(child, mxl.XMLArpeggiate):
             articulations.append("arpeggiate")
         if isinstance(child, mxl.XMLTied):
-            tie_type = child.attributes.get("type", "")
-            part.handle_tie_type(staff, tie_type)
+            tie_type = str(child.attributes.get("type", ""))
+            articulations.append("tie" + tie_type.capitalize())
         if isinstance(child, mxl.XMLSlur):
-            slur_type = child.attributes.get("type", "")
-            part.handle_slur_type(staff, slur_type)
+            slur_type = str(child.attributes.get("type", ""))
+            articulations.append("slur" + slur_type.capitalize())
     articulations = list(set(articulations))
     if len(articulations) == 0:
         return empty
@@ -445,8 +392,6 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
     duration_type = dur_nodes[0].value_ if dur_nodes else "eighth"
     base_duration = round(DURATION_NUMBER[duration_type] * triplet_factor)
     art = _collect_articulation(note, part, staff)
-    if part.is_in_slur_or_tie(staff):
-        part.mark_position_a_slurred_tied(staff)
     if len(rest) > 0:
         if rest[0] and rest[0].attributes.get("measure", None):
             part.append_rest(

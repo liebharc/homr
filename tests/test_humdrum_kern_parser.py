@@ -264,9 +264,9 @@ note_16 D5 _ _ upper
 note_16 G5 _ _ upper
 note_16 E5 b _ upper
 note_8 F5 _ _ upper&note_4 B3 b _ lower&note_4 D3 _ _ lower
-note_8 B5 b _ upper
+note_8 B5 b tieStart upper
 barline . . . .
-note_8 B5 b _ upper&note_4 B3 b _ lower&note_4 E3 b _ lower
+note_8 B5 b tieStop upper&note_4 B3 b _ lower&note_4 E3 b _ lower
 note_8 C5 _ _ upper
 note_4. C5 _ _ upper&note_4 B3 b _ lower&note_4 F3 _ _ lower
 note_4 A3 _ _ lower&note_4 F3 _ _ lower
@@ -282,9 +282,9 @@ note_16 D5 _ _ upper
 note_16 G5 _ _ upper
 note_16 E5 b _ upper
 note_8 F5 _ _ upper&note_4 D3 _ _ lower
-note_8 B5 b _ upper
+note_8 B5 b tieStart upper
 barline . . . .
-note_8 B5 b _ upper&note_4 E3 b _ lower
+note_8 B5 b tieStop upper&note_4 E3 b _ lower
 note_8 C5 _ _ upper
 note_4. C5 _ _ upper&note_4 F3 _ _ lower
 note_4 F2 _ _ lower
@@ -449,7 +449,7 @@ timeSignature/8 . . . .
 note_4. E4 _ _ upper&note_4. E2 _ _ lower
 barline . . . .
 note_4G E5 _ _ upper
-note_4. E5 _ _ upper&rest_16 _ _ _ lower
+note_4. E5 _ tieStart upper&rest_16 _ _ _ lower
 note_16 E4 _ _ lower
 note_16 A4 _ _ lower
 note_16 G4 # _ lower

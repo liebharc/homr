@@ -394,15 +394,13 @@ def get_decoder(config: Config) -> ScoreDecoder:
 
 
 def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
-    # Flash attention seems to cause slower convergence and no speed improvement
-    attn_flash = False
     return ScoreTransformerWrapper(
         config=config,
         attn_layers=Decoder(
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=attn_flash,
+            attn_flash=True,
             **config.decoder_args.to_dict(),
         ),
     )

@@ -28,6 +28,7 @@ class ScoreDecoder:
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
+        self.state_vocab = config.state_vocab
 
     def generate(
         self,
@@ -49,6 +50,10 @@ class ScoreDecoder:
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
         out_positions = nonote_tokens
+        key = "keySignature_0"
+        clef_upper = "clef_G2"
+        clef_lower = "clef_F4"
+        states = np.array([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]])
 
         symbols: list[EncodedSymbol] = []
 
@@ -64,6 +69,7 @@ class ScoreDecoder:
                 "rhythms": x_rhythm,
                 "pitchs": x_pitch,
                 "lifts": x_lift,
+                "states": states,
                 "articulations": x_articulations,
                 "positions": x_positions,
                 "context": context,
@@ -86,48 +92,46 @@ class ScoreDecoder:
             filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
             filtered_positions_logits = top_k(positionsp[:, -1, :], thres=filter_thres)
 
-            current_temperature = temperature
-            retry = True
-            attempt = 0
-            max_attempts = 5
-            while retry:
-                lift_probs = softmax(filtered_lift_logits / current_temperature, dim=-1)
-                pitch_probs = softmax(filtered_pitch_logits / current_temperature, dim=-1)
-                rhythm_probs = softmax(filtered_rhythm_logits / current_temperature, dim=-1)
-                articulation_probs = softmax(
-                    filtered_articulations_logits / current_temperature, dim=-1
-                )
-                positions_probs = softmax(filtered_positions_logits / current_temperature, dim=-1)
+            lift_probs = softmax(filtered_lift_logits / temperature, dim=-1)
+            pitch_probs = softmax(filtered_pitch_logits / temperature, dim=-1)
+            rhythm_probs = softmax(filtered_rhythm_logits / temperature, dim=-1)
+            articulation_probs = softmax(filtered_articulations_logits / temperature, dim=-1)
+            positions_probs = softmax(filtered_positions_logits / temperature, dim=-1)
 
-                lift_sample = np.array([[lift_probs.argmax()]])
-                pitch_sample = np.array([[pitch_probs.argmax()]])
-                rhythm_sample = np.array([[rhythm_probs.argmax()]])
-                articulation_sample = np.array([[articulation_probs.argmax()]])
-                position_sample = np.array([[positions_probs.argmax()]])
+            lift_sample = np.array([[lift_probs.argmax()]])
+            pitch_sample = np.array([[pitch_probs.argmax()]])
+            rhythm_sample = np.array([[rhythm_probs.argmax()]])
+            articulation_sample = np.array([[articulation_probs.argmax()]])
+            position_sample = np.array([[positions_probs.argmax()]])
 
-                lift_token = detokenize(lift_sample, self.inv_lift_vocab)
-                pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
-                rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
-                articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
-                position_token = detokenize(position_sample, self.inv_position_vocab)
+            lift_token = detokenize(lift_sample, self.inv_lift_vocab)
+            pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
+            rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
+            articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
+            position_token = detokenize(position_sample, self.inv_position_vocab)
 
-                is_eos = len(rhythm_token)
-                if is_eos == 0:
-                    break
+            is_eos = len(rhythm_token)
+            if is_eos == 0:
+                break
 
-                symbol = EncodedSymbol(
-                    rhythm=rhythm_token[0],
-                    pitch=pitch_token[0],
-                    lift=lift_token[0],
-                    articulation=articulation_token[0],
-                    position=position_token[0],
-                )
-
-                current_temperature *= 3.5
-                attempt += 1
-                retry = not symbol.is_valid() and attempt < max_attempts
-                if not retry and not symbol.is_control_symbol():
-                    symbols.append(symbol)
+            symbol = EncodedSymbol(
+                rhythm=rhythm_token[0],
+                pitch=pitch_token[0],
+                lift=lift_token[0],
+                articulation=articulation_token[0],
+                position=position_token[0],
+            )
+            symbols.append(symbol)
+            if symbol.rhythm.startswith("keySignature"):
+                key = symbol.rhythm
+            elif symbol.rhythm.startswith("clef"):
+                if symbol.position == "upper":
+                    clef_upper = symbol.rhythm
+                else:
+                    clef_lower = symbol.rhythm
+            states = np.concatenate(
+                (states, np.array([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]])), axis=-1
+            )
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
@@ -140,12 +144,6 @@ class ScoreDecoder:
                 and (np.cumsum(out_rhythm == self.eos_token, 1)[:, -1] >= 1).all()
             ):
                 break
-
-        out_lift = out_lift[:, t:]
-        out_pitch = out_pitch[:, t:]
-        out_rhythm = out_rhythm[:, t:]
-        out_articulations = out_articulations[:, t:]
-        out_positions = out_positions[:, t:]
 
         return symbols
 

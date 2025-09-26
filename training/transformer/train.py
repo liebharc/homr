@@ -116,7 +116,7 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
 
     run_id = get_run_id()
 
-    batch_size = 6 if compile_model else 4
+    batch_size = 12 if compile_model else 4
 
     train_args = TrainingArguments(
         checkpoint_folder,
