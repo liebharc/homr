@@ -1,23 +1,28 @@
 {
-    "files.exclude": {
-        "**/checkpoints/**": true,
-        "**/logs/**": true,
-        "**/CvcMuscima-Distortions/**": true,
-        "**/ds2_dense/**": true,
-        "**/Corpus/**": true,
-        "**/CPMS/**": true,
-        "**/diw/**": true,
-        "**/CPMS-main/**": true,
-        "**/grandstaff/**": true,
-        "**/Lieder-main/**": true,
-        "**/.mypy_cache/**": true,
-        "**/.pytest_cache/**": true,
-        "**/.ruff_cache/**": true,
-        "**/__pycache__/**": true
-    },
-    "python.testing.pytestArgs": [
-        "tests"
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+	"files.exclude": {
+		"**/checkpoints/**": true,
+		"**/logs/**": true,
+		"datasets/**": true,
+		"lightning_logs/**": true,
+		"testdata/**": true,
+		".venv/**": true,
+		".tox/**": true,
+		"**/.mypy_cache/**": true,
+		"**/.pytest_cache/**": true,
+		"**/.ruff_cache/**": true,
+		"**/__pycache__/**": true,
+		"**/*.pth": true,
+		"**/*.onnx": true,
+		"**/*.png": true,
+		"**/*.jpg": true,
+		"**/*.jpeg": true,
+		"**/*.tokens": true,
+		"**/*.npy": true,
+		"**/*.musicxml": true,
+		"**/*.Zone.Identifier": true,
+		"**/*_ser.txt": true
+	},
+	"python.testing.pytestArgs": ["tests"],
+	"python.testing.unittestEnabled": false,
+	"python.testing.pytestEnabled": true
 }

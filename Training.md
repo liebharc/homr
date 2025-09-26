@@ -13,6 +13,34 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run ???
+
+Commit:
+Day:
+SER:
+Validation result:
+
+Grandstaff support.
+
+Some notes about other experiments which have been performed on the lieder dataset with only 15 epochs:
+
+- Baseline
+  - Final eval loss: 0.6007007360458374
+  - SER: 112%
+- State
+  - Final eval loss: 0.5414645671844482
+  - SER: 109%
+- Clef unification
+  - Final eval loss: 1.849281907081604
+  - SER: 146%
+- fp16 and flash attention
+  - Final eval loss: 1.522333025932312
+  - SER: 144%
+- fp16 and no flash attention
+  - Final eval loss: 1.00400710105896
+  - SER: 130%
+  - Trains about twice as fast so the poorer performance can be adressed with additional epochs
+
 ## Run 220
 
 Commit: c50aec7de6469480cf6f547695f48aed76d8422e
