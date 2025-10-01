@@ -49,11 +49,10 @@ class ScoreDecoder:
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
-        out_positions = nonote_tokens
         key = "keySignature_0"
         clef_upper = "clef_G2"
         clef_lower = "clef_F4"
-        states = np.array([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]])
+        states = np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])
 
         symbols: list[EncodedSymbol] = []
 
@@ -62,16 +61,14 @@ class ScoreDecoder:
             x_pitch = out_pitch[:, -self.max_seq_len :]
             x_rhythm = out_rhythm[:, -self.max_seq_len :]
             x_articulations = out_articulations[:, -self.max_seq_len :]
-            x_positions = out_positions[:, -self.max_seq_len :]
             context = kwargs["context"]
 
             inputs = {
                 "rhythms": x_rhythm,
                 "pitchs": x_pitch,
                 "lifts": x_lift,
-                "states": states,
                 "articulations": x_articulations,
-                "positions": x_positions,
+                "states": states,
                 "context": context,
             }
 
@@ -110,8 +107,7 @@ class ScoreDecoder:
             articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
             position_token = detokenize(position_sample, self.inv_position_vocab)
 
-            is_eos = len(rhythm_token)
-            if is_eos == 0:
+            if rhythm_sample[0][0] == self.eos_token:
                 break
 
             symbol = EncodedSymbol(
@@ -130,20 +126,14 @@ class ScoreDecoder:
                 else:
                     clef_lower = symbol.rhythm
             states = np.concatenate(
-                (states, np.array([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]])), axis=-1
+                (states, np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])),
+                axis=-1,
             )
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
-            out_positions = np.concatenate((out_positions, position_sample), axis=-1)
-
-            if (
-                self.eos_token is not None
-                and (np.cumsum(out_rhythm == self.eos_token, 1)[:, -1] >= 1).all()
-            ):
-                break
 
         return symbols
 

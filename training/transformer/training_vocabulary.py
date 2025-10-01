@@ -57,12 +57,17 @@ def sort_token_chords(
             is_in_chord = True
         elif is_in_chord and len(chords) > 0:
             if keep_chord_symbol:
-                chords[1].append(EncodedSymbol("chord"))
+                chords[-1].append(EncodedSymbol("chord"))
             chords[-1].append(symbol)
             is_in_chord = False
         else:
             chords.append([symbol])
     return chords
+
+
+def calc_ratio_of_tuplets(symbols: list[EncodedSymbol]) -> float:
+    tuplets = [s for s in symbols if s.is_tuplet()]
+    return float(len(tuplets)) / len(symbols)
 
 
 def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:

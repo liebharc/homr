@@ -26,16 +26,61 @@ class ConversionState:
         return self.tremolo_state
 
 
-class SymbolGroup:
-    def __init__(self, symbols: list[EncodedSymbol]) -> None:
+class SymbolChord:
+    def __init__(self, symbols: list[EncodedSymbol], tuplet_mark: str = "") -> None:
         self.symbols = symbols
-        self.tuplet_mark = ""
+        self.tuplet_mark = tuplet_mark
 
     def __str__(self) -> str:
         return str.join("&", [str(s) for s in self.symbols])
 
     def __repr__(self) -> str:
         return str(self)
+
+    def is_barline(self) -> bool:
+        if len(self.symbols) == 0:
+            return False
+        first_rhythm = self.symbols[0].rhythm
+        return "barline" in first_rhythm or "repeat" in first_rhythm
+
+    def get_duration(self) -> Fraction:
+        notes_rests = [
+            s.get_duration().fraction for s in self.symbols if s.rhythm.startswith(("note", "rest"))
+        ]
+        if len(notes_rests) == 0:
+            return Fraction(0)
+        return min(notes_rests)
+
+    def into_positions(self) -> list["SymbolChord"]:
+        upper = []
+        lower = []
+        for symbol in self.symbols:
+            if symbol.position == "upper":
+                upper.append(symbol)
+            else:
+                lower.append(symbol)
+        return [
+            chord
+            for chord in [
+                SymbolChord(upper, self.tuplet_mark),
+                SymbolChord(lower, self.tuplet_mark),
+            ]
+            if len(chord.symbols) > 0
+        ]
+
+    def strip_slur_ties(self) -> tuple[list[str], "SymbolChord"]:
+        slurs_ties = set()
+
+        result = []
+        for symbol in self.symbols:
+            stripped, result_symbol = symbol.strip_articulations(
+                ["slurStart", "slurStop", "tieStart", "tieStop"]
+            )
+            result.append(result_symbol)
+            for articulation in stripped:
+                slurs_ties.add(articulation)
+
+        return sorted(slurs_ties), SymbolChord(result, tuplet_mark=self.tuplet_mark)
 
 
 class XmlGeneratorArguments:
@@ -72,7 +117,8 @@ def build_measures(
     args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
 ) -> list[mxl.XMLMeasure]:
     measure_number = 1
-    division, nominator = find_division_and_time_signature_nominator(voice)
+    groups = add_tuplet_start_stop(group_into_chords(voice))
+    division, nominator = find_division_and_time_signature_nominator(groups)
     state = ConversionState(division, nominator)
     measures: list[mxl.XMLMeasure] = []
     current_measure = mxl.XMLMeasure(number=str(measure_number))
@@ -82,7 +128,6 @@ def build_measures(
         direction = build_add_time_direction(args)
         if direction:
             current_measure.add_child(direction)
-    groups = add_tuplet_start_stop(group_into_chords(voice))
     attributes: mxl.XMLAttributes | None = first_attributes
     for group in groups:
         symbol = group.symbols[0]
@@ -94,8 +139,13 @@ def build_measures(
                 attributes = build_or_get_attributes(current_measure, last_attributes)
                 build_multi_measure_rest(symbol, attributes)
             else:
-                for note_xml in build_note_group(group, state):
-                    current_measure.add_child(note_xml)
+                staff_positions = group.into_positions()
+                for i, staff_pos in enumerate(staff_positions):
+                    chord_duration = (
+                        group.get_duration() if i == len(staff_positions) - 1 else Fraction(0)
+                    )
+                    for note_xml in build_note_chord(staff_pos, state, chord_duration):
+                        current_measure.add_child(note_xml)
             continue
         if rhythm == "newline":
             measures[-1].add_child(mxl.XMLPrint(new_system="yes"))
@@ -234,7 +284,7 @@ def build_key(model_key: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
 
 
 def get_staff(symbol: EncodedSymbol) -> int:
-    return 1 if symbol.position == "upper" else 2
+    return 2 if symbol.position == "lower" else 1
 
 
 def build_clef(model_clef: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
@@ -341,13 +391,13 @@ def build_articulations(
         elif articulation == "doit":
             xml_articulations.append(mxl.XMLDoit())
         elif articulation == "slurStart":
-            xml_articulations.append(mxl.XMLSlur(type="start"))
+            notation.add_child(mxl.XMLSlur(type="start"))
         elif articulation == "slurStop":
-            xml_articulations.append(mxl.XMLSlur(type="stop"))
+            notation.add_child(mxl.XMLSlur(type="stop"))
         elif articulation == "tieStart":
-            xml_articulations.append(mxl.XMLTie(type="start"))
+            notation.add_child(mxl.XMLTied(type="start"))
         elif articulation == "tieStop":
-            xml_articulations.append(mxl.XMLTie(type="stop"))
+            notation.add_child(mxl.XMLTied(type="stop"))
         else:
             raise ValueError("Unsupported articulation " + articulation)
 
@@ -439,31 +489,35 @@ def build_multi_measure_rest(
     attributes.add_child(style)
 
 
-def build_note_group(note_group: SymbolGroup, state: ConversionState) -> list[mxl.XMLNote]:
-    by_duration = _group_notes(note_group.symbols)
+def build_note_chord(
+    note_chord: SymbolChord, state: ConversionState, chord_duration: Fraction
+) -> list[mxl.XMLNote]:
+    slurs_ties, note_chord = note_chord.strip_slur_ties()
+    by_duration = _group_notes(note_chord.symbols)
     result = []
+    final_duration = Fraction(0)
     for i, group_duration in enumerate(sorted(by_duration)):
         is_first = True
-        for note in by_duration[group_duration]:
-            result.append(build_note_or_rest(note, i, not is_first, state, note_group.tuplet_mark))
+        for note_loop in by_duration[group_duration]:
+            note = note_loop
+            if i == 0 and is_first:
+                note = note.add_articulations(slurs_ties)
+            result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
             is_first = False
         if i != len(by_duration) - 1 and group_duration > Fraction(0):
             backup = mxl.XMLBackup()
             backup.add_child(mxl.XMLDuration(value_=int(group_duration * state.division)))
             result.append(backup)
 
-    # The shorted symbol defines the chord length
-    non_zero_durations = [d for d in by_duration if d > Fraction(0)]
-    if len(non_zero_durations) > 0:
-        shortest_duration = min(non_zero_durations)
-        largest_duration = max(non_zero_durations)
+        final_duration = group_duration
 
-        if shortest_duration < largest_duration:
-            backup = mxl.XMLBackup()
-            backup.add_child(
-                mxl.XMLDuration(value_=int((largest_duration - shortest_duration) * state.division))
-            )
-            result.append(backup)
+    # Reset the position to match the chord position
+    if chord_duration < final_duration:
+        backup = mxl.XMLBackup()
+        backup.add_child(
+            mxl.XMLDuration(value_=int((final_duration - chord_duration) * state.division))
+        )
+        result.append(backup)
     return result
 
 
@@ -521,18 +575,19 @@ def find_common_division(durations: list[Fraction]) -> int:
     return common
 
 
-def find_division_and_time_signature_nominator(voice: list[EncodedSymbol]) -> tuple[int, Fraction]:
+def find_division_and_time_signature_nominator(voice: list[SymbolChord]) -> tuple[int, Fraction]:
     durations = [Fraction(1, 4)]
     duration_in_measure = Fraction(0)
     measure_duration = []
-    for symbol in voice:
-        if symbol.rhythm.startswith(("note", "rest")):
-            duration = symbol.get_duration()
-            durations.append(duration.fraction)
-            duration_in_measure += duration.fraction
-        if "barline" in symbol.rhythm and duration_in_measure > Fraction(0):
+    for chord in voice:
+        if chord.is_barline() and duration_in_measure > Fraction(0):
             measure_duration.append(duration_in_measure)
             duration_in_measure = Fraction(0)
+        else:
+            duration = chord.get_duration()
+            if duration > Fraction(0):
+                durations.append(duration)
+                duration_in_measure += duration
 
     if duration_in_measure > Fraction(0):
         measure_duration.append(duration_in_measure)
@@ -546,11 +601,11 @@ def find_division_and_time_signature_nominator(voice: list[EncodedSymbol]) -> tu
     return find_common_division(durations), nominator
 
 
-def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolGroup]:
-    return [SymbolGroup(s) for s in sort_token_chords(voice)]
+def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolChord]:
+    return [SymbolChord(s) for s in sort_token_chords(voice)]
 
 
-def add_tuplet_start_stop(groups: list[SymbolGroup]) -> list[SymbolGroup]:
+def add_tuplet_start_stop(groups: list[SymbolChord]) -> list[SymbolChord]:
     has_tuplet_mark = False
     for group in groups:
         is_tuplet = False

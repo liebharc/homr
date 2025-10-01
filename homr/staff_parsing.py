@@ -10,7 +10,7 @@ from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
 from homr.type_definitions import NDArray
 
 
@@ -150,8 +150,9 @@ def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
     region = _calculate_region(staff, regions)
+    margin_bottom = 0 if staff.is_grandstaff else default_config.max_height // 2
     image_dimensions = get_tr_omr_canvas_size(
-        (int(region[3] - region[1]), int(region[2] - region[0]))
+        (int(region[3] - region[1]), int(region[2] - region[0])), margin_bottom=margin_bottom
     )
     scaling_factor = image_dimensions[1] / (region[3] - region[1])
     staff_image = cv2.resize(
@@ -173,7 +174,7 @@ def prepare_staff_image(
     eprint("Dewarping staff", index, "done")
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
-    staff_image = center_image_on_canvas(staff_image, image_dimensions)
+    staff_image = center_image_on_canvas(staff_image, image_dimensions, margin_bottom=margin_bottom)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
@@ -224,30 +225,6 @@ def parse_staff_image(
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
-    return result
-
-
-def remove_duplicated_symbols(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
-    """
-    Merge all staffs of a voice into a single staff.
-    Every staff starts with a clef and a key, but we only need to keep
-    them if they are different to the previous value.
-    """
-    result = []
-    last_values = {"clef": "", "timeSignature": "", "keySignature": ""}
-
-    for symbol in symbols:
-        ignore_symbol = False
-        for category in last_values:  # noqa: PLC0206
-            if symbol.rhythm.startswith(category):
-                if last_values[category] == symbol.rhythm:
-                    ignore_symbol = True
-                else:
-                    last_values[category] = symbol.rhythm
-
-        if ignore_symbol:
-            continue
-        result.append(symbol)
     return result
 
 

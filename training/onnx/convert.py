@@ -23,8 +23,8 @@ class DecoderWrapper(torch.nn.Module):
         rhythms: torch.Tensor,
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
-        positions: torch.Tensor,
         articulations: torch.Tensor,
+        states: torch.Tensor,
         context: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x = self.model(
@@ -32,7 +32,7 @@ class DecoderWrapper(torch.nn.Module):
             pitchs=pitchs,
             lifts=lifts,
             articulations=articulations,
-            positions=positions,
+            states=states,
             mask=None,
             context=context,
         )
@@ -114,7 +114,7 @@ def convert_decoder() -> str:
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
     articulations = torch.randint(0, config.num_articulation_tokens, (1, 10)).long()
-    positions = torch.randint(0, config.num_position_tokens, (1, 10)).long()
+    states = torch.randint(0, config.num_state_tokens, (1, 10)).long()
     context = torch.randn((1, 1281, config.decoder_dim)).float()
 
     dynamic_axes = {
@@ -122,7 +122,7 @@ def convert_decoder() -> str:
         "pitchs": {0: "batch_size", 1: "input_seq_len"},
         "lifts": {0: "batch_size", 1: "input_seq_len"},
         "articulations": {0: "batch_size", 1: "input_seq_len"},
-        "positions": {0: "batch_size", 1: "input_seq_len"},
+        "states": {0: "batch_size", 1: "input_seq_len"},
         "context": {0: "batch_size"},
         "out_rhythms": {0: "batch_size", 1: "output_seq_len"},
         "out_pitchs": {0: "batch_size", 1: "output_seq_len"},
@@ -133,9 +133,9 @@ def convert_decoder() -> str:
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, positions, articulations, context),
+        (rhythms, pitchs, lifts, articulations, states, context),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "positions", "articulations", "context"],
+        input_names=["rhythms", "pitchs", "lifts", "articulations", "states", "context"],
         output_names=[
             "out_rhythms",
             "out_pitchs",

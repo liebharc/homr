@@ -51,15 +51,18 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
         return ""
     ocr_results = _reader(ocr_input)
 
-    # Each result is (bbox, text, confidence)
-    # Pick the text with the largest bbox area
-    def bbox_area(bbox: list[list[float]]) -> float:
-        # bbox = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-        xs = [p[0] for p in bbox]
+    def bbox_height(bbox: list[list[float]]) -> float:
         ys = [p[1] for p in bbox]
-        return (max(xs) - min(xs)) * (max(ys) - min(ys))
+        return max(ys) - min(ys)
 
-    largest_text = max(ocr_results[0], key=lambda r: bbox_area(r[0]))[1]  # get text of largest area
+    # Take max average character height = bbox_height / number of chars
+    def font_size_score(result: tuple[list[list[float]], str, float]) -> float:
+        bbox, text, _ = result
+        if not text:
+            return 0
+        return bbox_height(bbox) / len(text)
+
+    largest_text = max(ocr_results[0], key=font_size_score)[1]
     return cleanup_text(largest_text)
 
 

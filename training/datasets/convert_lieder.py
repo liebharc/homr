@@ -25,7 +25,10 @@ from training.datasets.musescore_svg import (
     get_position_from_multiple_svg_files,
 )
 from training.datasets.music_xml_parser import music_xml_file_to_tokens
-from training.transformer.training_vocabulary import token_lines_to_str
+from training.transformer.training_vocabulary import (
+    calc_ratio_of_tuplets,
+    token_lines_to_str,
+)
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -210,7 +213,7 @@ def _split_file_into_staffs(
                 is_grandstaff = True
             staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
             if not just_token_files:
-                y_offset = int(1.5 * first_staff_height)
+                y_offset = int(random.uniform(1.5, 2.5) * first_staff_height)
                 x_offset = 50
                 x = total_staff_area.x - x_offset
                 y = total_staff_area.y - y_offset
@@ -223,7 +226,7 @@ def _split_file_into_staffs(
 
                 staff_image = image[y : y + height, x : x + width]
                 margin_top = random.randint(5, 10)
-                margin_bottom = random.randint(5, 10)
+                margin_bottom = random.randint(5, 10) if is_grandstaff else random.randint(-30, 0)
                 preprocessed = add_image_into_tr_omr_canvas(
                     staff_image, is_grandstaff, margin_top, margin_bottom
                 )
@@ -236,14 +239,16 @@ def _split_file_into_staffs(
             selected_measures: list[EncodedSymbol] = measures.extract_measures(
                 total_staff_area.number_of_measures
             )
-            tokens_content = token_lines_to_str(selected_measures)
-            write_text_to_file(tokens_content, token_file_name)
-            result.append(
-                str(Path(staff_image_file_name).relative_to(git_root))
-                + ","
-                + str(Path(token_file_name).relative_to(git_root))
-                + "\n"
-            )
+
+            if calc_ratio_of_tuplets(selected_measures) <= 0.2:
+                tokens_content = token_lines_to_str(selected_measures)
+                write_text_to_file(tokens_content, token_file_name)
+                result.append(
+                    str(Path(staff_image_file_name).relative_to(git_root))
+                    + ","
+                    + str(Path(token_file_name).relative_to(git_root))
+                    + "\n"
+                )
             current_voice = (current_voice + 1) % len(voices)
     if any(len(measure) > 0 for measure in voices):
         raise ValueError("Warning: Not all measures were processed")

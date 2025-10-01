@@ -181,5 +181,5 @@ def add_notes_to_staffs(
     number_of_notes = 0
     for staff in staffs:
         number_of_notes += len(staff.get_notes())
-    eprint("After grouping there are", number_of_notes, "notes")
+    eprint("Found", number_of_notes, "notes during segmentation")
     return result
