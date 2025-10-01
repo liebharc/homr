@@ -47,8 +47,8 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
         if image is None:
             eprint("Warning: Could not read image", path)
             return []
-        margin_top = random.randint(5, 25)
-        margin_bottom = random.randint(5, 25)
+        margin_top = random.randint(5, 10)
+        margin_bottom = random.randint(-25, 0)
         preprocessed = add_image_into_tr_omr_canvas(image, False, margin_top, margin_bottom)
         preprocessed = distort_image(preprocessed)
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)

@@ -13,12 +13,12 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
-## Run ???
+## Run 234
 
-Commit:
-Day:
-SER:
-Validation result:
+Commit:ea96f0150ec74388df8cb0bb78ee2c36782a00d9
+Day: 01 Oct 2025
+SER: 39%
+Validation result: 9.8
 
 Grandstaff support.
 

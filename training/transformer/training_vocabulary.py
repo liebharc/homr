@@ -44,7 +44,34 @@ def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
 
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     sorted_chord = sorted(chord, key=_symbol_to_sortable)
-    return str.join("&", [str(c) for c in sorted_chord])
+    upper_slurs_ties = set()
+    lower_slurs_ties = set()
+    annotation_resorted: list[EncodedSymbol] = []
+    for symbol in sorted_chord:
+        stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
+        for articulation in stripped:
+            if symbol.position == "lower":
+                lower_slurs_ties.add(articulation)
+            else:
+                upper_slurs_ties.add(articulation)
+        annotation_resorted.append(symbol_stripped)
+    if len(upper_slurs_ties) > 0:
+        first_upper = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
+        )
+        if first_upper is not None:
+            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_articulations(
+                list(upper_slurs_ties)
+            )
+    if len(lower_slurs_ties) > 0:
+        first_lower = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
+        )
+        if first_lower is not None:
+            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_articulations(
+                list(lower_slurs_ties)
+            )
+    return str.join("&", [str(c) for c in annotation_resorted])
 
 
 def sort_token_chords(
@@ -57,12 +84,17 @@ def sort_token_chords(
             is_in_chord = True
         elif is_in_chord and len(chords) > 0:
             if keep_chord_symbol:
-                chords[1].append(EncodedSymbol("chord"))
+                chords[-1].append(EncodedSymbol("chord"))
             chords[-1].append(symbol)
             is_in_chord = False
         else:
             chords.append([symbol])
     return chords
+
+
+def calc_ratio_of_tuplets(symbols: list[EncodedSymbol]) -> float:
+    tuplets = [s for s in symbols if s.is_tuplet()]
+    return float(len(tuplets)) / len(symbols)
 
 
 def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:

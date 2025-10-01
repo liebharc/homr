@@ -31,6 +31,8 @@ def split_weights(input_path: str) -> None:
             new_key = key.replace("decoder.", "")
             # And add it to a seperate dict
             decoder_state_dict[new_key] = value
+        else:
+            raise ValueError("Unknown key " + key)
 
     # Encoder weights can be saved directly
     torch.save(encoder_state_dict, "encoder_weights.pt")

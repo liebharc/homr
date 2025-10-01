@@ -1,5 +1,7 @@
+import copy
 import itertools
 import random
+import re
 from fractions import Fraction
 from typing import Iterable
 
@@ -36,7 +38,7 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend(
         ["repeatStart", "repeatEnd", "repeatEndStart"]
     )  # , "daCapo", "daSegno", "segno", "coda"
-    # rhythm.extend(["voltaStart", "voltaEnd"])
+    # rhythm.extend(["voltaStart1", "voltaStart2", "voltaStart3", "voltaStop", "voltaDiscontinue"])
 
     # clefs
     rhythm.extend([f"clef_F{c}" for c in range(3, 6)])
@@ -340,7 +342,7 @@ def kern_to_symbol_duration(kern: str) -> SymbolDuration:
     """
     if kern.endswith("m"):
         # Multirest
-        SymbolDuration(Fraction(0), 0, 1, 1, 4)
+        SymbolDuration(Fraction(1), 0, 1, 1, 4)
 
     # Extract numeric prefix (can be > 1 digit)
     i = 0
@@ -352,9 +354,12 @@ def kern_to_symbol_duration(kern: str) -> SymbolDuration:
     base = int(base_str) if base_str else 4  # default quarter
     dots = rest.count(".")
 
-    if base == 0:
-        # Special: grace note (duration = 0)
+    if "G" in kern:
+        # Grace note
         return SymbolDuration(Fraction(0), dots, 1, 1, base)
+    if base == 0:
+        # Special: Whoe measure rest
+        return SymbolDuration(Fraction(1), dots, 1, 1, base)
 
     # If base is a power of two, it's a normal note
     if base & (base - 1) == 0:
@@ -392,15 +397,72 @@ class EncodedSymbol:
     def is_control_symbol(self) -> bool:
         return self.rhythm in ("BOS", "EOS", "PAD")
 
+    def is_tuplet(self) -> bool:
+        no_tuplet = self.remove_tuplet()
+        return no_tuplet.rhythm != self.rhythm
+
+    def remove_tuplet(self) -> "EncodedSymbol":
+        match = re.match(r"(note|rest)_(\d+)(.*)", self.rhythm)
+        if not match:
+            return self
+        duration = int(match[2])
+        if duration % 3 == 0:
+            duration = duration // 3 * 2
+        elif duration % 5 == 0:
+            duration = duration // 5 * 4
+        elif duration % 7 == 0:
+            duration = duration // 7 * 4
+        else:
+            return self
+
+        result = copy.copy(self)
+        result.rhythm = match[1] + "_" + str(duration) + match[3]
+        result._duration = None
+        return result
+
+    def to_upper_position(self) -> "EncodedSymbol":
+        if self.position != "lower":
+            return self
+        result = copy.copy(self)
+        result.position = "upper"
+        return result
+
     def is_valid(self) -> bool:
         has_position = has_rhythm_symbol_a_position(self.rhythm)
         is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position]]
         return all(item == has_position for item in is_note)
 
+    def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
+        all_articulations = []
+        all_articulations.extend(articulations)
+        all_articulations.extend([a for a in self.articulation.split("_") if a])
+        result = copy.copy(self)
+        result.articulation = str.join("_", sorted(all_articulations))
+        return result
+
+    def strip_articulations(
+        self, to_be_removed: list[str], remove_all: bool = False
+    ) -> tuple[list[str], "EncodedSymbol"]:
+        stripped = []
+        remaining = []
+        for articulation in self.articulation.split("_"):
+            if not articulation:
+                continue
+            if remove_all or articulation in to_be_removed:
+                stripped.append(articulation)
+            else:
+                remaining.append(articulation)
+        result = copy.copy(self)
+        if remaining:
+            result.articulation = str.join("_", remaining)
+        else:
+            result.articulation = empty
+
+        return stripped, result
+
     def get_duration(self) -> SymbolDuration:
         """
         Convert a Humdrum **kern duration into a Fraction (relative to a whole note).
-        Assumes 4 = quarter note = 1/4.
         """
         if self._duration is not None:
             return self._duration
@@ -435,6 +497,174 @@ class EncodedSymbol:
 
     def __hash__(self) -> int:
         return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position))
+
+
+def _remove_redudant_clefs_keys_and_time_signatures(
+    chords: list[list[EncodedSymbol]],
+) -> list[list[EncodedSymbol]]:
+    clef_upper = ""
+    clef_lower = ""
+    key = ""
+    time = ""
+    result_chords = []
+    for chord in chords:
+        result = []
+        for symbol in chord:
+            if symbol.rhythm.startswith("clef"):
+                if symbol.position == "upper":
+                    if symbol.rhythm != clef_upper:
+                        clef_upper = symbol.rhythm
+                        result.append(symbol)
+                elif symbol.rhythm != clef_lower:
+                    clef_lower = symbol.rhythm
+                    result.append(symbol)
+            elif symbol.rhythm.startswith("keySignature"):
+                if symbol.rhythm != key:
+                    key = symbol.rhythm
+                    result.append(symbol)
+            elif symbol.rhythm.startswith("timeSignature"):
+                if symbol.rhythm != time:
+                    time = symbol.rhythm
+                    result.append(symbol)
+            else:
+                result.append(symbol)
+        result_chords.append(result)
+    return result_chords
+
+
+def _remove_duplicated_piches(chord: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    if len(chord) <= 1 or not chord[0].rhythm.startswith(("note", "rest")):
+        return chord
+    by_pitch: dict[str, EncodedSymbol] = {}
+    order_of_appearance = []
+    for symbol in chord:
+        key = symbol.pitch + " " + symbol.position
+        if key in by_pitch:
+            if symbol.get_duration().fraction > by_pitch[key].get_duration().fraction:
+                by_pitch[symbol.pitch] = symbol
+        else:
+            by_pitch[key] = symbol
+            order_of_appearance.append(key)
+
+    return [by_pitch[s] for s in order_of_appearance]
+
+
+def _group_into_chords(symbols: list[EncodedSymbol]) -> list[list[EncodedSymbol]]:
+    chords: list[list[EncodedSymbol]] = []
+    is_in_chord = False
+    for symbol in symbols:
+        if symbol.rhythm == "chord":
+            is_in_chord = True
+        elif is_in_chord and len(chords) > 0:
+            chords[-1].append(symbol)
+            is_in_chord = False
+        else:
+            chords.append([symbol])
+    return chords
+
+
+def _flatten_chords(chords: list[list[EncodedSymbol]]) -> list[EncodedSymbol]:
+    result = []
+    for chord in chords:
+        if len(chords) == 0:
+            continue
+        is_in_chord = False
+        for symbol in chord:
+            if is_in_chord:
+                result.append(EncodedSymbol("chord"))
+            result.append(symbol)
+            is_in_chord = True
+
+    return result
+
+
+def _group_into_measures(chords: list[list[EncodedSymbol]]) -> list[list[list[EncodedSymbol]]]:
+    measures = []
+    current_measure = []
+    for chord in chords:
+        current_measure.append(chord)
+        if len(chord) > 0 and ("barline" in chord[0].rhythm or "repeat" in chord[0].rhythm):
+            measures.append(current_measure)
+            current_measure = []
+    if len(current_measure) > 0:
+        measures.append(current_measure)
+    return measures
+
+
+def _flatten_measures(measures: list[list[list[EncodedSymbol]]]) -> list[list[EncodedSymbol]]:
+    return [chord for measure in measures for chord in measure]
+
+
+def _get_duration_of_measure(measure: list[list[EncodedSymbol]]) -> Fraction:
+    total_duration = Fraction(0)
+    for chord in measure:
+        duration = Fraction(0)
+        for symbol in chord:
+            if symbol.rhythm.startswith(("note", "rest")):
+                fraction = symbol.get_duration().fraction
+                if fraction > Fraction(0) and (fraction < duration or duration == Fraction(0)):
+                    duration = fraction
+        total_duration += duration
+    return total_duration
+
+
+def _get_typical_duration_of_measures(measures: list[list[list[EncodedSymbol]]]) -> Fraction:
+    durations = [_get_duration_of_measure(m) for m in measures]
+    if len(durations) == 0:
+        return Fraction(0)
+    return sorted(durations)[len(durations) // 2]
+
+
+def _remove_tuplets(measure: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
+    return [[symbol.remove_tuplet() for symbol in chord] for chord in measure]
+
+
+def _fix_over_eager_tuplets(chords: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
+    """
+    The transformer tends to add too many tuplets, so we remove them
+    based on the length of a measurement.
+    """
+    measures = _group_into_measures(chords)
+    mean = _get_typical_duration_of_measures(measures)
+    result = []
+    for i, measure in enumerate(measures):
+        if _get_duration_of_measure(measure) < mean:
+            eprint("Removing tuplets from measure #", i + 1)
+            result.append(_remove_tuplets(measure))
+        else:
+            result.append(measure)
+    return _flatten_measures(result)
+
+
+def _only_keep_lower_staff_if_there_is_a_clef(
+    chords: list[list[EncodedSymbol]],
+) -> list[list[EncodedSymbol]]:
+    has_lower_clef = False
+    all_results = []
+    for i, chord in enumerate(chords):
+        result = []
+        for symbol in chord:
+            if has_lower_clef:
+                result.append(symbol)
+            elif i < 5 and symbol.rhythm.startswith("clef") and symbol.position == "lower":
+                has_lower_clef = True
+                result.append(symbol)
+            else:
+                result.append(symbol.to_upper_position())
+        all_results.append(result)
+    return all_results
+
+
+def remove_duplicated_symbols(
+    symbols: list[EncodedSymbol], cleanup_tuplets: bool = True
+) -> list[EncodedSymbol]:
+    chords = _group_into_chords(symbols)
+    if cleanup_tuplets:
+        chords = _fix_over_eager_tuplets(chords)
+        chords = _only_keep_lower_staff_if_there_is_a_clef(chords)
+    chords = [_remove_duplicated_piches(c) for c in chords]
+    chords = _remove_redudant_clefs_keys_and_time_signatures(chords)
+    return _flatten_chords(chords)
 
 
 if __name__ == "__main__":

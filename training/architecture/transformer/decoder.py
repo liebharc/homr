@@ -173,7 +173,7 @@ class ScoreDecoder(nn.Module):
         key = "keySignature_0"
         clef_upper = "clef_G2"
         clef_lower = "clef_F4"
-        states = torch.Tensor([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]).to(
+        states = torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
             start_tokens.device
         )
 
@@ -218,8 +218,7 @@ class ScoreDecoder(nn.Module):
             articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
             position_token = detokenize(position_sample, self.inv_position_vocab)
 
-            is_eos = len(rhythm_token)
-            if is_eos == 0:
+            if rhythm_sample[0][0] == self.eos_token:
                 break
 
             symbol = EncodedSymbol(
@@ -240,7 +239,7 @@ class ScoreDecoder(nn.Module):
             states = torch.concat(
                 (
                     states,
-                    torch.Tensor([self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]).to(
+                    torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
                         states.device
                     ),
                 ),
@@ -252,12 +251,6 @@ class ScoreDecoder(nn.Module):
             out_rhythm = torch.cat((out_rhythm, rhythm_sample), dim=-1)
             out_articulations = torch.cat((out_articulations, articulation_sample), dim=-1)
             mask = F.pad(mask, (0, 1), value=True)
-
-            if (
-                self.eos_token is not None
-                and (torch.cumsum(out_rhythm == self.eos_token, 1)[:, -1] >= 1).all()
-            ):
-                break
 
         self.net.train(was_training)
         return symbols
@@ -400,7 +393,7 @@ def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=True,
+            attn_flash=False,
             **config.decoder_args.to_dict(),
         ),
     )

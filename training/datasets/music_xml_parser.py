@@ -155,14 +155,15 @@ class TokensMeasure:
         return merge_upper_and_lower_staff(result_staff)
 
 
-class TripletState:
+class TupletState:
 
     def __init__(self) -> None:
         self.started = False
+        self.last_stop_position = -1
 
-    def get_triplet_factor(self, note: mxl.XMLNote) -> float:
+    def get_tuplet_factor(self, note: mxl.XMLNote, position: int) -> float:
         notations = note.get_children_of_type(mxl.XMLNotations)
-        was_started = self.started
+        was_started = self.started or self.last_stop_position == position
         if len(notations) > 0:
             tuplets = notations[0].get_children_of_type(mxl.XMLTuplet)
             print_object = notations[0].attributes.get("print-object", None)
@@ -173,6 +174,7 @@ class TripletState:
                     self.started = True
                 if t_type == "stop":
                     self.started = False
+                    self.last_stop_position = position
 
         if not self.started and not was_started:
             return 1.0
@@ -189,12 +191,15 @@ class TripletState:
         normal = int(normal_notes[0].value_)
         return float(actual) / float(normal)
 
+    def on_end_of_measure(self) -> None:
+        self.last_stop_position = -1
+
 
 class TokensPart:
     def __init__(self) -> None:
         self.current_measure: TokensMeasure | None = None
         self.measures: list[list[EncodedSymbol]] = []
-        self.triplets = TripletState()
+        self.tuplets = TupletState()
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         current_measure = self.current_measure
@@ -240,9 +245,21 @@ class TokensPart:
 
         self.measures.append(self.current_measure.complete_measure())
         self.current_measure = TokensMeasure()
+        self.tuplets.on_end_of_measure()
 
     def get_measures(self) -> list[list[EncodedSymbol]]:
         return self.measures
+
+    def _get_current_position(self) -> int:
+        if self.current_measure is None:
+            return 0
+        return self.current_measure.current_position
+
+    def get_tuplet_factor(self, note: mxl.XMLNote, is_chord: bool, duration: int) -> float:
+        position = self._get_current_position()
+        if is_chord:
+            position -= duration
+        return self.tuplets.get_tuplet_factor(note, position)
 
 
 def _lift_from_pitch_or_accidental(pitch: mxl.XMLPitch, note: mxl.XMLNote) -> str:
@@ -346,7 +363,7 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
                 else:
                     articulations.append(nm)
         if isinstance(child, mxl.XMLTuplet):
-            # Tuplets are handled by TripletState
+            # Tuplets are handled by TupletState
             pass
         if isinstance(child, mxl.XMLArpeggiate):
             articulations.append("arpeggiate")
@@ -376,7 +393,6 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
         staff = int(staff_nodes[0].value_) - 1
     is_grace = len(note.get_children_of_type(mxl.XMLGrace)) > 0
     is_chord = len(note.get_children_of_type(mxl.XMLChord)) > 0
-    triplet_factor = part.triplets.get_triplet_factor(note)
     if len(note.get_children_of_type(mxl.XMLDuration)) == 0:
         is_grace_note = len(note.get_children_of_type(mxl.XMLGrace)) > 0
         if not is_grace_note:
@@ -386,6 +402,7 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
         # Note: The duration in MusicXML is in the unit "divisions"
         # divisions are specified in the parts attributes
         duration = int(note.get_children_of_type(mxl.XMLDuration)[0].value_)
+    triplet_factor = part.get_tuplet_factor(note, is_chord, duration)
     rest = note.get_children_of_type(mxl.XMLRest)
     dots = _count_dots(note)
     dur_nodes = note.get_children_of_type(mxl.XMLType)
@@ -395,7 +412,7 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
     if len(rest) > 0:
         if rest[0] and rest[0].attributes.get("measure", None):
             part.append_rest(
-                staff, is_chord, duration, invisible, EncodedSymbol("rest_0", empty, empty, empty)
+                staff, is_chord, duration, invisible, EncodedSymbol("rest_1", empty, empty, empty)
             )
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
@@ -432,6 +449,11 @@ def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
     if len(repeat_nodes) > 0:
         direction = repeat_nodes[0].attributes.get("direction", "")
 
+    ending = ""
+    ending_nodes = barline.get_children_of_type(mxl.XMLEnding)
+    if len(ending_nodes) > 0:
+        ending = ending_nodes[0].attributes.get("type", "")
+
     if direction == "forward":
         part.append_symbol(EncodedSymbol("repeatStart"))
     elif direction == "backward":
@@ -443,6 +465,13 @@ def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
     else:
         # "barline" elments without style or repeat are automatically added with measures
         pass
+
+    if ending == "stop":
+        part.append_symbol(EncodedSymbol("voltaStop"))
+    elif ending == "discontinue":
+        part.append_symbol(EncodedSymbol("voltaDiscontinue"))
+    elif ending == "start":
+        part.append_symbol(EncodedSymbol("voltaStart"))
 
 
 def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -> None:

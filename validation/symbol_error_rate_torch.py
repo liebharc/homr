@@ -67,12 +67,16 @@ def calc_symbol_error_rate_for_list(
         ]
         distance = editdistance.eval(expected, actual)
         ser = distance / len(expected)
+        if ser > 0.5:
+            eprint("Expected:", token_lines_to_str(expected))
+            eprint("Actual  :", token_lines_to_str(actual))
+
         all_sers.append(ser)
         ser = round(100 * ser)
         ser_avg = round(100 * sum(all_sers) / len(all_sers))
         i += 1
         has_usually_high_ser = (
-            "Playing_With_Fire_BlackPink" in img_path and "staff-1-pre.jpg" in img_path
+            "Playing_With_Fire_BlackPink" in img_path and "staff-1.jpg" in img_path
         )
         if has_usually_high_ser:
             interesting_results.append((token_lines_to_str(expected), token_lines_to_str(actual)))

@@ -17,7 +17,10 @@ from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
 from training.datasets.musescore_svg import SvgValidationError
-from training.transformer.training_vocabulary import token_lines_to_str
+from training.transformer.training_vocabulary import (
+    calc_ratio_of_tuplets,
+    token_lines_to_str,
+)
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -90,15 +93,54 @@ def distort_image(image: NDArray) -> NDArray:
     pil_image = PIL.Image.fromarray(image)
     pipeline = Compose(
         [
-            tr.RandomRotation(degrees=1),
-            tr.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            tr.RandomRotation(degrees=2),
+            tr.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.5),
             tr.RandomAdjustSharpness(2),
+            tr.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 0.5)),
         ]
     )
 
     augmented_image = pipeline(img=pil_image)
     augmented_image = warp_image_randomly(augmented_image)
-    return np.array(augmented_image)
+
+    # add paper texture overlay
+    paper_texture = np.random.normal(loc=235, scale=10, size=image.shape).astype(np.uint8)  # type: ignore
+    augmented_array = np.array(augmented_image)
+    alpha = 0.2
+    augmented_array = cv2.addWeighted(augmented_array, 1 - alpha, paper_texture, alpha, 0)
+
+    rows, cols = augmented_array.shape[:2]
+
+    # Randomized Gaussian parameters
+    sigma_x = np.random.uniform(cols / 4, cols)
+    sigma_y = np.random.uniform(rows / 4, rows)
+    center_x = np.random.uniform(0, cols)
+    center_y = np.random.uniform(0, rows)
+
+    # Generate coordinate grids
+    x = np.arange(cols) - center_x
+    y = np.arange(rows) - center_y
+    x_grid, y_grid = np.meshgrid(x, y)
+
+    # Optional rotation
+    theta = np.random.uniform(0, 2 * np.pi)
+    x_rot = x_grid * np.cos(theta) + y_grid * np.sin(theta)
+    y_rot = -x_grid * np.sin(theta) + y_grid * np.cos(theta)
+
+    # Create asymmetric Gaussian vignette
+    mask = np.exp(-0.5 * ((x_rot**2 / sigma_x**2) + (y_rot**2 / sigma_y**2)))
+    mask = mask / mask.max()
+
+    # Scale mask to subtle effect (0.9–1.0)
+    mask = 0.9 + 0.1 * mask
+
+    # Optional channel variation
+    if augmented_array.shape[2] == 3:
+        mask = np.stack([mask * np.random.uniform(0.9, 1.0) for _ in range(3)], axis=-1)
+
+    augmented_array = (augmented_array * mask).astype(np.uint8)
+
+    return augmented_array
 
 
 def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
@@ -146,6 +188,9 @@ def _kern_to_tokens(path: str, basename: str) -> str:
     with open(path) as text_file:
         result = convert_kern_to_tokens(text_file.readlines())
 
+    if calc_ratio_of_tuplets(result) > 0.2:
+        return ""
+
     with open(basename + ".tokens", "w") as f:
         f.write(token_lines_to_str(result))
     return basename + ".tokens"
@@ -156,6 +201,8 @@ def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> str:  #
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
         tokens = _kern_to_tokens(str(path), basename)
+        if not tokens:
+            return ""
         if ony_recreate_token_files:
             image = _check_staff_image(image_file, basename)
         else:
@@ -216,7 +263,7 @@ def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
     eprint("Indexing Grandstaff dataset, this can up to several hours.")
     krn_files = list(Path(grandstaff_root).rglob("*.krn"))
     krn_files = [file for file in krn_files if _filter_out_known_bad_ones(file)]
-    errors: set[Path] = set()
+    skipped: set[Path] = set()
     with open(index_file, "w") as f:
         file_number = 0
         with multiprocessing.Pool() as p:
@@ -233,14 +280,12 @@ def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
                     file_number += 1
                     if file_number % 1000 == 0:
                         eprint(
-                            f"Processed {file_number}/{len(krn_files)} files," "errors: ",
-                            len(errors),
+                            f"Processed {file_number}/{len(krn_files)} files,",
+                            f"skipped: {len(skipped)}",
                         )
                 else:
-                    errors.add(file)
+                    skipped.add(file)
     eprint("Done indexing")
-    if len(errors) > 0:
-        eprint("Errors:", errors)
 
 
 if __name__ == "__main__":
