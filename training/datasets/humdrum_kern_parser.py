@@ -1,12 +1,21 @@
 import re
 
-from homr.transformer.vocabulary import EncodedSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
+from training.datasets.staff_merging import (
+    EncodedSymbolWithPos,
+    merge_upper_and_lower_staff,
+)
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 
-def convert_kern_to_tokens(lines: list[str]) -> list[list[EncodedSymbol]]:
+def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
-    return [_convert_single_staff(staff) for staff in reversed(staffs)]
+    merged = merge_upper_and_lower_staff(
+        [_convert_single_staff(staff_no, staff) for staff_no, staff in enumerate(reversed(staffs))]
+    )
+    merged = _remove_redundant_key_changes(merged)
+    merged = _fix_final_repeat_start(merged)
+    return merged
 
 
 def _merge_multiple_voices_on_the_same_staff(
@@ -46,6 +55,7 @@ def _merge_multiple_voices_on_the_same_staff(
                 else:
                     new_map.append(spine_to_staff[i])
             spine_to_staff = new_map
+            continue
 
         # Join
         elif "*v" in tokens:
@@ -76,9 +86,38 @@ def _merge_multiple_voices_on_the_same_staff(
     return staff_lines
 
 
-def _convert_single_staff(lines: list[str]) -> list[EncodedSymbol]:
+def _remove_redundant_key_changes(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    last_symbol = EncodedSymbol("")
+    result = []
+    for symbol in symbols:
+        # Key signature was already added, this happend e.g. in
+        # datasets/grandstaff/scarlatti-d/keyboard-sonatas/L348K244/min3_up_m-89-93.tokens
+        # as there is a clef change for one staff and a key change for both, but the
+        # key change doesn't happen in one line then
+        if symbol.rhythm.startswith("keySignature") and symbol.rhythm == last_symbol.rhythm:
+            continue
+        result.append(symbol)
+        last_symbol = symbol
+    return result
+
+
+def _fix_final_repeat_start(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    """
+    If a measure ends with a repeat start then in the actual image you only see
+    a barline rendered.
+    """
+    if len(symbols) == 0:
+        return symbols
+    if symbols[-1].rhythm == "repeatEndStart":
+        symbols[-1].rhythm = "repeatEnd"
+    if symbols[-1].rhythm == "repeatStart":
+        symbols[-1].rhythm = "barline"
+    return symbols
+
+
+def _convert_single_staff(staff_no: int, lines: list[str]) -> list[EncodedSymbolWithPos]:
     converter = HumdrumKernConverter()
-    return converter.convert_humdrum_kern(lines)
+    return converter.convert_humdrum_kern(staff_no, lines)
 
 
 class HumdrumKernConverter:
@@ -90,8 +129,6 @@ class HumdrumKernConverter:
         # According to the grandstaff paper angleBracketOpen & Close stands for tieStart and tieEnd
         # but there is no tie visible
         self.angled_brackets = ("<", ">")
-
-        self.slur_level = 0
 
     def _accidental_to_lift(self, accidental: str) -> str:
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
@@ -108,12 +145,15 @@ class HumdrumKernConverter:
         if not suffix:
             return empty
 
-        mapping = {":": "arpeggiate"}
-        return mapping[suffix]
+        mapping = {":": "arpeggiate", "[": "tieStart", "]": "tieStop"}
+        articulations = []
+        for char in suffix:
+            articulations.append(mapping[char])
+        return str.join("_", articulations)
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split()[0].replace("*clef", "clef_")
-        return EncodedSymbol(clef_name)
+        return EncodedSymbol(clef_name, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
         mapping = {
@@ -171,78 +211,73 @@ class HumdrumKernConverter:
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
-        if "[" in suffix:
-            self.slur_level += 1
-            suffix = suffix.replace("[", "")
-        if "]" in suffix:
-            self.slur_level -= 1
-            suffix = suffix.replace("]", "")
         articulation_val = self._articulation_from_suffix(suffix)
         return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
         symbol = line.split(" ")[0]
         mapping = {
-            "=:|!|:": ["repeatEnd", "barline", "repeatStart"],
+            "=:|!|:": ["repeatEndStart"],
             "=": ["barline"],
             "=-": [],  # barline after clef, key and time sig
-            "==:|!": ["repeatEnd", "barline"],
+            "==:|!": ["repeatEnd"],
             "==": ["bolddoublebarline"],
-            "=:|!": ["repeatEnd", "barline"],
-            "=!|:": ["barline", "repeatStart"],
+            "=:|!": ["repeatEnd"],
+            "=!|:": ["repeatStart"],
             "=||": ["doublebarline"],
             "=|!": ["barline"],
         }
         return [EncodedSymbol(s) for s in mapping[symbol]]
 
-    def interleave_chord_symbol(self, notes: list[EncodedSymbol]) -> list[EncodedSymbol]:
-        result = []
-        for i, note in enumerate(notes):
-            last_note = i == len(notes) - 1
-            result.append(note)
-            if not last_note:
-                result.append(EncodedSymbol("chord"))
+    def _get_default_clef(self, staff_no: int) -> EncodedSymbol:
+        if staff_no == 0:
+            return EncodedSymbol("clef_G2", empty, empty, empty, "upper")
+        return EncodedSymbol("clef_F4", empty, empty, empty, "lower")
+
+    def _add_line_numbers(self, lines: list[str]) -> list[tuple[int, str]]:
+        """
+        Control chars seem to have no specific order and must be treated
+        as if we would be on the same line.
+        """
+        line_no = 0
+        result: list[tuple[int, str]] = []
+        in_control_group = True
+        for line in lines:
+            control_line = line.startswith("*")
+            if control_line and in_control_group:
+                result.append((line_no, line))
+            else:
+                line_no += 1
+                result.append((line_no, line))
+                in_control_group = control_line
         return result
 
-    def _swap_with_previous(self, results: list[EncodedSymbol], swap: tuple[str, ...]) -> None:
-        if len(results) < 2:
-            return
+    def convert_humdrum_kern(
+        self, staff_no: int, lines: list[str]
+    ) -> list[EncodedSymbolWithPos]:  # noqa: C901
+        result: list[EncodedSymbolWithPos] = []
 
-        item = results[-1]
-        previous = results[-2]
-        if previous.rhythm.startswith(swap):
-            results.pop()
-            results.pop()
-            results.append(item)
-            results.append(previous)
-
-    def convert_humdrum_kern(self, lines: list[str]) -> list[EncodedSymbol]:  # noqa: C901
-        result: list[EncodedSymbol] = []
-
-        clef = EncodedSymbol("clef_G2")
-        keySignature = EncodedSymbol("keySignature_0")
-        timeSignature = EncodedSymbol("timeSignature/4")
+        clef = EncodedSymbolWithPos(-10, self._get_default_clef(staff_no))
+        keySignature = EncodedSymbolWithPos(-9, EncodedSymbol("keySignature_0"))
+        timeSignature = EncodedSymbolWithPos(-8, EncodedSymbol("timeSignature/4"))
         initial_signature_was_added = False
-
-        for line in lines:
+        for line_no, line in self._add_line_numbers(lines):
             if line.startswith("="):
                 if initial_signature_was_added:
                     parsed = self.parse_barline(line)
-                    result.extend(parsed)
+                    result.extend([EncodedSymbolWithPos(line_no, p) for p in parsed])
             elif line.startswith("*k"):
-                keySignature = self.parse_key_signature(line)
+                keySignature = EncodedSymbolWithPos(-9, self.parse_key_signature(line))
                 if initial_signature_was_added:
-                    result.append(keySignature)
-                self._swap_with_previous(result, tuple("timeSignature"))
+                    result.append(EncodedSymbolWithPos(line_no, keySignature.symbol))
             elif line.startswith("*M"):
-                timeSignature = self.parse_time_signature(line)
+                timeSignature = EncodedSymbolWithPos(-8, self.parse_time_signature(line))
                 if initial_signature_was_added:
-                    result.append(timeSignature)
+                    result.append(EncodedSymbolWithPos(line_no, timeSignature.symbol))
             elif line.startswith("*clef"):
-                clef = self.parse_clef(line)
+                clef = EncodedSymbolWithPos(-10, self.parse_clef(line))
                 if initial_signature_was_added:
-                    result.append(clef)
-                self._swap_with_previous(result, ("timeSignature", "keySignature"))
+                    result.append(EncodedSymbolWithPos(line_no, clef.symbol))
             elif line.startswith("*"):
                 # All other control instructions can be ignored
                 pass
@@ -255,18 +290,9 @@ class HumdrumKernConverter:
                     result.append(timeSignature)
                     initial_signature_was_added = True
                 symbols = line.split()
-                chord = []
                 for token in symbols:
-                    if token != ".":
-                        chord.append(self.parse_note_or_rest(token))
-
-                result.extend(self.interleave_chord_symbol(chord))
-
-                if self.slur_level > 0 and len(chord) > 0:
-                    result.append(EncodedSymbol("tieSlur"))
-
-        if result[-1].rhythm != "barline":
-            result.append(EncodedSymbol("barline"))
+                    if token != nonote:
+                        result.append(EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token)))
 
         return result
 
@@ -278,11 +304,10 @@ if __name__ == "__main__":
     from homr.simple_logging import eprint
 
     stats = VocabularyStats()
-    for file in glob.glob(os.path.join("datasets", "grandstaff", "**", "**.krn"), recursive=True):
+    files = glob.glob(os.path.join("datasets", "grandstaff", "**", "**.krn"), recursive=True)
+    for file in files:
         with open(file, encoding="utf-8", errors="ignore") as f:
-            eprint(file, file.replace(".krn", ".jpg"))
-            staffs = convert_kern_to_tokens(f.readlines())
-            for tokens in staffs:
-                check_token_lines(tokens)
-                stats.add_lines(tokens)
+            tokens = convert_kern_to_tokens(f.readlines())
+            check_token_lines(tokens)
+            stats.add_lines(tokens)
     eprint("Stats", stats)

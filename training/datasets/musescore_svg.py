@@ -61,6 +61,18 @@ class SvgStaff(SvgRectangle):
         if not already_present:
             self.bar_line_x_positions.add(bar_line.x)
 
+    def merge_staff(self, other: "SvgStaff") -> "SvgStaff":
+        if self.number_of_measures != other.number_of_measures:
+            raise ValueError("Can't merge staffs with a different number of measures")
+        x_min = min(self.x, other.x)
+        y_min = min(self.y, other.y)
+        x_max = max(self.x + self.width, other.x + other.width)
+        y_max = max(self.y + self.height, other.y + other.height)
+        result = SvgStaff(x_min, y_min, x_max - x_min, y_max - y_min)
+        for pos in self.bar_line_x_positions:
+            result.bar_line_x_positions.add(pos)
+        return result
+
     @property
     def number_of_measures(self) -> int:
         return len(self.bar_line_x_positions) - 1

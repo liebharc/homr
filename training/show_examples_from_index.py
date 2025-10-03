@@ -25,9 +25,15 @@ parser.add_argument(
     type=int,
     help="Maximum SER to show",
 )
+parser.add_argument(
+    "--search",
+    type=str,
+    help="Only token files which contain this search term will be displayed",
+)
 args = parser.parse_args()
 
 index_file_name = args.index
+search = args.search
 number_of_samples_per_iteration = int(args.number_of_images)
 
 index_file = open(index_file_name)
@@ -62,13 +68,25 @@ def print_color(text: str, highlights: list[str], color: Any) -> None:
 
 
 done = False
+highlight = ["barline", "#", "N", "b"]
+if search:
+    highlight.append(search)
 while not done:
-    batch: list[str] = []
+    batch: list[tuple[str, str]] = []
     while len(batch) < number_of_samples_per_iteration:
         if len(index_lines) == 0:
             break
 
-        batch.append(index_lines.pop())
+        line = index_lines.pop()
+        cells = line.strip().split(",")
+
+        with open(cells[1]) as file:
+            tokens = str.join("", file.readlines())
+
+        if search and search not in tokens:
+            continue
+
+        batch.append((cells[0], tokens))
 
     if len(batch) == 0:
         break
@@ -79,18 +97,13 @@ while not done:
     print()
     print("==========================================")
     print()
-    for line in batch:
-        cells = line.strip().split(",")
-        image_path = cells[0]
-        tokens_path = cells[1]
+    for image_path, tokens in batch:
         ser: None | int = None
         if len(cells) > ser_position:
             ser = int(cells[ser_position])
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError("Failed to read " + image_path)
-        with open(tokens_path) as file:
-            tokens = str.join("", file.readlines())
         if images is None:
             images = image
         else:
@@ -100,7 +113,9 @@ while not done:
             print(">>> " + image_path + f" SER: {ser}%")
         else:
             print(">>> " + image_path)
-        print_color(tokens, ["barline", "#", "N", "b"], "green")
+        print_color(tokens, highlight, "green")
+        if search:
+            print("Count:", tokens.count(search))
     cv2.imshow("Images", images)  # type: ignore
     escKey = 27
     spaceKey = 32

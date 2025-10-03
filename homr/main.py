@@ -166,7 +166,7 @@ def process_image(
         title = title_future.result(60)
         eprint("Found title:", title)
 
-        eprint("Writing XML")
+        eprint("Writing XML", result_staffs)
         xml = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
 

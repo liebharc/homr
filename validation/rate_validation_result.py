@@ -6,7 +6,7 @@ from itertools import chain
 import editdistance
 
 from homr.simple_logging import eprint
-from homr.staff_parsing import remove_duplicated_symbols
+from homr.staff_parsing import remove_duplicated_symbols  # type: ignore[attr-defined]
 from homr.transformer.vocabulary import EncodedSymbol
 from training.datasets.music_xml_parser import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import sort_token_chords
@@ -28,7 +28,7 @@ class MusicFile:
         symbols = [symbol for measure in voices_in_deq for symbol in measure]
         sorted_chords = sort_token_chords(symbols, keep_chord_symbol=True)
         self.symbols = remove_duplicated_symbols(
-            [symbol for chord in sorted_chords for symbol in chord]
+            [symbol for chord in sorted_chords for symbol in chord], cleanup_tuplets=False
         )
         self.keys = [str(s) for s in self.symbols if s.rhythm.startswith("keySignature")]
         self.notestr = [
