@@ -78,7 +78,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
 
 def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = False) -> None:
-    number_of_epochs = 15 if smoke_test else 60
+    number_of_epochs = 15 if smoke_test else 70
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -116,7 +116,7 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
 
     run_id = get_run_id()
 
-    batch_size = 12 if compile_model else 4
+    batch_size = 16
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -137,7 +137,7 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
         label_names=label_names,
-        fp16=not fp32,
+        bf16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
     )

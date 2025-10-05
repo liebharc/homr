@@ -264,8 +264,8 @@ if __name__ == "__main__":
     for file in files:
         try:
             tokens = read_tokens(file)
-            check_token_lines(tokens)
             stats.add_lines(tokens)
+            check_token_lines(tokens)
             i += 1
             if i % 1000 == 0:
                 eprint(i, len(errors))

@@ -393,7 +393,7 @@ def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=False,
+            attn_flash=True,
             **config.decoder_args.to_dict(),
         ),
     )
