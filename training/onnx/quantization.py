@@ -18,14 +18,13 @@ def quantization_int8(
     """
     if out_path is None:
         out_path = model_path
-    
+
     quant_pre_process(
             model_path, "model_preprocessed.onnx"
         )  # Preprocess model for better quantization results
 
     if arm_optimized:
         # Quint8 is slower on x86; faster on arm (sometimes)
-        print('arm')
         quantize_dynamic("model_preprocessed.onnx", out_path, weight_type=QuantType.QUInt8)
     else:
         quantize_dynamic(
@@ -54,11 +53,11 @@ def main():
         action="store_true",
         default=True,
         help="Optimize model for arm"
-    )    
+    )
     args = parser.parse_args()
 
     quantization_int8(
-        args.model_path, 
+        args.model_path,
         args.out_path,
         args.arm_optimized
     )

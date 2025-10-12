@@ -41,9 +41,8 @@ class Staff2Score:
         nonote_token = np.full((len(x), 1), self.config.nonote_token, dtype=np.int64)
 
         # Generate context with encoder
-        t0 = perf_counter()
         context = self.encoder.generate(x)
-        print(f"Encoder time: {perf_counter() - t0}")
+
         # Make a prediction using decoder
         out = self.decoder.generate(
             start_token,

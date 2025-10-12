@@ -64,6 +64,5 @@ def main():
         segnet_path=args.path_segnet
     )
 
-
 if __name__ == "__main__":
     main()
