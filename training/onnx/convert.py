@@ -2,7 +2,6 @@ import os
 
 import torch
 
-from homr.segmentation.config import segnet_path_torch
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
@@ -37,14 +36,14 @@ class DecoderWrapper(torch.nn.Module):
         return out_rhythms, out_pitchs, out_lifts, out_articulations
 
 
-def convert_encoder() -> str:
+def convert_encoder(path_to_pth_model: str) -> str:
     """
     Converts the encoder to onnx
     """
     config = Config()
 
-    dir_path = os.path.dirname(config.filepaths.encoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
+    dir_path = os.path.dirname(path_to_pth_model)
+    filename = os.path.splitext(os.path.basename(path_to_pth_model))[0]
     path_out = os.path.join(dir_path, f"encoder_{filename}.onnx")
 
     if os.path.exists(path_out):
@@ -81,16 +80,17 @@ def convert_encoder() -> str:
     return path_out
 
 
-def convert_decoder() -> str:
+def convert_decoder(path_to_pth_model: str) -> str:
     """
     Converts the decoder to onnx.
+    Returns path to onnx.
     """
     config = Config()
     model = get_score_wrapper(config)
     model.eval()
 
-    dir_path = os.path.dirname(config.filepaths.decoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
+    dir_path = os.path.dirname(path_to_pth_model)
+    filename = os.path.splitext(os.path.basename(path_to_pth_model))[0]
     path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
 
     if os.path.exists(path_out):
@@ -145,13 +145,13 @@ def convert_decoder() -> str:
     return path_out
 
 
-def convert_segnet() -> str:
+def convert_segnet(path_to_pth_model: str) -> str:
     """
     Converts the segnet model to onnx.
     """
 
-    dir_path = os.path.dirname(segnet_path_torch)
-    filename = os.path.splitext(os.path.basename(segnet_path_torch))[0]
+    dir_path = os.path.dirname(path_to_pth_model)
+    filename = os.path.splitext(os.path.basename(path_to_pth_model))[0]
     path_out = os.path.join(dir_path, f"{filename}.onnx")
 
     if os.path.exists(path_out):
@@ -159,7 +159,7 @@ def convert_segnet() -> str:
         return path_out
 
     model = create_segnet()
-    model.load_state_dict(torch.load(segnet_path_torch, weights_only=True), strict=True)
+    model.load_state_dict(torch.load(path_to_pth_model, weights_only=True), strict=True)
     model.eval()
 
     # Input dimension is 1x3x320x320
@@ -176,4 +176,4 @@ def convert_segnet() -> str:
         # dyamic axes are required for dynamic batch_size
         dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
-    return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"
+    return path_out
