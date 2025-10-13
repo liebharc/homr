@@ -1,7 +1,7 @@
 # ruff: noqa: T201
 
-import os
 import argparse
+import os
 
 from homr.simple_logging import eprint
 from training.onnx.convert import (
@@ -42,27 +42,17 @@ def convert(transformer_path: str | None = None, segnet_path: str | None = None)
         os.remove("decoder_weights.pt")
         os.remove("encoder_weights.pt")
 
+
 def main():
     parser = argparse.ArgumentParser(
-        prog="Onnx converter",
-        description="Convert pytorch models to onnx format"
+        prog="Onnx converter", description="Convert pytorch models to onnx format"
     )
-    parser.add_argument(
-        "--path_transformer",
-        type=str,
-        help="Path to the transformer weights"
-    )
-    parser.add_argument(
-        "--path_segnet",
-        type=str,
-        help="Path to the segnet weights"
-    )
+    parser.add_argument("--path_transformer", type=str, help="Path to the transformer weights")
+    parser.add_argument("--path_segnet", type=str, help="Path to the segnet weights")
     args = parser.parse_args()
 
-    convert(
-        transformer_path=args.path_transformer,
-        segnet_path=args.path_segnet
-    )
+    convert(transformer_path=args.path_transformer, segnet_path=args.path_segnet)
+
 
 if __name__ == "__main__":
     main()
