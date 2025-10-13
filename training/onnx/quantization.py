@@ -5,7 +5,9 @@ from onnxruntime.quantization import QuantType, quantize_dynamic
 from onnxruntime.quantization.shape_inference import quant_pre_process
 
 
-def quantization_int8(model_path: str, out_path: str | None = None, arm_optimized: bool = False) -> None:
+def quantization_int8(
+    model_path: str, out_path: str | None = None, arm_optimized: bool = False
+) -> None:
     """
     Dynamic Quantization of an onnx model to int8
     Args:
