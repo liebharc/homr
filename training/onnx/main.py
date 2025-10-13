@@ -43,7 +43,7 @@ def convert(transformer_path: str | None = None, segnet_path: str | None = None)
         os.remove("encoder_weights.pt")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         prog="Onnx converter", description="Convert pytorch models to onnx format"
     )

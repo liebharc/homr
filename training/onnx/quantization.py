@@ -5,7 +5,7 @@ from onnxruntime.quantization import QuantType, quantize_dynamic
 from onnxruntime.quantization.shape_inference import quant_pre_process
 
 
-def quantization_int8(model_path: str, out_path: str = None, arm_optimized: bool = False) -> None:
+def quantization_int8(model_path: str, out_path: str | None = None, arm_optimized: bool = False) -> None:
     """
     Dynamic Quantization of an onnx model to int8
     Args:
@@ -29,7 +29,7 @@ def quantization_int8(model_path: str, out_path: str = None, arm_optimized: bool
     os.remove("model_preprocessed.onnx")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         prog="quantization_int8", description="Quantize an onnx model to dynamic int8"
     )
