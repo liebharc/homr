@@ -10,7 +10,7 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
-        model_name = "pytorch_model_236-7bb416e48b8165ab161bb63aee88fad66f646c79"
+        model_name = "pytorch_model_236-922ad08f8895f6d9c0ae61954cd78a021ff950a7"
         self.encoder_path = os.path.join(
             workspace,
             f"encoder_{model_name}.onnx",

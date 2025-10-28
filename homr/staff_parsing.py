@@ -146,6 +146,38 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
+def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
+    gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(kernel_size, kernel_size))
+    gray_image = clahe.apply(gray_image)
+
+    return cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
+
+
+def remove_background(gray: NDArray) -> NDArray:
+    # Estimate smooth background illumination
+    background = cv2.medianBlur(gray, 51)
+
+    # Flatten background but preserve detail
+    flat = cv2.divide(gray, background, scale=255)
+
+    # Stretch intensity to full range
+    enhanced = cv2.normalize(flat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)  # type: ignore
+
+    return enhanced
+
+
+def sharpen(img: NDArray) -> NDArray:
+    blur = cv2.GaussianBlur(img, (0, 0), 3)
+    sharpened = cv2.addWeighted(img, 1.5, blur, -0.5, 0)
+    return sharpened
+
+
+def augment_staff_image(staff_image: NDArray) -> NDArray:
+    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 10, 10, 7, 21)
+    return sharpen(remove_background(denoised1))
+
+
 def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
@@ -159,6 +191,7 @@ def prepare_staff_image(
         staff_image,
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
+    staff_image = augment_staff_image(staff_image)
     region = np.round(region * scaling_factor)
     eprint("Dewarping staff", index)
     region_step1 = np.array(region) + np.array([-10, -50, 10, 50])

@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 236
+
+Commit: 922ad08f8895f6d9c0ae61954cd78a021ff950a7
+Day: 26 Oct 2025
+SER: 37%
+Validation result: 9.8, 8.6 after some tweaks to the staff image preparation
+
+Volta brackets, bf16
+
 ## Run 234
 
 Commit:ea96f0150ec74388df8cb0bb78ee2c36782a00d9
