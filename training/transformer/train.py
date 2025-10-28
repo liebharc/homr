@@ -4,7 +4,10 @@ import sys
 
 import torch
 import torch._dynamo
-from transformers import Trainer, TrainingArguments  # type: ignore
+from transformers import (
+    Trainer,
+    TrainingArguments,
+)
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -16,7 +19,7 @@ from training.datasets.convert_grandstaff import (
 from training.datasets.convert_lieder import convert_lieder, lieder_train_index
 from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
 from training.run_id import get_run_id
-from training.transformer.data_loader import load_dataset
+from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
@@ -61,20 +64,21 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = os.path.join(script_location, "..", "..")
 
 
-def _check_datasets_are_present() -> None:
-    if not os.path.exists(primus_train_index):
-        convert_primus_dataset()
+def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
+    for dataset in selected_datasets:
+        if dataset == primus_train_index and not os.path.exists(primus_train_index):
+            convert_primus_dataset()
 
-    if not os.path.exists(grandstaff_train_index):
-        convert_grandstaff()
+        if dataset == grandstaff_train_index and not os.path.exists(grandstaff_train_index):
+            convert_grandstaff()
 
-    if not os.path.exists(lieder_train_index):
-        convert_lieder()
+        if dataset == lieder_train_index and not os.path.exists(lieder_train_index):
+            convert_lieder()
+    return selected_datasets
 
 
-def train_transformer(fp32: bool = False, resume: str = "") -> None:
-    number_of_files = -1
-    number_of_epochs = 60
+def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = False) -> None:
+    number_of_epochs = 15 if smoke_test else 70
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -83,13 +87,22 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
     elif os.path.exists(os.path.join(git_root, checkpoint_folder)):
         shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
-    _check_datasets_are_present()
-
-    train_index = load_and_mix_training_sets(
-        [primus_train_index, grandstaff_train_index, lieder_train_index],
-        [1.0, 1.0, 1.0],
-        number_of_files,
-    )
+    if smoke_test:
+        number_of_files = -1
+        train_index = load_and_mix_training_sets(
+            _check_datasets_are_present([lieder_train_index]),
+            [1.0],
+            number_of_files,
+        )
+    else:
+        number_of_files = -1
+        train_index = load_and_mix_training_sets(
+            _check_datasets_are_present(
+                [lieder_train_index, grandstaff_train_index, primus_train_index]
+            ),
+            [1.0, 1.0, 1.0],
+            number_of_files,
+        )
 
     config = Config()
     datasets = load_dataset(train_index, config, val_split=0.1)
@@ -103,16 +116,16 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
 
     run_id = get_run_id()
 
-    batch_size = 40 if compile_model else 4
+    batch_size = 16
 
     train_args = TrainingArguments(
         checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
-        # TrOMR Paper page 3 specifies a rate of 1e-3, but that can cause issues with fp16 mode
         learning_rate=1e-4,
-        optim="adamw_torch",  # TrOMR Paper page 3 specifies an Adam optimizer
+        optim="adamw_torch_fused",
+        gradient_accumulation_steps=4,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
         num_train_epochs=number_of_epochs,
@@ -123,8 +136,8 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
         metric_for_best_model="loss",
         logging_dir=os.path.join("logs", f"run{run_id}"),
         save_strategy="epoch",
-        label_names=["rhythms", "notes", "lifts", "pitchs", "articulations"],
-        fp16=not fp32,
+        label_names=label_names,
+        bf16=not fp32,
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
     )
@@ -149,7 +162,7 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
             eval_dataset=datasets["validation"],
         )
 
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)  # type: ignore
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     except KeyboardInterrupt:
         eprint("Interrupted")
     torch.save(model.state_dict(), model_destination)
@@ -157,4 +170,4 @@ def train_transformer(fp32: bool = False, resume: str = "") -> None:
 
 
 if __name__ == "__main__":
-    train_transformer()
+    train_transformer(smoke_test=True)

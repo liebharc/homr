@@ -10,7 +10,7 @@ from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.transformer.configs import default_config
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
 from homr.type_definitions import NDArray
 
 
@@ -101,8 +101,11 @@ def center_image_on_canvas(
 
 
 def add_image_into_tr_omr_canvas(
-    image: NDArray, margin_top: int = 0, margin_bottom: int = 0
+    image: NDArray, is_grandstaff: bool, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
+    if not is_grandstaff:
+        # take half of the image height away
+        margin_bottom += tr_omr_max_height // 2
     new_shape = get_tr_omr_canvas_size(image.shape, margin_top, margin_bottom)
     new_image = center_image_on_canvas(image, new_shape, margin_top, margin_bottom)
     return new_image
@@ -143,18 +146,52 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
+def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
+    gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(kernel_size, kernel_size))
+    gray_image = clahe.apply(gray_image)
+
+    return cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
+
+
+def remove_background(gray: NDArray) -> NDArray:
+    # Estimate smooth background illumination
+    background = cv2.medianBlur(gray, 51)
+
+    # Flatten background but preserve detail
+    flat = cv2.divide(gray, background, scale=255)
+
+    # Stretch intensity to full range
+    enhanced = cv2.normalize(flat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)  # type: ignore
+
+    return enhanced
+
+
+def sharpen(img: NDArray) -> NDArray:
+    blur = cv2.GaussianBlur(img, (0, 0), 3)
+    sharpened = cv2.addWeighted(img, 1.5, blur, -0.5, 0)
+    return sharpened
+
+
+def augment_staff_image(staff_image: NDArray) -> NDArray:
+    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 10, 10, 7, 21)
+    return sharpen(remove_background(denoised1))
+
+
 def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
     region = _calculate_region(staff, regions)
+    margin_bottom = 0 if staff.is_grandstaff else default_config.max_height // 2
     image_dimensions = get_tr_omr_canvas_size(
-        (int(region[3] - region[1]), int(region[2] - region[0]))
+        (int(region[3] - region[1]), int(region[2] - region[0])), margin_bottom=margin_bottom
     )
     scaling_factor = image_dimensions[1] / (region[3] - region[1])
     staff_image = cv2.resize(
         staff_image,
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
+    staff_image = augment_staff_image(staff_image)
     region = np.round(region * scaling_factor)
     eprint("Dewarping staff", index)
     region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
@@ -170,7 +207,7 @@ def prepare_staff_image(
     eprint("Dewarping staff", index, "done")
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
-    staff_image = center_image_on_canvas(staff_image, image_dimensions)
+    staff_image = center_image_on_canvas(staff_image, image_dimensions, margin_bottom=margin_bottom)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
@@ -221,30 +258,6 @@ def parse_staff_image(
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
-    return result
-
-
-def remove_duplicated_symbols(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
-    """
-    Merge all staffs of a voice into a single staff.
-    Every staff starts with a clef and a key, but we only need to keep
-    them if they are different to the previous value.
-    """
-    result = []
-    last_values = {"clef": "", "timeSignature": "", "keySignature": ""}
-
-    for symbol in symbols:
-        ignore_symbol = False
-        for category in last_values:  # noqa: PLC0206
-            if symbol.rhythm.startswith(category):
-                if last_values[category] == symbol.rhythm:
-                    ignore_symbol = True
-                else:
-                    last_values[category] = symbol.rhythm
-
-        if ignore_symbol:
-            continue
-        result.append(symbol)
     return result
 
 

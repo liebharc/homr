@@ -24,17 +24,19 @@ class DecoderWrapper(torch.nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
+        states: torch.Tensor,
         context: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        out_rhythms, out_pitchs, out_lifts, _out_notes, out_articulations, _x = self.model(
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x = self.model(
             rhythms=rhythms,
             pitchs=pitchs,
             lifts=lifts,
             articulations=articulations,
+            states=states,
             mask=None,
             context=context,
         )
-        return out_rhythms, out_pitchs, out_lifts, out_articulations
+        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations
 
 
 def convert_encoder() -> str:
@@ -64,7 +66,7 @@ def convert_encoder() -> str:
     model.eval()
 
     # Prepare input tensor
-    input_tensor = torch.randn(1, 1, 128, 1280).float()
+    input_tensor = torch.randn(1, 1, config.max_height, config.max_width).float()
 
     # Export to onnx
     torch.onnx.export(
@@ -112,29 +114,33 @@ def convert_decoder() -> str:
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
     articulations = torch.randint(0, config.num_articulation_tokens, (1, 10)).long()
-    context = torch.randn((1, 641, 312)).float()
+    states = torch.randint(0, config.num_state_tokens, (1, 10)).long()
+    context = torch.randn((1, 1281, config.decoder_dim)).float()
 
     dynamic_axes = {
         "rhythms": {0: "batch_size", 1: "input_seq_len"},
         "pitchs": {0: "batch_size", 1: "input_seq_len"},
         "lifts": {0: "batch_size", 1: "input_seq_len"},
         "articulations": {0: "batch_size", 1: "input_seq_len"},
+        "states": {0: "batch_size", 1: "input_seq_len"},
         "context": {0: "batch_size"},
         "out_rhythms": {0: "batch_size", 1: "output_seq_len"},
         "out_pitchs": {0: "batch_size", 1: "output_seq_len"},
         "out_lifts": {0: "batch_size", 1: "output_seq_len"},
         "out_articulations": {0: "batch_size", 1: "output_seq_len"},
+        "out_positions": {0: "batch_size", 1: "output_seq_len"},
     }
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, articulations, context),
+        (rhythms, pitchs, lifts, articulations, states, context),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "articulations", "context"],
+        input_names=["rhythms", "pitchs", "lifts", "articulations", "states", "context"],
         output_names=[
             "out_rhythms",
             "out_pitchs",
             "out_lifts",
+            "out_positions",
             "out_articulations",
         ],
         dynamic_axes=dynamic_axes,

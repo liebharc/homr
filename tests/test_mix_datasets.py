@@ -5,7 +5,7 @@ from training.transformer.mix_datasets import mix_training_sets
 
 class TestMixDataSets(unittest.TestCase):
 
-    def test_mix_training_sets(self):
+    def test_mix_training_sets(self) -> None:
         dataset1 = ["a", "b", "c", "d", "e", "f", "g"]
         dataset2 = ["1", "2", "3", "5", "6"]
         dataset3 = ["x", "y", "z"]

@@ -98,12 +98,6 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     else:
         raise RuntimeError("Unsupport image type!")
 
-    h, w = img.shape
-    size_h = config.max_height
-    new_h = size_h
-    new_w = int(size_h / h * w)
-    new_w = new_w // config.patch_size * config.patch_size
-    img = cv2.resize(img, (new_w, new_h))
     tensor = _transform(image=img)
     return tensor
 
@@ -112,6 +106,6 @@ if __name__ == "__main__":
     import sys
 
     model = Staff2Score(Config())
-    image = Image.open(sys.argv[1])
-    out = model.predict(np.array(image))
+    image = np.array(Image.open(sys.argv[1]))
+    out = model.predict(image)
     eprint(token_lines_to_str(out))

@@ -8,9 +8,9 @@ import editdistance
 
 from homr import download_utils
 from homr.simple_logging import eprint
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config as ConfigTorch
 from homr.transformer.vocabulary import EncodedSymbol
-from training.datasets.convert_lieder import convert_xml_and_svg_file
 from training.transformer.training_vocabulary import (
     read_tokens,
     sort_token_chords,
@@ -67,6 +67,10 @@ def calc_symbol_error_rate_for_list(
         ]
         distance = editdistance.eval(expected, actual)
         ser = distance / len(expected)
+        if ser > 0.5:
+            eprint("Expected:", token_lines_to_str(expected))
+            eprint("Actual  :", token_lines_to_str(actual))
+
         all_sers.append(ser)
         ser = round(100 * ser)
         ser_avg = round(100 * sum(all_sers) / len(all_sers))
@@ -100,42 +104,22 @@ def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
 
 
 def index_folder(folder: str, index_file: str) -> None:
-    with open(index_file, "w") as index:
-        for subfolder in reversed(os.listdir(folder)):
-            full_name = os.path.abspath(os.path.join(folder, subfolder))
-            if not os.path.isdir(full_name):
-                continue
-            file = os.path.join(full_name, "music.musicxml")
-            dirname = os.path.dirname(file)
-            lines = convert_xml_and_svg_file(
-                Path(file), just_token_files=True, fail_if_image_is_missing=False
-            )
-            for i, line in enumerate(lines):
-                token_file = line.split(",")[1].strip()
-                staff_index = map_staff_index(file, i, token_file)
-                staff_image = os.path.join(dirname, f"staff-{staff_index}.jpg")
-                if not os.path.exists(staff_image):
-                    continue
-                index.write(staff_image)
-                index.write(",")
-                index.write(token_file)
-                index.write("\n")
+    result = []
+    with open(os.path.join(folder, "index.txt")) as f:
+        lines = f.readlines()
 
+    for line in lines:
+        img_file, token_file = line.split(",")
+        staff_image = cv2.imread(img_file)
+        if staff_image is None:
+            raise ValueError("Failed to load " + img_file)
+        prepared = add_image_into_tr_omr_canvas(staff_image, False, 0, 0)
+        processed_path = img_file.replace(".jpg", "-pre.jpg")
+        cv2.imwrite(processed_path, prepared)
+        result.append(str.join(",", [processed_path, token_file]))
 
-def map_staff_index(file: str, line: int, token_file: str) -> int:
-    if "Playing_With_Fire_BlackPink" not in file:
-        return line
-    parts = token_file.replace(".tokens", "").split("-")
-    page = int(parts[1]) - 1
-    staff = int(parts[2])
-    staff_orders = [
-        [0, 5, 1, 6, 2, 7, 3, 8, 4, 9],
-        [10, 16, 11, 17, 12, 18, 13, 19, 14, 20, 15, 21],
-        [22, 27, 23, 28, 24, 29, 25, 30, 26, 31],
-        [32, 33],
-    ]
-
-    return staff_orders[page][staff]
+    with open(index_file, "w") as f:
+        f.writelines(result)
 
 
 def main() -> None:
@@ -155,7 +139,9 @@ def main() -> None:
     data_set_location = os.path.join(script_location, "..", "datasets")
     validation_data_set_location = os.path.join(data_set_location, "validation")
     download_path = os.path.join(data_set_location, "validation.zip")
-    download_url = "https://github.com/liebharc/homr/releases/download/datasets/validation.zip"
+    download_url = (
+        "https://github.com/liebharc/homr/releases/download/datasets/validation_tokens.zip"
+    )
     if not os.path.exists(validation_data_set_location):
         try:
             eprint("Downloading validation data set")
@@ -165,7 +151,7 @@ def main() -> None:
             if os.path.exists(download_path):
                 os.remove(download_path)
 
-    index_file = os.path.join(validation_data_set_location, "index.txt")
+    index_file = os.path.join(validation_data_set_location, "index_tokens.txt")
     if not os.path.exists(index_file):
         index_folder(validation_data_set_location, index_file)
 

@@ -31,37 +31,25 @@ class TestHumdrumKern(unittest.TestCase):
 ==:|!\t==:|!
 *-\t*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_7 . . .
-timeSignature/4 . . .
-note_32 D5 # _
-note_32 C5 # _
-note_16 B4 # _
-note_32 C5 # _
-note_32 B4 # _
-note_16 A4 # _
-note_8 A4 # _&note_8 C5 # _
-note_8 G4 ## _&note_8 B4 # _
-barline . . .
-note_2 A4 # _
-repeatEnd . . .
-barline . . ."""
-        lower = """clef_F4 . . .
-keySignature_7 . . .
-timeSignature/4 . . .
-note_8 B2 # _&note_8 B3 # _
-note_8 A2 # _&note_8 A3 # _
-note_8 E2 # _&note_8 E3 # _
-note_8 E2 # _&note_8 E3 # _
-barline . . .
-note_2 A2 # _
-repeatEnd . . .
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_7 . . . .
+timeSignature/4 . . . .
+note_32 D5 # _ upper&note_8 B3 # _ lower&note_8 B2 # _ lower
+note_32 C5 # _ upper
+note_16 B4 # _ upper
+note_32 C5 # _ upper&note_8 A3 # _ lower&note_8 A2 # _ lower
+note_32 B4 # _ upper
+note_16 A4 # _ upper
+note_8 C5 # _ upper&note_8 A4 # _ upper&note_8 E3 # _ lower&note_8 E2 # _ lower
+note_8 B4 # _ upper&note_8 G4 ## _ upper&note_8 E3 # _ lower&note_8 E2 # _ lower
+barline . . . .
+note_2 A4 # _ upper&note_2 A2 # _ lower
+repeatEnd . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic, [upper, lower])
+        self.assertEqual(tokens, expected)
 
     def test_multiple_voices_on_same_staff(self) -> None:
         """
@@ -93,44 +81,28 @@ barline . . ."""
 ==:|!\t==:|!
 *-\t*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_-2 . . .
-timeSignature/4 . . .
-note_8 G4 _ _&rest_4 _ _ _
-note_16 D5 _ _
-note_16 D4 _ _
-note_8 E4 b _&rest_4 _ _ _
-note_16 C5 _ _
-note_16 F4 # _
-note_4. G4 _ _&note_8 G4 _ _
-note_16 E4 b _
-note_16 C4 _ _
-note_8 B3 b _
-note_8 A3 _ _&note_8 C4 _ _&note_8 D4 _ _&note_8 F4 # _
-barline . . .
-note_1 B3 b _&note_1 D4 _ _
-repeatEnd . . .
-barline . . ."""
-        lower = """clef_F4 . . .
-keySignature_-2 . . .
-timeSignature/4 . . .
-note_8 G2 _ _&note_8 G3 _ _&rest_4 _ _ _
-note_8 B2 b _&note_8 G3 _ _
-note_8 C3 _ _&note_8 G3 _ _&rest_4 _ _ _
-note_8 A2 _ _&note_8 A3 _ _
-note_8 B2 b _&note_4 G3 _ _
-note_8 C3 _ _
-note_8 D3 _ _&rest_4 _ _ _
-note_8 D2 _ _
-barline . . .
-note_1 G2 _ _
-repeatEnd . . .
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_-2 . . . .
+timeSignature/4 . . . .
+note_8 G4 _ _ upper&rest_4 _ _ _ upper&note_8 G3 _ _ lower&note_8 G2 _ _ lower&rest_4 _ _ _ lower
+note_16 D5 _ _ upper&note_8 G3 _ _ lower&note_8 B2 b _ lower
+note_16 D4 _ _ upper
+note_8 E4 b _ upper&rest_4 _ _ _ upper&note_8 G3 _ _ lower&note_8 C3 _ _ lower&rest_4 _ _ _ lower
+note_16 C5 _ _ upper&note_8 A3 _ _ lower&note_8 A2 _ _ lower
+note_16 F4 # _ upper
+note_4. G4 _ _ upper&note_8 G4 _ _ upper&note_4 G3 _ _ lower&note_8 B2 b _ lower
+note_16 E4 b _ upper&note_8 C3 _ _ lower
+note_16 C4 _ _ upper
+note_8 B3 b _ upper&note_8 D3 _ _ lower&rest_4 _ _ _ lower
+note_8 F4 # _ upper&note_8 D4 _ _ upper&note_8 C4 _ _ upper&note_8 A3 _ _ upper&note_8 D2 _ _ lower
+barline . . . .
+note_1 D4 _ _ upper&note_1 B3 b _ upper&note_1 G2 _ _ lower
+repeatEnd . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic, [upper, lower])
+        self.assertEqual(tokens, expected)
 
     def test_triplets(self) -> None:
         """
@@ -179,46 +151,50 @@ barline . . ."""
 =\t=
 *-\t*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_2 . . .
-timeSignature/4 . . .
-note_12 G5 _ _
-note_12 F5 # _
-note_12 E5 _ _
-note_4 E5 _ _
-rest_4 _ _ _
-barline . . .
-rest_4 _ _ _
-note_4 E5 _ _
-note_4 E5 _ _
-barline . . .
-note_12 E5 _ _
-note_12 F5 # _
-note_12 C5 # _
-note_4 D5 _ _
-note_4 D5 _ _
-barline . . .
-note_12 D5 _ _
-note_12 C5 # _
-note_12 D5 _ _
-note_12 E5 _ _
-note_12 F5 # _
-note_12 G5 _ _
-note_12 G5 _ _
-note_12 F5 # _
-note_12 E5 _ _
-barline . . .
-note_12 F5 # _
-note_12 E5 _ _
-note_12 D5 _ _
-note_4 D5 _ _
-rest_4 _ _ _
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_2 . . . .
+timeSignature/4 . . . .
+note_12 G5 _ _ upper&note_4 E3 _ _ lower
+note_12 F5 # _ upper
+note_12 E5 _ _ upper
+note_4 E5 _ _ upper&rest_8 _ _ _ lower
+note_8 B3 _ _ lower
+rest_4 _ _ _ upper&note_8 G3 _ _ lower
+note_8 E3 _ _ lower
+barline . . . .
+rest_4 _ _ _ upper&note_4 E2 _ _ lower
+note_4 E5 _ _ upper&rest_4 _ _ _ lower
+note_4 E5 _ _ upper&note_4 G4 _ _ lower
+barline . . . .
+note_12 E5 _ _ upper&note_4 F4 # _ lower
+note_12 F5 # _ upper
+note_12 C5 # _ upper
+note_4 D5 _ _ upper&note_4 F4 # _ lower
+note_4 D5 _ _ upper&note_4 F4 # _ lower
+barline . . . .
+note_12 D5 _ _ upper&note_4 E4 _ _ lower
+note_12 C5 # _ upper
+note_12 D5 _ _ upper
+note_12 E5 _ _ upper&note_4 E4 _ _ lower
+note_12 F5 # _ upper
+note_12 G5 _ _ upper
+note_12 G5 _ _ upper&note_4 A3 _ _ lower
+note_12 F5 # _ upper
+note_12 E5 _ _ upper
+barline . . . .
+note_12 F5 # _ upper&note_4 D3 _ _ lower
+note_12 E5 _ _ upper
+note_12 D5 _ _ upper
+note_4 D5 _ _ upper&rest_8 _ _ _ lower
+note_8 A3 _ _ lower
+rest_4 _ _ _ upper&note_8 F3 # _ lower
+note_8 D3 _ _ lower
+barline . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic[0], upper)
+        self.assertEqual(tokens, expected)
 
     def test_simple(self) -> None:
         """
@@ -274,58 +250,57 @@ barline . . ."""
 =:|!\t=:|!
 *-\t*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_-2 . . .
-timeSignature/4 . . .
-note_16 D5 _ _
-note_16 B4 b _
-note_16 E5 b _
-note_16 C5 _ _
-note_16 F5 _ _
-note_16 D5 _ _
-note_16 G5 _ _
-note_16 E5 b _
-note_8 F5 _ _
-note_8 B5 b _
-tieSlur . . .
-barline . . .
-note_8 B5 b _
-note_8 C5 _ _
-note_4. C5 _ _
-note_16 B4 b _
-note_16 C5 _ _
-barline . . .
-note_16 D5 _ _
-note_16 B4 b _
-note_16 E5 b _
-note_16 C5 _ _
-note_16 F5 _ _
-note_16 D5 _ _
-note_16 G5 _ _
-note_16 E5 b _
-note_8 F5 _ _
-note_8 B5 b _
-tieSlur . . .
-barline . . .
-note_8 B5 b _
-note_8 C5 _ _
-note_4. C5 _ _
-note_16 B4 b _
-note_16 A4 _ _
-barline . . .
-note_8 B4 b _
-note_8 F4 _ _
-note_8 B3 b _
-note_8 C4 _ _
-note_8 D4 _ _
-note_8 E4 _ _
-repeatEnd . . .
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_-2 . . . .
+timeSignature/4 . . . .
+note_16 D5 _ _ upper&note_4 B2 b _ lower
+note_16 B4 b _ upper
+note_16 E5 b _ upper
+note_16 C5 _ _ upper
+note_16 F5 _ _ upper&rest_4 _ _ _ lower
+note_16 D5 _ _ upper
+note_16 G5 _ _ upper
+note_16 E5 b _ upper
+note_8 F5 _ _ upper&note_4 B3 b _ lower&note_4 D3 _ _ lower
+note_8 B5 b tieStart upper
+barline . . . .
+note_8 B5 b tieStop upper&note_4 B3 b _ lower&note_4 E3 b _ lower
+note_8 C5 _ _ upper
+note_4. C5 _ _ upper&note_4 B3 b _ lower&note_4 F3 _ _ lower
+note_4 A3 _ _ lower&note_4 F3 _ _ lower
+note_16 B4 b _ upper
+note_16 C5 _ _ upper
+barline . . . .
+note_16 D5 _ _ upper&note_4 B3 b _ lower&note_4 B2 b _ lower
+note_16 B4 b _ upper
+note_16 E5 b _ upper
+note_16 C5 _ _ upper
+note_16 F5 _ _ upper&rest_4 _ _ _ lower
+note_16 D5 _ _ upper
+note_16 G5 _ _ upper
+note_16 E5 b _ upper
+note_8 F5 _ _ upper&note_4 D3 _ _ lower
+note_8 B5 b tieStart upper
+barline . . . .
+note_8 B5 b tieStop upper&note_4 E3 b _ lower
+note_8 C5 _ _ upper
+note_4. C5 _ _ upper&note_4 F3 _ _ lower
+note_4 F2 _ _ lower
+note_16 B4 b _ upper
+note_16 A4 _ _ upper
+barline . . . .
+note_8 B4 b _ upper&note_4 B1 b _ lower
+note_8 F4 _ _ upper
+note_8 B3 b _ upper&rest_4 _ _ _ lower
+note_8 C4 _ _ upper
+note_8 D4 _ _ upper&rest_4 _ _ _ lower
+note_8 E4 _ _ upper
+repeatEnd . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic[0], upper)
+        self.assertEqual(tokens, expected)
 
     def test_accidentals(self) -> None:
         """
@@ -380,56 +355,56 @@ barline . . ."""
 =	=
 *-	*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_-3 . . .
-timeSignature/8 . . .
-note_16 D5 b _
-note_16 E5 _ _
-note_16 F5 _ _
-note_16 E5 _ _
-note_16 E5 _ _
-note_16 F5 _ _
-barline . . .
-rest_16 _ _ _
-note_16 F5 _ _
-note_16 F4 _ _
-note_16 G4 _ _
-note_16 A4 _ _
-note_16 B4 b _
-barline . . .
-note_16 C5 _ _
-note_16 D5 _ _
-note_16 E5 b _
-note_16 D5 _ _
-note_16 D5 _ _
-note_16 E5 b _
-barline . . .
-rest_16 _ _ _
-note_16 E5 b _
-note_16 A4 _ _
-note_16 B4 b _
-note_16 E4 b _
-note_16 G4 b _
-barline . . .
-note_16 F4 _ _
-note_16 E5 b _
-note_16 D5 b _
-note_16 C5 _ _
-note_16 F5 _ _
-note_16 B4 b _
-barline . . .
-rest_16 _ _ _
-note_16 E5 b _
-note_16 A4 _ _
-note_16 B4 b _
-note_16 E4 b _
-note_16 G4 b _
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_-3 . . . .
+timeSignature/8 . . . .
+note_16 D5 b _ upper&note_4. D4 b _ lower
+note_16 E5 _ _ upper
+note_16 F5 _ _ upper
+note_16 E5 _ _ upper
+note_16 E5 _ _ upper
+note_16 F5 _ _ upper
+barline . . . .
+rest_16 _ _ _ upper&note_4. D4 b _ lower
+note_16 F5 _ _ upper
+note_16 F4 _ _ upper
+note_16 G4 _ _ upper
+note_16 A4 _ _ upper
+note_16 B4 b _ upper
+barline . . . .
+note_16 C5 _ _ upper&note_4. C4 _ _ lower
+note_16 D5 _ _ upper
+note_16 E5 b _ upper
+note_16 D5 _ _ upper
+note_16 D5 _ _ upper
+note_16 E5 b _ upper
+barline . . . .
+rest_16 _ _ _ upper&note_4 E4 b _ lower&note_4 C4 _ _ lower
+note_16 E5 b _ upper
+note_16 A4 _ _ upper
+note_16 B4 b _ upper
+note_16 E4 b _ upper&note_8 B3 b _ lower
+note_16 G4 b _ upper
+barline . . . .
+note_16 F4 _ _ upper&note_4 A3 _ _ lower
+note_16 E5 b _ upper
+note_16 D5 b _ upper
+note_16 C5 _ _ upper
+note_16 F5 _ _ upper&note_8 B3 b _ lower
+note_16 B4 b _ upper
+barline . . . .
+rest_16 _ _ _ upper&note_4 E4 b _ lower&note_4 C4 _ _ lower
+note_16 E5 b _ upper
+note_16 A4 _ _ upper
+note_16 B4 b _ upper
+note_16 E4 b _ upper&note_8 B3 b _ lower
+note_16 G4 b _ upper
+barline . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic[0], upper)
+        self.assertEqual(tokens, expected)
 
     def test_grace_note(self) -> None:
         """
@@ -466,23 +441,68 @@ barline . . ."""
 =\t=
 *-\t*-
 """
-        semantic = [token_lines_to_str(s) for s in convert_kern_to_tokens(kern.splitlines())]
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        upper = """clef_G2 . . .
-keySignature_3 . . .
-timeSignature/8 . . .
-note_4. E4 _ _
-barline . . .
-note_4G E5 _ _
-note_4. E5 _ _
-tieSlur . . .
-barline . . .
-note_4. E5 _ _
-tieSlur . . .
-barline . . .
-note_4. E5 _ _
-tieSlur . . .
-barline . . ."""
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_3 . . . .
+timeSignature/8 . . . .
+note_4. E4 _ _ upper&note_4. E2 _ _ lower
+barline . . . .
+note_4G E5 _ _ upper
+note_4. E5 _ tieStart upper&rest_16 _ _ _ lower
+note_16 E4 _ _ lower
+note_16 A4 _ _ lower
+note_16 G4 # _ lower
+note_16 F4 # _ lower
+note_16 E4 _ _ lower
+barline . . . .
+note_4. E5 _ _ upper&note_16 D4 _ _ lower
+note_16 C4 # _ lower
+note_16 B3 _ _ lower
+note_16 A3 _ _ lower
+note_16 G3 # _ lower
+note_16 F3 # _ lower
+barline . . . .
+note_4. E5 _ _ upper&note_16 E3 _ _ lower
+note_16 E3 _ _ lower
+note_16 A3 _ _ lower
+note_16 G3 # _ lower
+note_16 F3 # _ lower
+note_16 E3 _ _ lower
+barline . . . ."""
 
         self.maxDiff = None
-        self.assertEqual(semantic[0], upper)
+        self.assertEqual(tokens, expected)
+
+    def test_staff_asignment(self) -> None:
+        kern = """**kern	**kern
+*	*^
+*clefF4	*clefG2	*clefG2
+*k[]	*k[]	*k[]
+*M2/4	*M2/4	*M2/4
+=-	=-	=-
+8EE	8r	16bLL
+.	.	16g#
+8r	8eeL	16e
+.	.	16g#JJ
+4r	8ff	16bLL
+.	.	16g#
+.	8eeJ	16e
+.	.	16g#JJ
+*	*v	*v
+=	="""
+        tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_0 . . . .
+timeSignature/4 . . . .
+note_16 B4 _ _ upper&rest_8 _ _ _ upper&note_8 E2 _ _ lower
+note_16 G4 # _ upper
+note_8 E5 _ _ upper&note_16 E4 _ _ upper&rest_8 _ _ _ lower
+note_16 G4 # _ upper
+note_8 F5 _ _ upper&note_16 B4 _ _ upper&rest_4 _ _ _ lower
+note_16 G4 # _ upper
+note_8 E5 _ _ upper&note_16 E4 _ _ upper
+note_16 G4 # _ upper
+barline . . . ."""
+        self.maxDiff = None
+        self.assertEqual(tokens, expected)

@@ -10,20 +10,21 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
+        model_name = "pytorch_model_236-922ad08f8895f6d9c0ae61954cd78a021ff950a7"
         self.encoder_path = os.path.join(
             workspace,
-            "encoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx",
+            f"encoder_{model_name}.onnx",
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace,
-            "decoder_pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55.onnx",
+            f"decoder_{model_name}.onnx",
         )  # noqa: E501
         self.checkpoint = os.path.join(
             root_dir,
             "training",
             "architecture",
             "transformer",
-            "pytorch_model_220-c50aec7de6469480cf6f547695f48aed76d8422e-epoch-55",
+            f"{model_name}.pth",
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
@@ -71,20 +72,21 @@ class Config:
         self.filepaths = FilePaths()
         self.channels = 1
         self.patch_size = 16
-        self.max_height = 128
+        self.max_height = 256
         self.max_width = 1280
-        self.max_seq_len = 512
+        self.max_seq_len = 608
         self.pad_token = 0
         self.bos_token = 1
         self.eos_token = 2
         self.nonote_token = 0
         self.num_rhythm_tokens = len(self.vocab.rhythm)
-        self.num_note_tokens = len(self.vocab.note)
         self.num_pitch_tokens = len(self.vocab.pitch)
         self.num_lift_tokens = len(self.vocab.lift)
         self.num_articulation_tokens = len(self.vocab.articulation)
+        self.num_position_tokens = len(self.vocab.position)
+        self.num_state_tokens = len(self.vocab.state)
         self.encoder_structure = "hybrid"
-        self.encoder_depth = 6
+        self.encoder_depth = 8
         self.backbone_layers = [3, 4, 6, 3]
         self.encoder_dim = 312
         self.encoder_heads = 8
@@ -97,6 +99,8 @@ class Config:
         self.pitch_vocab = self.vocab.pitch
         self.rhythm_vocab = self.vocab.rhythm
         self.articulation_vocab = self.vocab.articulation
+        self.position_vocab = self.vocab.position
+        self.state_vocab = self.vocab.state
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -71,8 +71,3 @@ max_angle_for_lines_to_be_parallel = 5
 
 
 NOTEHEAD_SIZE_RATIO = 1.285714  # width/height
-
-
-# We use ³ as triplet indicator as it's not a valid duration name
-# or note name and thus we have no risk of confusion
-triplet_symbol = "³"

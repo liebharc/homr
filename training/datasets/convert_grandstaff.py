@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 import PIL
 import PIL.Image
-from scipy.signal import find_peaks
 from torchvision import transforms as tr
 from torchvision.transforms import Compose
 
@@ -18,21 +17,16 @@ from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
 from training.datasets.musescore_svg import SvgValidationError
-from training.transformer.training_vocabulary import token_lines_to_str
+from training.transformer.training_vocabulary import (
+    calc_ratio_of_tuplets,
+    token_lines_to_str,
+)
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 grandstaff_root = os.path.join(dataset_root, "grandstaff")
 grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")
-
-
-if not os.path.exists(grandstaff_root):
-    eprint("Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets")
-    grandstaff_archive = os.path.join(dataset_root, "grandstaff.tgz")
-    download_file("https://grfia.dlsi.ua.es/musicdocs/grandstaff.tgz", grandstaff_archive)
-    untar_file(grandstaff_archive, grandstaff_root)
-    eprint("Adding musicxml files to grandstaff dataset")
 
 
 def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
@@ -46,20 +40,7 @@ def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
     return dark_pixels_per_row
 
 
-def _find_central_valleys(image: NDArray, dark_pixels_per_row: NDArray) -> np.int32 | None:
-    conv_len = image.shape[0] // 4 + 1
-    blurred = np.convolve(dark_pixels_per_row, np.ones(conv_len) / conv_len, mode="same")
-
-    # Find the central valley
-    peaks, _ = find_peaks(-blurred, distance=10, prominence=1)
-    if len(peaks) == 1:
-        peaks = [peaks[len(peaks) // 2]]
-        middle = peaks[0]
-        return np.int32(middle)
-    return None
-
-
-def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None]:
+def _distort_staff_image(path: str, basename: str) -> str:
     """
     This algorithm is taken from `oemer` staffline extraction algorithm. In this simplified version
     it only works with images which have no distortions.
@@ -70,47 +51,16 @@ def _split_staff_image(path: str, basename: str) -> tuple[str | None, str | None
     dark_pixels_per_row = _get_dark_pixels_per_row(image)
     upper_bound, lower_bound = _get_image_bounds(dark_pixels_per_row)
     image = image[upper_bound:-lower_bound]
-    dark_pixels_per_row = dark_pixels_per_row[upper_bound:-lower_bound]
-    norm = (dark_pixels_per_row - np.mean(dark_pixels_per_row)) / np.std(dark_pixels_per_row)
-    centers, _ = find_peaks(norm, height=1.4, distance=3, prominence=1)
-    lines_per_staff = 5
-    if len(centers) == lines_per_staff:
-        upper = _prepare_image(image)
-        predistorted_path = basename + "_distorted.jpg"
-        if os.path.exists(predistorted_path):
-            predistorted_image = cv2.imread(predistorted_path)
-            if predistorted_image is None:
-                raise ValueError("Failed to load " + predistorted_path)
-            single_image = _prepare_image(predistorted_image)
-            cv2.imwrite(basename + "_single-pre.jpg", single_image)
-            return distort_image(basename + "_single-pre.jpg"), None
-        eprint(f"INFO: Couldn't find pre-distorted image {path}, using custom distortions")
-        cv2.imwrite(basename + "_upper-pre.jpg", upper)
-        return distort_image(basename + "_upper-pre.jpg"), None
-    elif len(centers) == 2 * lines_per_staff:
-        middle = np.int32(np.round((centers[4] + centers[5]) / 2))
-    else:
-        central_valley = _find_central_valleys(image, dark_pixels_per_row)
-        if central_valley is None:
-            return None, None
-        middle = central_valley
-
-    overlap = np.random.randint(0, 15) + 10
-    if middle < overlap or middle > image.shape[0] - overlap:
-        eprint(f"INFO: Failed to split {path}, middle is at {middle}")
-        return None, None
-
-    upper = _prepare_image(image[: middle + overlap])
-    lower = _prepare_image(image[middle - overlap :])
-    cv2.imwrite(basename + "_upper-pre.jpg", upper)
-    cv2.imwrite(basename + "_lower-pre.jpg", lower)
-    return distort_image(basename + "_upper-pre.jpg"), distort_image(basename + "_lower-pre.jpg")
+    distorted_image = _prepare_image(image)
+    distorted_image = distort_image(distorted_image)
+    cv2.imwrite(basename + "-pre.jpg", distorted_image)
+    return basename + "-pre.jpg"
 
 
 def _prepare_image(image: NDArray) -> NDArray:
     margin_top = random.randint(5, 20)
     margin_bottom = random.randint(5, 20)
-    result = add_image_into_tr_omr_canvas(image, margin_top, margin_bottom)
+    result = add_image_into_tr_omr_canvas(image, True, margin_top, margin_bottom)
     return result
 
 
@@ -128,33 +78,69 @@ def _get_image_bounds(dark_pixels_per_row: NDArray) -> tuple[int, int]:
     return white_upper_area_size, white_lower_area_size
 
 
-def _check_staff_image(path: str, basename: str) -> tuple[str | None, str | None]:
+def _check_staff_image(path: str, basename: str) -> str:
     """
     This method helps with reprocessing a folder more quickly by skipping
     the image splitting.
     """
-    if not os.path.exists(basename + "_upper-pre.jpg"):
-        return None, None
-    return basename + "_upper-pre.jpg", basename + "_lower-pre.jpg"
+    if not os.path.exists(basename + "-pre.jpg"):
+        raise ValueError("Image is missing " + path)
+    return basename + "-pre.jpg"
 
 
-def distort_image(path: str) -> str:
-    image = PIL.Image.open(path)
-    image_arr = np.array(image)
-    image_arr = _add_random_gray_tone(image_arr)
-    image = PIL.Image.fromarray(image_arr)
+def distort_image(image: NDArray) -> NDArray:
+    image = _add_random_gray_tone(image)
+    pil_image = PIL.Image.fromarray(image)
     pipeline = Compose(
         [
-            tr.RandomRotation(degrees=1),
-            tr.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            tr.RandomRotation(degrees=2),
+            tr.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.5),
             tr.RandomAdjustSharpness(2),
+            tr.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 0.5)),
         ]
     )
 
-    augmented_image = pipeline(img=image)
+    augmented_image = pipeline(img=pil_image)
     augmented_image = warp_image_randomly(augmented_image)
-    augmented_image.save(path)
-    return path
+
+    # add paper texture overlay
+    paper_texture = np.random.normal(loc=235, scale=10, size=image.shape).astype(np.uint8)  # type: ignore
+    augmented_array = np.array(augmented_image)
+    alpha = 0.2
+    augmented_array = cv2.addWeighted(augmented_array, 1 - alpha, paper_texture, alpha, 0)
+
+    rows, cols = augmented_array.shape[:2]
+
+    # Randomized Gaussian parameters
+    sigma_x = np.random.uniform(cols / 4, cols)
+    sigma_y = np.random.uniform(rows / 4, rows)
+    center_x = np.random.uniform(0, cols)
+    center_y = np.random.uniform(0, rows)
+
+    # Generate coordinate grids
+    x = np.arange(cols) - center_x
+    y = np.arange(rows) - center_y
+    x_grid, y_grid = np.meshgrid(x, y)
+
+    # Optional rotation
+    theta = np.random.uniform(0, 2 * np.pi)
+    x_rot = x_grid * np.cos(theta) + y_grid * np.sin(theta)
+    y_rot = -x_grid * np.sin(theta) + y_grid * np.cos(theta)
+
+    # Create asymmetric Gaussian vignette
+    mask = np.exp(-0.5 * ((x_rot**2 / sigma_x**2) + (y_rot**2 / sigma_y**2)))
+    mask = mask / mask.max()
+
+    # Scale mask to subtle effect (0.9–1.0)
+    mask = 0.9 + 0.1 * mask
+
+    # Optional channel variation
+    if augmented_array.shape[2] == 3:
+        mask = np.stack([mask * np.random.uniform(0.9, 1.0) for _ in range(3)], axis=-1)
+
+    augmented_array = (augmented_array * mask).astype(np.uint8)
+
+    return augmented_array
 
 
 def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
@@ -198,74 +184,90 @@ def _find_lighest_non_white_pixel(gray: NDArray) -> int:
         return pure_white
 
 
-def _kern_to_tokens(path: str, basename: str) -> tuple[str | None, str | None]:
+def _kern_to_tokens(path: str, basename: str) -> str:
     with open(path) as text_file:
         result = convert_kern_to_tokens(text_file.readlines())
-    staffs_in_grandstaff = 2
-    if len(result) != staffs_in_grandstaff:
-        return None, None
 
-    with open(basename + "_upper.tokens", "w") as f:
-        f.write(token_lines_to_str(result[0]))
-    with open(basename + "_lower.tokens", "w") as f:
-        f.write(token_lines_to_str(result[1]))
-    return basename + "_upper.tokens", basename + "_lower.tokens"
+    if calc_ratio_of_tuplets(result) > 0.2:
+        return ""
+
+    with open(basename + ".tokens", "w") as f:
+        f.write(token_lines_to_str(result))
+    return basename + ".tokens"
 
 
-def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> list[str]:  # noqa: PLR0911
+def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> str:  # noqa: PLR0911
     try:
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
-        upper_tokens, lower_tokens = _kern_to_tokens(str(path), basename)
-        if upper_tokens is None or lower_tokens is None:
-            return []
+        tokens = _kern_to_tokens(str(path), basename)
+        if not tokens:
+            return ""
         if ony_recreate_token_files:
-            upper, lower = _check_staff_image(image_file, basename)
+            image = _check_staff_image(image_file, basename)
         else:
-            upper, lower = _split_staff_image(image_file, basename)
-        if upper is None:
-            return []
-        if lower is None:
-            return [
-                str(Path(upper).relative_to(git_root))
-                + ","
-                + str(Path(upper_tokens).relative_to(git_root)),
-            ]
-        return [
-            str(Path(upper).relative_to(git_root))
-            + ","
-            + str(Path(upper_tokens).relative_to(git_root)),
-            str(Path(lower).relative_to(git_root))
-            + ","
-            + str(Path(lower_tokens).relative_to(git_root)),
-        ]
+            image = _distort_staff_image(image_file, basename)
+        return (
+            str(Path(image).relative_to(git_root)) + "," + str(Path(tokens).relative_to(git_root))
+        )
+
     except SvgValidationError:
-        return []
+        return ""
     except Exception as e:
         eprint("Failed to convert ", path, e)
-        return []
+        return ""
 
 
-def _convert_file_only_tokens(path: Path) -> list[str]:
-    return _convert_file(path, True)
+def _convert_file_only_tokens(path: Path) -> tuple[Path, str]:
+    return path, _convert_file(path, True)
 
 
-def _convert_tokens_and_image(path: Path) -> list[str]:
-    return _convert_file(path, False)
+def _convert_tokens_and_image(path: Path) -> tuple[Path, str]:
+    return path, _convert_file(path, False)
+
+
+def _filter_out_known_bad_ones(path: Path) -> bool:
+    # These images contain to meaningful data or have
+    # artifacts like large black areas
+    bad_files = {
+        "scarlatti-d/keyboard-sonatas/L342K220/min3_up_m-5-9.krn",
+        "mozart/piano-sonatas/sonata10-3/maj3_down_m-157-160.krn",
+        "mozart/piano-sonatas/sonata10-3/original_m-157-160.krn",
+        "mozart/piano-sonatas/sonata10-3/min3_down_m-157-160.krn",
+        "mozart/piano-sonatas/sonata10-3/maj2_down_m-157-161.krn",
+        "beethoven/piano-sonatas/sonata11-2/maj3_down_m-1-6.krn",
+        "beethoven/piano-sonatas/sonata11-2/min3_down_m-1-6.krn",
+        "beethoven/piano-sonatas/sonata11-2/original_m-1-6.krn",
+        "chopin/preludes/prelude28-17/maj2_down_m-88-91.krn",
+    }
+
+    # normalize to forward slashes relative path string
+    normalized = path.as_posix()
+    return normalized not in bad_files
 
 
 def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
+    if not os.path.exists(grandstaff_root):
+        eprint(
+            "Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets"
+        )
+        grandstaff_archive = os.path.join(dataset_root, "grandstaff.tgz")
+        download_file("https://grfia.dlsi.ua.es/musicdocs/grandstaff.tgz", grandstaff_archive)
+        untar_file(grandstaff_archive, grandstaff_root)
+        eprint("Adding musicxml files to grandstaff dataset")
+
     index_file = grandstaff_train_index
     if only_recreate_token_files:
         index_file = os.path.join(grandstaff_root, "index_tmp.txt")
 
     eprint("Indexing Grandstaff dataset, this can up to several hours.")
     krn_files = list(Path(grandstaff_root).rglob("*.krn"))
+    krn_files = [file for file in krn_files if _filter_out_known_bad_ones(file)]
+    skipped: set[Path] = set()
     with open(index_file, "w") as f:
         file_number = 0
-        skipped_files = 0
         with multiprocessing.Pool() as p:
-            for result in p.imap_unordered(
+            for file, result in p.imap_unordered(
                 (
                     _convert_file_only_tokens
                     if only_recreate_token_files
@@ -273,17 +275,16 @@ def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
                 ),
                 krn_files,
             ):
-                if len(result) > 0:
-                    for line in result:
-                        f.write(line + "\n")
+                if result != "":
+                    f.write(result + "\n")
+                    file_number += 1
+                    if file_number % 1000 == 0:
+                        eprint(
+                            f"Processed {file_number}/{len(krn_files)} files,",
+                            f"skipped: {len(skipped)}",
+                        )
                 else:
-                    skipped_files += 1
-                file_number += 1
-                if file_number % 1000 == 0:
-                    eprint(
-                        f"Processed {file_number}/{len(krn_files)} files,",
-                        f"skipped {skipped_files} files",
-                    )
+                    skipped.add(file)
     eprint("Done indexing")
 
 

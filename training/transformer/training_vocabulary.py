@@ -7,8 +7,6 @@ from homr.transformer.configs import default_config
 from homr.transformer.vocabulary import (
     EncodedSymbol,
     Vocabulary,
-    is_valid_combination,
-    rhythm_to_category,
 )
 
 vocab = Vocabulary()
@@ -20,11 +18,11 @@ def check_token_line(line: EncodedSymbol) -> None:
         or line.lift not in vocab.lift
         or line.articulation not in vocab.articulation
         or line.pitch not in vocab.pitch
+        or line.position not in vocab.position
     ):
         raise ValueError("Invalid symbol " + str(line))
 
-    note_branch = rhythm_to_category(line.rhythm)
-    if not is_valid_combination(line.rhythm, line.lift, line.articulation, line.pitch, note_branch):
+    if not line.is_valid():
         raise ValueError("Invalid combination " + str(line))
 
 
@@ -34,16 +32,46 @@ def check_token_lines(lines: list[EncodedSymbol]) -> None:
 
 
 def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
+    position = 10000000 if symbol.position == "lower" else 0
     if "note" in symbol.rhythm:
-        return vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm]
+        return (
+            vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm] + position
+        )
     if "rest" in symbol.rhythm:
-        return 100000 + vocab.rhythm[symbol.rhythm]
-    return 1000000
+        return 100000 + vocab.rhythm[symbol.rhythm] + position
+    return 1000000 + position
 
 
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     sorted_chord = sorted(chord, key=_symbol_to_sortable)
-    return str.join("&", [str(c) for c in sorted_chord])
+    upper_slurs_ties = set()
+    lower_slurs_ties = set()
+    annotation_resorted: list[EncodedSymbol] = []
+    for symbol in sorted_chord:
+        stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
+        for articulation in stripped:
+            if symbol.position == "lower":
+                lower_slurs_ties.add(articulation)
+            else:
+                upper_slurs_ties.add(articulation)
+        annotation_resorted.append(symbol_stripped)
+    if len(upper_slurs_ties) > 0:
+        first_upper = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
+        )
+        if first_upper is not None:
+            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_articulations(
+                list(upper_slurs_ties)
+            )
+    if len(lower_slurs_ties) > 0:
+        first_lower = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
+        )
+        if first_lower is not None:
+            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_articulations(
+                list(lower_slurs_ties)
+            )
+    return str.join("&", [str(c) for c in annotation_resorted])
 
 
 def sort_token_chords(
@@ -56,7 +84,7 @@ def sort_token_chords(
             is_in_chord = True
         elif is_in_chord and len(chords) > 0:
             if keep_chord_symbol:
-                chords[1].append(EncodedSymbol("chord"))
+                chords[-1].append(EncodedSymbol("chord"))
             chords[-1].append(symbol)
             is_in_chord = False
         else:
@@ -64,8 +92,12 @@ def sort_token_chords(
     return chords
 
 
+def calc_ratio_of_tuplets(symbols: list[EncodedSymbol]) -> float:
+    tuplets = [s for s in symbols if s.is_tuplet()]
+    return float(len(tuplets)) / len(symbols)
+
+
 def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
-    # TODO convert lifts, sort symbols in chords, but also e.g. slur vs cres start
     chords = sort_token_chords(symbols)
 
     chord_strings = [_chord_to_str(c) for c in chords]
@@ -79,8 +111,13 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
         for i, entry in enumerate(entries):
             if "tieSlur" in entry:
                 continue
-            rhythm, pitch, lift, articulation = entry.strip().split()
-            symbol = EncodedSymbol(rhythm, pitch, lift, articulation)
+            parts = entry.strip().split()
+            if len(parts) == 5:
+                rhythm, pitch, lift, articulation, position = parts
+            else:
+                rhythm, pitch, lift, articulation = parts
+                position = "upper"
+            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position)
             is_first = i == 0
             if not is_first:
                 result.append(EncodedSymbol("chord"))
@@ -103,14 +140,16 @@ class DecoderBranches:
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
-        notes: torch.Tensor,
+        positions: torch.Tensor,
+        states: torch.Tensor,
         mask: torch.Tensor,
     ) -> None:
         self.rhythms = rhythms
         self.pitchs = pitchs
         self.lifts = lifts
         self.articulations = articulations
-        self.notes = notes
+        self.positions = positions
+        self.states = states
         self.mask = mask
 
 
@@ -122,21 +161,34 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     pitchs = [nonote_token]
     lifts = [nonote_token]
     articulations = [nonote_token]
-    notes = [nonote_token]
+    position = [nonote_token]
     mask = [True]
+    key = "keySignature_0"
+    clef_upper = "clef_G2"
+    clef_lower = "clef_F4"
+    states = [vocab.state[f"{key}+{clef_upper}+{clef_lower}"]]
     for symbol in symbols:
         rhythms.append(vocab.rhythm[symbol.rhythm])
         pitchs.append(vocab.pitch[symbol.pitch])
         lifts.append(vocab.lift[symbol.lift])
         articulations.append(vocab.articulation[symbol.articulation])
-        notes.append(vocab.note[rhythm_to_category(symbol.rhythm)])
+        position.append(vocab.position[symbol.position])
+        states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
         mask.append(True)
+        if symbol.rhythm.startswith("keySignature"):
+            key = symbol.rhythm
+        elif symbol.rhythm.startswith("clef"):
+            if symbol.position == "upper":
+                clef_upper = symbol.rhythm
+            else:
+                clef_lower = symbol.rhythm
 
     rhythms.append(end_of_seq)
     pitchs.append(nonote_token)
     lifts.append(nonote_token)
     articulations.append(nonote_token)
-    notes.append(nonote_token)
+    position.append(nonote_token)
+    states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
     mask.append(True)
 
     while len(rhythms) < default_config.max_seq_len:
@@ -144,7 +196,8 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         pitchs.append(nonote_token)
         lifts.append(nonote_token)
         articulations.append(nonote_token)
-        notes.append(nonote_token)
+        position.append(nonote_token)
+        states.append(nonote_token)
         mask.append(False)
 
     return DecoderBranches(
@@ -152,7 +205,8 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         lifts=torch.tensor(lifts),
         articulations=torch.tensor(articulations),
         pitchs=torch.tensor(pitchs),
-        notes=torch.tensor(notes),
+        positions=torch.tensor(position),
+        states=torch.tensor(states),
         mask=torch.tensor(mask),
     )
 
@@ -198,18 +252,20 @@ if __name__ == "__main__":
     errors: set[str] = set()
     i = 0
     if len(sys.argv) > 1:
-        index_file = open(sys.argv[1])
-        index_lines = index_file.readlines()
-        index_file.close()
-        files = [line.strip().split(",")[1] for line in index_lines]
+        files = []
+        for index_path in sys.argv[1:]:
+            index_file = open(index_path)
+            index_lines = index_file.readlines()
+            index_file.close()
+            files.extend([line.strip().split(",")[1] for line in index_lines])
     else:
         files = glob.glob(os.path.join("datasets", "**", "**.tokens"), recursive=True)
 
     for file in files:
         try:
             tokens = read_tokens(file)
-            check_token_lines(tokens)
             stats.add_lines(tokens)
+            check_token_lines(tokens)
             i += 1
             if i % 1000 == 0:
                 eprint(i, len(errors))

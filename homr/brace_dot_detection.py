@@ -131,6 +131,14 @@ def _merge_multi_staff_if_they_share_a_staff(staffs: list[MultiStaff]) -> list[M
     return result
 
 
+def _create_grandstaffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
+    if len(staffs) == 0:
+        return staffs
+    if len(staffs[0].staffs) != 2:
+        return staffs
+    return [s.create_grandstaffs() for s in staffs]
+
+
 def find_braces_brackets_and_grand_staff_lines(
     debug: Debug, staffs: list[Staff], brace_dot: list[RotatedBoundingBox]
 ) -> list[MultiStaff]:
@@ -154,4 +162,4 @@ def find_braces_brackets_and_grand_staff_lines(
         if not any_connected_neighbor:
             result.append(MultiStaff([staff], []))
 
-    return _merge_multi_staff_if_they_share_a_staff(result)
+    return _create_grandstaffs(_merge_multi_staff_if_they_share_a_staff(result))
