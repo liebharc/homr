@@ -111,9 +111,10 @@ class ScoreTransformerWrapper(nn.Module):
         cache_out = []
         attn_inters = cache.attn_intermediates
         for i in range(16): #16x2
-            for k, element in enumerate(attn_inters[i].cached_kv):
-                cache_out.append(element)
-
+            k, v = attn_inters[i].cached_kv
+            #print(k.shape, v.shape)
+            cache_out.append(k)
+            cache_out.append(v)
 
         out_lifts = self.to_logits_lift(x)
         out_pitchs = self.to_logits_pitch(x)
@@ -180,10 +181,10 @@ class ScoreDecoder(nn.Module):
         b, t = start_tokens.shape
 
         self.net.eval()
-        out_rhythm = start_tokens
-        out_pitch = nonote_tokens
-        out_lift = nonote_tokens
-        out_articulations = nonote_tokens
+        out_rhythm = torch.tensor([[1]], dtype=torch.long, device=self.device)
+        out_pitch = torch.tensor([[0]], dtype=torch.long, device=self.device)
+        out_lift = torch.tensor([[0]], dtype=torch.long, device=self.device)
+        out_articulations = torch.tensor([[0]], dtype=torch.long, device=self.device)
         mask = kwargs.pop("mask", None)
         context_first = kwargs["context"]
         context_later = context_first[:, :0]
@@ -208,6 +209,7 @@ class ScoreDecoder(nn.Module):
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
+
             if step == 0:
                 context = context_first
             else:
@@ -218,7 +220,7 @@ class ScoreDecoder(nn.Module):
                 x_pitch,
                 x_lift,
                 x_articulations,
-                states,
+                states[:, -1:],
                 torch.Tensor([step], device=self.device).long(),
                 context,
                 mask,

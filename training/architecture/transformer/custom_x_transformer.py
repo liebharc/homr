@@ -26,14 +26,6 @@ class CustomAttentionLayers(AttentionLayers):
         context_pos = None,
         attn_bias = None,
         deep_embeds_and_ids: tuple[nn.Parameter, Tensor] | None = None,
-        self_attn_additional_kv: (
-            LayerIntermediates |
-            list[tuple[Tensor, Tensor]]
-            | None
-        ) = None,
-        additional_kv_mask = None,
-        detach_additional_kv = False,
-        route_additional_kv_to_top = True,
         condition = None,
         in_attn_cond = None, # https://arxiv.org/abs/2105.04090
         layers_execute_order: tuple[int, ...] | None = None
@@ -120,16 +112,15 @@ class CustomAttentionLayers(AttentionLayers):
         prev_cache_length = 0
 
         attn_cache = []
-
         if exists(cache):
             assert self.causal and not exists(attn_mask)
 
             prev_cache_length = cache.cache_length
 
-            if exists(context) and False: # this is done in the inference code
+            if exists(context) and False:
                 context = context[:, :0]
 
-            if cache_age > 0 and False: # has no impact
+            if cache_age > 0 and False:
                 x = x[:, -cache_age:] # for spec decoding, may be greater than 1
 
                 if exists(deep_embeds_and_ids):
@@ -176,23 +167,6 @@ class CustomAttentionLayers(AttentionLayers):
 
         layers_execute_order = default(layers_execute_order, self.layers_execute_order)
         layer_variables = tuple(tuple(layer_variable[i] for i in layers_execute_order) for layer_variable in layer_variables)
-
-        # additional self attn key / values - say coming from vlm
-
-        if exists(self_attn_additional_kv) and route_additional_kv_to_top:
-
-            if isinstance(self_attn_additional_kv, LayerIntermediates):
-                self_attn_additional_kv = get_cached_kvs(self_attn_additional_kv)
-
-            if detach_additional_kv:
-                self_attn_additional_kv = detach_all(self_attn_additional_kv)
-
-            num_self_attns = sum([layer_type == 'a' for layer_type in first(layer_variables)])
-
-            self_attn_additional_kv = self_attn_additional_kv[-num_self_attns:]
-            self_attn_additional_kv = [None] * (num_self_attns - len(self_attn_additional_kv)) + self_attn_additional_kv
-
-        iter_self_attn_kv = iter(default(self_attn_additional_kv, ()))
 
         # derived input for reinjection if needed
 
@@ -285,14 +259,12 @@ class CustomAttentionLayers(AttentionLayers):
                     maybe_cross_attn_value_residual = first_cross_attn_inter.values
 
             # forward depending on layer type
-
             layer_cache = None
             if layer_type in ('a', 'c'):
                 layer_cache = next(iter_attn_cache, None)
 
-
             if layer_type == 'a':
-                out, inter = block(x, mask = mask, context_mask = self_attn_kv_mask, attn_mask = attn_mask, rel_pos = self.rel_pos, pos = pos, rotary_pos_emb = rotary_pos_emb, additional_key_values = layer_cache, additional_key_value_mask = additional_kv_mask, prev_attn = prev_attn, cache = next(iter_attn_cache, None), mem = layer_mem, mem_mask = layer_mem_mask, attn_bias = attn_bias, value_residual = maybe_self_attn_value_residual, return_intermediates = True)
+                out, inter = block(x, mask = mask, context_mask = self_attn_kv_mask, attn_mask = attn_mask, rel_pos = self.rel_pos, pos = pos, rotary_pos_emb = rotary_pos_emb, prev_attn = prev_attn, cache = layer_cache, mem = layer_mem, mem_mask = layer_mem_mask, attn_bias = attn_bias, value_residual = maybe_self_attn_value_residual, return_intermediates = True)
             elif layer_type == 'c':
                 out, inter = block(x, context = context, mask = mask, context_mask = context_mask, prev_attn = prev_cross_attn, cache = layer_cache, value_residual = maybe_cross_attn_value_residual, **cross_attn_rotary_pos_emb, return_intermediates = True)
             elif layer_type == 'f':
@@ -355,8 +327,7 @@ class CustomAttentionLayers(AttentionLayers):
         return x, intermediates
 
 
-
-class CustomDecoder(AttentionLayers):
+class CustomDecoder(CustomAttentionLayers):
     def __init__(self, **kwargs):
         assert 'causal' not in kwargs, 'cannot set causality on decoder'
         super().__init__(causal = True, **kwargs)
