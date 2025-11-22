@@ -4,11 +4,13 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from torch import nn
-from x_transformers.x_transformers import (
+from training.architecture.transformer.custom_x_transformer import (
     AbsolutePositionalEmbedding,
     AttentionLayers,
-    Decoder,
+    CustomDecoder,
     TokenEmbedding,
+    Intermediates,
+    LayerIntermediates
 )
 
 from homr.transformer.configs import Config
@@ -79,28 +81,46 @@ class ScoreTransformerWrapper(nn.Module):
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         states: torch.Tensor,
+        cache_len: torch.Tensor,
+        context: torch.Tensor,
         mask: torch.Tensor | None = None,
-        **kwargs: Any,
+        *cache: torch.Tensor
     ) -> Any:
         x = (
             self.rhythm_emb(rhythms)
             + self.pitch_emb(pitchs)
             + self.lift_emb(lifts)
             + self.articulation_emb(articulations)
-            + self.pos_emb(rhythms)
+            + self.pos_emb(rhythms, offset=cache_len)
             + self.states_emb(states)
         )
 
         x = self.post_emb_norm(x)
 
-        x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+        # reconstruct x_transformers LayerIntermediates class
+        inters = []
+        for i in range(0, 32, 2):
+            inters.append(Intermediates(cached_kv=(cache[i], cache[i+1])))
+
+        cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
+
+
+        x, cache = self.attn_layers(x, cache=cache_input, return_hiddens=True, context=context)
+        
+        # get the kv cache tensors from the LayerIntermediates class
+        cache_out = []
+        attn_inters = cache.attn_intermediates
+        for i in range(16): #16x2
+            for k, element in enumerate(attn_inters[i].cached_kv):
+                cache_out.append(element)
+
 
         out_lifts = self.to_logits_lift(x)
         out_pitchs = self.to_logits_pitch(x)
         out_rhythms = self.to_logits_rhythm(x)
         out_articulations = self.to_logits_articulations(x)
         out_positions = self.to_logits_position(x)
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x
+        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x, cache_out
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
@@ -165,9 +185,14 @@ class ScoreDecoder(nn.Module):
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
         mask = kwargs.pop("mask", None)
+        context_first = kwargs["context"]
+        context_later = context_first[:, :0]
 
         if mask is None:
-            mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
+            # the mask is always (True, True) because the x_ are always (1, 1) 
+            # and contain only the last token
+            # the information about the rest of the tokens gets passed via the kv cache
+            mask = torch.ones((1, 1), dtype=torch.bool, device=self.device)
 
         symbols: list[EncodedSymbol] = []
         key = "keySignature_0"
@@ -176,22 +201,28 @@ class ScoreDecoder(nn.Module):
         states = torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
             start_tokens.device
         )
+        cache = self.init_cache()
 
-        for _ in range(self.max_seq_len):
-            mask = mask[:, -self.max_seq_len :]
-            x_lift = out_lift[:, -self.max_seq_len :]
-            x_pitch = out_pitch[:, -self.max_seq_len :]
-            x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            x_articulations = out_articulations[:, -self.max_seq_len :]
+        for step in range(self.max_seq_len):
+            x_lift = out_lift[:, -1:]
+            x_pitch = out_pitch[:, -1:]
+            x_rhythm = out_rhythm[:, -1:]
+            x_articulations = out_articulations[:, -1:]
+            if step == 0:
+                context = context_first
+            else:
+                context = context_later
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _ = self.net(
-                rhythms=x_rhythm,
-                pitchs=x_pitch,
-                lifts=x_lift,
-                states=states,
-                mask=mask,
-                articulations=x_articulations,
-                **kwargs,
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, cache = self.net(
+                x_rhythm,
+                x_pitch,
+                x_lift,
+                x_articulations,
+                states,
+                torch.Tensor([step], device=self.device).long(),
+                context,
+                mask,
+                *cache
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
@@ -378,6 +409,15 @@ class ScoreDecoder(nn.Module):
 
         return loss
 
+    def init_cache(self):
+        """
+        Init cache to feed into the Decoder in the first step.
+        """
+        cache = []        
+        for i in range(32):
+            cache.append(torch.zeros((1, 8, 0, 64)))
+        return cache
+
 
 def get_decoder(config: Config) -> ScoreDecoder:
     return ScoreDecoder(
@@ -389,7 +429,7 @@ def get_decoder(config: Config) -> ScoreDecoder:
 def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
     return ScoreTransformerWrapper(
         config=config,
-        attn_layers=Decoder(
+        attn_layers=CustomDecoder(
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
