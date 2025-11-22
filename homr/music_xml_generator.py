@@ -526,7 +526,7 @@ def build_multi_measure_rest(
 def build_note_chord(
     note_chord: SymbolChord, state: ConversionState, chord_duration: Fraction
 ) -> list[mxl.XMLNote]:
-    slurs_ties, note_chord = note_chord.strip_slur_ties()
+    _slurs_ties, note_chord = note_chord.strip_slur_ties()
     by_duration = _group_notes(note_chord.symbols)
     result = []
     final_duration = Fraction(0)
@@ -534,8 +534,9 @@ def build_note_chord(
         is_first = True
         for note_loop in by_duration[group_duration]:
             note = note_loop
-            if i == 0 and is_first:
-                note = note.add_articulations(slurs_ties)
+            # Disabled slurs and ties until the detection is more robust
+            # if i == 0 and is_first:
+            #    note = note.add_articulations(slurs_ties)
             result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
             is_first = False
         if i != len(by_duration) - 1 and group_duration > Fraction(0):
