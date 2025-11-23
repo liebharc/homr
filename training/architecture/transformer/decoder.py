@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any, List
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -111,8 +111,9 @@ class ScoreTransformerWrapper(nn.Module):
         )
 
         # get the kv cache tensors from the LayerIntermediates class
-        # the cache is built up like this: LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
-        # the cache is alternating between the shapes (batch_size, 8, seq_len, 64) and (batch_size, 8, 1281, 64)
+        # the cache is built up like this:
+        # LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
+        # cache is alternating between the shapes (batch, 8, seq_len, 64) and (batch, 8, 1281, 64)
         # 8 probably corresponds to the number of decoder_heads
         # 1281 is the same as the encoder output
         cache_out = []
@@ -419,7 +420,9 @@ class ScoreDecoder(nn.Module):
         return loss
 
 
-def init_cache(cache_len=0):
+def init_cache(
+    cache_len: int = 0,
+) -> tuple[list[torch.Tensor], list[str], list[str], dict[str, dict[int, str]], int]:
     cache = []
     input_names = []
     output_names = []

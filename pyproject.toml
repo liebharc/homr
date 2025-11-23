@@ -133,6 +133,10 @@ implicit_reexport = false
 strict_equality = true
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "training.architecture.transformer.custom_x_transformer"
+ignore_errors = true
+
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = 10

@@ -149,7 +149,7 @@ class ScoreDecoder:
 
         return symbols
 
-    def init_cache(self, cache_len=0):
+    def init_cache(self, cache_len: int = 0) -> tuple[list[NDArray], list[str], list[str]]:
         cache = []
         input_names = []
         output_names = []

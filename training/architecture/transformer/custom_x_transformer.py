@@ -4,7 +4,42 @@ Used x_transformers==2.4.9
 I had issues with 2.9.2
 """
 
-from x_transformers.x_transformers import *
+# concerning the many noqa statements here:
+# I wanted to modify as little as possible of x_transformers code
+
+# F403 and F405 are related to the star import
+# S101 is related to the asserts (from x_transformer.py)
+
+# flake8: noqa: S101
+
+from random import random
+
+from torch import Tensor, arange, long, nn
+from x_transformers.x_transformers import (  # noqa: F401
+    AbsolutePositionalEmbedding,
+    AttentionLayers,
+    Intermediates,
+    LayerIntermediates,
+    TokenEmbedding,
+    default,
+    dropout_seq,
+    einx,
+    exists,
+    first,
+    maybe,
+    partial,
+    rearrange,
+    reduce,
+    softclamp,
+)
+
+__all__ = [
+    "AbsolutePositionalEmbedding",
+    "AttentionLayers",
+    "Intermediates",
+    "LayerIntermediates",
+    "TokenEmbedding",
+]
 
 
 class CustomAttentionLayers(AttentionLayers):
@@ -45,7 +80,7 @@ class CustomAttentionLayers(AttentionLayers):
         if exists(condition):
             assert (
                 condition.shape[-1] == self.dim_condition
-            ), f"expected condition dimension of {self.dim_condition} but received {condition.shape[-1]}"
+            ), f"expected condition dimension of {self.dim_condition} but received {condition.shape[-1]}"  # noqa: E501
 
             assert condition.ndim in {2, 3}
 
@@ -56,14 +91,14 @@ class CustomAttentionLayers(AttentionLayers):
 
         # setup maybe layernorm kwarg
 
-        norm_kwargs = dict()
+        norm_kwargs = dict()  # noqa: C408
 
         if self.norm_need_condition:
             norm_kwargs.update(condition=condition)
 
         # maybe post branch fn conditioning (DiT paper's ada-ln-zero)
 
-        block_forward_kwargs = dict()
+        block_forward_kwargs = dict()  # noqa: C408
 
         if self.post_branch_fn_needs_condition:
             block_forward_kwargs.update(condition=condition)
@@ -83,7 +118,7 @@ class CustomAttentionLayers(AttentionLayers):
         # handle left padded sequences
 
         if exists(seq_start_pos):
-            seq_arange = arange(x.shape[-2], device=x.device, dtype=torch.long)
+            seq_arange = arange(x.shape[-2], device=x.device, dtype=long)
             left_pad_mask = seq_arange >= seq_start_pos[..., None]
 
             if exists(self_attn_kv_mask):
@@ -93,13 +128,14 @@ class CustomAttentionLayers(AttentionLayers):
 
         # rotary positions
 
-        cross_attn_rotary_pos_emb = dict()
+        cross_attn_rotary_pos_emb = dict()  # noqa: C408
 
         if exists(self.rotary_pos_emb):
             if not exists(rotary_pos_emb):
                 maybe_mem = first(
                     mems, None
-                )  # todo - handle edge case where different layers get different memory lengths. don't think this will ever come up but who knows
+                )  # todo - handle edge case where different layers get different memory lengths.
+                # don't think this will ever come up but who knows
                 mem_len = maybe_mem.shape[1] if exists(maybe_mem) else 0
 
                 if not exists(pos):
@@ -190,7 +226,8 @@ class CustomAttentionLayers(AttentionLayers):
             inp_inject = self.reinject_input_proj(x)
 
         elif exists(in_attn_cond):
-            # handle in-attention conditioning, which serves the same purpose of having the network learn the residual
+            # handle in-attention conditioning, which serves the same purpose
+            # of having the network learn the residual
             inp_inject = (
                 in_attn_cond if in_attn_cond.ndim == 3 else rearrange(in_attn_cond, "b d -> b 1 d")
             )
@@ -214,10 +251,12 @@ class CustomAttentionLayers(AttentionLayers):
             layer_type,
             skip_combine,
             (norm, block, residual_fn),
-            layer_dropout,
-            layer_integrator,
-        ) in enumerate(zip(*layer_variables)):
-            is_last = ind == (len(self.layers) - 1)
+            layer_dropout,  # noqa: B905
+            layer_integrator,  # noqa: F841
+        ) in enumerate(
+            zip(*layer_variables)  # noqa: B905
+        ):  # noqa: B905
+            is_last = ind == (len(self.layers) - 1)  # noqa: F841
 
             # handle skip connections
 
@@ -265,9 +304,9 @@ class CustomAttentionLayers(AttentionLayers):
                 x = pre_norm(x)
 
                 if layer_type == "a" and exists(layer_mem):
-                    layer_mem = pre_norm(layer_mem)
+                    layer_mem = pre_norm(layer_mem)  # noqa: PLW2901
 
-            block = partial(block, **block_forward_kwargs)
+            block = partial(block, **block_forward_kwargs)  # noqa: PLW2901
 
             # handle maybe value residuals
 
