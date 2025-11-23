@@ -9,6 +9,7 @@ from training.architecture.segmentation.model import create_segnet  # type: igno
 from training.architecture.transformer.decoder import (
     ScoreTransformerWrapper,
     get_score_wrapper,
+    init_cache
 )
 from training.architecture.transformer.encoder import get_encoder
 
@@ -145,18 +146,6 @@ def convert_decoder() -> str:
         export_params=True,
     )
     return path_out
-
-def init_cache(cache_len=0):
-    cache = []
-    input_names = []    
-    output_names = []
-    dynamic = {}
-    for i in range(32):
-        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32))
-        input_names.append(f"cache_in{i}")
-        output_names.append(f"cache_out{i}")
-        dynamic[f"cache_in{i}"] = {2: "seq_len"}
-    return cache, input_names, output_names, dynamic, cache_len
 
 def convert_segnet() -> str:
     """

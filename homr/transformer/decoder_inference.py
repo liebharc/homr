@@ -65,7 +65,9 @@ class ScoreDecoder:
             x_articulations = out_articulations[:, -1:]
             
             if step != 0: # after the first step we don't pass the full context into the decoder
-                context = kwargs["context"][:, :1] 
+                # x_transformers uses [:, :0] to split the context
+                # which caused a Reshape error when loading the onnx model
+                context = kwargs["context"][:, :1]
 
             inputs = {
                 "rhythms": x_rhythm,
@@ -78,6 +80,7 @@ class ScoreDecoder:
             }
             for i in range(32):
                 inputs[kv_input_names[i]] = cache[i]
+
 
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, *cache = self.net.run(
                 output_names=[

@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any
+from typing import Any, List
 
 import torch
 import torch.nn.functional as F
@@ -97,22 +97,24 @@ class ScoreTransformerWrapper(nn.Module):
 
         x = self.post_emb_norm(x)
 
-        # reconstruct x_transformers LayerIntermediates class
+        # reconstruct x_transformers LayerIntermediates from the input_cache
         inters = []
         for i in range(0, 32, 2):
             inters.append(Intermediates(cached_kv=(cache[i], cache[i+1])))
 
         cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
 
+        x, cache = self.attn_layers(x, cache=cache_input, mask=mask, return_hiddens=True, context=context)
 
-        x, cache = self.attn_layers(x, cache=cache_input, return_hiddens=True, context=context)
-        
         # get the kv cache tensors from the LayerIntermediates class
+        # the cache is built up like this: LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
+        # the cache is alternating between the shapes (batch_size, 8, seq_len, 64) and (batch_size, 8, 1281, 64)
+        # 8 probably corresponds to the number of decoder_heads
+        # 1281 is the same as the encoder output
         cache_out = []
         attn_inters = cache.attn_intermediates
-        for i in range(16): #16x2
+        for i in range(16): # 16x2
             k, v = attn_inters[i].cached_kv
-            #print(k.shape, v.shape)
             cache_out.append(k)
             cache_out.append(v)
 
@@ -202,7 +204,7 @@ class ScoreDecoder(nn.Module):
         states = torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
             start_tokens.device
         )
-        cache = self.init_cache()
+        cache = init_cache()[0]
 
         for step in range(self.max_seq_len):
             x_lift = out_lift[:, -1:]
@@ -411,14 +413,17 @@ class ScoreDecoder(nn.Module):
 
         return loss
 
-    def init_cache(self):
-        """
-        Init cache to feed into the Decoder in the first step.
-        """
-        cache = []        
-        for i in range(32):
-            cache.append(torch.zeros((1, 8, 0, 64)))
-        return cache
+def init_cache(cache_len=0):
+    cache = []
+    input_names = []    
+    output_names = []
+    dynamic = {}
+    for i in range(32):
+        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32))
+        input_names.append(f"cache_in{i}")
+        output_names.append(f"cache_out{i}")
+        dynamic[f"cache_in{i}"] = {2: "seq_len"}
+    return cache, input_names, output_names, dynamic, cache_len
 
 
 def get_decoder(config: Config) -> ScoreDecoder:

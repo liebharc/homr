@@ -1,5 +1,7 @@
 """
-Version of x_transforer.x_transformer to support kv caching for homr's decoder in onnx.
+Version of x_transformers.x_transformer to support kv caching for homr's decoder in onnx.
+Used x_transformers==2.4.9 
+I had issues with 2.9.2
 """
 
 from x_transformers.x_transformers import *
