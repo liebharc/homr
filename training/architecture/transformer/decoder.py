@@ -81,8 +81,8 @@ class ScoreTransformerWrapper(nn.Module):
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         states: torch.Tensor,
-        cache_len: torch.Tensor,
         context: torch.Tensor,
+        cache_len: torch.Tensor,
         mask: torch.Tensor | None = None,
         *cache: torch.Tensor
     ) -> Any:
@@ -181,10 +181,10 @@ class ScoreDecoder(nn.Module):
         b, t = start_tokens.shape
 
         self.net.eval()
-        out_rhythm = torch.tensor([[1]], dtype=torch.long, device=self.device)
-        out_pitch = torch.tensor([[0]], dtype=torch.long, device=self.device)
-        out_lift = torch.tensor([[0]], dtype=torch.long, device=self.device)
-        out_articulations = torch.tensor([[0]], dtype=torch.long, device=self.device)
+        out_rhythm = start_tokens
+        out_pitch = nonote_tokens
+        out_lift = nonote_tokens
+        out_articulations = nonote_tokens
         mask = kwargs.pop("mask", None)
         context_first = kwargs["context"]
         context_later = context_first[:, :0]
@@ -221,8 +221,8 @@ class ScoreDecoder(nn.Module):
                 x_lift,
                 x_articulations,
                 states[:, -1:],
-                torch.Tensor([step], device=self.device).long(),
                 context,
+                torch.Tensor([step], device=self.device).long(),
                 mask,
                 *cache
             )

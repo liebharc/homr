@@ -53,32 +53,40 @@ class ScoreDecoder:
         clef_upper = "clef_G2"
         clef_lower = "clef_F4"
         states = np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])
+        cache, kv_input_names, kv_output_names = self.init_cache()
+        context = kwargs["context"]
 
         symbols: list[EncodedSymbol] = []
 
-        for _ in range(self.max_seq_len):
-            x_lift = out_lift[:, -self.max_seq_len :]
-            x_pitch = out_pitch[:, -self.max_seq_len :]
-            x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            x_articulations = out_articulations[:, -self.max_seq_len :]
-            context = kwargs["context"]
+        for step in range(self.max_seq_len):
+            x_lift = out_lift[:, -1:] # for all: shape=(1,1)
+            x_pitch = out_pitch[:, -1:]
+            x_rhythm = out_rhythm[:, -1:]
+            x_articulations = out_articulations[:, -1:]
+            
+            if step != 0: # after the first step we don't pass the full context into the decoder
+                context = kwargs["context"][:, :1] 
 
             inputs = {
                 "rhythms": x_rhythm,
                 "pitchs": x_pitch,
                 "lifts": x_lift,
                 "articulations": x_articulations,
-                "states": states,
+                "states": states[:, -1:],
                 "context": context,
+                "cache_len": np.array([step])
             }
+            for i in range(32):
+                inputs[kv_input_names[i]] = cache[i]
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp = self.net.run(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, *cache = self.net.run(
                 output_names=[
                     "out_rhythms",
                     "out_pitchs",
                     "out_lifts",
                     "out_positions",
                     "out_articulations",
+                    *kv_output_names
                 ],
                 input_feed=inputs,
             )
@@ -136,6 +144,17 @@ class ScoreDecoder:
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
 
         return symbols
+
+
+    def init_cache(self, cache_len=0):
+        cache = []
+        input_names = []    
+        output_names = []
+        for i in range(32):
+            cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
+            input_names.append(f"cache_in{i}")
+            output_names.append(f"cache_out{i}")
+        return cache, input_names, output_names
 
 
 def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:

@@ -57,8 +57,8 @@ class TrOMR(nn.Module):
 
     @torch.no_grad()
     def generate(self, x: torch.Tensor) -> list[EncodedSymbol]:
-        start_token = (torch.LongTensor([self.config.bos_token] * len(x))[:, None]).to(x.device)
-        nonote_token = (torch.LongTensor([self.config.nonote_token] * len(x))[:, None]).to(x.device)
+        start_token = torch.tensor([[1]], dtype=torch.long, device=x.device)
+        nonote_token = torch.tensor([[0]], dtype=torch.long, device=x.device)
 
         context = self.encoder(x)
         out = self.decoder.generate(start_token, nonote_token, context=context)

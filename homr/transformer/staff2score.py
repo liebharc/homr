@@ -37,8 +37,8 @@ class Staff2Score:
         t0 = perf_counter()
 
         # Create special tokens
-        start_token = np.full((len(x), 1), self.config.bos_token, dtype=np.int64)
-        nonote_token = np.full((len(x), 1), self.config.nonote_token, dtype=np.int64)
+        start_token = np.array([[1]], dtype=np.int64)
+        nonote_token = np.array([[0]], dtype=np.int64)
 
         # Generate context with encoder
         context = self.encoder.generate(x)

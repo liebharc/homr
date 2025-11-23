@@ -26,17 +26,21 @@ class DecoderWrapper(torch.nn.Module):
         articulations: torch.Tensor,
         states: torch.Tensor,
         context: torch.Tensor,
+        cache_len: torch.Tensor,
+        *cache: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x = self.model(
-            rhythms=rhythms,
-            pitchs=pitchs,
-            lifts=lifts,
-            articulations=articulations,
-            states=states,
-            mask=None,
-            context=context,
+        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x, *cache = self.model(
+            rhythms,
+            pitchs,
+            lifts,
+            articulations,
+            states,
+            context,
+            cache_len,
+            None,
+            *cache
         )
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations
+        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, *cache
 
 
 def convert_encoder() -> str:
@@ -110,46 +114,49 @@ def convert_decoder() -> str:
 
     # Create input data
     # Mask is not used since it caused problems with the tensor size
-    rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 10)).long()
-    pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
-    lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
-    articulations = torch.randint(0, config.num_articulation_tokens, (1, 10)).long()
-    states = torch.randint(0, config.num_state_tokens, (1, 10)).long()
-    context = torch.randn((1, 1281, config.decoder_dim)).float()
+    kv_cache, kv_input_names, kv_output_names, dynamic_axes, cache_length = init_cache()
+    rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 1)).long()
+    pitchs = torch.randint(0, config.num_pitch_tokens, (1, 1)).long()
+    lifts = torch.randint(0, config.num_lift_tokens, (1, 1)).long()
+    articulations = torch.randint(0, config.num_articulation_tokens, (1, 1)).long()
+    states = torch.randint(0, config.num_state_tokens, (1, 1)).long()
+    cache_len = torch.tensor([cache_length]).long()
+    cache = kv_cache
+    context = torch.randn((1, 1281, 312)).float()
 
-    dynamic_axes = {
-        "rhythms": {0: "batch_size", 1: "input_seq_len"},
-        "pitchs": {0: "batch_size", 1: "input_seq_len"},
-        "lifts": {0: "batch_size", 1: "input_seq_len"},
-        "articulations": {0: "batch_size", 1: "input_seq_len"},
-        "states": {0: "batch_size", 1: "input_seq_len"},
-        "context": {0: "batch_size"},
-        "out_rhythms": {0: "batch_size", 1: "output_seq_len"},
-        "out_pitchs": {0: "batch_size", 1: "output_seq_len"},
-        "out_lifts": {0: "batch_size", 1: "output_seq_len"},
-        "out_articulations": {0: "batch_size", 1: "output_seq_len"},
-        "out_positions": {0: "batch_size", 1: "output_seq_len"},
-    }
+    dynamic_axes["context"] = {1: "cache_exists"}
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, articulations, states, context),
+        (rhythms, pitchs, lifts, articulations, states, context, cache_len, *cache),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "articulations", "states", "context"],
+        input_names=["rhythms", "pitchs", "lifts", "articulations", "states", "context", "cache_len", *kv_input_names],
         output_names=[
             "out_rhythms",
             "out_pitchs",
             "out_lifts",
             "out_positions",
             "out_articulations",
+            *kv_output_names
         ],
         dynamic_axes=dynamic_axes,
-        opset_version=17,
+        opset_version=18,
         do_constant_folding=True,
         export_params=True,
     )
     return path_out
 
+def init_cache(cache_len=0):
+    cache = []
+    input_names = []    
+    output_names = []
+    dynamic = {}
+    for i in range(32):
+        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32))
+        input_names.append(f"cache_in{i}")
+        output_names.append(f"cache_out{i}")
+        dynamic[f"cache_in{i}"] = {2: "seq_len"}
+    return cache, input_names, output_names, dynamic, cache_len
 
 def convert_segnet() -> str:
     """
