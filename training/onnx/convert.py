@@ -39,7 +39,7 @@ class DecoderWrapper(torch.nn.Module):
             context,
             cache_len,
             None,
-            *cache
+            cache=cache
         )
         return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, *cache
 

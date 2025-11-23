@@ -55,6 +55,7 @@ class ScoreDecoder:
         states = np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])
         cache, kv_input_names, kv_output_names = self.init_cache()
         context = kwargs["context"]
+        context_reduced = kwargs["context"][:, :1]
 
         symbols: list[EncodedSymbol] = []
 
@@ -63,24 +64,24 @@ class ScoreDecoder:
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
-            
+            x_states = states[:, -1:]
+
             if step != 0: # after the first step we don't pass the full context into the decoder
                 # x_transformers uses [:, :0] to split the context
                 # which caused a Reshape error when loading the onnx model
-                context = kwargs["context"][:, :1]
+                context = context_reduced
 
             inputs = {
                 "rhythms": x_rhythm,
                 "pitchs": x_pitch,
                 "lifts": x_lift,
                 "articulations": x_articulations,
-                "states": states[:, -1:],
+                "states": x_states,
                 "context": context,
                 "cache_len": np.array([step])
             }
             for i in range(32):
                 inputs[kv_input_names[i]] = cache[i]
-
 
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, *cache = self.net.run(
                 output_names=[
