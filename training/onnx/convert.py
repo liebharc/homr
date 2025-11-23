@@ -9,7 +9,7 @@ from training.architecture.segmentation.model import create_segnet  # type: igno
 from training.architecture.transformer.decoder import (
     ScoreTransformerWrapper,
     get_score_wrapper,
-    init_cache
+    init_cache,
 )
 from training.architecture.transformer.encoder import get_encoder
 
@@ -28,18 +28,12 @@ class DecoderWrapper(torch.nn.Module):
         states: torch.Tensor,
         context: torch.Tensor,
         cache_len: torch.Tensor,
-        *cache: torch.Tensor
+        *cache: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x, *cache = self.model(
-            rhythms,
-            pitchs,
-            lifts,
-            articulations,
-            states,
-            context,
-            cache_len,
-            None,
-            cache=cache
+        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x, *cache = (
+            self.model(
+                rhythms, pitchs, lifts, articulations, states, context, cache_len, None, cache=cache
+            )
         )
         return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, *cache
 
@@ -131,14 +125,23 @@ def convert_decoder() -> str:
         wrapped_model,
         (rhythms, pitchs, lifts, articulations, states, context, cache_len, *cache),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "articulations", "states", "context", "cache_len", *kv_input_names],
+        input_names=[
+            "rhythms",
+            "pitchs",
+            "lifts",
+            "articulations",
+            "states",
+            "context",
+            "cache_len",
+            *kv_input_names,
+        ],
         output_names=[
             "out_rhythms",
             "out_pitchs",
             "out_lifts",
             "out_positions",
             "out_articulations",
-            *kv_output_names
+            *kv_output_names,
         ],
         dynamic_axes=dynamic_axes,
         opset_version=18,
@@ -146,6 +149,7 @@ def convert_decoder() -> str:
         export_params=True,
     )
     return path_out
+
 
 def convert_segnet() -> str:
     """

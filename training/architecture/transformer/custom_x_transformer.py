@@ -1,49 +1,56 @@
 """
 Version of x_transformers.x_transformer to support kv caching for homr's decoder in onnx.
-Used x_transformers==2.4.9 
+Used x_transformers==2.4.9
 I had issues with 2.9.2
 """
 
 from x_transformers.x_transformers import *
 
+
 class CustomAttentionLayers(AttentionLayers):
     def forward(
         self,
         x,
-        context = None,
-        mask = None,
-        context_mask = None,
-        attn_mask = None,
-        self_attn_kv_mask = None,
-        mems = None,
-        mem_masks = None,
+        context=None,
+        mask=None,
+        context_mask=None,
+        attn_mask=None,
+        self_attn_kv_mask=None,
+        mems=None,
+        mem_masks=None,
         seq_start_pos: Tensor | None = None,
         seq_pos_offset: int = 0,
         cache: LayerIntermediates | None = None,
-        input_not_include_cache = False,
-        cache_age = 1,
-        return_hiddens = False,
-        rotary_pos_emb = None,
-        pos = None,
-        context_pos = None,
-        attn_bias = None,
+        input_not_include_cache=False,
+        cache_age=1,
+        return_hiddens=False,
+        rotary_pos_emb=None,
+        pos=None,
+        context_pos=None,
+        attn_bias=None,
         deep_embeds_and_ids: tuple[nn.Parameter, Tensor] | None = None,
-        condition = None,
-        in_attn_cond = None, # https://arxiv.org/abs/2105.04090
-        layers_execute_order: tuple[int, ...] | None = None
+        condition=None,
+        in_attn_cond=None,  # https://arxiv.org/abs/2105.04090
+        layers_execute_order: tuple[int, ...] | None = None,
     ):
-        assert not (self.cross_attend ^ exists(context)), 'context must be passed in if cross_attend is set to True'
-        assert not (exists(condition) ^ self.need_condition), 'condition needs to be passed in if using adaptive layernorm or vice versa'
+        assert not (
+            self.cross_attend ^ exists(context)
+        ), "context must be passed in if cross_attend is set to True"
+        assert not (
+            exists(condition) ^ self.need_condition
+        ), "condition needs to be passed in if using adaptive layernorm or vice versa"
 
         # handle condition
 
         if exists(condition):
-            assert condition.shape[-1] == self.dim_condition, f'expected condition dimension of {self.dim_condition} but received {condition.shape[-1]}'
+            assert (
+                condition.shape[-1] == self.dim_condition
+            ), f"expected condition dimension of {self.dim_condition} but received {condition.shape[-1]}"
 
             assert condition.ndim in {2, 3}
 
             if condition.ndim == 2:
-                condition = rearrange(condition, 'b d -> b 1 d')
+                condition = rearrange(condition, "b d -> b 1 d")
 
             condition = self.adaptive_mlp(condition)
 
@@ -52,14 +59,14 @@ class CustomAttentionLayers(AttentionLayers):
         norm_kwargs = dict()
 
         if self.norm_need_condition:
-            norm_kwargs.update(condition = condition)
+            norm_kwargs.update(condition=condition)
 
         # maybe post branch fn conditioning (DiT paper's ada-ln-zero)
 
         block_forward_kwargs = dict()
 
         if self.post_branch_fn_needs_condition:
-            block_forward_kwargs.update(condition = condition)
+            block_forward_kwargs.update(condition=condition)
 
         # initialize accums
 
@@ -76,7 +83,7 @@ class CustomAttentionLayers(AttentionLayers):
         # handle left padded sequences
 
         if exists(seq_start_pos):
-            seq_arange = arange(x.shape[-2], device = x.device, dtype = torch.long)
+            seq_arange = arange(x.shape[-2], device=x.device, dtype=torch.long)
             left_pad_mask = seq_arange >= seq_start_pos[..., None]
 
             if exists(self_attn_kv_mask):
@@ -90,11 +97,13 @@ class CustomAttentionLayers(AttentionLayers):
 
         if exists(self.rotary_pos_emb):
             if not exists(rotary_pos_emb):
-                maybe_mem = first(mems, None) # todo - handle edge case where different layers get different memory lengths. don't think this will ever come up but who knows
+                maybe_mem = first(
+                    mems, None
+                )  # todo - handle edge case where different layers get different memory lengths. don't think this will ever come up but who knows
                 mem_len = maybe_mem.shape[1] if exists(maybe_mem) else 0
 
                 if not exists(pos):
-                    pos = arange(x.shape[1] + mem_len + seq_pos_offset, device = x.device) - mem_len
+                    pos = arange(x.shape[1] + mem_len + seq_pos_offset, device=x.device) - mem_len
 
                 rotary_pos_emb = self.rotary_pos_emb(pos)
 
@@ -105,8 +114,7 @@ class CustomAttentionLayers(AttentionLayers):
                 context_rotary_pos_emb = self.rotary_pos_emb(context_pos)
 
                 cross_attn_rotary_pos_emb.update(
-                    rotary_pos_emb = rotary_pos_emb,
-                    context_rotary_pos_emb = context_rotary_pos_emb
+                    rotary_pos_emb=rotary_pos_emb, context_rotary_pos_emb=context_rotary_pos_emb
                 )
 
         # assume cached key / values
@@ -123,7 +131,7 @@ class CustomAttentionLayers(AttentionLayers):
                 context = context[:, :0]
 
             if cache_age > 0 and False:
-                x = x[:, -cache_age:] # for spec decoding, may be greater than 1
+                x = x[:, -cache_age:]  # for spec decoding, may be greater than 1
 
                 if exists(deep_embeds_and_ids):
                     deep_embeds, token_ids = deep_embeds_and_ids
@@ -143,7 +151,7 @@ class CustomAttentionLayers(AttentionLayers):
         if exists(deep_embeds_and_ids):
             deep_embeds, token_ids = deep_embeds_and_ids
             deep_embeds_across_depth = deep_embeds[token_ids]
-            deep_embeds = rearrange(deep_embeds_across_depth, 'b n l d -> l b n d')
+            deep_embeds = rearrange(deep_embeds_across_depth, "b n l d -> l b n d")
 
         deep_embeds_iter = iter(deep_embeds)
 
@@ -153,7 +161,7 @@ class CustomAttentionLayers(AttentionLayers):
         is_multistream = streams > 1
 
         if is_multistream:
-            x = einx.add('b n d, s d -> (b s) n d', x, self.stream_emb)
+            x = einx.add("b n d, s d -> (b s) n d", x, self.stream_emb)
 
         # get layers to be executed
 
@@ -162,13 +170,16 @@ class CustomAttentionLayers(AttentionLayers):
             self.skip_combines,
             self.layers,
             self.layer_dropouts,
-            self.layer_integrators
+            self.layer_integrators,
         )
 
         # able to override the layers execution order on forward, for trying to depth extrapolate
 
         layers_execute_order = default(layers_execute_order, self.layers_execute_order)
-        layer_variables = tuple(tuple(layer_variable[i] for i in layers_execute_order) for layer_variable in layer_variables)
+        layer_variables = tuple(
+            tuple(layer_variable[i] for i in layers_execute_order)
+            for layer_variable in layer_variables
+        )
 
         # derived input for reinjection if needed
 
@@ -180,7 +191,9 @@ class CustomAttentionLayers(AttentionLayers):
 
         elif exists(in_attn_cond):
             # handle in-attention conditioning, which serves the same purpose of having the network learn the residual
-            inp_inject = in_attn_cond if in_attn_cond.ndim == 3 else rearrange(in_attn_cond, 'b d -> b 1 d')
+            inp_inject = (
+                in_attn_cond if in_attn_cond.ndim == 3 else rearrange(in_attn_cond, "b d -> b 1 d")
+            )
 
         if exists(inp_inject) and exists(self.learned_reinject_input_gate):
             inp_inject_gate = self.learned_reinject_input_gate(x).sigmoid()
@@ -197,7 +210,13 @@ class CustomAttentionLayers(AttentionLayers):
 
         # go through the attention and feedforward layers
 
-        for ind, (layer_type, skip_combine, (norm, block, residual_fn), layer_dropout, layer_integrator) in enumerate(zip(*layer_variables)):
+        for ind, (
+            layer_type,
+            skip_combine,
+            (norm, block, residual_fn),
+            layer_dropout,
+            layer_integrator,
+        ) in enumerate(zip(*layer_variables)):
             is_last = ind == (len(self.layers) - 1)
 
             # handle skip connections
@@ -209,19 +228,21 @@ class CustomAttentionLayers(AttentionLayers):
 
             # layer dropout
 
-            if self.training and layer_dropout > 0. and random() < layer_dropout:
+            if self.training and layer_dropout > 0.0 and random() < layer_dropout:
                 continue
 
-            if layer_type == 'a':
+            if layer_type == "a":
                 if return_hiddens:
                     hiddens.append(x)
 
                 layer_mem = mems.pop(0) if mems else None
                 layer_mem_mask = mem_masks.pop(0) if mem_masks else None
 
-            if layer_type == 'c':
-                if self.training and self.cross_attn_tokens_dropout > 0.:
-                    context, context_mask = dropout_seq(context, context_mask, self.cross_attn_tokens_dropout)
+            if layer_type == "c":
+                if self.training and self.cross_attn_tokens_dropout > 0.0:
+                    context, context_mask = dropout_seq(
+                        context, context_mask, self.cross_attn_tokens_dropout
+                    )
 
             x, inner_residual, residual_kwargs = residual_fn.prepare(x)
 
@@ -243,7 +264,7 @@ class CustomAttentionLayers(AttentionLayers):
             if exists(pre_norm):
                 x = pre_norm(x)
 
-                if layer_type == 'a' and exists(layer_mem):
+                if layer_type == "a" and exists(layer_mem):
                     layer_mem = pre_norm(layer_mem)
 
             block = partial(block, **block_forward_kwargs)
@@ -262,22 +283,47 @@ class CustomAttentionLayers(AttentionLayers):
 
             # forward depending on layer type
             layer_cache = None
-            if layer_type in ('a', 'c'):
+            if layer_type in ("a", "c"):
                 layer_cache = next(iter_attn_cache, None)
 
-            if layer_type == 'a':
-                out, inter = block(x, mask = mask, context_mask = self_attn_kv_mask, attn_mask = attn_mask, rel_pos = self.rel_pos, pos = pos, rotary_pos_emb = rotary_pos_emb, prev_attn = prev_attn, cache = layer_cache, mem = layer_mem, mem_mask = layer_mem_mask, attn_bias = attn_bias, value_residual = maybe_self_attn_value_residual, return_intermediates = True)
-            elif layer_type == 'c':
-                out, inter = block(x, context = context, mask = mask, context_mask = context_mask, prev_attn = prev_cross_attn, cache = layer_cache, value_residual = maybe_cross_attn_value_residual, **cross_attn_rotary_pos_emb, return_intermediates = True)
-            elif layer_type == 'f':
-                out = block(x, deep_embed = next(deep_embeds_iter, None))
+            if layer_type == "a":
+                out, inter = block(
+                    x,
+                    mask=mask,
+                    context_mask=self_attn_kv_mask,
+                    attn_mask=attn_mask,
+                    rel_pos=self.rel_pos,
+                    pos=pos,
+                    rotary_pos_emb=rotary_pos_emb,
+                    prev_attn=prev_attn,
+                    cache=layer_cache,
+                    mem=layer_mem,
+                    mem_mask=layer_mem_mask,
+                    attn_bias=attn_bias,
+                    value_residual=maybe_self_attn_value_residual,
+                    return_intermediates=True,
+                )
+            elif layer_type == "c":
+                out, inter = block(
+                    x,
+                    context=context,
+                    mask=mask,
+                    context_mask=context_mask,
+                    prev_attn=prev_cross_attn,
+                    cache=layer_cache,
+                    value_residual=maybe_cross_attn_value_residual,
+                    **cross_attn_rotary_pos_emb,
+                    return_intermediates=True,
+                )
+            elif layer_type == "f":
+                out = block(x, deep_embed=next(deep_embeds_iter, None))
 
             # store first self or cross attention intermediate for value residual
 
-            if not exists(first_self_attn_inter) and layer_type == 'a':
+            if not exists(first_self_attn_inter) and layer_type == "a":
                 first_self_attn_inter = inter
 
-            if not exists(first_cross_attn_inter) and layer_type == 'c':
+            if not exists(first_cross_attn_inter) and layer_type == "c":
                 first_cross_attn_inter = inter
 
             if exists(post_branch_norm):
@@ -285,13 +331,13 @@ class CustomAttentionLayers(AttentionLayers):
 
             x = residual_fn(out, inner_residual, **residual_kwargs)
 
-            if layer_type in ('a', 'c') and return_hiddens:
+            if layer_type in ("a", "c") and return_hiddens:
                 inter.layer_type = layer_type
                 intermediates.append(inter)
 
-            if layer_type == 'a' and self.residual_attn:
+            if layer_type == "a" and self.residual_attn:
                 prev_attn = inter.pre_softmax_attn
-            elif layer_type == 'c' and self.cross_residual_attn:
+            elif layer_type == "c" and self.cross_residual_attn:
                 prev_cross_attn = inter.pre_softmax_attn
 
             if exists(post_main_norm):
@@ -311,7 +357,7 @@ class CustomAttentionLayers(AttentionLayers):
         # take care of multistreams if needed, use sum for now
 
         if is_multistream:
-            x = reduce(x, '(b s) n d -> b n d', 'sum', s = streams)
+            x = reduce(x, "(b s) n d -> b n d", "sum", s=streams)
 
         x = final_norm(x)
 
@@ -319,11 +365,11 @@ class CustomAttentionLayers(AttentionLayers):
             return x
 
         intermediates = LayerIntermediates(
-            hiddens = hiddens,
-            last_hidden = x,
-            attn_intermediates = intermediates,
-            layer_hiddens = layer_hiddens,
-            cache_length = next_cache_length + prev_cache_length
+            hiddens=hiddens,
+            last_hidden=x,
+            attn_intermediates=intermediates,
+            layer_hiddens=layer_hiddens,
+            cache_length=next_cache_length + prev_cache_length,
         )
 
         return x, intermediates
@@ -331,5 +377,5 @@ class CustomAttentionLayers(AttentionLayers):
 
 class CustomDecoder(CustomAttentionLayers):
     def __init__(self, **kwargs):
-        assert 'causal' not in kwargs, 'cannot set causality on decoder'
-        super().__init__(causal = True, **kwargs)
+        assert "causal" not in kwargs, "cannot set causality on decoder"
+        super().__init__(causal=True, **kwargs)

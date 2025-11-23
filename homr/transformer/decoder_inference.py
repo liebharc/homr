@@ -60,13 +60,13 @@ class ScoreDecoder:
         symbols: list[EncodedSymbol] = []
 
         for step in range(self.max_seq_len):
-            x_lift = out_lift[:, -1:] # for all: shape=(1,1)
+            x_lift = out_lift[:, -1:]  # for all: shape=(1,1)
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
             x_states = states[:, -1:]
 
-            if step != 0: # after the first step we don't pass the full context into the decoder
+            if step != 0:  # after the first step we don't pass the full context into the decoder
                 # x_transformers uses [:, :0] to split the context
                 # which caused a Reshape error when loading the onnx model
                 context = context_reduced
@@ -78,7 +78,7 @@ class ScoreDecoder:
                 "articulations": x_articulations,
                 "states": x_states,
                 "context": context,
-                "cache_len": np.array([step])
+                "cache_len": np.array([step]),
             }
             for i in range(32):
                 inputs[kv_input_names[i]] = cache[i]
@@ -90,7 +90,7 @@ class ScoreDecoder:
                     "out_lifts",
                     "out_positions",
                     "out_articulations",
-                    *kv_output_names
+                    *kv_output_names,
                 ],
                 input_feed=inputs,
             )
@@ -149,10 +149,9 @@ class ScoreDecoder:
 
         return symbols
 
-
     def init_cache(self, cache_len=0):
         cache = []
-        input_names = []    
+        input_names = []
         output_names = []
         for i in range(32):
             cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))

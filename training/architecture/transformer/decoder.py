@@ -4,17 +4,17 @@ from typing import Any, List
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+from homr.transformer.configs import Config
+from homr.transformer.vocabulary import EncodedSymbol, has_rhythm_symbol_a_position
 from training.architecture.transformer.custom_x_transformer import (
     AbsolutePositionalEmbedding,
     AttentionLayers,
     CustomDecoder,
-    TokenEmbedding,
     Intermediates,
-    LayerIntermediates
+    LayerIntermediates,
+    TokenEmbedding,
 )
-
-from homr.transformer.configs import Config
-from homr.transformer.vocabulary import EncodedSymbol, has_rhythm_symbol_a_position
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -84,7 +84,7 @@ class ScoreTransformerWrapper(nn.Module):
         context: torch.Tensor,
         cache_len: torch.Tensor,
         mask: torch.Tensor | None = None,
-        **kwargs: torch.Tensor
+        **kwargs: torch.Tensor,
     ) -> Any:
         cache = kwargs.pop("cache")
 
@@ -102,11 +102,13 @@ class ScoreTransformerWrapper(nn.Module):
         # reconstruct x_transformers LayerIntermediates from the input_cache
         inters = []
         for i in range(0, 32, 2):
-            inters.append(Intermediates(cached_kv=(cache[i], cache[i+1])))
+            inters.append(Intermediates(cached_kv=(cache[i], cache[i + 1])))
 
         cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
 
-        x, cache = self.attn_layers(x, cache=cache_input, mask=mask, return_hiddens=True, context=context)
+        x, cache = self.attn_layers(
+            x, cache=cache_input, mask=mask, return_hiddens=True, context=context
+        )
 
         # get the kv cache tensors from the LayerIntermediates class
         # the cache is built up like this: LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
@@ -115,7 +117,7 @@ class ScoreTransformerWrapper(nn.Module):
         # 1281 is the same as the encoder output
         cache_out = []
         attn_inters = cache.attn_intermediates
-        for i in range(16): # 16x2
+        for i in range(16):  # 16x2
             k, v = attn_inters[i].cached_kv
             cache_out.append(k)
             cache_out.append(v)
@@ -194,7 +196,7 @@ class ScoreDecoder(nn.Module):
         context_later = context_first[:, :0]
 
         if mask is None:
-            # the mask is always (True, True) because the x_ are always (1, 1) 
+            # the mask is always (True, True) because the x_ are always (1, 1)
             # and contain only the last token
             # the information about the rest of the tokens gets passed via the kv cache
             mask = torch.ones((1, 1), dtype=torch.bool, device=self.device)
@@ -229,7 +231,7 @@ class ScoreDecoder(nn.Module):
                 torch.Tensor([step], device=self.device).long(),
                 mask,
                 cache=cache,
-                **kwargs
+                **kwargs,
             )
 
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
@@ -416,9 +418,10 @@ class ScoreDecoder(nn.Module):
 
         return loss
 
+
 def init_cache(cache_len=0):
     cache = []
-    input_names = []    
+    input_names = []
     output_names = []
     dynamic = {}
     for i in range(32):
