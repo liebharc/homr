@@ -81,54 +81,83 @@ class ScoreTransformerWrapper(nn.Module):
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         states: torch.Tensor,
-        context: torch.Tensor,
-        cache_len: torch.Tensor,
+        context: torch.Tensor | None = None,
+        cache_len: torch.Tensor | None = None,
         mask: torch.Tensor | None = None,
         **kwargs: torch.Tensor,
     ) -> Any:
-        cache = kwargs.pop("cache")
+        cache = kwargs.pop("cache", None)
+        if cache is None:
+            x = (
+                self.rhythm_emb(rhythms)
+                + self.pitch_emb(pitchs)
+                + self.lift_emb(lifts)
+                + self.articulation_emb(articulations)
+                + self.pos_emb(rhythms)
+                + self.states_emb(states)
+            )
 
-        x = (
-            self.rhythm_emb(rhythms)
-            + self.pitch_emb(pitchs)
-            + self.lift_emb(lifts)
-            + self.articulation_emb(articulations)
-            + self.pos_emb(rhythms, offset=cache_len)
-            + self.states_emb(states)
-        )
+            x = self.post_emb_norm(x)
 
-        x = self.post_emb_norm(x)
+            x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
 
-        # reconstruct x_transformers LayerIntermediates from the input_cache
-        inters = []
-        for i in range(0, 32, 2):
-            inters.append(Intermediates(cached_kv=(cache[i], cache[i + 1])))
+            out_lifts = self.to_logits_lift(x)
+            out_pitchs = self.to_logits_pitch(x)
+            out_rhythms = self.to_logits_rhythm(x)
+            out_articulations = self.to_logits_articulations(x)
+            out_positions = self.to_logits_position(x)
+            return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x
 
-        cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
+        else:
+            x = (
+                self.rhythm_emb(rhythms)
+                + self.pitch_emb(pitchs)
+                + self.lift_emb(lifts)
+                + self.articulation_emb(articulations)
+                + self.pos_emb(rhythms, offset=cache_len)
+                + self.states_emb(states)
+            )
 
-        x, cache = self.attn_layers(
-            x, cache=cache_input, mask=mask, return_hiddens=True, context=context
-        )
+            x = self.post_emb_norm(x)
 
-        # get the kv cache tensors from the LayerIntermediates class
-        # the cache is built up like this:
-        # LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
-        # cache is alternating between the shapes (batch, 8, seq_len, 64) and (batch, 8, 1281, 64)
-        # 8 probably corresponds to the number of decoder_heads
-        # 1281 is the same as the encoder output
-        cache_out = []
-        attn_inters = cache.attn_intermediates
-        for i in range(16):  # 16x2
-            k, v = attn_inters[i].cached_kv
-            cache_out.append(k)
-            cache_out.append(v)
+            # reconstruct x_transformers LayerIntermediates from the input_cache
+            inters = []
+            for i in range(0, 32, 2):
+                inters.append(Intermediates(cached_kv=(cache[i], cache[i + 1])))
 
-        out_lifts = self.to_logits_lift(x)
-        out_pitchs = self.to_logits_pitch(x)
-        out_rhythms = self.to_logits_rhythm(x)
-        out_articulations = self.to_logits_articulations(x)
-        out_positions = self.to_logits_position(x)
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x, cache_out
+            cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
+
+            x, cache = self.attn_layers(
+                x, cache=cache_input, mask=mask, return_hiddens=True, context=context
+            )
+
+            # get the kv cache tensors from the LayerIntermediates class
+            # the cache is built up like this:
+            # LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
+            # cache is alternating between shapes (batch, 8, seq_len, 64) and (batch, 8, 1281, 64)
+            # 8 probably corresponds to the number of decoder_heads
+            # 1281 is the same as the encoder output
+            cache_out = []
+            attn_inters = cache.attn_intermediates
+            for i in range(16):  # 16x2
+                k, v = attn_inters[i].cached_kv
+                cache_out.append(k)
+                cache_out.append(v)
+
+            out_lifts = self.to_logits_lift(x)
+            out_pitchs = self.to_logits_pitch(x)
+            out_rhythms = self.to_logits_rhythm(x)
+            out_articulations = self.to_logits_articulations(x)
+            out_positions = self.to_logits_position(x)
+            return (
+                out_rhythms,
+                out_pitchs,
+                out_lifts,
+                out_positions,
+                out_articulations,
+                x,
+                cache_out,
+            )
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
