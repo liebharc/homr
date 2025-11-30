@@ -113,7 +113,7 @@ def index_folder(folder: str, index_file: str) -> None:
         staff_image = cv2.imread(img_file)
         if staff_image is None:
             raise ValueError("Failed to load " + img_file)
-        prepared = add_image_into_tr_omr_canvas(staff_image, False, 0, 0)
+        prepared = add_image_into_tr_omr_canvas(staff_image)
         processed_path = img_file.replace(".jpg", "-pre.jpg")
         cv2.imwrite(processed_path, prepared)
         result.append(str.join(",", [processed_path, token_file]))

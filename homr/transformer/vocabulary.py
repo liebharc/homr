@@ -98,22 +98,6 @@ def build_position() -> dict[str, int]:
     return build_dict(positions)
 
 
-def build_state() -> dict[str, int]:
-    """
-    States keeps track of the current clef (for upper and lower staff)
-    and the current key signature.
-    """
-    keys = [f"keySignature_{c}" for c in range(-7, 8)]
-    clefs = []
-    clefs.extend([f"clef_F{c}" for c in range(3, 6)])
-    clefs.extend([f"clef_C{c}" for c in range(1, 6)])
-    clefs.extend([f"clef_G{c}" for c in range(1, 3)])
-    states = [nonote]
-    for key, upper_clef, lower_clef in itertools.product(keys, clefs, clefs):
-        states.append(f"{key}+{upper_clef}+{lower_clef}")
-    return build_dict(states)
-
-
 def build_articulation() -> dict[str, int]:
     articulation = [nonote, empty]
 
@@ -315,7 +299,6 @@ class Vocabulary:
         self.articulation = build_articulation()
         self.pitch = build_pitch()
         self.position = build_position()
-        self.state = build_state()
 
 
 class SymbolDuration:
@@ -697,7 +680,6 @@ if __name__ == "__main__":
     eprint("Articulation=", json.dumps(vocab.articulation, indent=2))
     eprint("Pitch=", json.dumps(vocab.pitch, indent=2))
     eprint("Positions=", json.dumps(vocab.position, indent=2))
-    eprint("States=", json.dumps(vocab.state, indent=2))
 
     valid_combinations = []
 

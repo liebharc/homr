@@ -152,11 +152,11 @@ def warp_image_randomly(image: PIL.Image.Image) -> PIL.Image.Image:
 
 def warp_image_array_randomly(image: NDArray) -> NDArray:
     center = (image.shape[1] // 2, image.shape[0] // 2)
-    num_points = 3
+    num_points = 5
     upper = [(i * image.shape[1] // num_points, 0) for i in range(num_points)]
     source = [(i * image.shape[1] // num_points, center[1]) for i in range(num_points)]
     lower = [(i * image.shape[1] // num_points, image.shape[0]) for i in range(num_points)]
-    max_random_offset = 10
+    max_random_offset = 20
     destination = [
         (
             i * image.shape[1] // num_points,

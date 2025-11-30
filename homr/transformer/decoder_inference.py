@@ -28,7 +28,6 @@ class ScoreDecoder:
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
-        self.state_vocab = config.state_vocab
 
     def generate(
         self,
@@ -49,10 +48,6 @@ class ScoreDecoder:
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
-        key = "keySignature_0"
-        clef_upper = "clef_G2"
-        clef_lower = "clef_F4"
-        states = np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])
 
         symbols: list[EncodedSymbol] = []
 
@@ -68,7 +63,6 @@ class ScoreDecoder:
                 "pitchs": x_pitch,
                 "lifts": x_lift,
                 "articulations": x_articulations,
-                "states": states,
                 "context": context,
             }
 
@@ -118,17 +112,6 @@ class ScoreDecoder:
                 position=position_token[0],
             )
             symbols.append(symbol)
-            if symbol.rhythm.startswith("keySignature"):
-                key = symbol.rhythm
-            elif symbol.rhythm.startswith("clef"):
-                if symbol.position == "upper":
-                    clef_upper = symbol.rhythm
-                else:
-                    clef_lower = symbol.rhythm
-            states = np.concatenate(
-                (states, np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])),
-                axis=-1,
-            )
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)

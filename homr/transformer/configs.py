@@ -84,7 +84,6 @@ class Config:
         self.num_lift_tokens = len(self.vocab.lift)
         self.num_articulation_tokens = len(self.vocab.articulation)
         self.num_position_tokens = len(self.vocab.position)
-        self.num_state_tokens = len(self.vocab.state)
         self.encoder_structure = "hybrid"
         self.encoder_depth = 8
         self.backbone_layers = [3, 4, 6, 3]
@@ -100,7 +99,6 @@ class Config:
         self.rhythm_vocab = self.vocab.rhythm
         self.articulation_vocab = self.vocab.articulation
         self.position_vocab = self.vocab.position
-        self.state_vocab = self.vocab.state
 
     def to_dict(self) -> dict[str, Any]:
         return {

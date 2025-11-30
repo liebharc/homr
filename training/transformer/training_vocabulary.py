@@ -141,7 +141,6 @@ class DecoderBranches:
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         positions: torch.Tensor,
-        states: torch.Tensor,
         mask: torch.Tensor,
     ) -> None:
         self.rhythms = rhythms
@@ -149,7 +148,6 @@ class DecoderBranches:
         self.lifts = lifts
         self.articulations = articulations
         self.positions = positions
-        self.states = states
         self.mask = mask
 
 
@@ -163,32 +161,19 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     articulations = [nonote_token]
     position = [nonote_token]
     mask = [True]
-    key = "keySignature_0"
-    clef_upper = "clef_G2"
-    clef_lower = "clef_F4"
-    states = [vocab.state[f"{key}+{clef_upper}+{clef_lower}"]]
     for symbol in symbols:
         rhythms.append(vocab.rhythm[symbol.rhythm])
         pitchs.append(vocab.pitch[symbol.pitch])
         lifts.append(vocab.lift[symbol.lift])
         articulations.append(vocab.articulation[symbol.articulation])
         position.append(vocab.position[symbol.position])
-        states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
         mask.append(True)
-        if symbol.rhythm.startswith("keySignature"):
-            key = symbol.rhythm
-        elif symbol.rhythm.startswith("clef"):
-            if symbol.position == "upper":
-                clef_upper = symbol.rhythm
-            else:
-                clef_lower = symbol.rhythm
 
     rhythms.append(end_of_seq)
     pitchs.append(nonote_token)
     lifts.append(nonote_token)
     articulations.append(nonote_token)
     position.append(nonote_token)
-    states.append(vocab.state[f"{key}+{clef_upper}+{clef_lower}"])
     mask.append(True)
 
     while len(rhythms) < default_config.max_seq_len:
@@ -197,7 +182,6 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         lifts.append(nonote_token)
         articulations.append(nonote_token)
         position.append(nonote_token)
-        states.append(nonote_token)
         mask.append(False)
 
     return DecoderBranches(
@@ -206,7 +190,6 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         articulations=torch.tensor(articulations),
         pitchs=torch.tensor(pitchs),
         positions=torch.tensor(position),
-        states=torch.tensor(states),
         mask=torch.tensor(mask),
     )
 

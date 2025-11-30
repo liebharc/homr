@@ -45,9 +45,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.articulation_emb = TokenEmbedding(
             config.decoder_dim, config.num_articulation_tokens, l2norm_embed=l2norm_embed
         )
-        self.states_emb = TokenEmbedding(
-            config.decoder_dim, config.num_state_tokens, l2norm_embed=l2norm_embed
-        )
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
@@ -78,7 +75,6 @@ class ScoreTransformerWrapper(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
-        states: torch.Tensor,
         mask: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> Any:
@@ -88,7 +84,6 @@ class ScoreTransformerWrapper(nn.Module):
             + self.lift_emb(lifts)
             + self.articulation_emb(articulations)
             + self.pos_emb(rhythms)
-            + self.states_emb(states)
         )
 
         x = self.post_emb_norm(x)
@@ -131,7 +126,6 @@ class ScoreDecoder(nn.Module):
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
-        self.state_vocab = config.state_vocab
 
         note_mask = torch.zeros(config.num_rhythm_tokens)
         for index, rhythm_symbol in enumerate(config.rhythm_vocab.keys()):
@@ -170,12 +164,6 @@ class ScoreDecoder(nn.Module):
             mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
 
         symbols: list[EncodedSymbol] = []
-        key = "keySignature_0"
-        clef_upper = "clef_G2"
-        clef_lower = "clef_F4"
-        states = torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
-            start_tokens.device
-        )
 
         for _ in range(self.max_seq_len):
             mask = mask[:, -self.max_seq_len :]
@@ -188,7 +176,6 @@ class ScoreDecoder(nn.Module):
                 rhythms=x_rhythm,
                 pitchs=x_pitch,
                 lifts=x_lift,
-                states=states,
                 mask=mask,
                 articulations=x_articulations,
                 **kwargs,
@@ -229,22 +216,6 @@ class ScoreDecoder(nn.Module):
                 position=position_token[0],
             )
             symbols.append(symbol)
-            if symbol.rhythm.startswith("keySignature"):
-                key = symbol.rhythm
-            elif symbol.rhythm.startswith("clef"):
-                if symbol.position == "upper":
-                    clef_upper = symbol.rhythm
-                else:
-                    clef_lower = symbol.rhythm
-            states = torch.concat(
-                (
-                    states,
-                    torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
-                        states.device
-                    ),
-                ),
-                dim=-1,
-            )
 
             out_lift = torch.cat((out_lift, lift_sample), dim=-1)
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
@@ -261,7 +232,6 @@ class ScoreDecoder(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
-        states: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
         **kwargs: Any,
@@ -275,7 +245,6 @@ class ScoreDecoder(nn.Module):
         rhythmsi = rhythms[:, :-1]
         rhythmso = rhythms[:, 1:]
         positionso = positions[:, 1:]
-        statesi = states[:, :-1]
 
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
@@ -285,7 +254,6 @@ class ScoreDecoder(nn.Module):
             pitchs=pitchsi,
             lifts=liftsi,
             articulations=articulationsi,
-            states=statesi,
             mask=mask,
             **kwargs,
         )  # this calls ScoreTransformerWrapper.forward

@@ -8,7 +8,7 @@ import cv2
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from training.datasets.convert_grandstaff import distort_image
+from training.datasets.convert_grandstaff import add_margin, distort_image
 from training.datasets.primus_semantic_parser import convert_primus_semantic_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
@@ -43,14 +43,18 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
         return []
     preprocessed_path = _replace_suffix(path, "-pre.jpg")
     if not only_recreate_token_files:
-        image = cv2.imread(str(path))
+        image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if image is None:
             eprint("Warning: Could not read image", path)
             return []
-        margin_top = random.randint(5, 10)
-        margin_bottom = random.randint(-25, 0)
-        preprocessed = add_image_into_tr_omr_canvas(image, False, margin_top, margin_bottom)
+        margin_left = random.randint(0, 10)
+        margin_right = random.randint(0, 10)
+        margin_top = random.randint(10, 30)
+        margin_bottom = random.randint(10, 30)
+        preprocessed = add_margin(image, margin_top, margin_bottom, margin_left, margin_right)
+        preprocessed = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2BGR)
         preprocessed = distort_image(preprocessed)
+        preprocessed = add_image_into_tr_omr_canvas(preprocessed)
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
     semantic_file = _find_semantic_file(path)
     if semantic_file is None:

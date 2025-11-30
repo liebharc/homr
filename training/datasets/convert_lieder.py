@@ -207,10 +207,8 @@ def _split_file_into_staffs(
             total_staff_area = staffs.pop(0)
             first_staff_height = total_staff_area.height
             measures = splitter[current_voice]
-            is_grandstaff = False
             for _ in range(measures.number_of_staffs - 1):
                 total_staff_area = total_staff_area.merge_staff(staffs.pop(0))
-                is_grandstaff = True
             staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
             if not just_token_files:
                 y_offset = int(random.uniform(1.5, 2.5) * first_staff_height)
@@ -225,12 +223,8 @@ def _split_file_into_staffs(
                 height = int(height * scale)
 
                 staff_image = image[y : y + height, x : x + width]
-                margin_top = random.randint(5, 10)
-                margin_bottom = random.randint(5, 10) if is_grandstaff else random.randint(-30, 0)
-                preprocessed = add_image_into_tr_omr_canvas(
-                    staff_image, is_grandstaff, margin_top, margin_bottom
-                )
-                preprocessed = distort_image(preprocessed)
+                preprocessed = distort_image(staff_image)
+                preprocessed = add_image_into_tr_omr_canvas(preprocessed)
                 cv2.imwrite(staff_image_file_name, preprocessed)
             elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
                 raise ValueError(f"File {staff_image_file_name} not found")

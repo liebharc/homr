@@ -15,7 +15,7 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 
 git_root = os.path.join(script_location, "..", "..")
 
-label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations", "states"]
+label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations"]
 
 
 class DataLoader:
@@ -58,7 +58,6 @@ class DataLoader:
             "lifts": tokens.lifts,
             "positions": tokens.positions,
             "articulations": tokens.articulations,
-            "states": tokens.states,
             "mask": tokens.mask,
         }
         return result

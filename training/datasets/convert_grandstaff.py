@@ -1,6 +1,5 @@
 import multiprocessing
 import os
-import random
 from pathlib import Path
 
 import cv2
@@ -58,9 +57,7 @@ def _distort_staff_image(path: str, basename: str) -> str:
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    margin_top = random.randint(5, 20)
-    margin_bottom = random.randint(5, 20)
-    result = add_image_into_tr_omr_canvas(image, True, margin_top, margin_bottom)
+    result = add_image_into_tr_omr_canvas(image)
     return result
 
 
@@ -88,14 +85,33 @@ def _check_staff_image(path: str, basename: str) -> str:
     return basename + "-pre.jpg"
 
 
+def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> NDArray:
+    # image is 2D grayscale
+    flat = image.reshape(-1)
+    bg = np.bincount(flat).argmax()
+
+    h, w = image.shape
+
+    top_pad = np.full((top, w), bg, dtype=image.dtype)
+    bottom_pad = np.full((bottom, w), bg, dtype=image.dtype)
+
+    img_tb = np.vstack([top_pad, image, bottom_pad])
+
+    new_h = img_tb.shape[0]
+    left_pad = np.full((new_h, left), bg, dtype=image.dtype)
+    right_pad = np.full((new_h, right), bg, dtype=image.dtype)
+
+    return np.hstack([left_pad, img_tb, right_pad])
+
+
 def distort_image(image: NDArray) -> NDArray:
-    image = _add_random_gray_tone(image)
+    image, _background_value = _add_random_gray_tone(image)
     pil_image = PIL.Image.fromarray(image)
     pipeline = Compose(
         [
             tr.RandomRotation(degrees=2),
             tr.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.5),
-            tr.RandomAdjustSharpness(2),
+            tr.RandomAdjustSharpness(0),
             tr.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 0.5)),
         ]
     )
@@ -143,7 +159,7 @@ def distort_image(image: NDArray) -> NDArray:
     return augmented_array
 
 
-def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
+def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
     """
     Adds a gray background. While doing so it ensures
     that all symbols are still visible on the image.
@@ -152,17 +168,17 @@ def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
 
     lightest_pixel_value = _find_lighest_non_white_pixel(gray)
 
-    minimum_contrast = 30
+    minimum_contrast = 70
     pure_white = 255
 
     if lightest_pixel_value >= pure_white - minimum_contrast:
-        return image_arr
+        return image_arr, pure_white
 
-    strongest_possible_gray = max(lightest_pixel_value + minimum_contrast, 175)
+    strongest_possible_gray = lightest_pixel_value + minimum_contrast
 
     random_gray_value = np.random.randint(strongest_possible_gray, pure_white)
     if random_gray_value >= pure_white:
-        return image_arr
+        return image_arr, random_gray_value
 
     mask = np.all(image_arr > random_gray_value, axis=-1)
 
@@ -171,7 +187,7 @@ def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
 
     image_arr[mask] = np.stack([gray[mask]] * 3, axis=-1)
 
-    return image_arr
+    return image_arr, random_gray_value
 
 
 def _find_lighest_non_white_pixel(gray: NDArray) -> int:

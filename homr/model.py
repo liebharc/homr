@@ -305,6 +305,8 @@ class Staff(DebugDrawable):
 
         grid = [grid_a[x].merge(grid_b[x]) for x in sorted(x_positions)]
         result = Staff(grid)
+        result.symbols.extend(self.symbols)
+        result.symbols.extend(other.symbols)
         result.is_grandstaff = True
         return result
 
