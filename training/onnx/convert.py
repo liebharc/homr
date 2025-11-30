@@ -44,9 +44,7 @@ def convert_encoder() -> str:
     """
     config = Config()
 
-    dir_path = os.path.dirname(config.filepaths.encoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
-    path_out = os.path.join(dir_path, f"encoder_{filename}.onnx")
+    path_out = config.filepaths.encoder_path
 
     if os.path.exists(path_out):
         eprint(path_out, "is already present")
@@ -90,9 +88,7 @@ def convert_decoder() -> str:
     model = get_score_wrapper(config)
     model.eval()
 
-    dir_path = os.path.dirname(config.filepaths.decoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
-    path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
+    path_out = config.filepaths.decoder_path
 
     if os.path.exists(path_out):
         eprint(path_out, "is already present")

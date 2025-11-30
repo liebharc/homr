@@ -13,11 +13,11 @@ class FilePaths:
         model_name = "pytorch_model_236-922ad08f8895f6d9c0ae61954cd78a021ff950a7"
         self.encoder_path = os.path.join(
             workspace,
-            f"encoder_{model_name}.onnx",
+            f"encoder_{model_name}_kv.onnx",
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace,
-            f"decoder_{model_name}.onnx",
+            f"decoder_{model_name}_kv.onnx",
         )  # noqa: E501
         self.checkpoint = os.path.join(
             root_dir,
