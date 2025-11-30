@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here.
 
+## [WIP]
+
+### Added
+
+- **Faster inference**.
+  Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
+- **Support for more symbols**
+
 ## [0.5.0]
 
 ### Added
