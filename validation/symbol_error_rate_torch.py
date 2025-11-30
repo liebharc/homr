@@ -136,7 +136,7 @@ def main() -> None:
     args = parser.parse_args()
 
     script_location = os.path.dirname(os.path.realpath(__file__))
-    data_set_location = os.path.join(script_location, "..", "datasets")
+    data_set_location = os.path.abspath(os.path.join(script_location, "..", "datasets"))
     validation_data_set_location = os.path.join(data_set_location, "validation")
     download_path = os.path.join(data_set_location, "validation.zip")
     download_url = (
@@ -146,7 +146,7 @@ def main() -> None:
         try:
             eprint("Downloading validation data set")
             download_utils.download_file(download_url, download_path)
-            download_utils.unzip_file(download_path, data_set_location)
+            download_utils.unzip_file(download_path, validation_data_set_location)
         finally:
             if os.path.exists(download_path):
                 os.remove(download_path)
