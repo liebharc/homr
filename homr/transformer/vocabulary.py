@@ -404,12 +404,14 @@ class EncodedSymbol:
         lift: str = nonote,
         articulation: str = nonote,
         position: str = nonote,
+        coordinates: tuple[float, float] | None = None,
     ) -> None:
         self.rhythm = rhythm
         self.pitch = pitch
         self.lift = lift
         self.articulation = articulation
         self.position = position
+        self.coordinates = coordinates
         self._duration: SymbolDuration | None = None
 
     def is_control_symbol(self) -> bool:

@@ -30,6 +30,11 @@ class ScoreDecoder:
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
         self.state_vocab = config.state_vocab
 
+        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
+        self.attention_width = config.max_width // config.patch_size
+        self.attention_height = config.max_height // config.patch_size
+        self.patch_size = config.patch_size
+
     def generate(
         self,
         start_tokens: NDArray,
@@ -83,13 +88,14 @@ class ScoreDecoder:
             for i in range(32):
                 inputs[kv_input_names[i]] = cache[i]
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, *cache = self.net.run(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, attention, *cache = self.net.run(
                 output_names=[
                     "out_rhythms",
                     "out_pitchs",
                     "out_lifts",
                     "out_positions",
                     "out_articulations",
+                    "attention",
                     *kv_output_names,
                 ],
                 input_feed=inputs,
@@ -128,6 +134,7 @@ class ScoreDecoder:
                 lift=lift_token[0],
                 articulation=articulation_token[0],
                 position=position_token[0],
+                coordinates=self.center_of_attention_from_map(attention),
             )
             symbols.append(symbol)
             if symbol.rhythm.startswith("keySignature"):
@@ -158,6 +165,43 @@ class ScoreDecoder:
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
+
+    def center_of_attention_from_map(
+        self,
+        image_attention: np.ndarray,
+        gamma: float = 8.0,
+    ) -> tuple[float, float]:
+
+        attn = image_attention.astype(np.float32)
+
+        if attn.ndim == 2:
+            attn = attn[0]
+
+        H = self.attention_height
+        W = self.attention_width
+
+        # Keep ONLY spatial patches (handles 1280→1282 drift)
+        attn = attn[-(H * W) :]
+
+        # Power sharpening (dominant-peak enforcement)
+        attn = np.power(attn, gamma)
+
+        s = attn.sum()
+        if s > 0:
+            attn /= s
+
+        attn = attn.reshape(H, W)
+
+        ys = np.arange(H, dtype=np.float32).reshape(H, 1)
+        xs = np.arange(W, dtype=np.float32).reshape(1, W)
+
+        cx_patch = float((attn * xs).sum())
+        cy_patch = float((attn * ys).sum())
+
+        cx_pixel = cx_patch * self.patch_size + (self.patch_size * 0.5)
+        cy_pixel = cy_patch * self.patch_size + (self.patch_size * 0.5)
+
+        return cx_pixel, cy_pixel
 
 
 def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:

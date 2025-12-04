@@ -258,6 +258,25 @@ def parse_staff_image(
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
+    if debug.debug:
+        result_image = staff_image.copy()
+        for symbol in result:
+            center = symbol.coordinates
+            if center is None or symbol.rhythm.startswith("chord"):
+                continue
+            center_int = (int(center[0]), int(center[1]))
+            cv2.circle(result_image, center_int, 5, color=(0, 0, 255), thickness=2)
+            cv2.putText(
+                result_image,
+                symbol.rhythm,
+                center_int,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.3,
+                (0, 0, 255),
+                1,
+            )
+
+        debug.write_image_with_fixed_suffix(f"_staff-{index}_output.jpg", result_image)
     return result
 
 
