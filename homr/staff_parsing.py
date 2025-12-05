@@ -260,7 +260,7 @@ def parse_staff_image(
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
     if debug.debug:
         result_image = staff_image.copy()
-        for symbol in result:
+        for i, symbol in enumerate(result):
             center = symbol.coordinates
             if center is None or symbol.rhythm.startswith("chord"):
                 continue
@@ -268,8 +268,8 @@ def parse_staff_image(
             cv2.circle(result_image, center_int, 5, color=(0, 0, 255), thickness=2)
             cv2.putText(
                 result_image,
-                symbol.rhythm,
-                center_int,
+                str(i),
+                (center_int[0], center_int[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.3,
                 (0, 0, 255),

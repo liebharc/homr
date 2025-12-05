@@ -107,7 +107,7 @@ class ScoreTransformerWrapper(nn.Module):
 
             if return_center_of_attention:
                 x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
-                attention = self.get_attention_map(hiddens.attn_intermediates)
+                attention = self.get_center_of_attention(hiddens.attn_intermediates)
             else:
                 x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
                 attention = None
@@ -159,7 +159,7 @@ class ScoreTransformerWrapper(nn.Module):
             cache_out = []
             attn_inters = cache.attn_intermediates
             if return_center_of_attention:
-                attention = self.get_attention_map(attn_inters)
+                attention = self.get_center_of_attention(attn_inters)
             else:
                 attention = None
             for i in range(16):  # 16x2
@@ -183,10 +183,38 @@ class ScoreTransformerWrapper(nn.Module):
                 cache_out,
             )
 
-    def get_attention_map(self, intermediates: list[Any]) -> torch.Tensor:
-        a = intermediates[-1].post_softmax_attn[:, :, -1, :]  # (B, H, K)
-        attention_map = a.mean(dim=1)  # (B, K)
-        return attention_map
+    def get_center_of_attention(self, intermediates: list[Any]) -> torch.Tensor:
+        filtered_intermediate = [
+            intermediates[1].post_softmax_attn[:, :, -1, :],
+            intermediates[3].post_softmax_attn[:, :, -1, :],
+            intermediates[5].post_softmax_attn[:, :, -1, :],
+            intermediates[7].post_softmax_attn[:, :, -1, :],
+            intermediates[9].post_softmax_attn[:, :, -1, :],
+            intermediates[11].post_softmax_attn[:, :, -1, :],
+            intermediates[13].post_softmax_attn[:, :, -1, :],
+            intermediates[15].post_softmax_attn[:, :, -1, :]
+        ]
+
+        attention_all_layers = torch.mean(torch.stack(filtered_intermediate), dim=0)
+        attention_all_layers = attention_all_layers.squeeze(0).squeeze(1)
+        attention_all_layers = attention_all_layers.mean(dim=0)
+
+        image_attention = attention_all_layers[1:]
+        image_attention_2d = image_attention.reshape(
+            self.attention_height, self.attention_width
+        )
+
+        flat_index = torch.argmax(image_attention_2d)
+        row = flat_index // self.attention_width
+        col = flat_index % self.attention_width
+
+        center_of_attention = torch.stack([
+            col * self.patch_size,
+            row * self.patch_size
+        ])
+
+        return center_of_attention
+
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
