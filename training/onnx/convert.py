@@ -29,13 +29,45 @@ class DecoderWrapper(torch.nn.Module):
         context: torch.Tensor,
         cache_len: torch.Tensor,
         *cache: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x, *cache = (
-            self.model(
-                rhythms, pitchs, lifts, articulations, states, context, cache_len, None, cache=cache
-            )
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        tuple[torch.Tensor, ...],
+    ]:
+        (
+            out_rhythms,
+            out_pitchs,
+            out_lifts,
+            out_positions,
+            out_articulations,
+            _x,
+            attention,
+            *cache,
+        ) = self.model(
+            rhythms=rhythms,
+            pitchs=pitchs,
+            lifts=lifts,
+            articulations=articulations,
+            states=states,
+            context=context,
+            cache_len=cache_len,
+            mask=None,
+            cache=cache,
+            return_center_of_attention=True,
         )
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, *cache
+        return (
+            out_rhythms,
+            out_pitchs,
+            out_lifts,
+            out_positions,
+            out_articulations,
+            attention,
+            *cache,
+        )
 
 
 def convert_encoder() -> str:
@@ -85,7 +117,7 @@ def convert_decoder() -> str:
     Converts the decoder to onnx.
     """
     config = Config()
-    model = get_score_wrapper(config)
+    model = get_score_wrapper(config, attn_flash=False)
     model.eval()
 
     path_out = config.filepaths.decoder_path
@@ -105,7 +137,9 @@ def convert_decoder() -> str:
 
     # Create input data
     # Mask is not used since it caused problems with the tensor size
-    kv_cache, kv_input_names, kv_output_names, dynamic_axes, cache_length = init_cache()
+    kv_cache, kv_input_names, kv_output_names, dynamic_axes, cache_length = init_cache(
+        0, torch.device("cpu")
+    )
     rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 1)).long()
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 1)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 1)).long()
@@ -137,6 +171,7 @@ def convert_decoder() -> str:
             "out_lifts",
             "out_positions",
             "out_articulations",
+            "attention",
             *kv_output_names,
         ],
         dynamic_axes=dynamic_axes,

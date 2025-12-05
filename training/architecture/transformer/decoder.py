@@ -53,6 +53,9 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
+        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
+        self.attention_width = config.max_width // config.patch_size
+        self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
 
         self.attn_layers = attn_layers
@@ -84,6 +87,7 @@ class ScoreTransformerWrapper(nn.Module):
         context: torch.Tensor | None = None,
         cache_len: torch.Tensor | None = None,
         mask: torch.Tensor | None = None,
+        return_center_of_attention: bool = False,
         **kwargs: torch.Tensor,
     ) -> Any:
         cache = kwargs.pop("cache", None)
@@ -101,12 +105,27 @@ class ScoreTransformerWrapper(nn.Module):
 
             x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
 
+            if return_center_of_attention:
+                x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
+                attention = self.get_center_of_attention(hiddens.attn_intermediates)
+            else:
+                x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+                attention = None
+
             out_lifts = self.to_logits_lift(x)
             out_pitchs = self.to_logits_pitch(x)
             out_rhythms = self.to_logits_rhythm(x)
             out_articulations = self.to_logits_articulations(x)
             out_positions = self.to_logits_position(x)
-            return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x
+            return (
+                out_rhythms,
+                out_pitchs,
+                out_lifts,
+                out_positions,
+                out_articulations,
+                x,
+                attention,
+            )
 
         else:
             x = (
@@ -139,6 +158,10 @@ class ScoreTransformerWrapper(nn.Module):
             # 1281 is the same as the encoder output
             cache_out = []
             attn_inters = cache.attn_intermediates
+            if return_center_of_attention:
+                attention = self.get_center_of_attention(attn_inters)
+            else:
+                attention = None
             for i in range(16):  # 16x2
                 k, v = attn_inters[i].cached_kv
                 cache_out.append(k)
@@ -156,8 +179,54 @@ class ScoreTransformerWrapper(nn.Module):
                 out_positions,
                 out_articulations,
                 x,
+                attention,
                 cache_out,
             )
+
+    def get_center_of_attention(self, intermediates: list[Any]) -> torch.Tensor:
+        """
+        Calculates the center of attention. It uses the attention weights,
+        performs a power scaling to give more weight to the peaks and then
+        calculates the center of mass to get the focus point of the attention.
+        """
+
+        # Only use the last 3 layers as the later layers contain the strongest
+        # alignment between attention and semantic object position.
+        filtered_intermediate = [
+            intermediates[-5].post_softmax_attn[:, :, -1, :],
+            intermediates[-3].post_softmax_attn[:, :, -1, :],
+            intermediates[-1].post_softmax_attn[:, :, -1, :],
+        ]
+
+        attention_all_layers = torch.mean(torch.stack(filtered_intermediate), dim=0)
+        attention_all_layers = attention_all_layers.squeeze(0).squeeze(1)
+        attention_all_layers = attention_all_layers.mean(dim=0)
+        h, w = self.attention_height, self.attention_width
+
+        image_token_count = h * w
+        image_attention = attention_all_layers[1 : image_token_count + 1]
+
+        image_attention_2d = image_attention.reshape(h, w)
+
+        power = 8.0
+        weights = torch.clamp(image_attention_2d, min=1e-8).pow(power)
+
+        y_coords = torch.linspace(0.5, h - 0.5, h, device=weights.device, dtype=weights.dtype)
+        x_coords = torch.linspace(0.5, w - 0.5, w, device=weights.device, dtype=weights.dtype)
+        yy, xx = torch.meshgrid(y_coords, x_coords, indexing="ij")
+
+        total_mass = weights.sum()
+        row = (weights * yy).sum() / total_mass
+        col = (weights * xx).sum() / total_mass
+
+        center_of_attention = torch.stack(
+            [
+                col * self.patch_size,
+                row * self.patch_size,
+            ]
+        )
+
+        return center_of_attention
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
@@ -238,7 +307,7 @@ class ScoreDecoder(nn.Module):
         states = torch.Tensor([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]]).to(
             start_tokens.device
         )
-        cache = init_cache()[0]
+        cache = init_cache(0, self.device)[0]
 
         for step in range(self.max_seq_len):
             x_lift = out_lift[:, -1:]
@@ -251,16 +320,17 @@ class ScoreDecoder(nn.Module):
             else:
                 context = context_later
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, cache = self.net(
-                x_rhythm,
-                x_pitch,
-                x_lift,
-                x_articulations,
-                states[:, -1:],
-                context,
-                torch.Tensor([step], device=self.device).long(),
-                mask,
+            (rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, _, cache) = self.net(
+                rhythms=x_rhythm,
+                pitchs=x_pitch,
+                lifts=x_lift,
+                articulations=x_articulations,
+                states=states[:, -1:],
+                context=context,
+                cache_len=torch.Tensor([step]).to(self.device).long(),
+                mask=mask,
                 cache=cache,
+                return_center_of_attention=False,
                 **kwargs,
             )
 
@@ -450,14 +520,15 @@ class ScoreDecoder(nn.Module):
 
 
 def init_cache(
-    cache_len: int = 0,
+    cache_len: int,
+    device: torch.device,
 ) -> tuple[list[torch.Tensor], list[str], list[str], dict[str, dict[int, str]], int]:
     cache = []
     input_names = []
     output_names = []
     dynamic = {}
     for i in range(32):
-        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32))
+        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32).to(device))
         input_names.append(f"cache_in{i}")
         output_names.append(f"cache_out{i}")
         dynamic[f"cache_in{i}"] = {2: "seq_len"}
@@ -471,14 +542,14 @@ def get_decoder(config: Config) -> ScoreDecoder:
     )
 
 
-def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
+def get_score_wrapper(config: Config, attn_flash: bool = True) -> ScoreTransformerWrapper:
     return ScoreTransformerWrapper(
         config=config,
         attn_layers=CustomDecoder(
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=True,
+            attn_flash=attn_flash,
             **config.decoder_args.to_dict(),
         ),
     )

@@ -83,13 +83,14 @@ class ScoreDecoder:
             for i in range(32):
                 inputs[kv_input_names[i]] = cache[i]
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, *cache = self.net.run(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, attention, *cache = self.net.run(
                 output_names=[
                     "out_rhythms",
                     "out_pitchs",
                     "out_lifts",
                     "out_positions",
                     "out_articulations",
+                    "attention",
                     *kv_output_names,
                 ],
                 input_feed=inputs,
@@ -128,6 +129,7 @@ class ScoreDecoder:
                 lift=lift_token[0],
                 articulation=articulation_token[0],
                 position=position_token[0],
+                coordinates=attention,
             )
             symbols.append(symbol)
             if symbol.rhythm.startswith("keySignature"):
