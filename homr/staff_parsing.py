@@ -268,7 +268,7 @@ def parse_staff_image(
             cv2.circle(result_image, center_int, 5, color=(0, 0, 255), thickness=2)
             cv2.putText(
                 result_image,
-                str(i),
+                str(i) + ": " + symbol.rhythm,
                 (center_int[0], center_int[1] - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.3,

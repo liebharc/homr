@@ -184,6 +184,11 @@ class ScoreTransformerWrapper(nn.Module):
             )
 
     def get_center_of_attention(self, intermediates: list[Any]) -> torch.Tensor:
+        """
+        Calculates the center of attention. It uses the attention weights,
+        performs a power scaling to give more weight to the peaks and then
+        calculates the center of mass to get the focus point of the attention.
+        """
         filtered_intermediate = [
             intermediates[1].post_softmax_attn[:, :, -1, :],
             intermediates[3].post_softmax_attn[:, :, -1, :],
@@ -198,19 +203,33 @@ class ScoreTransformerWrapper(nn.Module):
         attention_all_layers = torch.mean(torch.stack(filtered_intermediate), dim=0)
         attention_all_layers = attention_all_layers.squeeze(0).squeeze(1)
         attention_all_layers = attention_all_layers.mean(dim=0)
+        h, w = self.attention_height, self.attention_width
+            
+        image_token_count = h * w
+        image_attention = attention_all_layers[1:image_token_count+1]
 
-        image_attention = attention_all_layers[1:]
         image_attention_2d = image_attention.reshape(
-            self.attention_height, self.attention_width
+            h, w
         )
 
-        flat_index = torch.argmax(image_attention_2d)
-        row = flat_index // self.attention_width
-        col = flat_index % self.attention_width
+        power = 8.0
+        weights = torch.clamp(image_attention_2d, min=1e-8).pow(power)
+
+        y_coords = torch.linspace(
+            0.5, h - 0.5, h, device=weights.device, dtype=weights.dtype
+        )
+        x_coords = torch.linspace(
+            0.5, w - 0.5, w, device=weights.device, dtype=weights.dtype
+        )
+        yy, xx = torch.meshgrid(y_coords, x_coords, indexing="ij")
+
+        total_mass = weights.sum()
+        row = (weights * yy).sum() / total_mass
+        col = (weights * xx).sum() / total_mass
 
         center_of_attention = torch.stack([
             col * self.patch_size,
-            row * self.patch_size
+            row * self.patch_size,
         ])
 
         return center_of_attention
