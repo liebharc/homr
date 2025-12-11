@@ -7,9 +7,8 @@ import editdistance
 
 from homr.simple_logging import eprint
 from homr.staff_parsing import remove_duplicated_symbols  # type: ignore[attr-defined]
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
 from training.datasets.music_xml_parser import music_xml_file_to_tokens
-from training.transformer.training_vocabulary import sort_token_chords
 
 
 def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
