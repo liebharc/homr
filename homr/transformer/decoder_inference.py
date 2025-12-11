@@ -14,6 +14,7 @@ class ScoreDecoder:
     def __init__(
         self,
         transformer: ort.InferenceSession,
+        fp16: bool,
         config: Config,
         ignore_index: int = -100,
     ):
@@ -29,6 +30,9 @@ class ScoreDecoder:
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
         self.state_vocab = config.state_vocab
+
+        self.fp16 = fp16
+
 
     def generate(
         self,
@@ -54,7 +58,8 @@ class ScoreDecoder:
         clef_lower = "clef_F4"
         states = np.array([[self.state_vocab[f"{key}+{clef_upper}+{clef_lower}"]]])
         cache, kv_input_names, kv_output_names = self.init_cache()
-        context = kwargs["context"]
+        if self.fp16: # the encoder should output fp16 but the encoder could run on cpu
+            context = kwargs["context"].astype(np.float16)
         context_reduced = kwargs["context"][:, :1]
 
         symbols: list[EncodedSymbol] = []
@@ -154,7 +159,10 @@ class ScoreDecoder:
         input_names = []
         output_names = []
         for i in range(32):
-            cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
+            if self.fp16: # the cache needs to be fp16 as well
+                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float16))
+            else:
+                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
@@ -197,10 +205,13 @@ def get_decoder(config: Config, path: str, use_gpu: bool) -> ScoreDecoder:
     if use_gpu:
         try:
             onnx_transformer = ort.InferenceSession(path, providers=["CUDAExecutionProvider"])
+            fp16 = True
         except Exception:
             onnx_transformer = ort.InferenceSession(path)
+            fp16 = False
 
     else:
         onnx_transformer = ort.InferenceSession(path)
+        fp16 = False
 
-    return ScoreDecoder(onnx_transformer, config=config)
+    return ScoreDecoder(onnx_transformer, fp16, config=config)

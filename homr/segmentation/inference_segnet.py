@@ -18,19 +18,25 @@ class Segnet:
         if use_gpu:
             try:
                 self.model = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"])
+                self.fp16 = True
             except Exception as e:
                 eprint(
                     "Error while trying to load model using CUDA. You probably don't have a compatible gpu"  # noqa: E501
                 )
                 eprint(e)
                 self.model = ort.InferenceSession(model_path)
+                self.fp16 = False
         else:
             self.model = ort.InferenceSession(model_path)
+            self.fp16 = False
         self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
 
     def run(self, input_data: NDArray) -> NDArray:
-        out = self.model.run([self.output_name], {self.input_name: input_data})[0]
+        if self.fp16:
+            out = self.model.run([self.output_name], {self.input_name: input_data.astype(np.float16)})[0]
+        else:
+            out = self.model.run([self.output_name], {self.input_name: input_data})[0]
         return out
 
 

@@ -1,4 +1,5 @@
 import onnxruntime as ort
+import numpy as np
 
 from homr.type_definitions import NDArray
 
@@ -8,15 +9,21 @@ class Encoder:
         if use_gpu:
             try:
                 self.encoder = ort.InferenceSession(path, providers=["CUDAExecutionProvider"])
+                self.fp16 = True
             except Exception:
                 self.encoder = ort.InferenceSession(path)
+                self.fp16 = False
 
         else:
             self.encoder = ort.InferenceSession(path)
+            self.fp16 = False
 
         self.input_name = self.encoder.get_inputs()[0].name
         self.output_name = self.encoder.get_outputs()[0].name
 
     def generate(self, x: NDArray) -> NDArray:
-        output = self.encoder.run([self.output_name], {self.input_name: x})
+        if self.fp16:
+            output = self.encoder.run([self.output_name], {self.input_name: x.astype(np.float16)})
+        else:
+            output = self.encoder.run([self.output_name], {self.input_name: x})
         return output[0]
