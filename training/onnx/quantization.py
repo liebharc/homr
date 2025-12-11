@@ -1,9 +1,9 @@
 import os
 
 import onnx
+from onnxconverter_common import float16
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from onnxruntime.quantization.shape_inference import quant_pre_process
-from onnxconverter_common import float16
 
 
 def quantization_int8(
@@ -33,7 +33,7 @@ def quantization_int8(
     os.remove("model_preprocessed.onnx")
 
 
-def quantization_fp16(model_path: str, out_path: str | None = None):
+def quantization_fp16(model_path: str, out_path: str | None = None) -> None:
     if out_path is None:
         out_path = model_path
 

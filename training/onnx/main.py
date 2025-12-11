@@ -7,7 +7,7 @@ from training.onnx.convert import (
     convert_encoder,
     convert_segnet,
 )
-from training.onnx.quantization import quantization_int8, quantization_fp16
+from training.onnx.quantization import quantization_fp16
 from training.onnx.simplify import main as simplify_onnx_model
 from training.onnx.split_weights import split_weights
 

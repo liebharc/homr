@@ -7,8 +7,7 @@ import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
-from training.transformer.training_vocabulary import sort_token_chords
+from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
 
 
 class ConversionState:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 
 from homr import color_adjust, download_utils
 from homr.autocrop import autocrop
@@ -30,7 +31,7 @@ from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
-from homr.segmentation.config import segnet_path_onnx
+from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
 from homr.segmentation.inference_segnet import extract
 from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
@@ -271,13 +272,22 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
 
 
 def download_weights() -> None:
-    base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
-    models = [
-        segnet_path_onnx,
-        default_config.filepaths.encoder_path,
-        default_config.filepaths.decoder_path,
-    ]
-    missing_models = [model for model in models if not os.path.exists(model)]
+    base_url = "https://github.com/aicelen/homr/releases/tag/v0.4.0"
+    if "CUDAExecutionProvider" in ort.get_available_providers():
+        models = [
+            segnet_path_onnx_fp16,
+            default_config.filepaths.encoder_path_fp16,
+            default_config.filepaths.decoder_path_fp16,
+        ]
+        missing_models = [model for model in models if not os.path.exists(model)]
+    else:
+        eprint("CUDA not detected.")
+        models = [
+            segnet_path_onnx,
+            default_config.filepaths.encoder_path,
+            default_config.filepaths.decoder_path,
+        ]
+        missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:
         return

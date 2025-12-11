@@ -4,11 +4,7 @@ from collections import defaultdict
 import torch
 
 from homr.transformer.configs import default_config
-from homr.transformer.vocabulary import (
-    EncodedSymbol,
-    Vocabulary,
-    sort_token_chords
-)
+from homr.transformer.vocabulary import EncodedSymbol, Vocabulary, sort_token_chords
 
 vocab = Vocabulary()
 
