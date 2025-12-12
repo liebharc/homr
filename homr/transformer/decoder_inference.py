@@ -14,6 +14,7 @@ class ScoreDecoder:
     def __init__(
         self,
         transformer: ort.InferenceSession,
+        fp16: bool,
         config: Config,
         ignore_index: int = -100,
     ):
@@ -29,6 +30,8 @@ class ScoreDecoder:
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
         self.state_vocab = config.state_vocab
+
+        self.fp16 = fp16
 
     def generate(
         self,
@@ -154,7 +157,10 @@ class ScoreDecoder:
         input_names = []
         output_names = []
         for i in range(32):
-            cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
+            if self.fp16:  # the cache needs to be fp16 as well
+                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float16))
+            else:
+                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
@@ -190,17 +196,22 @@ def detokenize(tokens: NDArray, vocab: dict[int, str]) -> list[str]:
     return toks
 
 
-def get_decoder(config: Config, path: str, use_gpu: bool) -> ScoreDecoder:
+def get_decoder(config: Config) -> ScoreDecoder:
     """
     Returns Tromr's Decoder
     """
-    if use_gpu:
+    if "CUDAExecutionProvider" in ort.get_available_providers():
         try:
-            onnx_transformer = ort.InferenceSession(path, providers=["CUDAExecutionProvider"])
+            onnx_transformer = ort.InferenceSession(
+                config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
+            )
+            fp16 = True
         except Exception:
-            onnx_transformer = ort.InferenceSession(path)
+            onnx_transformer = ort.InferenceSession(config.filepaths.decoder_path_fp16)
+            fp16 = True
 
     else:
-        onnx_transformer = ort.InferenceSession(path)
+        onnx_transformer = ort.InferenceSession(config.filepaths.decoder_path)
+        fp16 = False
 
-    return ScoreDecoder(onnx_transformer, config=config)
+    return ScoreDecoder(onnx_transformer, fp16, config=config)

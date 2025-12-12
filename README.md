@@ -15,7 +15,10 @@ processed using tools such as [musescore](https://musescore.com/).
 ## Getting started
 
 - Clone the repository
-- Install dependencies using `poetry install`
+- Install dependencies for:
+    - GPU (requires CUDA): `poetry install --only main,gpu`
+    - CPU: `poetry install --only main`
+    - Development: `poetry install`
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 - To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)

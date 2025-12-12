@@ -19,6 +19,16 @@ class FilePaths:
             workspace,
             f"decoder_{model_name}_kv.onnx",
         )  # noqa: E501
+
+        self.encoder_path_fp16 = os.path.join(
+            workspace,
+            f"encoder_{model_name}_kv_fp16.onnx",
+        )  # noqa: E501
+        self.decoder_path_fp16 = os.path.join(
+            workspace,
+            f"decoder_{model_name}_kv_fp16.onnx",
+        )  # noqa: E501
+
         self.checkpoint = os.path.join(
             root_dir,
             "training",

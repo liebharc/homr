@@ -8,29 +8,43 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from homr.segmentation.config import segmentation_version, segnet_path_onnx
+from homr.segmentation.config import (
+    segmentation_version,
+    segnet_path_onnx,
+    segnet_path_onnx_fp16,
+)
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
 class Segnet:
-    def __init__(self, model_path: str, use_gpu: bool) -> None:
-        if use_gpu:
+    def __init__(self) -> None:
+        if "CUDAExecutionProvider" in ort.get_available_providers():
             try:
-                self.model = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider"])
+                self.model = ort.InferenceSession(
+                    segnet_path_onnx_fp16, providers=["CUDAExecutionProvider"]
+                )
+                self.fp16 = True
             except Exception as e:
                 eprint(
                     "Error while trying to load model using CUDA. You probably don't have a compatible gpu"  # noqa: E501
                 )
                 eprint(e)
-                self.model = ort.InferenceSession(model_path)
+                self.model = ort.InferenceSession(segnet_path_onnx_fp16)
+                self.fp16 = True
         else:
-            self.model = ort.InferenceSession(model_path)
+            self.model = ort.InferenceSession(segnet_path_onnx)
+            self.fp16 = False
         self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
 
     def run(self, input_data: NDArray) -> NDArray:
-        out = self.model.run([self.output_name], {self.input_name: input_data})[0]
+        if self.fp16:
+            out = self.model.run(
+                [self.output_name], {self.input_name: input_data.astype(np.float16)}
+            )[0]
+        else:
+            out = self.model.run([self.output_name], {self.input_name: input_data})[0]
         return out
 
 
@@ -84,7 +98,7 @@ def merge_patches(
 
 
 def inference(
-    image_org: NDArray, batch_size: int, step_size: int, use_gpu: bool, win_size: int
+    image_org: NDArray, batch_size: int, step_size: int, win_size: int
 ) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
     """
     Inference function for the segementation model.
@@ -92,7 +106,6 @@ def inference(
         image_org(NDArray): Array of the input image
         batch_size(int): Mainly for speeding up GPU performance. Minimal impact on CPU speed.
         step_size(int): How far the window moves between to input images.
-        use_gpu(bool): Use gpu for inference. Only for debugging purposes.
         win_size(int): Debug only.
 
     Returns:
@@ -103,7 +116,7 @@ def inference(
     if step_size < 0:
         step_size = win_size // 2
 
-    model = Segnet(segnet_path_onnx, use_gpu)
+    model = Segnet()
     data = []
     batch = []
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
@@ -163,7 +176,6 @@ def extract(
     use_cache: bool = False,
     batch_size: int = 8,
     step_size: int = -1,
-    use_gpu: bool = True,
     win_size: int = 320,
 ) -> ExtractResult:
     img_path = Path(img_path_str)
@@ -196,7 +208,6 @@ def extract(
             original_image,
             batch_size=batch_size,
             step_size=step_size,
-            use_gpu=use_gpu,
             win_size=win_size,
         )
         if use_cache:

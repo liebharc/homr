@@ -10,10 +10,9 @@ from homr import download_utils
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config as ConfigTorch
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
 from training.transformer.training_vocabulary import (
     read_tokens,
-    sort_token_chords,
     token_lines_to_str,
 )
 
@@ -25,7 +24,7 @@ def calc_symbol_error_rate_for_list(
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
 
-        model = Staff2ScoreOnnx(False)
+        model = Staff2ScoreOnnx()
         result_file = "onnx_ser.txt"
 
     else:
