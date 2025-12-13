@@ -9,6 +9,7 @@ from training.architecture.segmentation.model import create_segnet  # type: igno
 from training.architecture.transformer.decoder import (
     ScoreTransformerWrapper,
     get_score_wrapper,
+    init_cache,
 )
 from training.architecture.transformer.encoder import get_encoder
 
@@ -25,16 +26,46 @@ class DecoderWrapper(torch.nn.Module):
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         context: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, _x = self.model(
+        cache_len: torch.Tensor,
+        *cache: torch.Tensor,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        tuple[torch.Tensor, ...],
+    ]:
+        (
+            out_rhythms,
+            out_pitchs,
+            out_lifts,
+            out_positions,
+            out_articulations,
+            _x,
+            attention,
+            *cache,
+        ) = self.model(
             rhythms=rhythms,
             pitchs=pitchs,
             lifts=lifts,
             articulations=articulations,
-            mask=None,
             context=context,
+            cache_len=cache_len,
+            mask=None,
+            cache=cache,
+            return_center_of_attention=True,
         )
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations
+        return (
+            out_rhythms,
+            out_pitchs,
+            out_lifts,
+            out_positions,
+            out_articulations,
+            attention,
+            *cache,
+        )
 
 
 def convert_encoder() -> str:
@@ -43,9 +74,7 @@ def convert_encoder() -> str:
     """
     config = Config()
 
-    dir_path = os.path.dirname(config.filepaths.encoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
-    path_out = os.path.join(dir_path, f"encoder_{filename}.onnx")
+    path_out = config.filepaths.encoder_path
 
     if os.path.exists(path_out):
         eprint(path_out, "is already present")
@@ -86,12 +115,10 @@ def convert_decoder() -> str:
     Converts the decoder to onnx.
     """
     config = Config()
-    model = get_score_wrapper(config)
+    model = get_score_wrapper(config, attn_flash=False)
     model.eval()
 
-    dir_path = os.path.dirname(config.filepaths.decoder_path)
-    filename = os.path.splitext(os.path.basename(config.filepaths.checkpoint))[0]
-    path_out = os.path.join(dir_path, f"decoder_{filename}.onnx")
+    path_out = config.filepaths.decoder_path
 
     if os.path.exists(path_out):
         eprint(path_out, "is already present")
@@ -108,39 +135,43 @@ def convert_decoder() -> str:
 
     # Create input data
     # Mask is not used since it caused problems with the tensor size
-    rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 10)).long()
-    pitchs = torch.randint(0, config.num_pitch_tokens, (1, 10)).long()
-    lifts = torch.randint(0, config.num_lift_tokens, (1, 10)).long()
-    articulations = torch.randint(0, config.num_articulation_tokens, (1, 10)).long()
-    context = torch.randn((1, 1281, config.decoder_dim)).float()
+    kv_cache, kv_input_names, kv_output_names, dynamic_axes, cache_length = init_cache(
+        0, torch.device("cpu")
+    )
+    rhythms = torch.randint(0, config.num_rhythm_tokens, (1, 1)).long()
+    pitchs = torch.randint(0, config.num_pitch_tokens, (1, 1)).long()
+    lifts = torch.randint(0, config.num_lift_tokens, (1, 1)).long()
+    articulations = torch.randint(0, config.num_articulation_tokens, (1, 1)).long()
+    cache_len = torch.tensor([cache_length]).long()
+    cache = kv_cache
+    context = torch.randn((1, 1281, 312)).float()
 
-    dynamic_axes = {
-        "rhythms": {0: "batch_size", 1: "input_seq_len"},
-        "pitchs": {0: "batch_size", 1: "input_seq_len"},
-        "lifts": {0: "batch_size", 1: "input_seq_len"},
-        "articulations": {0: "batch_size", 1: "input_seq_len"},
-        "context": {0: "batch_size"},
-        "out_rhythms": {0: "batch_size", 1: "output_seq_len"},
-        "out_pitchs": {0: "batch_size", 1: "output_seq_len"},
-        "out_lifts": {0: "batch_size", 1: "output_seq_len"},
-        "out_articulations": {0: "batch_size", 1: "output_seq_len"},
-        "out_positions": {0: "batch_size", 1: "output_seq_len"},
-    }
+    dynamic_axes["context"] = {1: "cache_exists"}
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, articulations, context),
+        (rhythms, pitchs, lifts, articulations, context, cache_len, *cache),
         path_out,
-        input_names=["rhythms", "pitchs", "lifts", "articulations", "context"],
+        input_names=[
+            "rhythms",
+            "pitchs",
+            "lifts",
+            "articulations",
+            "context",
+            "cache_len",
+            *kv_input_names,
+        ],
         output_names=[
             "out_rhythms",
             "out_pitchs",
             "out_lifts",
             "out_positions",
             "out_articulations",
+            "attention",
+            *kv_output_names,
         ],
         dynamic_axes=dynamic_axes,
-        opset_version=17,
+        opset_version=18,
         do_constant_folding=True,
         export_params=True,
     )

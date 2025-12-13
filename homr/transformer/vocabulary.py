@@ -387,12 +387,20 @@ class EncodedSymbol:
         lift: str = nonote,
         articulation: str = nonote,
         position: str = nonote,
+        coordinates: tuple[float, float] | None = None,
     ) -> None:
         self.rhythm = rhythm
         self.pitch = pitch
         self.lift = lift
         self.articulation = articulation
         self.position = position
+
+        # These coordinates are derived from transformer attention and are inherently imprecise,
+        # since the model is optimized for predictive accuracy rather than spatial localization.
+        # Because patch tokens are processed in raster order (top-to-bottom, left-to-right),
+        # this ordering can be used to reject cases where attention-based coordinates
+        # violate monotonic scan constraints and are therefore unreliable.
+        self.coordinates = coordinates
         self._duration: SymbolDuration | None = None
 
     def is_control_symbol(self) -> bool:

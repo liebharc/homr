@@ -77,9 +77,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
     return selected_datasets
 
 
-def train_transformer(
-    fp32: bool = False, resume: str = "", smoke_test: bool = False
-) -> None:
+def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = False) -> None:
     number_of_epochs = 15 if smoke_test else 70
     resume_from_checkpoint = None
 

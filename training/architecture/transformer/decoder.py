@@ -4,15 +4,17 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from torch import nn
-from x_transformers.x_transformers import (
-    AbsolutePositionalEmbedding,
-    AttentionLayers,
-    Decoder,
-    TokenEmbedding,
-)
 
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import EncodedSymbol, has_rhythm_symbol_a_position
+from training.architecture.transformer.custom_x_transformer import (
+    AbsolutePositionalEmbedding,
+    AttentionLayers,
+    CustomDecoder,
+    Intermediates,
+    LayerIntermediates,
+    TokenEmbedding,
+)
 
 
 class ScoreTransformerWrapper(nn.Module):
@@ -48,6 +50,9 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
+        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
+        self.attention_width = config.max_width // config.patch_size
+        self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
 
         self.attn_layers = attn_layers
@@ -75,27 +80,147 @@ class ScoreTransformerWrapper(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
+        context: torch.Tensor | None = None,
+        cache_len: torch.Tensor | None = None,
         mask: torch.Tensor | None = None,
-        **kwargs: Any,
+        return_center_of_attention: bool = False,
+        **kwargs: torch.Tensor,
     ) -> Any:
-        x = (
-            self.rhythm_emb(rhythms)
-            + self.pitch_emb(pitchs)
-            + self.lift_emb(lifts)
-            + self.articulation_emb(articulations)
-            + self.pos_emb(rhythms)
+        cache = kwargs.pop("cache", None)
+        if cache is None:
+            x = (
+                self.rhythm_emb(rhythms)
+                + self.pitch_emb(pitchs)
+                + self.lift_emb(lifts)
+                + self.articulation_emb(articulations)
+                + self.pos_emb(rhythms)
+            )
+
+            x = self.post_emb_norm(x)
+
+            x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+
+            if return_center_of_attention:
+                x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
+                attention = self.get_center_of_attention(hiddens.attn_intermediates)
+            else:
+                x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+                attention = None
+
+            out_lifts = self.to_logits_lift(x)
+            out_pitchs = self.to_logits_pitch(x)
+            out_rhythms = self.to_logits_rhythm(x)
+            out_articulations = self.to_logits_articulations(x)
+            out_positions = self.to_logits_position(x)
+            return (
+                out_rhythms,
+                out_pitchs,
+                out_lifts,
+                out_positions,
+                out_articulations,
+                x,
+                attention,
+            )
+
+        else:
+            x = (
+                self.rhythm_emb(rhythms)
+                + self.pitch_emb(pitchs)
+                + self.lift_emb(lifts)
+                + self.articulation_emb(articulations)
+                + self.pos_emb(rhythms, offset=cache_len)
+            )
+
+            x = self.post_emb_norm(x)
+
+            # reconstruct x_transformers LayerIntermediates from the input_cache
+            inters = []
+            for i in range(0, 32, 2):
+                inters.append(Intermediates(cached_kv=(cache[i], cache[i + 1])))
+
+            cache_input = LayerIntermediates(attn_intermediates=inters, cache_length=cache_len)
+
+            x, cache = self.attn_layers(
+                x, cache=cache_input, mask=mask, return_hiddens=True, context=context
+            )
+
+            # get the kv cache tensors from the LayerIntermediates class
+            # the cache is built up like this:
+            # LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
+            # cache is alternating between shapes (batch, 8, seq_len, 64) and (batch, 8, 1281, 64)
+            # 8 probably corresponds to the number of decoder_heads
+            # 1281 is the same as the encoder output
+            cache_out = []
+            attn_inters = cache.attn_intermediates
+            if return_center_of_attention:
+                attention = self.get_center_of_attention(attn_inters)
+            else:
+                attention = None
+            for i in range(16):  # 16x2
+                k, v = attn_inters[i].cached_kv
+                cache_out.append(k)
+                cache_out.append(v)
+
+            out_lifts = self.to_logits_lift(x)
+            out_pitchs = self.to_logits_pitch(x)
+            out_rhythms = self.to_logits_rhythm(x)
+            out_articulations = self.to_logits_articulations(x)
+            out_positions = self.to_logits_position(x)
+            return (
+                out_rhythms,
+                out_pitchs,
+                out_lifts,
+                out_positions,
+                out_articulations,
+                x,
+                attention,
+                cache_out,
+            )
+
+    def get_center_of_attention(self, intermediates: list[Any]) -> torch.Tensor:
+        """
+        Calculates the center of attention. It uses the attention weights,
+        performs a power scaling to give more weight to the peaks and then
+        calculates the center of mass to get the focus point of the attention.
+        """
+
+        # Only use the last 3 layers as the later layers contain the strongest
+        # alignment between attention and semantic object position.
+        filtered_intermediate = [
+            intermediates[-5].post_softmax_attn[:, :, -1, :],
+            intermediates[-3].post_softmax_attn[:, :, -1, :],
+            intermediates[-1].post_softmax_attn[:, :, -1, :],
+        ]
+
+        attention_all_layers = torch.mean(torch.stack(filtered_intermediate), dim=0)
+        attention_all_layers = attention_all_layers.squeeze(0).squeeze(1)
+        attention_all_layers = attention_all_layers.mean(dim=0)
+        h, w = self.attention_height, self.attention_width
+
+        image_token_count = h * w
+        image_attention = attention_all_layers[1 : image_token_count + 1]
+
+        image_attention_2d = image_attention.reshape(h, w)
+
+        power = 8.0
+        weights = torch.clamp(image_attention_2d, min=1e-8).pow(power)
+
+        y_coords = torch.linspace(0.5, h - 0.5, h, device=weights.device, dtype=weights.dtype)
+        x_coords = torch.linspace(0.5, w - 0.5, w, device=weights.device, dtype=weights.dtype)
+        yy, xx = torch.meshgrid(y_coords, x_coords, indexing="ij")
+
+        total_mass = weights.sum()
+        row = (weights * yy).sum() / total_mass
+        col = (weights * xx).sum() / total_mass
+
+        center_of_attention = torch.stack(
+            [
+                col * self.patch_size,
+                row * self.patch_size,
+            ]
         )
 
-        x = self.post_emb_norm(x)
-
-        x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
-
-        out_lifts = self.to_logits_lift(x)
-        out_pitchs = self.to_logits_pitch(x)
-        out_rhythms = self.to_logits_rhythm(x)
-        out_articulations = self.to_logits_articulations(x)
-        out_positions = self.to_logits_position(x)
-        return out_rhythms, out_pitchs, out_lifts, out_positions, out_articulations, x
+        return center_of_attention
 
 
 def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
@@ -159,25 +284,40 @@ class ScoreDecoder(nn.Module):
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
         mask = kwargs.pop("mask", None)
+        context_first = kwargs.pop("context")
+        context_later = context_first[:, :0]
 
         if mask is None:
-            mask = torch.full_like(out_rhythm, True, dtype=torch.bool, device=out_rhythm.device)
+            # the mask is always (True, True) because the x_ are always (1, 1)
+            # and contain only the last token
+            # the information about the rest of the tokens gets passed via the kv cache
+            mask = torch.ones((1, 1), dtype=torch.bool, device=self.device)
 
         symbols: list[EncodedSymbol] = []
 
-        for _ in range(self.max_seq_len):
-            mask = mask[:, -self.max_seq_len :]
-            x_lift = out_lift[:, -self.max_seq_len :]
-            x_pitch = out_pitch[:, -self.max_seq_len :]
-            x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            x_articulations = out_articulations[:, -self.max_seq_len :]
+        cache = init_cache(0, self.device)[0]
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _ = self.net(
+        for step in range(self.max_seq_len):
+            x_lift = out_lift[:, -1:]
+            x_pitch = out_pitch[:, -1:]
+            x_rhythm = out_rhythm[:, -1:]
+            x_articulations = out_articulations[:, -1:]
+
+            if step == 0:
+                context = context_first
+            else:
+                context = context_later
+
+            (rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, _, cache) = self.net(
                 rhythms=x_rhythm,
                 pitchs=x_pitch,
                 lifts=x_lift,
-                mask=mask,
                 articulations=x_articulations,
+                context=context,
+                cache_len=torch.Tensor([step]).to(self.device).long(),
+                mask=mask,
+                cache=cache,
+                return_center_of_attention=False,
                 **kwargs,
             )
 
@@ -347,6 +487,22 @@ class ScoreDecoder(nn.Module):
         return loss
 
 
+def init_cache(
+    cache_len: int,
+    device: torch.device,
+) -> tuple[list[torch.Tensor], list[str], list[str], dict[str, dict[int, str]], int]:
+    cache = []
+    input_names = []
+    output_names = []
+    dynamic = {}
+    for i in range(32):
+        cache.append(torch.zeros((1, 8, cache_len, 64), dtype=torch.float32).to(device))
+        input_names.append(f"cache_in{i}")
+        output_names.append(f"cache_out{i}")
+        dynamic[f"cache_in{i}"] = {2: "seq_len"}
+    return cache, input_names, output_names, dynamic, cache_len
+
+
 def get_decoder(config: Config) -> ScoreDecoder:
     return ScoreDecoder(
         get_score_wrapper(config),
@@ -354,14 +510,14 @@ def get_decoder(config: Config) -> ScoreDecoder:
     )
 
 
-def get_score_wrapper(config: Config) -> ScoreTransformerWrapper:
+def get_score_wrapper(config: Config, attn_flash: bool = True) -> ScoreTransformerWrapper:
     return ScoreTransformerWrapper(
         config=config,
-        attn_layers=Decoder(
+        attn_layers=CustomDecoder(
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=True,
+            attn_flash=attn_flash,
             **config.decoder_args.to_dict(),
         ),
     )

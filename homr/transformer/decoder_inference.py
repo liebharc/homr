@@ -48,15 +48,22 @@ class ScoreDecoder:
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
+        cache, kv_input_names, kv_output_names = self.init_cache()
+        context = kwargs["context"]
+        context_reduced = kwargs["context"][:, :1]
 
         symbols: list[EncodedSymbol] = []
 
-        for _ in range(self.max_seq_len):
-            x_lift = out_lift[:, -self.max_seq_len :]
-            x_pitch = out_pitch[:, -self.max_seq_len :]
-            x_rhythm = out_rhythm[:, -self.max_seq_len :]
-            x_articulations = out_articulations[:, -self.max_seq_len :]
-            context = kwargs["context"]
+        for step in range(self.max_seq_len):
+            x_lift = out_lift[:, -1:]  # for all: shape=(1,1)
+            x_pitch = out_pitch[:, -1:]
+            x_rhythm = out_rhythm[:, -1:]
+            x_articulations = out_articulations[:, -1:]
+
+            if step != 0:  # after the first step we don't pass the full context into the decoder
+                # x_transformers uses [:, :0] to split the context
+                # which caused a Reshape error when loading the onnx model
+                context = context_reduced
 
             inputs = {
                 "rhythms": x_rhythm,
@@ -64,15 +71,20 @@ class ScoreDecoder:
                 "lifts": x_lift,
                 "articulations": x_articulations,
                 "context": context,
+                "cache_len": np.array([step]),
             }
+            for i in range(32):
+                inputs[kv_input_names[i]] = cache[i]
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp = self.net.run(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, attention, *cache = self.net.run(
                 output_names=[
                     "out_rhythms",
                     "out_pitchs",
                     "out_lifts",
                     "out_positions",
                     "out_articulations",
+                    "attention",
+                    *kv_output_names,
                 ],
                 input_feed=inputs,
             )
@@ -110,6 +122,7 @@ class ScoreDecoder:
                 lift=lift_token[0],
                 articulation=articulation_token[0],
                 position=position_token[0],
+                coordinates=attention,
             )
             symbols.append(symbol)
 
@@ -119,6 +132,16 @@ class ScoreDecoder:
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
 
         return symbols
+
+    def init_cache(self, cache_len: int = 0) -> tuple[list[NDArray], list[str], list[str]]:
+        cache = []
+        input_names = []
+        output_names = []
+        for i in range(32):
+            cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
+            input_names.append(f"cache_in{i}")
+            output_names.append(f"cache_out{i}")
+        return cache, input_names, output_names
 
 
 def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:
