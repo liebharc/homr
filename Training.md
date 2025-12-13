@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 242
+
+Commit: a00be6debbedf617acdf39558c89ba6113c06af3
+Day: 9 Dec 2025
+SER: 36%
+Validation result: 8.3
+
+Singe staff images now use the full resolution.
+
 ## Run 236
 
 Commit: 922ad08f8895f6d9c0ae61954cd78a021ff950a7
