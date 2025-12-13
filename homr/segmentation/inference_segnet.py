@@ -18,8 +18,8 @@ from homr.type_definitions import NDArray
 
 
 class Segnet:
-    def __init__(self) -> None:
-        if "CUDAExecutionProvider" in ort.get_available_providers():
+    def __init__(self, use_gpu_inference: bool) -> None:
+        if use_gpu_inference:
             try:
                 self.model = ort.InferenceSession(
                     segnet_path_onnx_fp16, providers=["CUDAExecutionProvider"]
@@ -98,7 +98,7 @@ def merge_patches(
 
 
 def inference(
-    image_org: NDArray, batch_size: int, step_size: int, win_size: int
+    image_org: NDArray, use_gpu_inference: bool, batch_size: int, step_size: int, win_size: int
 ) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
     """
     Inference function for the segementation model.
@@ -116,7 +116,7 @@ def inference(
     if step_size < 0:
         step_size = win_size // 2
 
-    model = Segnet()
+    model = Segnet(use_gpu_inference)
     data = []
     batch = []
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
@@ -174,6 +174,7 @@ def extract(
     original_image: NDArray,
     img_path_str: str,
     use_cache: bool = False,
+    use_gpu_inference: bool = True,
     batch_size: int = 8,
     step_size: int = -1,
     win_size: int = 320,
@@ -206,6 +207,7 @@ def extract(
     if not loaded_from_cache:
         staff, symbols, stems_rests, notehead, clefs_keys = inference(
             original_image,
+            use_gpu_inference=use_gpu_inference,
             batch_size=batch_size,
             step_size=step_size,
             win_size=win_size,

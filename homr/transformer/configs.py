@@ -13,20 +13,20 @@ class FilePaths:
         model_name = "pytorch_model_242-a00be6debbedf617acdf39558c89ba6113c06af3"
         self.encoder_path = os.path.join(
             workspace,
-            f"encoder_{model_name}_att.onnx",
+            f"encoder_{model_name}.onnx",
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace,
-            f"decoder_{model_name}_att.onnx",
+            f"decoder_{model_name}.onnx",
         )  # noqa: E501
 
         self.encoder_path_fp16 = os.path.join(
             workspace,
-            f"encoder_{model_name}_kv_fp16.onnx",
+            f"encoder_{model_name}_fp16.onnx",
         )  # noqa: E501
         self.decoder_path_fp16 = os.path.join(
             workspace,
-            f"decoder_{model_name}_kv_fp16.onnx",
+            f"decoder_{model_name}_fp16.onnx",
         )  # noqa: E501
 
         self.checkpoint = os.path.join(
@@ -109,6 +109,7 @@ class Config:
         self.rhythm_vocab = self.vocab.rhythm
         self.articulation_vocab = self.vocab.articulation
         self.position_vocab = self.vocab.position
+        self.use_gpu_inference = True
 
     def to_dict(self) -> dict[str, Any]:
         return {

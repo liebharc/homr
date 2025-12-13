@@ -69,7 +69,7 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
 
     def __getitem__(self, i: int) -> tuple[NDArray, NDArray]:
         # Read the image
-        (path, y, x) = self.ids[i]
+        path, y, x = self.ids[i]
         if path == self.last_path and self.last_image is not None and self.last_mask is not None:
             image = self.last_image
             mask = self.last_mask

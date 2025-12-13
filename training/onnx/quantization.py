@@ -5,6 +5,8 @@ from onnxconverter_common import float16
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from onnxruntime.quantization.shape_inference import quant_pre_process
 
+from homr.simple_logging import eprint
+
 
 def quantization_int8(
     model_path: str, out_path: str | None = None, preprocess: bool = True
@@ -33,10 +35,15 @@ def quantization_int8(
     os.remove("model_preprocessed.onnx")
 
 
-def quantization_fp16(model_path: str, out_path: str | None = None) -> None:
+def quantization_fp16(model_path: str, out_path: str | None = None) -> str:
     if out_path is None:
         out_path = model_path
+
+    if os.path.exists(out_path):
+        eprint(out_path, "is already present")
+        return out_path
 
     model = onnx.load(model_path)
     model_fp16 = float16.convert_float_to_float16(model)
     onnx.save(model_fp16, out_path)
+    return out_path

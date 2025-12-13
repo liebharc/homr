@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.utils import softmax
 from homr.transformer.vocabulary import EncodedSymbol
@@ -184,13 +185,15 @@ def get_decoder(config: Config) -> ScoreDecoder:
     """
     Returns Tromr's Decoder
     """
-    if "CUDAExecutionProvider" in ort.get_available_providers():
+    if config.use_gpu_inference:
         try:
             onnx_transformer = ort.InferenceSession(
                 config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
             )
             fp16 = True
-        except Exception:
+        except Exception as ex:
+            eprint(ex)
+            eprint("Going on without GPU support")
             onnx_transformer = ort.InferenceSession(config.filepaths.decoder_path_fp16)
             fp16 = True
 

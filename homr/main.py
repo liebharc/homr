@@ -38,7 +38,7 @@ from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.title_detection import detect_title, download_ocr_weights
-from homr.transformer.configs import default_config
+from homr.transformer.configs import Config, default_config
 from homr.type_definitions import NDArray
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -61,9 +61,19 @@ class PredictedSymbols:
 
 
 def get_predictions(
-    original: NDArray, preprocessed: NDArray, img_path: str, enable_cache: bool
+    original: NDArray,
+    preprocessed: NDArray,
+    img_path: str,
+    enable_cache: bool,
+    use_gpu_inference: bool,
 ) -> InputPredictions:
-    result = extract(preprocessed, img_path, step_size=320, use_cache=enable_cache)
+    result = extract(
+        preprocessed,
+        img_path,
+        step_size=320,
+        use_cache=enable_cache,
+        use_gpu_inference=use_gpu_inference,
+    )
     original_image = cv2.resize(original, (result.staff.shape[1], result.staff.shape[0]))
     preprocessed_image = cv2.resize(preprocessed, (result.staff.shape[1], result.staff.shape[0]))
     return InputPredictions(
@@ -82,7 +92,7 @@ def replace_extension(path: str, new_extension: str) -> str:
 
 
 def load_and_preprocess_predictions(
-    image_path: str, enable_debug: bool, enable_cache: bool
+    image_path: str, enable_debug: bool, enable_cache: bool, use_gpu_inference: bool
 ) -> tuple[InputPredictions, Debug]:
     image = cv2.imread(image_path)
     if image is None:
@@ -90,7 +100,7 @@ def load_and_preprocess_predictions(
     image = autocrop(image)
     image = resize_image(image)
     preprocessed, _background = color_adjust.color_adjust(image, 40)
-    predictions = get_predictions(image, preprocessed, image_path, enable_cache)
+    predictions = get_predictions(image, preprocessed, image_path, enable_cache, use_gpu_inference)
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
 
@@ -134,6 +144,7 @@ class ProcessingConfig:
     write_staff_positions: bool
     read_staff_positions: bool
     selected_staff: int
+    use_gpu_inference: bool
 
 
 def process_image(
@@ -160,8 +171,15 @@ def process_image(
             multi_staffs, image, debug, title_future = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
 
+        transformer_config = Config()
+        transformer_config.use_gpu_inference = config.use_gpu_inference
+
         result_staffs = parse_staffs(
-            debug, multi_staffs, image, selected_staff=config.selected_staff
+            debug,
+            multi_staffs,
+            image,
+            selected_staff=config.selected_staff,
+            config=transformer_config,
         )
 
         title = title_future.result(60)
@@ -193,7 +211,7 @@ def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
 ) -> tuple[list[MultiStaff], NDArray, Debug, Future[str]]:
     predictions, debug = load_and_preprocess_predictions(
-        image_path, config.enable_debug, config.enable_cache
+        image_path, config.enable_debug, config.enable_cache, config.use_gpu_inference
     )
     symbols = predict_symbols(debug, predictions)
 
@@ -271,9 +289,9 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     return sorted(without_teasers)
 
 
-def download_weights() -> None:
-    base_url = "https://github.com/aicelen/homr/releases/download/v0.4.0/"
-    if "CUDAExecutionProvider" in ort.get_available_providers():
+def download_weights(use_gpu_inference: bool) -> None:
+    base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
+    if use_gpu_inference:
         models = [
             segnet_path_onnx_fp16,
             default_config.filepaths.encoder_path_fp16,
@@ -281,7 +299,6 @@ def download_weights() -> None:
         ]
         missing_models = [model for model in models if not os.path.exists(model)]
     else:
-        eprint("CUDA not detected.")
         models = [
             segnet_path_onnx,
             default_config.filepaths.encoder_path,
@@ -348,16 +365,30 @@ def main() -> None:
         help="Reads the position of all staffs from a txt file instead"
         + " of running the built-in staff detection.",
     )
+    parser.add_argument(
+        "--force-cpu",
+        action="store_true",
+        help="Inference will only use CPU, even if a supported GPU would be available",
+    )
     args = parser.parse_args()
 
-    download_weights()
+    use_gpu_inference = (
+        not args.force_cpu and "CUDAExecutionProvider" in ort.get_available_providers()
+    )
+
+    download_weights(use_gpu_inference)
     if args.init:
         download_ocr_weights()
         eprint("Init finished")
         return
 
     config = ProcessingConfig(
-        args.debug, args.cache, args.write_staff_positions, args.read_staff_positions, -1
+        args.debug,
+        args.cache,
+        args.write_staff_positions,
+        args.read_staff_positions,
+        -1,
+        use_gpu_inference,
     )
 
     xml_generator_args = XmlGeneratorArguments(

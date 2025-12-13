@@ -1,19 +1,22 @@
 import numpy as np
 import onnxruntime as ort
 
+from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.type_definitions import NDArray
 
 
 class Encoder:
     def __init__(self, config: Config) -> None:
-        if "CUDAExecutionProvider" in ort.get_available_providers():
+        if config.use_gpu_inference:
             try:
                 self.encoder = ort.InferenceSession(
-                    config.filepaths.encoder_path_fp16, providers=["CUDAExecutionProvider"]
+                    config.filepaths.encoder_path_fp16, providers=[('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT',})]
                 )
                 self.fp16 = True
-            except Exception:
+            except Exception as ex:
+                eprint(ex)
+                eprint("Going on without GPU support")
                 self.encoder = ort.InferenceSession(config.filepaths.encoder_path_fp16)
                 self.fp16 = True
 

@@ -9,7 +9,7 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
-from homr.transformer.configs import default_config
+from homr.transformer.configs import Config, default_config
 from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
 from homr.type_definitions import NDArray
 
@@ -226,13 +226,13 @@ def _dewarp_staff(
 
 
 def parse_staff_image(
-    debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions
+    debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions, config: Config
 ) -> list[EncodedSymbol]:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
     eprint("Running TrOmr inference on staff image", index)
-    result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff)
+    result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
     if debug.debug:
         result_image = staff_image.copy()
         for i, symbol in enumerate(result):
@@ -256,7 +256,7 @@ def parse_staff_image(
 
 
 def parse_staffs(
-    debug: Debug, staffs: list[MultiStaff], image: NDArray, selected_staff: int = -1
+    debug: Debug, staffs: list[MultiStaff], image: NDArray, config: Config, selected_staff: int = -1
 ) -> list[list[EncodedSymbol]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
@@ -277,7 +277,7 @@ def parse_staffs(
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
-            result_staff = parse_staff_image(debug, i, staff, image, regions)
+            result_staff = parse_staff_image(debug, i, staff, image, regions, config)
             if len(result_staff) == 0:
                 eprint("Skipping empty staff", i)
                 i += 1

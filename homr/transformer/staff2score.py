@@ -17,8 +17,8 @@ class Staff2Score:
     Inference class for Tromr. Use predict() for prediction
     """
 
-    def __init__(self) -> None:
-        self.config = Config()
+    def __init__(self, config: Config) -> None:
+        self.config = config
         self.encoder = Encoder(self.config)
         self.decoder = get_decoder(self.config)
 
@@ -82,7 +82,7 @@ def test_transformer_on_image(path_to_img: str) -> None:
     """
     from PIL import Image
 
-    model = Staff2Score()
+    model = Staff2Score(Config())
     image = Image.open(path_to_img)
     out = model.predict(np.array(image))
     eprint(out)

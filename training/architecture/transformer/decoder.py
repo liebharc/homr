@@ -308,7 +308,7 @@ class ScoreDecoder(nn.Module):
             else:
                 context = context_later
 
-            (rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, _, cache) = self.net(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, _, cache = self.net(
                 rhythms=x_rhythm,
                 pitchs=x_pitch,
                 lifts=x_lift,
