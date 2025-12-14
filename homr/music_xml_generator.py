@@ -142,7 +142,7 @@ def build_measures(
         if direction:
             current_measure.add_child(direction)
     attributes: mxl.XMLAttributes | None = first_attributes
-    for group in groups:
+    for i, group in enumerate(groups):
         symbol = group.symbols[0]
         rhythm = symbol.rhythm
         last_attributes = attributes
@@ -161,7 +161,9 @@ def build_measures(
                         current_measure.add_child(note_xml)
             continue
         if rhythm == "newline":
-            current_measure.add_child(mxl.XMLPrint(new_system="yes"))
+            is_last_measure = i == len(groups) - 1
+            if not is_last_measure:
+                current_measure.add_child(mxl.XMLPrint(new_system="yes"))
         elif rhythm.startswith("clef"):
             attributes = build_or_get_attributes(current_measure, last_attributes, force_new=True)
             for should_be_clef in group.symbols:
