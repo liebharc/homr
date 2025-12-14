@@ -142,7 +142,7 @@ def build_measures(
         if direction:
             current_measure.add_child(direction)
     attributes: mxl.XMLAttributes | None = first_attributes
-    for i, group in enumerate(groups):
+    for group_no, group in enumerate(groups):
         symbol = group.symbols[0]
         rhythm = symbol.rhythm
         last_attributes = attributes
@@ -153,15 +153,15 @@ def build_measures(
                 build_multi_measure_rest(symbol, attributes)
             else:
                 staff_positions = group.into_positions()
-                for i, staff_pos in enumerate(staff_positions):
+                for pos_no, staff_pos in enumerate(staff_positions):
                     chord_duration = (
-                        group.get_duration() if i == len(staff_positions) - 1 else Fraction(0)
+                        group.get_duration() if pos_no == len(staff_positions) - 1 else Fraction(0)
                     )
                     for note_xml in build_note_chord(staff_pos, state, chord_duration):
                         current_measure.add_child(note_xml)
             continue
         if rhythm == "newline":
-            is_last_measure = i == len(groups) - 1
+            is_last_measure = group_no == len(groups) - 1
             if not is_last_measure:
                 current_measure.add_child(mxl.XMLPrint(new_system="yes"))
         elif rhythm.startswith("clef"):
