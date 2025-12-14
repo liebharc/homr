@@ -202,8 +202,8 @@ class ScoreTransformerWrapper(nn.Module):
 
         image_attention_2d = image_attention.reshape(h, w)
 
-        power = 8.0
-        weights = torch.clamp(image_attention_2d, min=1e-8).pow(power)
+        power = 4.0
+        weights = torch.clamp(image_attention_2d, min=1e-4).pow(power)
 
         y_coords = torch.linspace(0.5, h - 0.5, h, device=weights.device, dtype=weights.dtype)
         x_coords = torch.linspace(0.5, w - 0.5, w, device=weights.device, dtype=weights.dtype)

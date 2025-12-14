@@ -1,3 +1,5 @@
+import math
+
 import cv2
 import numpy as np
 
@@ -238,6 +240,8 @@ def parse_staff_image(
         for i, symbol in enumerate(result):
             center = symbol.coordinates
             if center is None or symbol.rhythm.startswith("chord"):
+                continue
+            if math.isnan(center[0]) or math.isnan(center[1]):
                 continue
             center_int = (int(center[0]), int(center[1]))
             cv2.circle(result_image, center_int, 5, color=(0, 0, 255), thickness=2)
