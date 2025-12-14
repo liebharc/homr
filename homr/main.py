@@ -368,13 +368,22 @@ def main() -> None:
     parser.add_argument(
         "--force-cpu",
         action="store_true",
-        help="Inference will only use CPU, even if a supported GPU would be available",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--force-gpu",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
 
-    use_gpu_inference = (
-        not args.force_cpu and "CUDAExecutionProvider" in ort.get_available_providers()
-    )
+    has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
+
+    if args.force_gpu and args.force_cpu:
+        eprint("Can't force CPU and GPU usage at the same time")
+        sys.exit(1)
+
+    use_gpu_inference = (not args.force_cpu and has_gpu_support) or args.force_gpu
 
     download_weights(use_gpu_inference)
     if args.init:
