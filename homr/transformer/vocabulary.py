@@ -661,6 +661,9 @@ def _only_keep_lower_staff_if_there_is_a_clef(
             else:
                 result.append(symbol.to_upper_position())
         all_results.append(result)
+    delta = len(chords) - len(all_results)
+    if delta > 0:
+        eprint("Removed", delta, "results as there was no matching clef")
     return all_results
 
 

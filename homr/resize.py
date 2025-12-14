@@ -5,18 +5,18 @@ from homr.type_definitions import NDArray
 
 
 def calc_target_image_size(width: int, height: int) -> tuple[int, int]:
-    # Estimate target size with number of pixels.
-    # Best number would be 3M~4.35M pixels.
-    pixels = width * height
-    target_size_min = 3.0 * 1000 * 1000
-    target_size_max = 4.35 * 1000 * 1000
-    if target_size_min <= pixels <= target_size_max:
+    """
+    Target a fixed width while preserving aspect ratio.
+    """
+    target_width = 1920
+
+    if width == target_width:
         return width, height
-    lb = target_size_min / pixels
-    ub = target_size_max / pixels
-    ratio = pow((lb + ub) / 2, 0.5)
-    tar_w = round(ratio * width)
-    tar_h = round(ratio * height)
+
+    ratio = target_width / width
+    tar_w = target_width
+    tar_h = round(height * ratio)
+
     return tar_w, tar_h
 
 

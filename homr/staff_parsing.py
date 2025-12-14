@@ -152,7 +152,7 @@ def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int 
 
 
 def augment_staff_image(staff_image: NDArray) -> NDArray:
-    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 10, 10, 7, 21)
+    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 5, 5, 11, 31)
     return apply_clahe(denoised1)
 
 
