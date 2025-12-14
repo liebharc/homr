@@ -38,7 +38,7 @@ Day: 01 Oct 2025
 SER: 39%
 Validation result: 9.8
 
-Grandstaff support.
+Grandstaff support. With the grandstaff support the SER numbers can't be directly compared to the previous runs anymore. Validations results still can be used for comparison.
 
 Some notes about other experiments which have been performed on the lieder dataset with only 15 epochs:
 

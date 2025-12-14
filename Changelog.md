@@ -2,11 +2,11 @@
 
 All notable changes to this project will be documented here.
 
-## [WIP]
+## [0.6.0]
 
 ### Added
 
-- **Faster inference**.
+- **Faster inference and GPU support**.
   Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
 - **Support for more symbols**
 

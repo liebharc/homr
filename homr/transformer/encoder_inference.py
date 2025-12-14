@@ -11,7 +11,15 @@ class Encoder:
         if config.use_gpu_inference:
             try:
                 self.encoder = ort.InferenceSession(
-                    config.filepaths.encoder_path_fp16, providers=[('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT',})]
+                    config.filepaths.encoder_path_fp16,
+                    providers=[
+                        (
+                            "CUDAExecutionProvider",
+                            {
+                                "cudnn_conv_algo_search": "DEFAULT",
+                            },
+                        )
+                    ],
                 )
                 self.fp16 = True
             except Exception as ex:

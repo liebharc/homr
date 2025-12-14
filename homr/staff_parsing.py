@@ -141,7 +141,7 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
-def apply_clahe(staff_image: NDArray, clip_limit: float = 2.0, kernel_size: int = 8) -> NDArray:
+def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
     gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(kernel_size, kernel_size))
     gray_image = clahe.apply(gray_image)

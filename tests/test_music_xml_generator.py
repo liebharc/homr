@@ -169,6 +169,32 @@ XMLNotations()])])])])"""
         )
         self.assertEqual(articulations, ["slurStop", "tieStart"])
 
+    def test_begin_chord_with_standalone_rests(self) -> None:
+        """
+        If the lower position consists of a standalone rest then start the
+        chord with this. That fixes an issue where the upper position
+        consists of tuplets because in that case backups must not be used.
+
+        See tabi.jpg measure 9 for an example.
+        """
+        chord = SymbolChord(
+            [
+                EncodedSymbol("note_12", position="upper"),
+                EncodedSymbol("note_12", position="upper"),
+                EncodedSymbol("rest_8", position="lower"),
+            ]
+        )
+        first, second = chord.into_positions()
+
+        self.assertEqual(first.symbols, [EncodedSymbol("rest_8", position="lower")])
+        self.assertEqual(
+            second.symbols,
+            [
+                EncodedSymbol("note_12", position="upper"),
+                EncodedSymbol("note_12", position="upper"),
+            ],
+        )
+
     def _norm_expected(self, expected: str) -> str:
         norm = expected.replace("\n", "")
         norm = re.sub(r",\s+", ",", norm)

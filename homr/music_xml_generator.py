@@ -66,19 +66,20 @@ class SymbolChord:
     def into_positions(self) -> list["SymbolChord"]:
         upper = []
         lower = []
+        lower_is_only_rest = True
         for symbol in self.symbols:
             if symbol.position == "upper":
                 upper.append(symbol)
             else:
                 lower.append(symbol)
-        return [
-            chord
-            for chord in [
-                SymbolChord(upper, self.tuplet_mark),
-                SymbolChord(lower, self.tuplet_mark),
-            ]
-            if len(chord.symbols) > 0
-        ]
+                lower_is_only_rest = lower_is_only_rest and symbol.rhythm.startswith("rest")
+        chords = (
+            SymbolChord(upper, self.tuplet_mark),
+            SymbolChord(lower, self.tuplet_mark),
+        )
+        if lower_is_only_rest:
+            chords = (chords[1], chords[0])
+        return [chord for chord in chords if len(chord.symbols) > 0]
 
     def strip_slur_ties(self) -> tuple[list[str], "SymbolChord"]:
         slurs_ties = set()
