@@ -161,7 +161,7 @@ def build_measures(
                         current_measure.add_child(note_xml)
             continue
         if rhythm == "newline":
-            measures[-1].add_child(mxl.XMLPrint(new_system="yes"))
+            current_measure.add_child(mxl.XMLPrint(new_system="yes"))
         elif rhythm.startswith("clef"):
             attributes = build_or_get_attributes(current_measure, last_attributes, force_new=True)
             for should_be_clef in group.symbols:
