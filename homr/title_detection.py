@@ -31,6 +31,16 @@ def _initialize_reader() -> None:
                 _reader = RapidOCR()
 
 
+def is_tempo_marking(text: str) -> bool:
+    """
+    Filter out tempo markings, e.g. 60 BPM
+    """
+    min_letters = 4
+    if len(text) < min_letters:
+        return True
+    return sum(1 for c in text if "a" <= c.lower() <= "z") < min_letters
+
+
 def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     _initialize_reader()
 
@@ -42,12 +52,18 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     x: int = max(int(top_staff.min_x) - 50, 0)
     width: int = int(top_staff.max_x - top_staff.min_x) + 100
     width = min(width, image.shape[1] - x)
-    height = min(height, image.shape[0] - y)
+    height = min(height, int(top_staff.min_y) - y)
     above_staff = image[y : y + height, x : x + width]
 
     ocr_input: str = debug.write_model_input_image("_tesseract_input.png", above_staff)
     ocr_results = _reader(ocr_input)
+
     if not ocr_results or not ocr_results[0]:
+        return ""
+
+    filtered_results = [r for r in ocr_results[0] if not is_tempo_marking(r[1])]
+
+    if not filtered_results:
         return ""
 
     def bbox_height(bbox: list[list[float]]) -> float:
@@ -61,7 +77,7 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
             return 0
         return bbox_height(bbox) / len(text)
 
-    largest_text = max(ocr_results[0], key=font_size_score)[1]
+    largest_text = max(filtered_results, key=font_size_score)[1]
     return cleanup_text(largest_text)
 
 
