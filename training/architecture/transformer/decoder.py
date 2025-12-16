@@ -98,13 +98,13 @@ class ScoreTransformerWrapper(nn.Module):
 
             x = self.post_emb_norm(x)
 
-            x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+            x = self.attn_layers(x, mask=mask, return_hiddens=False, context=context, **kwargs)
 
             if return_center_of_attention:
                 x, hiddens = self.attn_layers(x, mask=mask, return_hiddens=True, **kwargs)
                 attention = self.get_center_of_attention(hiddens.attn_intermediates)
             else:
-                x = self.attn_layers(x, mask=mask, return_hiddens=False, **kwargs)
+                x = self.attn_layers(x, mask=mask, return_hiddens=False, context=context, **kwargs)
                 attention = None
 
             out_lifts = self.to_logits_lift(x)
@@ -389,12 +389,14 @@ class ScoreDecoder(nn.Module):
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
 
-        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x = self.net(
+        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention = self.net(
             rhythms=rhythmsi,
             pitchs=pitchsi,
             lifts=liftsi,
             articulations=articulationsi,
             mask=mask,
+            cache=None,
+            return_center_of_attention=False,
             **kwargs,
         )  # this calls ScoreTransformerWrapper.forward
 
@@ -517,7 +519,7 @@ def get_score_wrapper(config: Config, attn_flash: bool = True) -> ScoreTransform
             dim=config.decoder_dim,
             depth=config.decoder_depth,
             heads=config.decoder_heads,
-            attn_flash=attn_flash,
+            attn_flash=False,
             **config.decoder_args.to_dict(),
         ),
     )
