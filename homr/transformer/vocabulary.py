@@ -507,6 +507,11 @@ class EncodedSymbol:
     def __hash__(self) -> int:
         return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position))
 
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, EncodedSymbol):
+            return NotImplemented
+        return str(self) > str(other)
+
 
 def _remove_redudant_clefs_keys_and_time_signatures(
     chords: list[list[EncodedSymbol]],
@@ -694,7 +699,8 @@ def sort_token_chords(
             is_in_chord = False
         else:
             chords.append([symbol])
-    return chords
+
+    return [sorted(chord) for chord in chords]
 
 
 if __name__ == "__main__":

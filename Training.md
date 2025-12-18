@@ -17,8 +17,8 @@ The training process itself takes depending on the hardware you use a 1-2 days.
 
 Commit: a00be6debbedf617acdf39558c89ba6113c06af3
 Day: 9 Dec 2025
-SER: 36%
-Validation result: 8.1
+SER: 23% after fixing some errors in the SER calculation itself, before 36%
+Validation result: 7.2 after fixing an error in the validation result calculation itself, before 8.1
 
 Singe staff images now use the full resolution.
 

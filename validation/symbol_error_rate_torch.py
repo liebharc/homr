@@ -66,9 +66,6 @@ def calc_symbol_error_rate_for_list(
         ]
         distance = editdistance.eval(expected, actual)
         ser = distance / len(expected)
-        if ser > 0.5:
-            eprint("Expected:", token_lines_to_str(expected))
-            eprint("Actual  :", token_lines_to_str(actual))
 
         all_sers.append(ser)
         ser = round(100 * ser)
@@ -81,6 +78,10 @@ def calc_symbol_error_rate_for_list(
             interesting_results.append((token_lines_to_str(expected), token_lines_to_str(actual)))
         percentage = round(i / total * 100)
         img_path_rel = os.path.relpath(img_path)
+        if ser > 0.5:
+            eprint(f"SER: {ser}%, ({img_path_rel})")
+            eprint("Expected:", token_lines_to_str(expected))
+            eprint("Actual  :", token_lines_to_str(actual))
         eprint(f"Progress: {percentage}%, SER: {ser}%, SER avg: {ser_avg}% ({img_path_rel})")
 
     for result in interesting_results:
