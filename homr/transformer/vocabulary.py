@@ -337,6 +337,14 @@ def next_power_of_two(n: int) -> int:
     return 1 << (n - 1).bit_length()
 
 
+def prior_power_of_two(n: int) -> int:
+    """Return the next power of two <= n."""
+    if n < 1:
+        # This produces wrong notes, but at least it produces something
+        return next_power_of_two(n)
+    return 1 << (n.bit_length() - 1)
+
+
 def kern_to_symbol_duration(kern: str) -> SymbolDuration:
     """
     Parse a Humdrum **kern duration string into a SymbolDuration object.
@@ -369,7 +377,7 @@ def kern_to_symbol_duration(kern: str) -> SymbolDuration:
         return SymbolDuration(base_duration, dots, actual_notes, normal_notes, base)
     else:
         # Tuplet case: find next higher power of two
-        normal_notes = next_power_of_two(base)
+        normal_notes = prior_power_of_two(base)
         base_duration = Fraction(1, normal_notes)
         actual_notes = base
         return SymbolDuration(base_duration, dots, actual_notes, normal_notes, normal_notes)
