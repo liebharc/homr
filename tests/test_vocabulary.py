@@ -3,6 +3,7 @@ from fractions import Fraction
 
 from homr.transformer.vocabulary import (
     EncodedSymbol,
+    kern_to_symbol_duration,
     remove_duplicated_symbols,
 )
 from training.transformer.training_vocabulary import (
@@ -191,3 +192,15 @@ barline . . . ."""
         ]
 
         self.assertEqual(token_lines_to_str(result), token_lines_to_str(expected))
+
+    def test_tuplet_duration(self) -> None:
+        for kern in ["6", "12"]:
+            duration = kern_to_symbol_duration(kern)
+            self.assertEqual(duration.normal_notes, 2)
+            self.assertEqual(duration.actual_notes, 3)
+
+    def test_normal_duration(self) -> None:
+        for kern in ["2", "4", "8"]:
+            duration = kern_to_symbol_duration(kern)
+            self.assertEqual(duration.normal_notes, 1)
+            self.assertEqual(duration.actual_notes, 1)
