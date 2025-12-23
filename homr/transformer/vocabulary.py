@@ -332,16 +332,11 @@ class SymbolDuration:
         return dur
 
 
-def next_power_of_two(n: int) -> int:
-    """Return the next power of two >= n."""
-    return 1 << (n - 1).bit_length()
-
-
 def prior_power_of_two(n: int) -> int:
     """Return the next power of two <= n."""
     if n < 1:
-        # This produces wrong notes, but at least it produces something
-        return next_power_of_two(n)
+        # This produces wrong rhythms, but at least it produces something
+        return 1
     return 1 << (n.bit_length() - 1)
 
 
