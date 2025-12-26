@@ -143,8 +143,7 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
-def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
-    gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
+def apply_clahe(gray_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(kernel_size, kernel_size))
     gray_image = clahe.apply(gray_image)
 
@@ -152,7 +151,8 @@ def apply_clahe(staff_image: NDArray, clip_limit: float = 1.0, kernel_size: int 
 
 
 def augment_staff_image(staff_image: NDArray) -> NDArray:
-    denoised1 = cv2.fastNlMeansDenoisingColored(staff_image, None, 5, 5, 11, 31)
+    gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
+    denoised1 = cv2.fastNlMeansDenoising(gray_image, None, 5, 11, 31)
     return apply_clahe(denoised1)
 
 
