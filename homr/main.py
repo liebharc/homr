@@ -284,7 +284,7 @@ def detect_staffs_in_image(
 
     debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
 
-    return multi_staffs, predictions.original, debug, title_future
+    return multi_staffs, predictions.preprocessed, debug, title_future
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
