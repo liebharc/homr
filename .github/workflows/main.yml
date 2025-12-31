@@ -37,7 +37,7 @@ jobs:
         run: make ci
 
       - name: Downloads models CPU
-        run: poetry run homr --init --force-cpu
+        run: poetry run homr --init --gpu no
 
       - name: Downloads models GPU
-        run: poetry run homr --init --force-gpu
+        run: poetry run homr --init --gpu force

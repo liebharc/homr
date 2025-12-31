@@ -4,6 +4,7 @@ import os
 import sys
 from concurrent.futures import Future
 from dataclasses import dataclass
+from enum import Enum
 
 import cv2
 import numpy as np
@@ -62,6 +63,12 @@ class PredictedSymbols:
 
 class InvalidProgramArgumentException(Exception):
     """Raise this exception for issues which the user can address."""
+
+
+class GpuSupport(Enum):
+    No = "no"
+    AUTO = "auto"
+    FORCE = "force"
 
 
 def get_predictions(
@@ -372,24 +379,19 @@ def main() -> None:
         + " of running the built-in staff detection.",
     )
     parser.add_argument(
-        "--force-cpu",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--force-gpu",
-        action="store_true",
+        "--gpu",
+        type=GpuSupport,
+        choices=list(GpuSupport),
+        default=GpuSupport.AUTO,
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
 
     has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
 
-    if args.force_gpu and args.force_cpu:
-        eprint("Can't force CPU and GPU usage at the same time")
-        sys.exit(1)
-
-    use_gpu_inference = (not args.force_cpu and has_gpu_support) or args.force_gpu
+    use_gpu_inference = (
+        args.gpu == GpuSupport.AUTO and has_gpu_support
+    ) or args.gpu == GpuSupport.FORCE
 
     download_weights(use_gpu_inference)
     if args.init:
