@@ -1,7 +1,6 @@
 import os
 from time import perf_counter
 
-import cv2
 import numpy as np
 
 from homr.simple_logging import eprint
@@ -31,7 +30,6 @@ class Staff2Score:
         """
         Inference an image (NDArray) using Tromr.
         """
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         x = _transform(image=image)
 
         t0 = perf_counter()

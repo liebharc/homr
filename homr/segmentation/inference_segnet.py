@@ -119,6 +119,7 @@ def inference(
     model = Segnet(use_gpu_inference)
     data = []
     batch = []
+    image_org = cv2.cvtColor(image_org, cv2.COLOR_GRAY2BGR)
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
     for y_loop in range(0, image.shape[1], step_size):
         if y_loop + win_size > image.shape[1]:

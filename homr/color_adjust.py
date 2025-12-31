@@ -27,7 +27,7 @@ def get_dominant_color(gray_scale: NDArray, color_range: range, default: int | N
 
 
 def apply_clahe(channel: NDArray) -> NDArray:
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
     return clahe.apply(channel)
 
 
@@ -84,7 +84,7 @@ def color_adjust(image: NDArray, block_size: int) -> tuple[NDArray, NDArray]:
     try:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         image, background = remove_background_from_channel(image, block_size)
-        return cv2.cvtColor(apply_clahe(image), cv2.COLOR_GRAY2BGR), background
+        return apply_clahe(image), background
     except Exception as e:
         eprint(e)
         return image, image

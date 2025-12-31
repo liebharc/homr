@@ -85,19 +85,31 @@ def get_tr_omr_canvas_size(
 def center_image_on_canvas(
     image: NDArray, canvas_size: NDArray, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
+    is_grayscale = image.ndim == 2 or (image.ndim == 3 and image.shape[2] == 1)
 
     resized = cv2.resize(image, canvas_size)  # type: ignore
 
-    new_image = np.zeros((tr_omr_max_height, tr_omr_max_width, 3), np.uint8)
-    new_image[:, :] = (255, 255, 255)
+    if is_grayscale:
+        new_image = np.full(
+            (tr_omr_max_height, tr_omr_max_width),
+            255,
+            dtype=np.uint8,
+        )
+    else:
+        new_image = np.full(  # type: ignore
+            (tr_omr_max_height, tr_omr_max_width, 3),
+            255,
+            dtype=np.uint8,
+        )
 
-    # Copy the resized image into the center of the new image.
     x_offset = 0
     tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
     y_offset = (tr_omr_max_height_with_margin - resized.shape[0]) // 2 + margin_top
-    new_image[y_offset : y_offset + resized.shape[0], x_offset : x_offset + resized.shape[1]] = (
-        resized
-    )
+
+    new_image[
+        y_offset : y_offset + resized.shape[0],
+        x_offset : x_offset + resized.shape[1],
+    ] = resized
 
     return new_image
 
@@ -108,8 +120,7 @@ def add_image_into_tr_omr_canvas(image: NDArray) -> NDArray:
     return new_image
 
 
-def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> NDArray:
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+def remove_black_contours_at_edges_of_image(gray: NDArray, unit_size: float) -> NDArray:
     _, thresh = cv2.threshold(gray, 97, 255, cv2.THRESH_BINARY)
     thresh = 255 - thresh
     contours, _hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -118,15 +129,15 @@ def remove_black_contours_at_edges_of_image(bgr: NDArray, unit_size: float) -> N
         x, y, w, h = cv2.boundingRect(cnt)
         if w < threshold or h < threshold:
             continue
-        is_at_edge_of_image = x == 0 or y == 0 or x + w == bgr.shape[1] or y + h == bgr.shape[0]
+        is_at_edge_of_image = x == 0 or y == 0 or x + w == gray.shape[1] or y + h == gray.shape[0]
         if not is_at_edge_of_image:
             continue
         average_gray_intensity = 127
         is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity  # type: ignore
         if is_mostly_dark:
             continue
-        bgr[y : y + h, x : x + w] = (255, 255, 255)
-    return bgr
+        gray[y : y + h, x : x + w] = 255
+    return gray
 
 
 def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
@@ -150,11 +161,6 @@ def apply_clahe(gray_image: NDArray, clip_limit: float = 1.0, kernel_size: int =
     return cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
 
 
-def augment_staff_image(staff_image: NDArray) -> NDArray:
-    gray_image = cv2.cvtColor(staff_image, cv2.COLOR_BGR2GRAY)
-    return apply_clahe(gray_image)
-
-
 def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
@@ -167,7 +173,6 @@ def prepare_staff_image(
         staff_image,
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
-    staff_image = augment_staff_image(staff_image)
     region = np.round(region * scaling_factor)
     eprint("Dewarping staff", index)
     region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
