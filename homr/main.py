@@ -60,6 +60,10 @@ class PredictedSymbols:
         self.bar_lines = bar_lines
 
 
+class InvalidProgramArgumentException(Exception):
+    """Raise this exception for issues which the user can address."""
+
+
 def get_predictions(
     original: NDArray,
     preprocessed: NDArray,
@@ -96,7 +100,9 @@ def load_and_preprocess_predictions(
 ) -> tuple[InputPredictions, Debug]:
     image = cv2.imread(image_path)
     if image is None:
-        raise ValueError("Failed to read " + image_path)
+        raise InvalidProgramArgumentException(
+            "The file format is not supported, please provide a JPG or PNG image file:" + image_path
+        )
     image = autocrop(image)
     image = resize_image(image)
     preprocessed, _background = color_adjust.color_adjust(image, 40)
@@ -409,7 +415,11 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     elif os.path.isfile(args.image):
-        process_image(args.image, config, xml_generator_args)
+        try:
+            process_image(args.image, config, xml_generator_args)
+        except InvalidProgramArgumentException as e:
+            eprint(str(e))
+            sys.exit(2)
     elif os.path.isdir(args.image):
         image_files = get_all_image_files_in_folder(args.image)
         eprint("Processing", len(image_files), "files:", image_files)
@@ -425,7 +435,8 @@ def main() -> None:
         if len(error_files) > 0:
             eprint("Errors occurred while processing the following files:", error_files)
     else:
-        raise ValueError(f"{args.image} is not a valid file or directory")
+        eprint(f"{args.image} is not a valid file or directory")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
