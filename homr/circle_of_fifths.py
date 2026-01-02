@@ -126,58 +126,28 @@ class KeyTransformation(AbstractKeyTransformation):
         return KeyTransformation(self.circle_of_fifth)
 
 
-def convert_sounding_to_engraving_representation(
+def maintain_accidentals_during_measure(
     symbols: list[EncodedSymbol],
 ) -> list[EncodedSymbol]:
     """
-    The distinction in encoding accidentals is typically described as:
+    The PrIMuS datset doesn't maintain accidentals. Possibly
+    because it uses a different rule for accidentals as in music
+    there is no aggreement on this matter. However homr and the
+    other datasets maintain accidentals until the endo f the measure,
+    so we adjust the PrIMus ground truth to match this.
 
-    1. Notation-based encoding (visual/engraving representation):
-    - Stores accidentals exactly as they appear in the score, following notation rules.
-    - Example: In a measure with two F#s, only the first carries a #; the second is implied.
-    - Used in some engraving formats and MuseScore's internal format.
-
-    2. Pitch-based encoding (sounding representation):
-    - Stores the actual sounding pitch of each note, ignoring visual notation conventions.
-    - Example: Both F#s in the measure are explicitly encoded.
-    - Used in standard MusicXML <pitch> representation and MIDI.
+    Example: datasets/Corpus/000135772-1_2_1/000135772-1_2_1-pre.jpg
     """
     results = []
-    key = KeyTransformation(0)
-    for symbol in symbols:
-        if "barline" in symbol.rhythm:
-            key = key.reset_at_end_of_measure()
-            results.append(symbol)
-        elif symbol.rhythm.startswith("keySignature_"):
-            key = KeyTransformation(int(symbol.rhythm.split("_")[1]))
-            results.append(symbol)
-        elif symbol.lift != nonote:
-            lift = symbol.lift if symbol.lift != empty else None
-            note = symbol.pitch[0]
-            accidental = key.add_accidental(note, lift)
-            results.append(symbol.change_lift(accidental if accidental else empty))
-        else:
-            results.append(symbol)
 
-    return results
-
-
-def convert_engraving_to_sounding_representation(
-    symbols: list[EncodedSymbol],
-) -> list[EncodedSymbol]:
-    """
-    Converts notation-based (engraving) representation into pitch-based (sounding) representation.
-    All accidentals are explicitly stored according to actual sounding pitch.
-    """
-    results = []
+    # Since PrIMuS treats keys as we expect, we don't
+    # have to take the key into account and therefore just the
+    # key of C as it has no accidentals
     key = KeyTransformation(0)
 
     for symbol in symbols:
         if "barline" in symbol.rhythm:
             key = key.reset_at_end_of_measure()
-            results.append(symbol)
-        elif symbol.rhythm.startswith("keySignature_"):
-            key = KeyTransformation(int(symbol.rhythm.split("_")[1]))
             results.append(symbol)
         elif symbol.lift != nonote:
             note = symbol.pitch[0]
