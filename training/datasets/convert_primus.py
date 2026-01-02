@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 
 from homr.circle_of_fifths import (
-    convert_engraving_to_sounding_representation,
+    maintain_accidentals_during_measure,
     strip_naturals,
 )
 from homr.download_utils import download_file, untar_file
@@ -65,7 +65,7 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
         eprint("Warning: No semantic file found for", path)
         return []
     tokens = convert_primus_semantic_to_tokens(semantic_file.read_text())
-    tokens = convert_engraving_to_sounding_representation(tokens)
+    tokens = maintain_accidentals_during_measure(tokens)
     tokens = strip_naturals(tokens)
     token_file = _replace_suffix(path, ".tokens")
     token_file.write_text(token_lines_to_str(tokens))

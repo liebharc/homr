@@ -62,3 +62,41 @@ class TrOMR(nn.Module):
         out = self.decoder.generate(start_token, nonote_token, context=context)
 
         return out
+
+    def freeze_decoder(self) -> None:
+        """Freeze all decoder parameters to prevent updates during training."""
+        for param in self.decoder.parameters():
+            param.requires_grad = False
+
+    def freeze_encoder(self) -> None:
+        """Freeze all encoder parameters to prevent updates during training."""
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+
+    def unfreeze_lift_decoder(self) -> None:
+        for param in self.decoder.net.lift_emb.parameters():
+            param.requires_grad = True
+        for param in self.decoder.net.to_logits_lift.parameters():
+            param.requires_grad = True
+
+
+def load_model(config: Config) -> TrOMR:
+    """Load model from checkpoint."""
+    model = TrOMR(config)
+    checkpoint_path = config.filepaths.checkpoint
+    if checkpoint_path.endswith(".safetensors"):
+        import safetensors
+
+        tensors = {}
+        with safetensors.safe_open(checkpoint_path, framework="pt", device=0) as f:
+            for k in f.keys():
+                tensors[k] = f.get_tensor(k)
+        model.load_state_dict(tensors, strict=False)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.load_state_dict(
+            torch.load(checkpoint_path, map_location=device, weights_only=True), strict=False
+        )
+    model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    return model

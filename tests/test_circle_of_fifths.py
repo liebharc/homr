@@ -1,8 +1,7 @@
 import unittest
 
 from homr.circle_of_fifths import (
-    convert_engraving_to_sounding_representation,
-    convert_sounding_to_engraving_representation,
+    maintain_accidentals_during_measure,
     strip_naturals,
 )
 from homr.transformer.vocabulary import EncodedSymbol
@@ -10,35 +9,41 @@ from homr.transformer.vocabulary import EncodedSymbol
 
 class TestCircleOfFifths(unittest.TestCase):
 
-    def test_convert_sounding_to_engraving_representation(self) -> None:
+    def test_maintain_accidentals_during_measure_with_key_and_barlines(self) -> None:
         symbols = [
-            EncodedSymbol("note_4", "F4", "#"),
+            EncodedSymbol("keySignature_1"),
+            EncodedSymbol("note_2", "F4", "_"),
+            EncodedSymbol("note_4", "G4", "#"),
             EncodedSymbol("note_4", "G4", "_"),
-            EncodedSymbol("note_4", "A4", "_"),
-            EncodedSymbol("note_4", "F5", "_"),
+            EncodedSymbol("barline"),
+            EncodedSymbol("note_1", "G4", "_"),
         ]
-        result = convert_sounding_to_engraving_representation(symbols)
+        result = maintain_accidentals_during_measure(symbols)
         expected = [
-            EncodedSymbol("note_4", "F4", "#"),
-            EncodedSymbol("note_4", "G4", "_"),
-            EncodedSymbol("note_4", "A4", "_"),
-            EncodedSymbol("note_4", "F5", "N"),
+            EncodedSymbol("keySignature_1"),
+            EncodedSymbol(
+                "note_2", "F4", "_"
+            ),  # the PrIMus datset encodes the keys already correctly
+            EncodedSymbol("note_4", "G4", "#"),
+            EncodedSymbol("note_4", "G4", "#"),
+            EncodedSymbol("barline"),
+            EncodedSymbol("note_1", "G4", "_"),
         ]
         self.assertEqual(result, expected)
 
-    def test_convert_engraving_to_sounding_representation(self) -> None:
+    def test_maintain_accidentals_during_measure(self) -> None:
         symbols = [
             EncodedSymbol("note_4", "F4", "#"),
             EncodedSymbol("note_4", "G4", "_"),
             EncodedSymbol("note_4", "A4", "_"),
-            EncodedSymbol("note_4", "F5", "_"),
+            EncodedSymbol("note_4", "F4", "_"),
         ]
-        result = convert_engraving_to_sounding_representation(symbols)
+        result = maintain_accidentals_during_measure(symbols)
         expected = [
             EncodedSymbol("note_4", "F4", "#"),
             EncodedSymbol("note_4", "G4", "_"),
             EncodedSymbol("note_4", "A4", "_"),
-            EncodedSymbol("note_4", "F5", "#"),
+            EncodedSymbol("note_4", "F4", "#"),
         ]
         self.assertEqual(result, expected)
 

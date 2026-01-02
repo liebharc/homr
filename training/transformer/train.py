@@ -11,7 +11,7 @@ from transformers import (
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from training.architecture.transformer.tromr_arch import TrOMR
+from training.architecture.transformer.tromr_arch import TrOMR, load_model
 from training.datasets.convert_grandstaff import (
     convert_grandstaff,
     grandstaff_train_index,
@@ -77,8 +77,14 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
     return selected_datasets
 
 
-def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = False) -> None:
-    number_of_epochs = 15 if smoke_test else 70
+def train_transformer(
+    fp32: bool = False, resume: str = "", smoke_test: bool = False, fine_tune: bool = False
+) -> None:
+    number_of_epochs = 70
+    if smoke_test:
+        number_of_epochs = 15
+    elif fine_tune:
+        number_of_epochs = 20
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -116,14 +122,14 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
 
     run_id = get_run_id()
 
-    batch_size = 16
+    batch_size = 6 if fp32 else 16
 
     train_args = TrainingArguments(
         checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
-        learning_rate=1e-4,
+        learning_rate=1e-6 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
         gradient_accumulation_steps=4,
         per_device_train_batch_size=batch_size,
@@ -142,7 +148,12 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
         dataloader_num_workers=12,
     )
 
-    model = TrOMR(config)
+    if fine_tune:
+        eprint("Fine tuning model from", config.filepaths.checkpoint)
+        model = load_model(config)
+        model.freeze_encoder()
+    else:
+        model = TrOMR(config)
 
     model_name = "pytorch_model"
 
@@ -170,4 +181,7 @@ def train_transformer(fp32: bool = False, resume: str = "", smoke_test: bool = F
 
 
 if __name__ == "__main__":
-    train_transformer(smoke_test=True)
+    if "--fine" in sys.argv:
+        train_transformer(fp32=False, fine_tune=True)
+    else:
+        train_transformer(smoke_test=True)
