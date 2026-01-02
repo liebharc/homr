@@ -1,5 +1,6 @@
 import re
 
+from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
 from training.datasets.staff_merging import (
     EncodedSymbolWithPos,
@@ -15,6 +16,7 @@ def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
     )
     merged = _remove_redundant_key_changes(merged)
     merged = _fix_final_repeat_start(merged)
+    merged = strip_naturals(merged)
     return merged
 
 
