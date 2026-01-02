@@ -165,8 +165,9 @@ def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
     region = _calculate_region(staff, regions)
+    margin_bottom = 0 if staff.is_grandstaff else default_config.max_height // 2
     image_dimensions = get_tr_omr_canvas_size(
-        (int(region[3] - region[1]), int(region[2] - region[0]))
+        (int(region[3] - region[1]), int(region[2] - region[0])), margin_bottom=margin_bottom
     )
     scaling_factor = image_dimensions[1] / (region[3] - region[1])
     staff_image = cv2.resize(
@@ -188,7 +189,7 @@ def prepare_staff_image(
     eprint("Dewarping staff", index, "done")
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
-    staff_image = center_image_on_canvas(staff_image, image_dimensions)
+    staff_image = center_image_on_canvas(staff_image, image_dimensions, margin_bottom=margin_bottom)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
