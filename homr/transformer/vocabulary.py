@@ -432,6 +432,11 @@ class EncodedSymbol:
         result._duration = None
         return result
 
+    def change_lift(self, lift: str) -> "EncodedSymbol":
+        result = copy.copy(self)
+        result.lift = lift
+        return result
+
     def to_upper_position(self) -> "EncodedSymbol":
         if self.position != "lower":
             return self
