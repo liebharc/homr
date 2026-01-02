@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
@@ -235,6 +236,7 @@ def _split_file_into_staffs(
             )
 
             if calc_ratio_of_tuplets(selected_measures) <= 0.2:
+                selected_measures = strip_naturals(selected_measures)
                 tokens_content = token_lines_to_str(selected_measures)
                 write_text_to_file(tokens_content, token_file_name)
                 result.append(
