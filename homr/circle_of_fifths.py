@@ -150,7 +150,6 @@ def maintain_accidentals_during_measure(
             key = key.reset_at_end_of_measure()
             results.append(symbol)
         elif symbol.lift != nonote:
-            note = symbol.pitch[0]
             # In engraving, the lift may be empty (implied by key signature or previous accidental)
             # In sounding, we need the actual pitch: remove any previous
             # accidental tracking to force the current one
@@ -161,10 +160,10 @@ def maintain_accidentals_during_measure(
                 actual_accidental = lift
                 # Update key state to reflect that this accidental has been
                 # applied for future notes in the measure
-                key.add_accidental(note, lift)
-            elif note in key.sharps:  # Determine if note is sharp/flat by key signature
+                key.add_accidental(symbol.pitch, lift)
+            elif symbol.pitch in key.sharps:  # Determine if note is sharp/flat by key signature
                 actual_accidental = "#"
-            elif note in key.flats:
+            elif symbol.pitch in key.flats:
                 actual_accidental = "b"
             else:
                 actual_accidental = empty
