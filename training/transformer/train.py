@@ -84,7 +84,7 @@ def train_transformer(
     if smoke_test:
         number_of_epochs = 15
     elif fine_tune:
-        number_of_epochs = 20
+        number_of_epochs = 15
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -129,7 +129,7 @@ def train_transformer(
         torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
-        learning_rate=1e-6 if fine_tune else 1e-4,
+        learning_rate=1e-5 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
         gradient_accumulation_steps=4,
         per_device_train_batch_size=batch_size,
@@ -152,6 +152,8 @@ def train_transformer(
         eprint("Fine tuning model from", config.filepaths.checkpoint)
         model = load_model(config)
         model.freeze_encoder()
+        model.freeze_decoder()
+        model.unfreeze_lift_decoder()
     else:
         model = TrOMR(config)
 
