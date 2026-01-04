@@ -14,31 +14,9 @@ from tqdm import tqdm
 
 from homr.transformer.configs import default_config
 from homr.transformer.staff2score import readimg
-from homr.transformer.tromr_arch import TrOMR
+from homr.transformer.tromr_arch import load_model
 
 MAX_NUMBER_OF_SAMPLES_WITH_IMAGES = 1000
-
-
-def load_model(config):
-    """Load model from checkpoint."""
-    model = TrOMR(config)
-    checkpoint_path = config.filepaths.checkpoint
-    if checkpoint_path.endswith(".safetensors"):
-        import safetensors
-
-        tensors = {}
-        with safetensors.safe_open(checkpoint_path, framework="pt", device=0) as f:
-            for k in f.keys():
-                tensors[k] = f.get_tensor(k)
-        model.load_state_dict(tensors, strict=False)
-    else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model.load_state_dict(
-            torch.load(checkpoint_path, map_location=device, weights_only=True), strict=False
-        )
-    model.eval()
-    model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-    return model
 
 
 def extract_embedding(model, img_tensor):

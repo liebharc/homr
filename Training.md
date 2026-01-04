@@ -13,6 +13,16 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 286
+
+Commit: 0daf75fea21e6ea6a865405e03a4bc7e73e9aa14
+Day: 4 Jan 2026
+SER: 26%
+Validation result: 7.4
+
+After fixing an issue with accidentals during the conversion of the PrIMuS dataset Run 242 (a00be6debbedf617acdf39558c89ba6113c06af3)
+was used as basis of a 15 epoch run which only trained the lift decoder.
+
 ## Run 242
 
 Commit: a00be6debbedf617acdf39558c89ba6113c06af3
