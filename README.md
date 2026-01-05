@@ -10,15 +10,16 @@ processed using tools such as [musescore](https://musescore.com/).
 
 - Python 3.10
 - Poetry
-- Optional: NVidia GPU with CUDA 12.1
+- Optional: NVIDIA GPU with CUDA, using a CUDA version compatible with onnxruntime-gpu (inference) or pytorch (training).
+  CUDA installation and compatibility depend on your system and troubleshooting is not supported by this project.
 
 ## Getting started
 
 - Clone the repository
 - Install dependencies for:
-    - GPU (requires CUDA): `poetry install --only main,gpu`
-    - CPU: `poetry install --only main`
-    - Development: `poetry install`
+  - CPU (recommended): `poetry install --only main`
+  - GPU (CUDA required; usually only modest speedups): `poetry install --only main,gpu`
+  - Development: `poetry install`
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 - To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)

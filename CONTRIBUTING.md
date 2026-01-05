@@ -4,7 +4,11 @@ We're thrilled you're considering contributing to `homr`! This document outlines
 
 ## Getting Started
 
-Before you begin, make sure you have a GitHub account and have familiarized yourself with the `homr` project by reading through the documentation and exploring the codebase.
+Before you begin, make sure you have a GitHub account and have familiarized yourself with the `homr` project by reading through the documentation and exploring the codebase. Likely you will also recognize that the documentation can be improved, so this can be a good first PR.
+
+- [README](README.md)
+- [Goals](Goals.md)
+- [Vocabulary](Vocabulary.md)
 
 ### Issues
 
@@ -40,14 +44,14 @@ Before you begin, make sure you have a GitHub account and have familiarized your
 
 ### Detection Algorithm Changes
 
-If your contribution impacts the detection algorithm, please include examples that showcase the enhancements. 
-This should cover both qualitative examples and, where possible, quantitative metrics to illustrate the improvements. 
-Utilize the [rate_validation_result.py](https://github.com/liebharc/homr/blob/main/validation/rate_validation_result.py) script to generate metrics across multiple images, 
+If your contribution impacts the detection algorithm, please include examples that showcase the enhancements.
+This should cover both qualitative examples and, where possible, quantitative metrics to illustrate the improvements.
+Utilize the [rate_validation_result.py](https://github.com/liebharc/homr/blob/main/validation/rate_validation_result.py) script to generate metrics across multiple images,
 provided you have access to corresponding groundtruth MusicXML files.
 
 ### Training Model Updates
 
-If your contribution involves modifications to the model training process, please include a link to the updated trained model. 
+If your contribution involves modifications to the model training process, please include a link to the updated trained model.
 This ensures that reviewers and users can easily access and evaluate the impact of your changes.
 
 ## Licensing
