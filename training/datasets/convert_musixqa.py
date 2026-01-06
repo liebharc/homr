@@ -51,22 +51,50 @@ def convert_duration(duration_str: str) -> str:
 
 def interleave_staves(bars, is_grandstaff):
     all_symbols = []
+    # Track which pitches have an active tie outgoing (the next note should have tieStop)
+    active_ties = {} # (staff_name, pitch) -> bool
+
     for bar_data in bars:
         staves = bar_data["staves"]
         timed_events = []
-        staff_keys = ["treble", "bass"] if is_grandstaff else list(staves.keys())
+        staff_keys = ["treble", "bass"] if is_grandstaff else sorted(staves.keys(), reverse=True)
+        
+        # Add repeatStart if present
+        if bar_data.get("repeat") == "start":
+            all_symbols.append([EncodedSymbol("repeatStart")])
+
         for staff_name in staff_keys:
             if staff_name not in staves: continue
             offset = Fraction(0)
             position = "upper" if staff_name == "treble" or not is_grandstaff else "lower"
+            
             for event in staves[staff_name]:
                 dur_str = event["duration"]
                 dur_kern = convert_duration(dur_str)
+                articulations = []
+                
                 if "pitch" in event:
                     pitch_name, lift = parse_pitch(event["pitch"])
-                    sym = EncodedSymbol(f"note_{dur_kern}", pitch_name, lift, "_", position)
+                    
+                    tie_key = (staff_name, event["pitch"])
+                    has_active_tie = active_ties.get(tie_key, False)
+                    has_outgoing_tie = event.get("tie", False)
+                    
+                    if has_active_tie and has_outgoing_tie:
+                        articulations.append("tieStart")
+                        articulations.append("tieStop")
+                    elif has_active_tie:
+                        articulations.append("tieStop")
+                    elif has_outgoing_tie:
+                        articulations.append("tieStart")
+                    
+                    active_ties[tie_key] = has_outgoing_tie
+                    
+                    art_str = "_".join(sorted(articulations)) if articulations else "_"
+                    sym = EncodedSymbol(f"note_{dur_kern}", pitch_name, lift, art_str, position)
                 else:
                     sym = EncodedSymbol(f"rest_{dur_kern}", ".", ".", ".", position)
+                
                 timed_events.append((offset, sym))
                 offset += Fraction(dur_str)
         
@@ -74,9 +102,16 @@ def interleave_staves(bars, is_grandstaff):
         for offset, sym in timed_events:
             events_by_offset.setdefault(offset, []).append(sym)
         
-        for offset in sorted(events_by_offset.keys()):
+        sorted_offsets = sorted(events_by_offset.keys())
+        for offset in sorted_offsets:
             all_symbols.append(events_by_offset[offset])
-        all_symbols.append([EncodedSymbol("barline")])
+            
+        # Add barline or repeatEnd
+        if bar_data.get("repeat") == "end":
+            all_symbols.append([EncodedSymbol("repeatEnd")])
+        else:
+            all_symbols.append([EncodedSymbol("barline")])
+            
     return all_symbols
 
 from homr.transformer.vocabulary import Vocabulary

@@ -57,6 +57,53 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertEqual(res_str[1], ["note_4 E4 _ _ upper"])
         self.assertEqual(res_str[2], ["barline . . . ."])
 
+    def test_interleave_staves_with_ties(self):
+        bars = [
+            {
+                "staves": {
+                    "treble": [
+                        {"duration": "1/4", "pitch": "C4", "tie": True},
+                        {"duration": "1/4", "pitch": "C4", "tie": True},
+                        {"duration": "1/4", "pitch": "C4"}
+                    ]
+                }
+            }
+        ]
+        result = interleave_staves(bars, False)
+        res_str = [[str(s) for s in chord] for chord in result]
+        
+        # Expected:
+        # Note 1: tieStart
+        # Note 2: tieStart_tieStop
+        # Note 3: tieStop
+        self.assertEqual(res_str[0], ["note_4 C4 _ tieStart upper"])
+        self.assertEqual(res_str[1], ["note_4 C4 _ tieStart_tieStop upper"])
+        self.assertEqual(res_str[2], ["note_4 C4 _ tieStop upper"])
+        self.assertEqual(res_str[3], ["barline . . . ."])
+
+    def test_interleave_staves_with_repeats(self):
+        bars = [
+            {
+                "repeat": "start",
+                "staves": {"treble": [{"duration": "1/4", "pitch": "G4"}]}
+            },
+            {
+                "repeat": "end",
+                "staves": {"treble": [{"duration": "1/4", "pitch": "G4"}]}
+            }
+        ]
+        result = interleave_staves(bars, False)
+        res_str = [[str(s) for s in chord] for chord in result]
+        
+        # Expected:
+        # Bar 1: repeatStart, note_4 G4 _, barline
+        # Bar 2: note_4 G4 _, repeatEnd
+        self.assertEqual(res_str[0], ["repeatStart . . . ."])
+        self.assertEqual(res_str[1], ["note_4 G4 _ _ upper"])
+        self.assertEqual(res_str[2], ["barline . . . ."])
+        self.assertEqual(res_str[3], ["note_4 G4 _ _ upper"])
+        self.assertEqual(res_str[4], ["repeatEnd . . . ."])
+
     def test_convert_piece_to_homr(self):
         piece_data = {
             "key": "G Major",
