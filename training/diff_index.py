@@ -29,7 +29,7 @@ def _normalize(token: str) -> str:
     return token.strip() + "\n"
 
 
-def diff_index(index_path: str):
+def diff_index(index_path: str) -> None:
     git_root = Path(__file__).parent.parent.absolute()
 
     if not os.path.exists(index_path):
@@ -43,8 +43,8 @@ def diff_index(index_path: str):
     with open(index_path, "r") as f:
         lines = f.readlines()
 
-    for line in lines:
-        line = line.strip()
+    for raw_line in lines:
+        line = raw_line.strip()
         if not line:
             continue
 

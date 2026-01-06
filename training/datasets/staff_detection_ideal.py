@@ -16,7 +16,8 @@ Algorithm overview:
 6. Merge adjacent staffs if their expanded regions touch, forming a grand staff.
 7. Detect vertical bar lines for each staff group:
    - Consider only the vertical span from the top staff line to the bottom staff line of the group.
-   - Validate columns by requiring continuous black pixels spanning approximately the staff-line height.
+   - Validate columns by requiring continuous black pixels spanning approximately
+     the staff-line height.
    - Merge adjacent candidate columns into a single bar line.
 8. Output:
    - Print staff group positions, heights, and number of bar lines.
@@ -24,7 +25,6 @@ Algorithm overview:
 """
 
 import sys
-from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
@@ -41,7 +41,7 @@ BAR_HEIGHT_TOL = 0.5
 # ------------------------------------------------------------
 
 
-def load_binary_image(path):
+def load_binary_image(path: str) -> tuple[np.ndarray, np.ndarray]:
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError("Image not found")
@@ -49,7 +49,7 @@ def load_binary_image(path):
     return img, bin_img
 
 
-def save_row_histogram(row_hist, peaks, out_path):
+def save_row_histogram(row_hist: np.ndarray, peaks: np.ndarray, out_path: str) -> None:
     plt.figure(figsize=(6, 8))
     plt.plot(row_hist, np.arange(len(row_hist)))
     plt.scatter(row_hist[peaks], peaks, color="red", s=5)
@@ -66,7 +66,7 @@ def save_row_histogram(row_hist, peaks, out_path):
 # ------------------------------------------------------------
 
 
-def collapse_thick_lines(rows):
+def collapse_thick_lines(rows: np.ndarray) -> np.ndarray:
     lines = []
     current = [rows[0]]
     for r in rows[1:]:
@@ -79,7 +79,7 @@ def collapse_thick_lines(rows):
     return np.array(lines)
 
 
-def detect_staff_lines(bin_img):
+def detect_staff_lines(bin_img: np.ndarray) -> list[tuple[int, int]]:
     # Use morphological opening to strengthen horizontal lines and remove stems/beams
     # This is more robust than simple global histogram thresholding
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 1))
@@ -88,7 +88,7 @@ def detect_staff_lines(bin_img):
     row_hist = morphed.sum(axis=1)
 
     # Local maxima detection to resolve peak rows even if the space between them is not empty
-    peak_rows = []
+    peak_rows_arr = []
     min_h = bin_img.shape[1] * 0.3 * 255  # 30% width
     for i in range(1, len(row_hist) - 1):
         if (
@@ -102,9 +102,9 @@ def detect_staff_lines(bin_img):
             j = i
             while j < len(row_hist) - 1 and row_hist[j + 1] == row_hist[i]:
                 j += 1
-            peak_rows.append(int((i + j) / 2))
+            peak_rows_arr.append(int((i + j) / 2))
 
-    peak_rows = np.array(peak_rows)
+    peak_rows = np.array(peak_rows_arr)
 
     staffs = []
     if len(peak_rows) < STAFF_LINES:
@@ -147,7 +147,7 @@ def detect_staff_lines(bin_img):
 # ------------------------------------------------------------
 
 
-def detect_staff_width(bin_img, top, bottom):
+def detect_staff_width(bin_img: np.ndarray, top: int, bottom: int) -> tuple[int, int]:
     region = bin_img[top : bottom + 1, :]
     col_hist = region.sum(axis=0)
     nz = np.where(col_hist > 0)[0]
@@ -156,7 +156,9 @@ def detect_staff_width(bin_img, top, bottom):
     return int(nz[0]), int(nz[-1])
 
 
-def expand_staff_height(bin_img, top, bottom, left, right):
+def expand_staff_height(
+    bin_img: np.ndarray, top: int, bottom: int, left: int, right: int
+) -> tuple[int, int]:
     h = bin_img.shape[0]
 
     t = top
@@ -170,7 +172,7 @@ def expand_staff_height(bin_img, top, bottom, left, right):
     return t, b
 
 
-def merge_grandstaffs(staff_boxes):
+def merge_grandstaffs(staff_boxes: list) -> list:
     """
     staff_boxes: list of (t, b, l, r, line_t, line_b)
     """
@@ -180,7 +182,7 @@ def merge_grandstaffs(staff_boxes):
     # Sort by top position
     staff_boxes.sort(key=lambda x: x[0])
 
-    merged = []
+    merged: list = []
     for box in staff_boxes:
         if not merged:
             # list of: [t, b, l, r, [list of (lt, lb) individual lines]]
@@ -212,11 +214,11 @@ def merge_grandstaffs(staff_boxes):
 
 
 def detect_barlines(
-    bin_img,
-    staff_line_ranges,  # list of (lt, lb) for each staff in group
-    left,
-    right,
-):
+    bin_img: np.ndarray,
+    staff_line_ranges: list[tuple[int, int]],  # list of (lt, lb) for each staff in group
+    left: int,
+    right: int,
+) -> list[int]:
     # Use morphological opening with a vertical kernel.
     # Width=1 matches barlines but also stems.
     # Height=25 filters out most smaller vertical bits.
@@ -271,7 +273,7 @@ def detect_barlines(
 # ------------------------------------------------------------
 
 
-def main(image_path):
+def main(image_path: str) -> tuple[list, list]:
     img, bin_img = load_binary_image(image_path)
 
     # 1. Detect exact staff-line bounds
@@ -293,12 +295,12 @@ def main(image_path):
     group_barlines = []
 
     for group in merged_groups:
-        t, b, l, r, line_ranges = group
-        width = r - l + 1
+        t, b, left, right, line_ranges = group
+        width = right - left + 1
         if width < 500:  # Filter out titles, clef-only bits etc
             continue
 
-        bls = detect_barlines(bin_img, line_ranges, l, r)
+        bls = detect_barlines(bin_img, line_ranges, left, right)
 
         # Final sanity check: at least 2 barlines (start and end)
         if len(bls) < 2:
@@ -308,7 +310,7 @@ def main(image_path):
         lt = min(r[0] for r in line_ranges)
         lb = max(r[1] for r in line_ranges)
 
-        staff_groups.append((t, b, l, r, lt, lb))
+        staff_groups.append((t, b, left, right, lt, lb))
         group_barlines.append(bls)
 
     return staff_groups, group_barlines

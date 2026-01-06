@@ -78,7 +78,7 @@ def unzip_file(filename: str, output_folder: str, flatten_root_entry: bool = Fal
 
 def untar_file(filename: str, output_folder: str, zipped: bool = True) -> None:
     read_mode = "r:gz" if zipped else "r"
-    with tarfile.open(filename, read_mode) as tar:
+    with tarfile.open(filename, read_mode) as tar:  # type: ignore
         for member in tar.getmembers():
             # Ensure file path is safe
             if os.path.isabs(member.name) or ".." in member.name:

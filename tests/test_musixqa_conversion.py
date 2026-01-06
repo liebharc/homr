@@ -1,7 +1,5 @@
 import unittest
-from fractions import Fraction
 
-from homr.transformer.vocabulary import EncodedSymbol
 from training.datasets.convert_musixqa import (
     convert_duration,
     convert_piece_to_homr,
@@ -12,14 +10,14 @@ from training.datasets.convert_musixqa import (
 
 class TestMusixQAConversion(unittest.TestCase):
 
-    def test_parse_pitch(self):
+    def test_parse_pitch(self) -> None:
         self.assertEqual(parse_pitch("C4"), ("C4", "_"))
         self.assertEqual(parse_pitch("F#4"), ("F4", "#"))
         self.assertEqual(parse_pitch("Bb3"), ("B3", "b"))
         self.assertEqual(parse_pitch("rest"), (".", "."))
         self.assertEqual(parse_pitch(""), (".", "."))
 
-    def test_convert_duration(self):
+    def test_convert_duration(self) -> None:
         self.assertEqual(convert_duration("1/4"), "4")
         self.assertEqual(convert_duration("1/8"), "8")
         self.assertEqual(convert_duration("1/2"), "2")
@@ -28,7 +26,7 @@ class TestMusixQAConversion(unittest.TestCase):
         with self.assertRaises(ValueError):
             convert_duration("1/5")
 
-    def test_interleave_staves_simple(self):
+    def test_interleave_staves_simple(self) -> None:
         bars = [
             {
                 "staves": {
@@ -57,14 +55,14 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertEqual(res_str[1], ["note_4 E4 _ _ upper"])
         self.assertEqual(res_str[2], ["bolddoublebarline . . . ."])
 
-    def test_interleave_staves_intermediate_system(self):
+    def test_interleave_staves_intermediate_system(self) -> None:
         bars = [{"staves": {"treble": [{"duration": "1/4", "pitch": "C4"}]}}]
         # Not last system -> normal barline
         result = interleave_staves(bars, is_last_system=False)
         res_str = [[str(s) for s in chord] for chord in result]
         self.assertEqual(res_str[1], ["barline . . . ."])
 
-    def test_interleave_staves_with_ties(self):
+    def test_interleave_staves_with_ties(self) -> None:
         bars = [
             {
                 "staves": {
@@ -88,7 +86,7 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertEqual(res_str[2], ["note_4 C4 _ tieStop upper"])
         self.assertEqual(res_str[3], ["bolddoublebarline . . . ."])
 
-    def test_interleave_staves_with_repeats(self):
+    def test_interleave_staves_with_repeats(self) -> None:
         bars = [
             {"repeat": "start", "staves": {"treble": [{"duration": "1/4", "pitch": "G4"}]}},
             {"repeat": "end", "staves": {"treble": [{"duration": "1/4", "pitch": "G4"}]}},
@@ -105,7 +103,7 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertEqual(res_str[3], ["note_4 G4 _ _ upper"])
         self.assertEqual(res_str[4], ["repeatEnd . . . ."])
 
-    def test_convert_piece_to_homr(self):
+    def test_convert_piece_to_homr(self) -> None:
         piece_data = {"key": "G Major", "time_signature": "4/4"}
         bars = [
             {
@@ -131,7 +129,7 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertIn("note_4 G4 _ _ upper&note_4 G3 _ _ upper", tokens)
         self.assertIn("bolddoublebarline . . . .", tokens)
 
-    def test_convert_piece_to_homr_no_time_sig(self):
+    def test_convert_piece_to_homr_no_time_sig(self) -> None:
         piece_data = {"key": "C Major", "time_signature": "4/4"}
         bars = [{"staves": {"treble": [{"duration": "1/4", "pitch": "C4"}]}}]
 
@@ -142,8 +140,8 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertIn("clef_G2 _ _ _ upper", tokens)
         self.assertIn("bolddoublebarline . . . .", tokens)
 
-    def test_repeat_start_replaces_barline(self):
-        bars = [
+    def test_repeat_start_replaces_barline(self) -> None:
+        bars: list = [
             {"staves": {"treble": [{"duration": "1/4", "pitch": "C4"}]}},
             {"repeat": "start", "staves": {"treble": [{"duration": "1/4", "pitch": "D4"}]}},
         ]
@@ -159,7 +157,7 @@ class TestMusixQAConversion(unittest.TestCase):
         self.assertEqual(res_str[2], ["note_4 D4 _ _ upper"])
         self.assertEqual(res_str[3], ["barline . . . ."])
 
-    def test_repeat_end_replaces_barline(self):
+    def test_repeat_end_replaces_barline(self) -> None:
         # Verify repeatEnd works as intended (replaces barline/bolddoublebarline)
         bars = [{"repeat": "end", "staves": {"treble": [{"duration": "1/4", "pitch": "C4"}]}}]
 

@@ -6,15 +6,12 @@ from fractions import Fraction
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.transformer.vocabulary import EncodedSymbol
-from training.datasets.convert_grandstaff import distort_image
+from homr.transformer.vocabulary import EncodedSymbol, Vocabulary
 from training.datasets.staff_detection_ideal import main as detect_staff
-from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -69,10 +66,10 @@ def convert_duration(duration_str: str) -> str:
     raise ValueError(f"Unsupported duration: {duration_str}")
 
 
-def interleave_staves(bars, is_last_system=False):
-    all_symbols = []
+def interleave_staves(bars: list[dict], is_last_system: bool = False) -> list[list[EncodedSymbol]]:
+    all_symbols: list = []
     # Track which pitches have an active tie outgoing (the next note should have tieStop)
-    active_ties = {}  # (staff_name, pitch) -> bool
+    active_ties: dict = {}  # (staff_name, pitch) -> bool
 
     for bar_idx, bar_data in enumerate(bars):
         staves = bar_data["staves"]
@@ -81,7 +78,8 @@ def interleave_staves(bars, is_last_system=False):
 
         # Add repeatStart if present
         if bar_data.get("repeat") == "start":
-            # If the previous symbol was a standard barline, remove it because repeatStart implies a barline
+            # If the previous symbol was a standard barline,
+            # remove it because repeatStart implies a barline
             if all_symbols and str(all_symbols[-1][0]).startswith("barline"):
                 all_symbols.pop()
             all_symbols.append([EncodedSymbol("repeatStart")])
@@ -122,7 +120,7 @@ def interleave_staves(bars, is_last_system=False):
                 timed_events.append((offset, sym))
                 offset += Fraction(dur_str)
 
-        events_by_offset = {}
+        events_by_offset: dict = {}
         for offset, sym in timed_events:
             events_by_offset.setdefault(offset, []).append(sym)
 
@@ -144,13 +142,13 @@ def interleave_staves(bars, is_last_system=False):
 
     return all_symbols
 
+    return all_symbols
 
-from homr.transformer.vocabulary import Vocabulary
 
 vocab = Vocabulary()
 
 
-def validate_tokens(token_str: str):
+def validate_tokens(token_str: str) -> None:
     tokens = [
         t.strip()
         for t in token_str.replace(",", " ").split(" ")
@@ -168,7 +166,12 @@ def validate_tokens(token_str: str):
                 raise ValueError(f"Invalid rhythm token: {rhythm}")
 
 
-def convert_piece_to_homr(piece_data, bars_subset, is_first_system=False, is_last_system=False):
+def convert_piece_to_homr(
+    piece_data: dict,
+    bars_subset: list[dict],
+    is_first_system: bool = False,
+    is_last_system: bool = False,
+) -> str:
     tokens = []
     has_bass = any("bass" in b["staves"] for b in bars_subset)
     tokens.append(str(EncodedSymbol("clef_F4" if has_bass else "clef_G2", "_", "_", "_", "upper")))
@@ -244,14 +247,21 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
                 # Validation: measure count match
                 if total_bars_detected != total_bars_meta:
                     eprint(
-                        f"Warning: Measure count mismatch for {piece_id}: detected {total_bars_detected}, meta {total_bars_meta}"
+                        f"Warning: Measure count mismatch for {piece_id}: "
+                        f"detected {total_bars_detected}, meta {total_bars_meta}"
                     )
                     continue
 
                 img = cv2.imread(img_path)
+                if img is None:
+                    eprint(f"Error reading image: {img_path}")
+                    continue
+
                 current_bar_idx = 0
-                for i, (group, barlines) in enumerate(zip(staff_groups, group_barlines)):
-                    t, b, l, r, lt, lb = group
+                for i, (group, barlines) in enumerate(
+                    zip(staff_groups, group_barlines, strict=True)
+                ):
+                    t, b, left, right, lt, lb = group
                     num_bars = len(barlines) - 1
                     if num_bars <= 0:
                         continue
@@ -259,7 +269,8 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
                     bars_subset = piece_data["bars"][current_bar_idx : current_bar_idx + num_bars]
                     current_bar_idx += num_bars
 
-                    # Grandstaff check (System): Should be redundant if global check works, but keep for safety
+                    # Grandstaff check (System): Should be redundant if global check works
+                    # but keep for safety
                     is_grandstaff = any(
                         "treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset
                     )
@@ -278,7 +289,7 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
                     system_id = f"{piece_id}_{i}"
                     crop = img[
                         max(0, t - 10) : min(img.shape[0], b + 10),
-                        max(0, l - 10) : min(img.shape[1], r + 10),
+                        max(0, left - 10) : min(img.shape[1], right + 10),
                     ]
                     # Homr expects 128px height or similar, and distorted?
                     # add_image_into_tr_omr_canvas and distort_image from convert_grandstaff
