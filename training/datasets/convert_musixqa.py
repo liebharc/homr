@@ -276,6 +276,17 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
                         "treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset
                     )
                     if is_grandstaff:
+                        # The layout of the grand staff examples in this dataset is atypical.
+                        # In standard music engraving practice, events that are vertically
+                        # aligned represent simultaneity: noteheads, rests, and chords
+                        # sounding at the same rhythmic position are placed in the same
+                        # vertical column across staves. In these examples, that convention
+                        # is not followed. Notes that are rhythmically simultaneous are not
+                        # vertically aligned, which disrupts the visual representation of
+                        # metric and rhythmic structure. This suggests that the notation
+                        # was likely generated algorithmically rather than engraved according
+                        # to established conventions, and that the data may be entirely
+                        # synthetic rather than derived from human-edited scores.
                         continue
 
                     is_last_system = i == len(staff_groups) - 1
