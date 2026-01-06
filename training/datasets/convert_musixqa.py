@@ -196,11 +196,76 @@ def convert_piece_to_homr(
     result = "\n".join(tokens)
     # validate_tokens(result) # Optional: can be slow
     return result
+def _process_image_job(args):
+    image_name, piece_data = args
+    piece_id = image_name.replace(".png", "")
 
+    img_path = os.path.join(musixqa_images, image_name)
 
+    try:
+        staff_groups, group_barlines = detect_staff(img_path)
+        total_bars_detected = sum(len(bls) - 1 for bls in group_barlines)
+        total_bars_meta = len(piece_data["bars"])
+
+        if total_bars_detected != total_bars_meta:
+            return None
+
+        img = cv2.imread(img_path)
+        if img is None:
+            return None
+
+        results = []
+        current_bar_idx = 0
+
+        for i, (group, barlines) in enumerate(
+            zip(staff_groups, group_barlines, strict=True)
+        ):
+            t, b, left, right, lt, lb = group
+            num_bars = len(barlines) - 1
+            if num_bars <= 0:
+                continue
+
+            bars_subset = piece_data["bars"][current_bar_idx : current_bar_idx + num_bars]
+            current_bar_idx += num_bars
+
+            # System-level grandstaff safety check
+            if any("treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset):
+                continue
+
+            is_last_system = i == len(staff_groups) - 1
+            system_tokens = convert_piece_to_homr(
+                piece_data,
+                bars_subset,
+                is_first_system=(i == 0),
+                is_last_system=is_last_system,
+            )
+
+            system_id = f"{piece_id}_{i}"
+            crop = img[
+                max(0, t - 10) : min(img.shape[0], b + 10),
+                max(0, left - 10) : min(img.shape[1], right + 10),
+            ]
+
+            crop_ready = add_image_into_tr_omr_canvas(crop)
+            crop_distorted = distort_image(crop_ready)
+
+            out_img_path = os.path.join(musixqa_homr_root, f"{system_id}.jpg")
+            out_tokens_path = os.path.join(musixqa_homr_root, f"{system_id}.tokens")
+
+            cv2.imwrite(out_img_path, crop_distorted)
+            with open(out_tokens_path, "w") as f_out:
+                f_out.write(system_tokens)
+
+            rel_img = os.path.relpath(out_img_path, git_root)
+            rel_tok = os.path.relpath(out_tokens_path, git_root)
+            results.append((rel_img, rel_tok))
+
+        return results
+
+    except Exception:
+        return None
 def convert_musixqa(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(musixqa_root):
-        eprint("Downloading MusiXQA...")
         os.makedirs(musixqa_root, exist_ok=True)
         download_file(
             "https://huggingface.co/datasets/puar-playground/MusiXQA/resolve/main/images.tar?download=true",
@@ -212,123 +277,48 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
             musixqa_meta_data,
         )
 
-    if not os.path.exists(musixqa_homr_root):
-        os.makedirs(musixqa_homr_root)
+    os.makedirs(musixqa_homr_root, exist_ok=True)
 
+    # Load JSON ONCE
     with open(musixqa_meta_data, "r") as f:
         metadata = json.load(f)
 
-    image_files = sorted([f for f in os.listdir(musixqa_images) if f.endswith(".png")])
-    total_count = len(image_files)
-    processed_count = 0
-    success_count = 0
+    image_files = sorted(f for f in os.listdir(musixqa_images) if f.endswith(".png"))
 
-    with open(musixqa_index, "w") as f_index:
-        for image_name in image_files:
-            piece_id = image_name.replace(".png", "")
-            if piece_id not in metadata:
-                continue
+    # Pre-filter grandstaff pieces globally
+    jobs = []
+    for image_name in image_files:
+        piece_id = image_name.replace(".png", "")
+        piece_data = metadata.get(piece_id)
+        if piece_data is None:
+            continue
 
-            piece_data = metadata[piece_id]
+        if any(
+            "treble" in b["staves"] and "bass" in b["staves"]
+            for b in piece_data["bars"]
+        ):
+            continue
 
-            # Grandstaff check (Global): Ignore grandstaff pieces silently
-            is_grandstaff_piece = any(
-                "treble" in b["staves"] and "bass" in b["staves"] for b in piece_data["bars"]
-            )
-            if is_grandstaff_piece:
-                continue
+        jobs.append((image_name, piece_data))
 
-            img_path = os.path.join(musixqa_images, image_name)
+    total = len(jobs)
 
-            try:
-                staff_groups, group_barlines = detect_staff(img_path)
-                total_bars_detected = sum(len(bls) - 1 for bls in group_barlines)
-                total_bars_meta = len(piece_data["bars"])
+    with multiprocessing.Pool(
+        processes=os.cpu_count(),
+        maxtasksperchild=20,
+    ) as pool, open(musixqa_index, "w") as f_index:
 
-                # Validation: measure count match
-                if total_bars_detected != total_bars_meta:
-                    eprint(
-                        f"Warning: Measure count mismatch for {piece_id}: "
-                        f"detected {total_bars_detected}, meta {total_bars_meta}"
-                    )
-                    continue
+        for idx, result in enumerate(
+            pool.imap_unordered(_process_image_job, jobs, chunksize=2)
+        ):
+            if result:
+                for rel_img, rel_tok in result:
+                    f_index.write(f"{rel_img},{rel_tok}\n")
 
-                img = cv2.imread(img_path)
-                if img is None:
-                    eprint(f"Error reading image: {img_path}")
-                    continue
+            if idx % 50 == 0:
+                eprint(f"Processed {idx}/{total}")
 
-                current_bar_idx = 0
-                for i, (group, barlines) in enumerate(
-                    zip(staff_groups, group_barlines, strict=True)
-                ):
-                    t, b, left, right, lt, lb = group
-                    num_bars = len(barlines) - 1
-                    if num_bars <= 0:
-                        continue
-
-                    bars_subset = piece_data["bars"][current_bar_idx : current_bar_idx + num_bars]
-                    current_bar_idx += num_bars
-
-                    # Grandstaff check (System): Should be redundant if global check works
-                    # but keep for safety
-                    is_grandstaff = any(
-                        "treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset
-                    )
-                    if is_grandstaff:
-                        # The layout of the grand staff examples in this dataset is atypical.
-                        # In standard music engraving practice, events that are vertically
-                        # aligned represent simultaneity: noteheads, rests, and chords
-                        # sounding at the same rhythmic position are placed in the same
-                        # vertical column across staves. In these examples, that convention
-                        # is not followed. Notes that are rhythmically simultaneous are not
-                        # vertically aligned, which disrupts the visual representation of
-                        # metric and rhythmic structure. This suggests that the notation
-                        # was likely generated algorithmically rather than engraved according
-                        # to established conventions, and that the data may be entirely
-                        # synthetic rather than derived from human-edited scores.
-                        continue
-
-                    is_last_system = i == len(staff_groups) - 1
-                    system_tokens = convert_piece_to_homr(
-                        piece_data,
-                        bars_subset,
-                        is_first_system=(i == 0),
-                        is_last_system=is_last_system,
-                    )
-
-                    # Save cropped image and tokens
-                    system_id = f"{piece_id}_{i}"
-                    crop = img[
-                        max(0, t - 10) : min(img.shape[0], b + 10),
-                        max(0, left - 10) : min(img.shape[1], right + 10),
-                    ]
-                    # Homr expects 128px height or similar, and distorted?
-                    # add_image_into_tr_omr_canvas and distort_image from convert_grandstaff
-                    crop_ready = add_image_into_tr_omr_canvas(crop)
-                    crop_distorted = distort_image(crop_ready)
-
-                    out_img_path = os.path.join(musixqa_homr_root, f"{system_id}.jpg")
-                    out_tokens_path = os.path.join(musixqa_homr_root, f"{system_id}.tokens")
-
-                    cv2.imwrite(out_img_path, crop_distorted)
-                    with open(out_tokens_path, "w") as f_out:
-                        f_out.write(system_tokens)
-
-                    # Write to index
-                    rel_img_path = os.path.relpath(out_img_path, git_root)
-                    rel_tokens_path = os.path.relpath(out_tokens_path, git_root)
-                    f_index.write(f"{rel_img_path},{rel_tokens_path}\n")
-
-                success_count += 1
-            except Exception as e:
-                eprint(f"Error processing {piece_id}: {e}")
-
-            processed_count += 1
-            if processed_count % 50 == 0:
-                eprint(f"Processed {processed_count}/{total_count}, Success: {success_count}")
-
-    eprint(f"Finished. Success rate: {success_count/processed_count:.1%}")
+    eprint("Finished.")
 
 
 if __name__ == "__main__":
