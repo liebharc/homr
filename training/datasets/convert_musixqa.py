@@ -23,6 +23,7 @@ musixqa_root = os.path.join(dataset_root, "musixqa")
 musixqa_images = os.path.join(musixqa_root, "images")
 musixqa_meta_data = os.path.join(musixqa_root, "metadata.json")
 musixqa_homr_root = os.path.join(dataset_root, "musixqa_homr")
+musixqa_index = os.path.join(musixqa_homr_root, "index.txt")
 
 # Mapping of major keys to circle-of-fifths values
 KEY_TO_FIFTHS = {
@@ -138,61 +139,67 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
     processed_count = 0
     success_count = 0
 
-    for image_name in image_files:
-        piece_id = image_name.replace(".png", "")
-        if piece_id not in metadata: continue
-        
-        piece_data = metadata[piece_id]
-        img_path = os.path.join(musixqa_images, image_name)
-        
-        try:
-            staff_groups, group_barlines = detect_staff(img_path)
-            total_bars_detected = sum(len(bls) - 1 for bls in group_barlines)
-            total_bars_meta = len(piece_data["bars"])
+    with open(musixqa_index, "w") as f_index:
+        for image_name in image_files:
+            piece_id = image_name.replace(".png", "")
+            if piece_id not in metadata: continue
             
-            # Validation: measure count match
-            if total_bars_detected != total_bars_meta:
-                eprint(f"Warning: Measure count mismatch for {piece_id}: detected {total_bars_detected}, meta {total_bars_meta}")
-                continue
+            piece_data = metadata[piece_id]
+            img_path = os.path.join(musixqa_images, image_name)
+            
+            try:
+                staff_groups, group_barlines = detect_staff(img_path)
+                total_bars_detected = sum(len(bls) - 1 for bls in group_barlines)
+                total_bars_meta = len(piece_data["bars"])
+                
+                # Validation: measure count match
+                if total_bars_detected != total_bars_meta:
+                    eprint(f"Warning: Measure count mismatch for {piece_id}: detected {total_bars_detected}, meta {total_bars_meta}")
+                    continue
 
-            img = cv2.imread(img_path)
-            current_bar_idx = 0
-            for i, (group, barlines) in enumerate(zip(staff_groups, group_barlines)):
-                t, b, l, r, lt, lb = group
-                num_bars = len(barlines) - 1
-                if num_bars <= 0: continue
+                img = cv2.imread(img_path)
+                current_bar_idx = 0
+                for i, (group, barlines) in enumerate(zip(staff_groups, group_barlines)):
+                    t, b, l, r, lt, lb = group
+                    num_bars = len(barlines) - 1
+                    if num_bars <= 0: continue
+                    
+                    bars_subset = piece_data["bars"][current_bar_idx : current_bar_idx + num_bars]
+                    current_bar_idx += num_bars
+                    
+                    # Grandstaff check: if it's piano (has treble and bass) and staff lines were merged
+                    # detect_staff merges if they touch.
+                    is_grandstaff = any("treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset)
+                    
+                    system_tokens = convert_piece_to_homr(piece_data, bars_subset, is_grandstaff)
+                    
+                    # Save cropped image and tokens
+                    system_id = f"{piece_id}_{i}"
+                    crop = img[max(0, t-10):min(img.shape[0], b+10), max(0, l-10):min(img.shape[1], r+10)]
+                    # Homr expects 128px height or similar, and distorted?
+                    # add_image_into_tr_omr_canvas and distort_image from convert_grandstaff
+                    crop_ready = add_image_into_tr_omr_canvas(crop)
+                    crop_distorted = distort_image(crop_ready)
+                    
+                    out_img_path = os.path.join(musixqa_homr_root, f"{system_id}.jpg")
+                    out_tokens_path = os.path.join(musixqa_homr_root, f"{system_id}.tokens")
+                    
+                    cv2.imwrite(out_img_path, crop_distorted)
+                    with open(out_tokens_path, "w") as f_out:
+                        f_out.write(system_tokens)
+                    
+                    # Write to index
+                    rel_img_path = os.path.relpath(out_img_path, git_root)
+                    rel_tokens_path = os.path.relpath(out_tokens_path, git_root)
+                    f_index.write(f"{rel_img_path},{rel_tokens_path}\n")
                 
-                bars_subset = piece_data["bars"][current_bar_idx : current_bar_idx + num_bars]
-                current_bar_idx += num_bars
+                success_count += 1
+            except Exception as e:
+                eprint(f"Error processing {piece_id}: {e}")
                 
-                # Grandstaff check: if it's piano (has treble and bass) and staff lines were merged
-                # detect_staff merges if they touch.
-                is_grandstaff = any("treble" in b["staves"] and "bass" in b["staves"] for b in bars_subset)
-                
-                system_tokens = convert_piece_to_homr(piece_data, bars_subset, is_grandstaff)
-                
-                # Save cropped image and tokens
-                system_id = f"{piece_id}_{i}"
-                crop = img[max(0, t-10):min(img.shape[0], b+10), max(0, l-10):min(img.shape[1], r+10)]
-                # Homr expects 128px height or similar, and distorted?
-                # add_image_into_tr_omr_canvas and distort_image from convert_grandstaff
-                crop_ready = add_image_into_tr_omr_canvas(crop)
-                crop_distorted = distort_image(crop_ready)
-                
-                out_img_path = os.path.join(musixqa_homr_root, f"{system_id}.jpg")
-                out_tokens_path = os.path.join(musixqa_homr_root, f"{system_id}.tokens")
-                
-                cv2.imwrite(out_img_path, crop_distorted)
-                with open(out_tokens_path, "w") as f_out:
-                    f_out.write(system_tokens)
-            
-            success_count += 1
-        except Exception as e:
-            eprint(f"Error processing {piece_id}: {e}")
-            
-        processed_count += 1
-        if processed_count % 50 == 0:
-            eprint(f"Processed {processed_count}/1000, Success: {success_count}")
+            processed_count += 1
+            if processed_count % 50 == 0:
+                eprint(f"Processed {processed_count}/1000, Success: {success_count}")
 
     eprint(f"Finished. Success rate: {success_count/processed_count:.1%}")
 
