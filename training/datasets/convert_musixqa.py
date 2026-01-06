@@ -152,7 +152,7 @@ def convert_piece_to_homr(piece_data, bars_subset, is_grandstaff):
         else:
             tokens.append(str(chord[0]))
     
-    result = ", ".join(tokens)
+    result = "\n".join(tokens)
     # validate_tokens(result) # Optional: can be slow
     return result
 
