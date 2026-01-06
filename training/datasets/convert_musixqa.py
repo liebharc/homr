@@ -14,7 +14,7 @@ from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol
 from training.datasets.convert_grandstaff import distort_image
 from training.transformer.training_vocabulary import token_lines_to_str
-from staff_detection_ideal import main as detect_staff
+from training.datasets.staff_detection_ideal import main as detect_staff
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
