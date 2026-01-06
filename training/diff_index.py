@@ -1,24 +1,37 @@
-import sys
-import os
+# ruff: noqa: T201
+
 import difflib
-import numpy as np
-from PIL import Image
+import os
+import sys
 from pathlib import Path
 
-from homr.transformer.staff2score import Staff2Score
-from homr.transformer.configs import Config
-from training.transformer.training_vocabulary import read_tokens, token_lines_to_str
+import numpy as np
+from PIL import Image
+
 from homr.simple_logging import eprint
+from homr.transformer.configs import Config
+from homr.transformer.staff2score import Staff2Score
+from training.transformer.training_vocabulary import read_tokens, token_lines_to_str
+
 
 def _normalize(token: str) -> str:
     token = token.replace("..", ".")
-    token = token.replace(" tieStart ", " _ ").replace(" tieStop ", " _ ").replace(" tieStart_tieStop ", " _ ")
-    token = token.replace(" slurStart ", " _ ").replace(" slurStop ", " _ ").replace(" slurStart_slurStop ", " _ ")
-    return token
+    token = (
+        token.replace(" tieStart ", " _ ")
+        .replace(" tieStop ", " _ ")
+        .replace(" tieStart_tieStop ", " _ ")
+    )
+    token = (
+        token.replace(" slurStart ", " _ ")
+        .replace(" slurStop ", " _ ")
+        .replace(" slurStart_slurStop ", " _ ")
+    )
+    return token.strip() + "\n"
+
 
 def diff_index(index_path: str):
     git_root = Path(__file__).parent.parent.absolute()
-    
+
     if not os.path.exists(index_path):
         eprint(f"Error: Index file not found: {index_path}")
         sys.exit(1)
@@ -34,12 +47,12 @@ def diff_index(index_path: str):
         line = line.strip()
         if not line:
             continue
-            
+
         parts = line.split(",")
         if len(parts) != 2:
             eprint(f"Skipping malformed line: {line}")
             continue
-            
+
         img_rel_path, tokens_rel_path = parts
         img_abs_path = os.path.join(git_root, img_rel_path)
         tokens_abs_path = os.path.join(git_root, tokens_rel_path)
@@ -68,20 +81,16 @@ def diff_index(index_path: str):
 
         if gt != pred:
             print(f"--- {img_rel_path} ---")
-            diff = difflib.unified_diff(
-                gt,
-                pred,
-                fromfile="Ground Truth",
-                tofile="Prediction"
-            )
+            diff = difflib.unified_diff(gt, pred, fromfile="Ground Truth", tofile="Prediction")
             sys.stdout.writelines(diff)
             print("\n")
         else:
             eprint(f"OK: {img_rel_path}")
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python training/diff_index.py <index_file>")
         sys.exit(1)
-        
+
     diff_index(sys.argv[1])
