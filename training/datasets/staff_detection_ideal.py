@@ -80,25 +80,60 @@ def collapse_thick_lines(rows):
 
 
 def detect_staff_lines(bin_img):
-    row_hist = bin_img.sum(axis=1)
-    thresh = row_hist.max() * ROW_THRESHOLD_RATIO
-
-    raw_peaks = np.where(row_hist > thresh)[0]
-    if len(raw_peaks) == 0:
-        return []
-
-    peak_rows = collapse_thick_lines(raw_peaks)
+    # Use morphological opening to strengthen horizontal lines and remove stems/beams
+    # This is more robust than simple global histogram thresholding
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 1))
+    morphed = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, kernel)
+    
+    row_hist = morphed.sum(axis=1)
+    
+    # Local maxima detection to resolve peak rows even if the space between them is not empty
+    peak_rows = []
+    min_h = bin_img.shape[1] * 0.3 * 255 # 30% width
+    for i in range(1, len(row_hist) - 1):
+        if row_hist[i] >= row_hist[i-1] and row_hist[i] >= row_hist[i+1] and row_hist[i] >= min_h:
+            # Handle plateaus (flat peaks)
+            if row_hist[i] == row_hist[i-1]:
+                continue
+            j = i
+            while j < len(row_hist) - 1 and row_hist[j+1] == row_hist[i]:
+                j += 1
+            peak_rows.append(int((i + j) / 2))
+    
+    peak_rows = np.array(peak_rows)
 
     staffs = []
-    i = 0
-    while i <= len(peak_rows) - STAFF_LINES:
-        group = peak_rows[i:i + STAFF_LINES]
-        spacings = np.diff(group)
-        if np.all(np.abs(spacings - spacings[0]) <= SPACING_TOLERANCE):
-            staffs.append((int(group[0]), int(group[-1])))
-            i += STAFF_LINES
-        else:
-            i += 1
+    if len(peak_rows) < STAFF_LINES:
+        return []
+
+    # For each peak as a potential top line
+    used_indices = set()
+    for i in range(len(peak_rows)):
+        if i in used_indices:
+            continue
+            
+        # Try different potential spacings by looking at the next peak
+        for j in range(i + 1, min(i + 3, len(peak_rows))):
+            p1 = peak_rows[i]
+            p2 = peak_rows[j]
+            spacing = p2 - p1
+            if spacing < 5: 
+                continue
+            
+            group = [i, j]
+            next_target = p2 + spacing
+            for k in range(j + 1, len(peak_rows)):
+                if abs(peak_rows[k] - next_target) <= SPACING_TOLERANCE:
+                    group.append(k)
+                    next_target = peak_rows[k] + spacing
+                if len(group) == 5:
+                    break
+            
+            if len(group) == 5:
+                staffs.append((int(peak_rows[group[0]]), int(peak_rows[group[-1]])))
+                for idx in group:
+                    used_indices.add(idx)
+                break
 
     return staffs
 
@@ -131,60 +166,82 @@ def expand_staff_height(bin_img, top, bottom, left, right):
 
 
 def merge_grandstaffs(staff_boxes):
+    """
+    staff_boxes: list of (t, b, l, r, line_t, line_b)
+    """
+    if not staff_boxes:
+        return []
+    
+    # Sort by top position
+    staff_boxes.sort(key=lambda x: x[0])
+    
     merged = []
     for box in staff_boxes:
         if not merged:
-            merged.append(box)
+            # list of: [t, b, l, r, [list of (lt, lb) individual lines]]
+            merged.append([box[0], box[1], box[2], box[3], [(box[4], box[5])]])
             continue
 
         last = merged[-1]
-        if box[0] <= last[1] + 1:
-            merged[-1] = (
-                min(last[0], box[0]),
-                max(last[1], box[1]),
-                min(last[2], box[2]),
-                max(last[3], box[3]),
-            )
+        # Use unexpanded staff-line bounds for the merging decision
+        # box: (t, b, l, r, line_t, line_b)
+        last_line_b = max(r[1] for r in last[4])
+        current_line_t = box[4]
+        
+        # If the gap between staff lines is within 60px, it's likely a grandstaff.
+        if current_line_t <= last_line_b + 60:
+            last[0] = min(last[0], box[0])
+            last[1] = max(last[1], box[1])
+            last[2] = min(last[2], box[2])
+            last[3] = max(last[3], box[3])
+            last[4].append((box[4], box[5]))
         else:
-            merged.append(box)
+            merged.append([box[0], box[1], box[2], box[3], [(box[4], box[5])]])
 
     return merged
 
 
 # ------------------------------------------------------------
-# Barline detection (validated on top and bottom of the whole staff group)
+# Barline detection (robust to gaps between staves)
 # ------------------------------------------------------------
 
 def detect_barlines(
     bin_img,
-    group_line_top,
-    group_line_bottom,
+    staff_line_ranges, # list of (lt, lb) for each staff in group
     left,
     right,
 ):
-    expected_h = group_line_bottom - group_line_top + 1
-    min_h = int(expected_h * (1.0 - BAR_HEIGHT_TOL))
-    max_h = int(expected_h * (1.0 + BAR_HEIGHT_TOL))
-
-    region = bin_img[group_line_top:group_line_bottom + 1, left:right + 1]
-    h, w = region.shape
-
+    # Use morphological opening with a vertical kernel. 
+    # Width=1 matches barlines but also stems.
+    # Height=25 filters out most smaller vertical bits.
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25))
+    morphed = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, kernel)
+    
     candidate_cols = []
 
-    for x in range(w):
-        col = region[:, x]
-        y = 0
-        while y < h:
-            if col[y]:
-                y0 = y
-                while y < h and col[y]:
-                    y += 1
-                run_h = y - y0
-                if min_h <= run_h <= max_h:
-                    candidate_cols.append(left + x)
-                    break
-            else:
-                y += 1
+    # Check each column in the staff region
+    for x in range(left, right + 1):
+        # A column is a barline if it has vertical runs covering ALMOST ALL of each staff.
+        # Barlines in MusiXQA are very consistent. Stems are often shorter or broken.
+        matched_staves = 0
+        for (lt, lb) in staff_line_ranges:
+            h_staff = lb - lt + 1
+            active = np.count_nonzero(morphed[lt:lb+1, x])
+            if active >= h_staff * 0.95: # Ultra strict
+                # Strict check: barlines shouldn't connect to note heads above/below
+                # Check a wider window and range of 0s
+                above = 0
+                below = 0
+                if lt - 10 >= 0:
+                    above = np.count_nonzero(bin_img[lt-10:lt-2, x-2:x+3])
+                if lb + 10 < bin_img.shape[0]:
+                    below = np.count_nonzero(bin_img[lb+2:lb+10, x-2:x+3])
+                
+                if above == 0 and below == 0:
+                    matched_staves += 1
+        
+        if matched_staves == len(staff_line_ranges): 
+            candidate_cols.append(x)
 
     if not candidate_cols:
         return []
@@ -193,12 +250,13 @@ def detect_barlines(
     barlines = []
     current = [candidate_cols[0]]
     for c in candidate_cols[1:]:
-        if c == current[-1] + 1:
+        if c <= current[-1] + 10: 
             current.append(c)
         else:
             barlines.append(int(np.mean(current)))
             current = [c]
     barlines.append(int(np.mean(current)))
+    
     return barlines
 
 
@@ -208,35 +266,52 @@ def detect_barlines(
 
 def main(image_path):
     img, bin_img = load_binary_image(image_path)
-    base = Path(image_path).with_suffix("")
 
     # 1. Detect exact staff-line bounds
     staff_lines = detect_staff_lines(bin_img)
 
     # 2. Expand to include symbols
-    expanded = []
-    for top, bottom in staff_lines:
-        left, right = detect_staff_width(bin_img, top, bottom)
-        t2, b2 = expand_staff_height(bin_img, top, bottom, left, right)
-        expanded.append((t2, b2, left, right))
+    staff_boxes = []
+    for line_top, line_bottom in staff_lines:
+        left, right = detect_staff_width(bin_img, line_top, line_bottom)
+        t, b = expand_staff_height(bin_img, line_top, line_bottom, left, right)
+        staff_boxes.append((t, b, left, right, line_top, line_bottom))
 
     # 3. Merge into grand staffs
-    staff_groups = merge_grandstaffs(expanded)
+    merged_groups = merge_grandstaffs(staff_boxes)
+    
+    # 4. Filter groups: remove those that are too short or weird aspect ratio
+    # A staff should have a decent width. MusiXQA images are ~1200 wide.
+    staff_groups = []
+    group_barlines = []
+    
+    for group in merged_groups:
+        t, b, l, r, line_ranges = group
+        width = r - l + 1
+        if width < 500: # Filter out titles, clef-only bits etc
+            continue
+            
+        bls = detect_barlines(bin_img, line_ranges, l, r)
+        
+        # Final sanity check: at least 2 barlines (start and end)
+        if len(bls) < 2:
+            continue
+            
+        # Unpack lt/lb for compatibility: use min/max of ranges
+        lt = min(r[0] for r in line_ranges)
+        lb = max(r[1] for r in line_ranges)
+        
+        staff_groups.append((t, b, l, r, lt, lb))
+        group_barlines.append(bls)
 
-    # 4. Detect barlines (based on top/bottom of the whole group)
-    barlines = []
-    for (t, b, l, r) in staff_groups:
-        barlines.append(
-            detect_barlines(
-                bin_img,
-                t,   # top of staff group
-                b,   # bottom of staff group
-                l,
-                r,
-            )
-        )
+    return staff_groups, group_barlines
 
-    return staff_groups, barlines
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python staff_detect.py <image>")
+        sys.exit(1)
+    main(sys.argv[1])
 
 
 if __name__ == "__main__":
