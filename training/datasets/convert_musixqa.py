@@ -11,6 +11,7 @@ from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol, Vocabulary
+from training.datasets.convert_grandstaff import distort_image
 from training.datasets.staff_detection_ideal import main as detect_staff
 
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -217,7 +218,7 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
     with open(musixqa_meta_data, "r") as f:
         metadata = json.load(f)
 
-    image_files = sorted([f for f in os.listdir(musixqa_images) if f.endswith(".png")])[0:1000]
+    image_files = sorted([f for f in os.listdir(musixqa_images) if f.endswith(".png")])
     total_count = len(image_files)
     processed_count = 0
     success_count = 0
@@ -294,8 +295,7 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
                     # Homr expects 128px height or similar, and distorted?
                     # add_image_into_tr_omr_canvas and distort_image from convert_grandstaff
                     crop_ready = add_image_into_tr_omr_canvas(crop)
-                    # crop_distorted = distort_image(crop_ready)
-                    crop_distorted = crop_ready
+                    crop_distorted = distort_image(crop_ready)
 
                     out_img_path = os.path.join(musixqa_homr_root, f"{system_id}.jpg")
                     out_tokens_path = os.path.join(musixqa_homr_root, f"{system_id}.tokens")
