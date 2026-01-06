@@ -196,7 +196,9 @@ def convert_piece_to_homr(
     result = "\n".join(tokens)
     # validate_tokens(result) # Optional: can be slow
     return result
-def _process_image_job(args):
+
+
+def _process_image_job(args: tuple[str, dict]) -> list | None:
     image_name, piece_data = args
     piece_id = image_name.replace(".png", "")
 
@@ -217,9 +219,7 @@ def _process_image_job(args):
         results = []
         current_bar_idx = 0
 
-        for i, (group, barlines) in enumerate(
-            zip(staff_groups, group_barlines, strict=True)
-        ):
+        for i, (group, barlines) in enumerate(zip(staff_groups, group_barlines, strict=True)):
             t, b, left, right, lt, lb = group
             num_bars = len(barlines) - 1
             if num_bars <= 0:
@@ -264,6 +264,8 @@ def _process_image_job(args):
 
     except Exception:
         return None
+
+
 def convert_musixqa(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(musixqa_root):
         os.makedirs(musixqa_root, exist_ok=True)
@@ -293,24 +295,25 @@ def convert_musixqa(only_recreate_token_files: bool = False) -> None:
         if piece_data is None:
             continue
 
-        if any(
-            "treble" in b["staves"] and "bass" in b["staves"]
-            for b in piece_data["bars"]
-        ):
+        if any("treble" in b["staves"] and "bass" in b["staves"] for b in piece_data["bars"]):
             continue
 
         jobs.append((image_name, piece_data))
 
+    limit = 14650
+    jobs = jobs[0:limit]
+
     total = len(jobs)
 
-    with multiprocessing.Pool(
-        processes=os.cpu_count(),
-        maxtasksperchild=20,
-    ) as pool, open(musixqa_index, "w") as f_index:
+    with (
+        multiprocessing.Pool(
+            processes=os.cpu_count(),
+            maxtasksperchild=20,
+        ) as pool,
+        open(musixqa_index, "w") as f_index,
+    ):
 
-        for idx, result in enumerate(
-            pool.imap_unordered(_process_image_job, jobs, chunksize=2)
-        ):
+        for idx, result in enumerate(pool.imap_unordered(_process_image_job, jobs, chunksize=2)):
             if result:
                 for rel_img, rel_tok in result:
                     f_index.write(f"{rel_img},{rel_tok}\n")

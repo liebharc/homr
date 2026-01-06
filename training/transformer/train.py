@@ -17,6 +17,7 @@ from training.datasets.convert_grandstaff import (
     grandstaff_train_index,
 )
 from training.datasets.convert_lieder import convert_lieder, lieder_train_index
+from training.datasets.convert_musixqa import convert_musixqa, musixqa_index
 from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
@@ -74,6 +75,9 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == lieder_train_index and not os.path.exists(lieder_train_index):
             convert_lieder()
+
+        if dataset == musixqa_index and not os.path.exists(musixqa_index):
+            convert_musixqa()
     return selected_datasets
 
 
@@ -104,9 +108,9 @@ def train_transformer(
         number_of_files = -1
         train_index = load_and_mix_training_sets(
             _check_datasets_are_present(
-                [lieder_train_index, grandstaff_train_index, primus_train_index]
+                [lieder_train_index, grandstaff_train_index, primus_train_index, musixqa_index]
             ),
-            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
             number_of_files,
         )
 
@@ -151,9 +155,6 @@ def train_transformer(
     if fine_tune:
         eprint("Fine tuning model from", config.filepaths.checkpoint)
         model = load_model(config)
-        model.freeze_encoder()
-        model.freeze_decoder()
-        model.unfreeze_lift_decoder()
     else:
         model = TrOMR(config)
 
