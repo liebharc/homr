@@ -1,8 +1,8 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Any
 from time import perf_counter
+from typing import Any
 
 import cv2
 import editdistance
@@ -26,6 +26,7 @@ def calc_symbol_error_rate_for_list(
     model: Any
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
+
         config = ConfigTorch()
         config.use_gpu_inference = use_gpu
         model = Staff2ScoreOnnx(config)
@@ -47,14 +48,14 @@ def calc_symbol_error_rate_for_list(
     i = 0
     total = len(dataset)
     interesting_results: list[tuple[str, str]] = []
-    inference_time = 0
+    inference_time = 0.0
     for sample in dataset:
         img_path, token_path = sample.strip().split(",")
         expected = read_tokens(token_path)
         image = cv2.imread(img_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         if image is None:
             raise ValueError("Failed to read " + img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         t0 = perf_counter()
         actual: list[EncodedSymbol] = model.predict(image)
         inference_time += perf_counter() - t0
