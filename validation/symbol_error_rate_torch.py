@@ -2,11 +2,14 @@ import argparse
 import os
 from pathlib import Path
 from typing import Any
+from time import perf_counter
 
 import cv2
 import editdistance
+import onnxruntime as ort
 
 from homr import download_utils
+from homr.main import GpuSupport
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config as ConfigTorch
@@ -18,13 +21,14 @@ from training.transformer.training_vocabulary import (
 
 
 def calc_symbol_error_rate_for_list(
-    dataset: list[str], config: ConfigTorch | None, onnx: bool
+    dataset: list[str], config: ConfigTorch | None, onnx: bool, use_gpu: bool
 ) -> None:
     model: Any
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
-
-        model = Staff2ScoreOnnx(ConfigTorch())
+        config = ConfigTorch()
+        config.use_gpu_inference = use_gpu
+        model = Staff2ScoreOnnx(config)
         result_file = "onnx_ser.txt"
 
     else:
@@ -43,13 +47,17 @@ def calc_symbol_error_rate_for_list(
     i = 0
     total = len(dataset)
     interesting_results: list[tuple[str, str]] = []
+    inference_time = 0
     for sample in dataset:
         img_path, token_path = sample.strip().split(",")
         expected = read_tokens(token_path)
         image = cv2.imread(img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         if image is None:
             raise ValueError("Failed to read " + img_path)
+        t0 = perf_counter()
         actual: list[EncodedSymbol] = model.predict(image)
+        inference_time += perf_counter() - t0
         # Calculate the SER only based on notes and rests
         relevant_symbols = ("note", "rest", "keySignature")
         actual = [
@@ -89,7 +97,7 @@ def calc_symbol_error_rate_for_list(
         eprint("Actual  :", result[1])
 
     ser_avg = round(100 * sum(all_sers) / len(all_sers))
-    eprint(f"Done, SER avg: {ser_avg}%")
+    eprint(f"Done after {round(inference_time, 2)} seconds, SER avg: {ser_avg}%")
 
     with open(result_file, "w") as f:
         f.write(f"SER avg: {ser_avg}%\n")
@@ -128,6 +136,15 @@ def main() -> None:
     with the original inference code located in homr/transformer.
     """
     parser = argparse.ArgumentParser(description="Calculate symbol error rate.")
+
+    parser.add_argument(
+        "--gpu",
+        type=GpuSupport,
+        choices=list(GpuSupport),
+        default=GpuSupport.AUTO,
+        help=argparse.SUPPRESS,
+    )
+
     # optional: if no path is given it uses the onnx backend with
     # the model located in homr/transformer
     parser.add_argument(
@@ -160,8 +177,12 @@ def main() -> None:
 
     if args.checkpoint_file is None:
         # use onnx backend
-        eprint("Running with onnx backend")
-        calc_symbol_error_rate_for_list(index, None, onnx=True)
+        has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
+        use_gpu_inference = (
+            args.gpu == GpuSupport.AUTO and has_gpu_support
+        ) or args.gpu == GpuSupport.FORCE
+        eprint(f"Running with onnx backend with {'GPU' if use_gpu_inference else 'CPU'}")
+        calc_symbol_error_rate_for_list(index, None, onnx=True, use_gpu=use_gpu_inference)
 
     else:
         eprint("Running with torch backend")
@@ -179,7 +200,7 @@ def main() -> None:
 
         for checkpoint_file in checkpoint_files:
             config.filepaths.checkpoint = str(checkpoint_file)
-            calc_symbol_error_rate_for_list(index, config, onnx=False)
+            calc_symbol_error_rate_for_list(index, config, onnx=False, use_gpu=False)
 
 
 if __name__ == "__main__":
