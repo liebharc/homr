@@ -170,6 +170,43 @@ def warp_image_array_randomly(image: NDArray) -> NDArray:
     return (255 * result).astype(np.uint8)
 
 
+def warp_image_array_fast(image: NDArray, num_points: int = 5, max_offset: int = 20) -> NDArray:
+    """
+    Fast book-like random warp for sheet music.
+    """
+    h, w = image.shape[:2]
+    center_y = h // 2
+
+    # Create coarse control points
+    src_middle = np.array([[i * w // (num_points-1), center_y] for i in range(num_points)], np.float32)
+
+    dst_middle = src_middle.copy()
+    dst_middle[:, 1] += np.random.randint(-max_offset, max_offset+1, size=num_points)
+
+    # Build a coarse grid of y-offsets
+    offsets = np.zeros((h, w), dtype=np.float32)
+    for i in range(num_points-1):
+        x0, x1 = int(src_middle[i,0]), int(src_middle[i+1,0])
+        y0, y1 = dst_middle[i,1], dst_middle[i+1,1]
+        dx = x1 - x0
+        if dx == 0:
+            continue
+        for x in range(x0, x1+1):
+            if x >= w:
+                break  # prevent out-of-bounds
+            alpha = (x - x0)/dx
+            offsets[:, x] = (1-alpha)*y0 + alpha*y1 - center_y
+
+    # Generate map_x, map_y
+    map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
+    map_y = np.clip(map_y + offsets, 0, h-1).astype(np.float32)
+    map_x = map_x.astype(np.float32)
+
+    # Remap image
+    warped = cv2.remap(image, map_x, map_y, interpolation=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    return warped
+
+
 if __name__ == "__main__":
     import sys
 

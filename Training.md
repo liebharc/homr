@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 300
+
+Commit: 0dbc69b0d90c4ecdcfee002c866612107921b3ea
+Day: 7 Jan 2026
+SER: 26%
+Validation result: 8.1
+
+Added some examples from the MusiXQA dataset.
+
 ## Run 286
 
 Commit: 0daf75fea21e6ea6a865405e03a4bc7e73e9aa14

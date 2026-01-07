@@ -88,7 +88,7 @@ def train_transformer(
     if smoke_test:
         number_of_epochs = 15
     elif fine_tune:
-        number_of_epochs = 15
+        number_of_epochs = 10
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"

@@ -37,7 +37,6 @@ pyclean = "^3.1.0"
 coverage = "^7.8.2"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
-torchvision = "^0.22.1"
 transformers = {extras = ["torch"], version = "^4.53.2"}
 cairosvg = "^2.8.2"
 types-requests = "^2.32.4.20250611"

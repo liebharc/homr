@@ -4,14 +4,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import PIL
-import PIL.Image
-from torchvision import transforms as tr
-from torchvision.transforms import Compose
+import albumentations as A
 
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
-from homr.staff_dewarping import warp_image_randomly
+from homr.staff_dewarping import warp_image_array_fast, warp_image_randomly
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
@@ -104,62 +101,191 @@ def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> 
     return np.hstack([left_pad, img_tb, right_pad])
 
 
+
+def _dilate(img: np.ndarray, **kwargs) -> np.ndarray:
+    kernel = np.ones((2, 2), np.uint8)
+    return cv2.dilate(img, kernel, iterations=1)
+
+
+def _erode(img: np.ndarray, **kwargs) -> np.ndarray:
+    kernel = np.ones((2, 2), np.uint8)
+    return cv2.erode(img, kernel, iterations=1)
+
+def _add_random_black_edges(img: np.ndarray) -> np.ndarray:
+    h, w = img.shape[:2]
+    img = img.copy()
+
+    max_thickness = int(0.06 * min(h, w))
+    thickness = np.random.randint(1, max_thickness + 1)
+
+    sides = ["top", "bottom", "left", "right"]
+    np.random.shuffle(sides)
+    sides = sides[: np.random.randint(1, 3)]  # 1 or 2 sides
+
+    for side in sides:
+        if side == "top":
+            img[:thickness, :] = 0
+        elif side == "bottom":
+            img[-thickness:, :] = 0
+        elif side == "left":
+            img[:, :thickness] = 0
+        elif side == "right":
+            img[:, -thickness:] = 0
+
+    return img
+
 def distort_image(image: NDArray) -> NDArray:
-    image, _background_value = _add_random_gray_tone(image)
-    pil_image = PIL.Image.fromarray(image)
-    pipeline = Compose(
+    if image.dtype != np.uint8:
+        image = image.astype(np.uint8)
+
+    h, w = image.shape[:2]
+    pad = int(0.08 * min(h, w))  # safe margin
+
+    class ShowThrough(A.ImageOnlyTransform):
+        def apply(self, img, **params):
+            flipped = cv2.flip(img, 1)
+            back = cv2.GaussianBlur(flipped, (11, 11), 0)
+            return cv2.addWeighted(img, 0.92, back, 0.08, 0)
+
+    pipeline = A.Compose(
         [
-            tr.RandomRotation(degrees=2),
-            tr.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.5),
-            tr.RandomAdjustSharpness(0),
-            tr.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 0.5)),
-        ]
+            
+            A.Perspective(scale=(0.00, 0.01), keep_size=True, p=0.5),
+            A.SafeRotate(limit=2, border_mode=cv2.BORDER_CONSTANT, p=0.7, fill=255),
+            BookWarp(p=0.35),  # your custom piecewise/book warp
+
+            # 4. Crop back to original size
+            A.CenterCrop(height=h, width=w),
+
+            # Crop back to original size
+            A.CenterCrop(height=h, width=w),
+
+            # Lighting
+            A.RandomShadow(
+                shadow_dimension=4,
+                p=0.3,
+            ),
+            A.RandomBrightnessContrast(
+                brightness_limit=0.2,
+                contrast_limit=0.2,
+                p=0.4,
+            ),
+
+            # Paper / scan
+            ShowThrough(p=0.15),
+
+            A.GaussNoise(
+                std_range=(0.01, 0.05),
+                p=0.3,
+            ),
+
+            # Ink quality (topology-safe)
+            A.OneOf(
+                [
+                    A.Lambda(image=_dilate),
+                    A.Lambda(image=_erode),
+                ],
+                p=0.25,
+            ),
+
+            # Digital compression
+            A.ImageCompression(p=0.25),
+        ],
+        p=1.0,
     )
 
-    augmented_image = pipeline(img=pil_image)
-    augmented_image = warp_image_randomly(augmented_image)
+    augmented = pipeline(image=image)["image"]
 
-    # add paper texture overlay
-    paper_texture = np.random.normal(loc=235, scale=10, size=image.shape).astype(np.uint8)  # type: ignore
-    augmented_array = np.array(augmented_image)
-    alpha = 0.2
-    augmented_array = cv2.addWeighted(augmented_array, 1 - alpha, paper_texture, alpha, 0)
+    # Apply gray gradient background last
+    augmented = _add_random_gray_tone(augmented)
 
-    rows, cols = augmented_array.shape[:2]
+    # Random black scanner / binder edges
+    if np.random.rand() < 0.3:
+        augmented = _add_random_black_edges(augmented)
 
-    # Randomized Gaussian parameters
-    sigma_x = np.random.uniform(cols / 4, cols)
-    sigma_y = np.random.uniform(rows / 4, rows)
-    center_x = np.random.uniform(0, cols)
-    center_y = np.random.uniform(0, rows)
+    return augmented
 
-    # Generate coordinate grids
-    x = np.arange(cols) - center_x
-    y = np.arange(rows) - center_y
-    x_grid, y_grid = np.meshgrid(x, y)
+def book_page_warp(
+    img: np.ndarray,
+    curvature: float = 0.25,
+    vertical_bow: float = 0.04,
+    spine_pos: float | None = None,
+    focal_mult: float = 1.4,
+) -> np.ndarray:
+    """
+    Physically-inspired book page warp using a 3D surface + camera projection.
 
-    # Optional rotation
-    theta = np.random.uniform(0, 2 * np.pi)
-    x_rot = x_grid * np.cos(theta) + y_grid * np.sin(theta)
-    y_rot = -x_grid * np.sin(theta) + y_grid * np.cos(theta)
+    curvature     : strength of page bend (0.15–0.35 realistic)
+    vertical_bow  : secondary vertical tension (0–0.06)
+    spine_pos     : x-position of spine in [0,1]; None = random
+    focal_mult    : camera focal length multiplier
+    """
 
-    # Create asymmetric Gaussian vignette
-    mask = np.exp(-0.5 * ((x_rot**2 / sigma_x**2) + (y_rot**2 / sigma_y**2)))
-    mask = mask / mask.max()
+    h, w = img.shape[:2]
 
-    # Scale mask to subtle effect (0.9–1.0)
-    mask = 0.9 + 0.1 * mask
+    if spine_pos is None:
+        spine_pos = np.random.uniform(0.25, 0.45)
 
-    # Optional channel variation
-    if augmented_array.shape[2] == 3:
-        mask = np.stack([mask * np.random.uniform(0.9, 1.0) for _ in range(3)], axis=-1)
+    # Coordinate grids (page space)
+    yy, xx = np.meshgrid(
+        np.linspace(0, 1, h),
+        np.linspace(0, 1, w),
+        indexing="ij",
+    )
 
-    augmented_array = (augmented_array * mask).astype(np.uint8)
+    # Signed distance from spine
+    dx = xx - spine_pos
 
-    return augmented_array
+    # Depth model (book curvature)
+    z = curvature * (1.0 - (dx / np.max(np.abs(dx))) ** 2)
+    z = np.clip(z, 0, None)
+
+    # Vertical paper tension
+    z += vertical_bow * np.cos(np.pi * yy)
+
+    # Camera model
+    f = focal_mult * w
+    cx, cy = w / 2, h / 2
+
+    # 3D surface coordinates
+    X = (xx - 0.5) * w
+    Y = (yy - 0.5) * h
+    Z = z * w  # depth in pixel scale
+
+    # Project to image plane
+    denom = f + Z
+    map_x = (f * X / denom + cx).astype(np.float32)
+    map_y = (f * Y / denom + cy).astype(np.float32)
+
+    # Valid remap
+    warped = cv2.remap(
+        img,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
+
+    return warped
 
 
-def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
+class BookWarp(A.ImageOnlyTransform):
+    def __init__(
+        self,
+        curvature=(0.18, 0.35),
+        vertical_bow=(0.02, 0.06),
+        p=0.3,
+    ):
+        super().__init__(p=p)
+        self.curvature = curvature
+        self.vertical_bow = vertical_bow
+
+    def apply(self, img, **params):
+        return warp_image_array_fast(
+            img,
+        )
+
+def _add_random_gray_tone(image_arr: NDArray) -> NDArray:
     """
     Adds a gray background. While doing so it ensures
     that all symbols are still visible on the image.
@@ -172,13 +298,13 @@ def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
     pure_white = 255
 
     if lightest_pixel_value >= pure_white - minimum_contrast:
-        return image_arr, pure_white
+        return image_arr
 
     strongest_possible_gray = lightest_pixel_value + minimum_contrast
 
     random_gray_value = np.random.randint(strongest_possible_gray, pure_white)
     if random_gray_value >= pure_white:
-        return image_arr, random_gray_value
+        return image_arr
 
     mask = np.all(image_arr > random_gray_value, axis=-1)
 
@@ -187,7 +313,7 @@ def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
 
     image_arr[mask] = np.stack([gray[mask]] * 3, axis=-1)
 
-    return image_arr, random_gray_value
+    return image_arr
 
 
 def _find_lighest_non_white_pixel(gray: NDArray) -> int:
