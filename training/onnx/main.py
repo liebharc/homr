@@ -9,7 +9,7 @@ from training.onnx.convert import (
     convert_encoder,
     convert_segnet,
 )
-from training.onnx.quantization import quantization_fp16
+from training.onnx.quantization import quantization_fp16, quantization_int8
 from training.onnx.simplify import main as simplify_onnx_model
 from training.onnx.split_weights import split_weights
 
@@ -40,7 +40,8 @@ def convert_all() -> None:
     # FP16 slowed inference speed down (CPU).
     path_to_decoder_fp16 = quantization_fp16(path_to_decoder, config.filepaths.decoder_path_fp16)
     print(path_to_decoder_fp16)
-
+    path_to_decoder_int8 = quantization_int8(path_to_decoder, config.filepaths.decoder_path)
+    print(path_to_decoder_int8)
     os.remove("decoder_weights.pt")
     os.remove("encoder_weights.pt")
 
