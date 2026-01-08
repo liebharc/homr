@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 301
+
+Commit: 894793edb75fddc9932aba226fd16739fb7071c6
+Day: 8 Jan 2026
+SER: 41%
+Validation result: 9.0
+
+Experimented with different and faster data augmentation. Fine tuned based on 300.
+
 ## Run 300
 
 Commit: 0dbc69b0d90c4ecdcfee002c866612107921b3ea
@@ -20,7 +29,7 @@ Day: 7 Jan 2026
 SER: 26%
 Validation result: 8.1
 
-Added some examples from the MusiXQA dataset.
+Added some examples from the MusiXQA dataset. Fine tuned based on 286.
 
 ## Run 286
 
