@@ -69,16 +69,20 @@ class ExtractResult:
 
 
 def extract_patch(image: NDArray, y: int, x: int, win_size: int) -> NDArray:
+    """
+    Returns a full-size (3, win_size, win_size) patch.
+    Pads with white pixes if the patch exceeds image boundaries.
+    """
     c, h, w = image.shape
-    patch = np.zeros((c, win_size, win_size), dtype=image.dtype)
+    patch = np.full((c, win_size, win_size), 255, dtype=image.dtype)
 
     y0 = max(y, 0)
     x0 = max(x, 0)
     y1 = min(y + win_size, h)
     x1 = min(x + win_size, w)
 
-    py0 = y0 - y
-    px0 = x0 - x
+    py0 = 0
+    px0 = 0
     py1 = py0 + (y1 - y0)
     px1 = px0 + (x1 - x0)
 
@@ -87,25 +91,28 @@ def extract_patch(image: NDArray, y: int, x: int, win_size: int) -> NDArray:
 
 
 def merge_patches(
-    patches: list[NDArray], image_shape: tuple[int, int], win_size: int, step_size: int = -1
+    patches: list[NDArray], image_shape: tuple[int, int], win_size: int, step_size: int
 ) -> NDArray:
     reconstructed = np.zeros(image_shape, dtype=np.float32)
     weight = np.zeros(image_shape, dtype=np.float32)
 
     idx = 0
     for iy in range(0, image_shape[0], step_size):
-        if iy + win_size > image_shape[0]:
-            y = image_shape[0] - win_size
-        else:
-            y = iy
-        for ix in range(0, image_shape[1], step_size):
-            if ix + win_size > image_shape[1]:
-                x = image_shape[1] - win_size
-            else:
-                x = ix
+        y = min(iy, image_shape[0] - win_size)
+        y0 = max(y, 0)
+        y1 = min(y + win_size, image_shape[0])
 
-            reconstructed[y : y + win_size, x : x + win_size] += patches[idx]
-            weight[y : y + win_size, x : x + win_size] += 1
+        for ix in range(0, image_shape[1], step_size):
+            x = min(ix, image_shape[1] - win_size)
+            x0 = max(x, 0)
+            x1 = min(x + win_size, image_shape[1])
+
+            patch = patches[idx]
+            ph = y1 - y0
+            pw = x1 - x0
+
+            reconstructed[y0:y1, x0:x1] += patch[:ph, :pw]
+            weight[y0:y1, x0:x1] += 1
             idx += 1
 
     # Avoid division by zero
