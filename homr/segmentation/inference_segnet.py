@@ -76,6 +76,24 @@ class ExtractResult:
         self.clefs_keys = clefs_keys
 
 
+def extract_patch(image: NDArray, y: int, x: int, win_size: int) -> NDArray:
+    c, h, w = image.shape
+    patch = np.zeros((c, win_size, win_size), dtype=image.dtype)
+
+    y0 = max(y, 0)
+    x0 = max(x, 0)
+    y1 = min(y + win_size, h)
+    x1 = min(x + win_size, w)
+
+    py0 = y0 - y
+    px0 = x0 - x
+    py1 = py0 + (y1 - y0)
+    px1 = px0 + (x1 - x0)
+
+    patch[:, py0:py1, px0:px1] = image[:, y0:y1, x0:x1]
+    return patch
+
+
 def merge_patches(
     patches: list[NDArray], image_shape: tuple[int, int], win_size: int, step_size: int = -1
 ) -> NDArray:
@@ -125,56 +143,45 @@ def inference(
         step_size = win_size // 2
 
     model = Segnet(use_gpu_inference)
-    data = []
-    batch = []
+
     image_org = cv2.cvtColor(image_org, cv2.COLOR_GRAY2BGR)
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
-    for y_loop in range(0, image.shape[1], step_size):
-        if y_loop + win_size > image.shape[1]:
-            y = image.shape[1] - win_size
-        else:
-            y = y_loop
-        for x_loop in range(0, image.shape[2], step_size):
-            if x_loop + win_size > image.shape[2]:
-                x = image.shape[2] - win_size
-            else:
-                x = x_loop
-            hop = image[:, y : y + win_size, x : x + win_size]
+
+    c, h, w = image.shape
+    data: list[NDArray] = []
+    batch: list[NDArray] = []
+
+    for y_loop in range(0, max(h, win_size), step_size):
+        y = min(y_loop, h - win_size)
+        for x_loop in range(0, max(w, win_size), step_size):
+            x = min(x_loop, w - win_size)
+
+            hop = extract_patch(image, y, x, win_size)
+
             batch.append(hop)
 
-            # When there
-            if batch_size == len(batch):
-                # run model
+            if len(batch) == batch_size:
                 batch_out = model.run(np.stack(batch, axis=0))
                 for out in batch_out:
-                    out_filtered = np.argmax(out, axis=0)
-                    data.append(out_filtered)
-                # reset the batch list so it is not full anymore
-                batch = []
+                    data.append(np.argmax(out, axis=0))
+                batch.clear()
 
-    # There might still be something in the batch list
-    # So we run inference one more time
     if batch:
         batch_out = model.run(np.stack(batch, axis=0))
         for out in batch_out:
-            out_max = np.argmax(out, axis=0)
-            data.append(out_max)
+            data.append(np.argmax(out, axis=0))
 
-    eprint(f"Segnet Inference time: {perf_counter()- t0}; batch_size of {batch_size}")
+    eprint(f"Segnet Inference time: {perf_counter() - t0}; batch_size {batch_size}")
 
     merged = merge_patches(
         data, (int(image_org.shape[0]), int(image_org.shape[1])), win_size, step_size
     )
-    stems_layer = 1
-    stems_rests = np.where(merged == stems_layer, 1, 0)
-    notehead_layer = 2
-    notehead = np.where(merged == notehead_layer, 1, 0)
-    clefs_keys_layer = 3
-    clefs_keys = np.where(merged == clefs_keys_layer, 1, 0)
-    staff_layer = 4
-    staff = np.where(merged == staff_layer, 1, 0)
-    symbol_layer = 5
-    symbols = np.where(merged == symbol_layer, 1, 0)
+
+    stems_rests = (merged == 1).astype(np.uint8)
+    notehead = (merged == 2).astype(np.uint8)
+    clefs_keys = (merged == 3).astype(np.uint8)
+    staff = (merged == 4).astype(np.uint8)
+    symbols = (merged == 5).astype(np.uint8)
 
     return staff, symbols, stems_rests, notehead, clefs_keys
 
