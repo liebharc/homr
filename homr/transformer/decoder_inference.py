@@ -16,12 +16,14 @@ class ScoreDecoder:
         self,
         transformer: ort.InferenceSession,
         fp16: bool,
+        use_gpu: bool,
         config: Config,
         ignore_index: int = -100,
     ):
         super().__init__()
         self.ignore_index = ignore_index
         self.net = transformer
+        self.io_binding = self.net.io_binding()
         self.max_seq_len = config.max_seq_len
         self.eos_token = config.eos_token
 
@@ -32,6 +34,16 @@ class ScoreDecoder:
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
 
         self.fp16 = fp16
+        self.use_gpu = use_gpu
+        self.device_id = 0
+        self.output_names = [
+            "out_rhythms",
+            "out_pitchs",
+            "out_lifts",
+            "out_positions",
+            "out_articulations",
+            "attention",
+        ]
 
     def generate(
         self,
@@ -53,6 +65,7 @@ class ScoreDecoder:
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
         cache, kv_input_names, kv_output_names = self.init_cache()
+        output_names = self.output_names + kv_output_names
         context = kwargs["context"]
         context_reduced = kwargs["context"][:, :1]
 
@@ -64,35 +77,41 @@ class ScoreDecoder:
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
 
-            if step != 0:  # after the first step we don't pass the full context into the decoder
-                # x_transformers uses [:, :0] to split the context
-                # which caused a Reshape error when loading the onnx model
-                context = context_reduced
+            # after the first step we don't pass the full context into the decoder
+            # x_transformers uses [:, :0] to split the context
+            # which caused a Reshape error when loading the onnx model
+            context = context if step == 0 else context_reduced
 
-            inputs = {
-                "rhythms": x_rhythm,
-                "pitchs": x_pitch,
-                "lifts": x_lift,
-                "articulations": x_articulations,
-                "context": context,
-                "cache_len": np.array([step]),
-            }
-            for i in range(32):
-                inputs[kv_input_names[i]] = cache[i]
+            # Bind Inputs
+            self.io_binding.bind_cpu_input("rhythms", x_rhythm)
+            self.io_binding.bind_cpu_input("pitchs", x_pitch)
+            self.io_binding.bind_cpu_input("lifts", x_lift)
+            self.io_binding.bind_cpu_input("articulations", x_articulations)
+            self.io_binding.bind_cpu_input("context", context)
+            self.io_binding.bind_cpu_input("cache_len", np.array([step], dtype=np.int64))
+            for name, cache_val in zip(kv_input_names, cache, strict=True):
+                self.io_binding.bind_ortvalue_input(name, cache_val)
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, attention, *cache = self.net.run(
-                output_names=[
-                    "out_rhythms",
-                    "out_pitchs",
-                    "out_lifts",
-                    "out_positions",
-                    "out_articulations",
-                    "attention",
-                    *kv_output_names,
-                ],
-                input_feed=inputs,
-            )
+            # Bind Outputs
+            for name in output_names:
+                self.io_binding.bind_output(name, "cuda" if self.use_gpu else "cpu", self.device_id)
 
+            # Run inference
+            self.net.run_with_iobinding(iobinding=self.io_binding)
+
+            # Get outputs
+            outputs = self.io_binding.get_outputs()
+            cache = outputs[6:]
+
+            # And convert the outputs to np arrays...
+            rhythmsp = outputs[0].numpy()
+            pitchsp = outputs[1].numpy()
+            liftsp = outputs[2].numpy()
+            positionsp = outputs[3].numpy()
+            articulationsp = outputs[4].numpy()
+            attention = outputs[5].numpy()
+
+            # ...To continue with the normal CPU based processing
             filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
             filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
             filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
@@ -143,9 +162,21 @@ class ScoreDecoder:
         output_names = []
         for i in range(32):
             if self.fp16:  # the cache needs to be fp16 as well
-                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float16))
+                cache.append(
+                    ort.OrtValue.ortvalue_from_numpy(
+                        np.zeros((1, 8, cache_len, 64), dtype=np.float16),
+                        "cuda" if self.use_gpu else "cpu",
+                        self.device_id,
+                    )
+                )
             else:
-                cache.append(np.zeros((1, 8, cache_len, 64), dtype=np.float32))
+                cache.append(
+                    ort.OrtValue.ortvalue_from_numpy(
+                        np.zeros((1, 8, cache_len, 64), dtype=np.float32),
+                        "cuda" if self.use_gpu else "cpu",
+                        self.device_id,
+                    )
+                )
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
@@ -185,12 +216,14 @@ def get_decoder(config: Config) -> ScoreDecoder:
     """
     Returns Tromr's Decoder
     """
+    use_gpu = False
     if config.use_gpu_inference:
         try:
             onnx_transformer = ort.InferenceSession(
                 config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
             )
             fp16 = True
+            use_gpu = True
         except Exception as ex:
             eprint(ex)
             eprint("Going on without GPU support")
@@ -201,4 +234,4 @@ def get_decoder(config: Config) -> ScoreDecoder:
         onnx_transformer = ort.InferenceSession(config.filepaths.decoder_path)
         fp16 = False
 
-    return ScoreDecoder(onnx_transformer, fp16, config=config)
+    return ScoreDecoder(onnx_transformer, fp16, use_gpu, config=config)

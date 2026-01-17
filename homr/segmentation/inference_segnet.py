@@ -19,12 +19,14 @@ from homr.type_definitions import NDArray
 
 class Segnet:
     def __init__(self, use_gpu_inference: bool) -> None:
+        self.use_gpu = False
         if use_gpu_inference:
             try:
                 self.model = ort.InferenceSession(
                     segnet_path_onnx_fp16, providers=["CUDAExecutionProvider"]
                 )
                 self.fp16 = True
+                self.use_gpu = True
             except Exception as e:
                 eprint(
                     "Error while trying to load model using CUDA. You probably don't have a compatible gpu"  # noqa: E501
@@ -35,16 +37,22 @@ class Segnet:
         else:
             self.model = ort.InferenceSession(segnet_path_onnx)
             self.fp16 = False
+
+        self.io_binding = self.model.io_binding()
+        self.device_id = 0
+
         self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
         self.output_name = self.model.get_outputs()[0].name
 
     def run(self, input_data: NDArray) -> NDArray:
         if self.fp16:
-            out = self.model.run(
-                [self.output_name], {self.input_name: input_data.astype(np.float16)}
-            )[0]
+            self.io_binding.bind_cpu_input("input", input_data.astype(np.float16))
         else:
-            out = self.model.run([self.output_name], {self.input_name: input_data})[0]
+            self.io_binding.bind_cpu_input("input", input_data.astype(np.float32))
+
+        self.io_binding.bind_output("output", "cpu")
+        self.model.run_with_iobinding(self.io_binding)
+        out = self.io_binding.get_outputs()[0].numpy()
         return out
 
 

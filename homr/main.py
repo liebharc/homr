@@ -385,6 +385,7 @@ def main() -> None:
         default=GpuSupport.AUTO,
         help=argparse.SUPPRESS,
     )
+
     args = parser.parse_args()
 
     has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
@@ -411,6 +412,11 @@ def main() -> None:
     xml_generator_args = XmlGeneratorArguments(
         args.output_large_page, args.output_metronome, args.output_tempo
     )
+    if args.debug:
+        eprint(f"Using Log Level {2} for OnnxRuntime")
+        ort.set_default_logger_severity(2)
+    else:
+        ort.set_default_logger_severity(3)
 
     if not args.image:
         eprint("No image provided")
