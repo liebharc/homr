@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented here.
 
+## Next
+
+### Added
+
+- **Greatly improved GPU inference**.
+  Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
+
+### Fixed
+
+- Error when running on small images.
+
 ## [0.6.0]
 
 ### Added
