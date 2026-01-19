@@ -112,7 +112,7 @@ def load_and_preprocess_predictions(
         )
     image = autocrop(image)
     image = resize_image(image)
-    preprocessed, _background = color_adjust.color_adjust(image, 40)
+    preprocessed = color_adjust.apply_clahe(image)
     predictions = get_predictions(image, preprocessed, image_path, enable_cache, use_gpu_inference)
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
