@@ -9,6 +9,11 @@ All notable changes to this project will be documented here.
 - **Greatly improved GPU inference**.
   Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
 
+### Changed
+
+- Removed dependency on **scipy**
+- Updated all other dependencies
+
 ### Fixed
 
 - Error when running on small images.

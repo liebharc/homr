@@ -154,13 +154,6 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
-def apply_clahe(gray_image: NDArray, clip_limit: float = 1.0, kernel_size: int = 8) -> NDArray:
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(kernel_size, kernel_size))
-    gray_image = clahe.apply(gray_image)
-
-    return cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
-
-
 def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff]:
@@ -181,7 +174,7 @@ def prepare_staff_image(
     top_left = top_left / scaling_factor
     staff = _dewarp_staff(staff, None, top_left, scaling_factor)
     dewarp = dewarp_staff_image(staff_image, staff, index, debug)
-    staff_image = (255 * dewarp.dewarp(staff_image)).astype(np.uint8)
+    staff_image = dewarp.dewarp(staff_image)
     staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
     scaling_factor = 1
 
