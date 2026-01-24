@@ -13,7 +13,7 @@ def autocrop(img: NDArray) -> NDArray:
     # convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     hist = cv2.calcHist([img], [0], None, [256], [0, 256])
-    dominant_color_gray_scale = max(enumerate(hist), key=lambda x: int(x[1]))[0]
+    dominant_color_gray_scale = int(np.argmax(hist.flatten()))
 
     # threshold
     thresh = cv2.threshold(gray, dominant_color_gray_scale - 30, 255, cv2.THRESH_BINARY)[1]

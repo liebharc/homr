@@ -25,8 +25,10 @@ def save_staff_positions(
             centerx = x1 + width / 2
             centery = y1 + height / 2
             img_height, img_width = shape
+            staff_class = "1" if staff.is_grandstaff else "0"
             coordinate = (
-                "0 "
+                staff_class
+                + " "
                 + str(centerx / img_width)
                 + " "
                 + str(centery / img_height)
