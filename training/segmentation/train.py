@@ -299,8 +299,8 @@ def train_segnet(visualize: bool = False) -> None:
 
     validation_dataset = D2DenseDataset(val_images, augmentation=None)
 
-    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=False, num_workers=4)
-    validation_loader = DataLoader(validation_dataset, batch_size=24, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False, num_workers=6)
+    validation_loader = DataLoader(validation_dataset, batch_size=32, shuffle=False, num_workers=6)
 
     model = create_segnet()
 

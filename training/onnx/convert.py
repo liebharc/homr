@@ -202,7 +202,7 @@ def convert_segnet() -> str:
         model,
         sample_inputs,  # type: ignore
         path_out,
-        opset_version=17,
+        opset_version=18,
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"],

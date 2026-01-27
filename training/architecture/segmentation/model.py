@@ -15,7 +15,7 @@ class CamVidModel(pl.LightningModule):
 
     def __init__(
         self,
-        arch: str = "UnetPlusPlus",
+        arch: str = "Unet",
         encoder_name: str = "resnet18",
         in_channels: int = 3,
         out_classes: int = 0,
