@@ -1,6 +1,7 @@
 import os
 
 import torch
+from torch.export import Dim
 
 from homr.segmentation.config import segnet_path_torch
 from homr.simple_logging import eprint
@@ -196,7 +197,7 @@ def convert_segnet() -> str:
     model.eval()
 
     # Input dimension is 1x3x320x320
-    sample_inputs = torch.randn(1, 3, 320, 320)
+    sample_inputs = torch.randn(8, 3, 320, 320)
 
     torch.onnx.export(
         model,
@@ -207,6 +208,7 @@ def convert_segnet() -> str:
         input_names=["input"],
         output_names=["output"],
         # dyamic axes are required for dynamic batch_size
-        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        dynamic_shapes={"image": (Dim("batch_size"), 3, 320, 320)},
+        dynamo=True,
     )
     return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"
