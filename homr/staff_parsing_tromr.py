@@ -16,4 +16,7 @@ def predict_best(org_image: NDArray, staff: Staff, config: Config) -> list[Encod
     if inference is None:
         inference = Staff2Score(config)
 
-    return inference.predict(org_image)
+    result = inference.predict(org_image)
+    if staff.is_grandstaff:
+        return result
+    return [r for r in result if r.position != "lower"]

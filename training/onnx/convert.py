@@ -3,7 +3,7 @@ import os
 import torch
 from torch.export import Dim
 
-from homr.segmentation.config import segnet_path_torch, segnet_path_onnx
+from homr.segmentation.config import segnet_path_onnx, segnet_path_torch
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
@@ -207,6 +207,6 @@ def convert_segnet() -> str:
         # dyamic axes are required for dynamic batch_size
         dynamic_shapes={"image": (Dim("batch_size"), 3, 320, 320)},
         dynamo=True,
-        external_data=False
+        external_data=False,
     )
     return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"
