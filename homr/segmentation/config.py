@@ -7,7 +7,7 @@ segnet_path_onnx = os.path.join(
 )
 
 segnet_path_onnx_fp16 = os.path.join(
-    script_location, "segnet_303-71bee8fac626ac28e8d17ddc33138421edc8e714.onnx"
+    script_location, "segnet_303-71bee8fac626ac28e8d17ddc33138421edc8e714_fp16.onnx"
 )
 
 segnet_path_torch = os.path.join(
