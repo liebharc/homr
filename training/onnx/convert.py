@@ -194,7 +194,7 @@ def convert_segnet() -> str:
     model.eval()
 
     # Input dimension is 1x3x320x320
-    sample_inputs = torch.randn(8, 3, 320, 320)
+    sample_inputs = torch.randn(8, 1, 320, 320)
 
     torch.onnx.export(
         model,
@@ -205,7 +205,7 @@ def convert_segnet() -> str:
         input_names=["input"],
         output_names=["output"],
         # dyamic axes are required for dynamic batch_size
-        dynamic_shapes={"image": (Dim("batch_size"), 3, 320, 320)},
+        dynamic_shapes={"image": (Dim("batch_size"), 1, 320, 320)},
         dynamo=True,
         external_data=False,
     )

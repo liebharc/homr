@@ -96,7 +96,7 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
             image, mask = sample["image"], sample["mask"]
         # image = image.transpose(2, 0, 1)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        image = np.array([image, image, image])
+        image = np.array([image])
         return image, mask
 
     def _get_patch(self, image: NDArray, x: int, y: int, pad_value: int) -> NDArray:
@@ -331,7 +331,7 @@ def train_segnet(visualize: bool = False) -> None:
 
     model = create_segnet()
 
-    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=2, log_every_n_steps=1)
 
     trainer.fit(
         model,
