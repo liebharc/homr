@@ -344,12 +344,12 @@ def find_staff_anchors(
         # Therefore we try to detect them at the left and right side of the symbol as well.
         if are_clefs:
             adjacent = [
+                center_symbol.move_to_x_horizontal_by(-10),
                 center_symbol,
-                center_symbol.move_to_x_horizontal_by(50),
-                center_symbol,
-                center_symbol.move_to_x_horizontal_by(100),
-                center_symbol,
-                center_symbol.move_to_x_horizontal_by(150),
+                center_symbol.move_to_x_horizontal_by(10),
+                center_symbol.move_to_x_horizontal_by(30),
+                center_symbol.move_to_x_horizontal_by(60),
+                center_symbol.move_to_x_horizontal_by(80),
             ]
         else:
             adjacent = [

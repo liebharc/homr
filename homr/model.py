@@ -395,6 +395,7 @@ class Staff(DebugDrawable):
     ) -> "Staff":
         copy = Staff([point.transform_coordinates(transformation) for point in self.grid])
         copy.symbols = [symbol.transform_coordinates(transformation) for symbol in self.symbols]
+        copy.is_grandstaff = self.is_grandstaff
         return copy
 
 
