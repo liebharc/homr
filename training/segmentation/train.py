@@ -226,7 +226,7 @@ class AddGrayGradient(A.ImageOnlyTransform):
 def get_training_augmentation() -> Any:
     train_transform = [
         AddGrayGradient(alpha=0.4, direction="vertical", p=1.0),
-        A.HorizontalFlip(p=0.5),
+        A.HorizontalFlip(p=0.2),
         A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=1, border_mode=0),
         A.GaussNoise(p=0.2),
         A.Perspective(p=0.5),
@@ -241,8 +241,9 @@ def get_training_augmentation() -> Any:
         A.OneOf(
             [
                 A.Sharpen(p=1),
-                A.Blur(blur_limit=3, p=1),
+                A.Blur(blur_limit=[3, 7], p=1),
                 A.MotionBlur(blur_limit=3, p=1),
+                A.Defocus(radius=(3, 7), alias_blur=(0.1, 0.5), p=1.0),
             ],
             p=0.9,
         ),
