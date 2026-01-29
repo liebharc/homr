@@ -485,16 +485,26 @@ def resample_staffs(staffs: list[RawStaff]) -> list[Staff]:
 
 def filter_edge_of_vision(staffs: list[Staff], image_shape: tuple[int, ...]) -> list[Staff]:
     """
-    Removes staffs which begin in at the right edge or at the lower edge of the image,
-    as this are very likely incomplete staffs.
+    Removes staffs which are outside the page dimensions.
     """
+    staff_widths = np.array([s.max_x - s.min_x for s in staffs], dtype=float)
+    usual_width = np.average(staff_widths)
+
     result = []
     for staff in staffs:
-        starts_at_right_edge = staff.min_x > 0.90 * image_shape[1]
-        starts_at_bottom_edge = staff.min_y > 0.95 * image_shape[0]
-        ends_at_left_edge = staff.max_x < 0.20 * image_shape[1]
-        if any([starts_at_right_edge, starts_at_bottom_edge, ends_at_left_edge]):
+        beyond_bottom = staff.max_y >= image_shape[0]
+        beyond_top = staff.min_y < 0
+        if beyond_bottom or beyond_top:
             continue
+
+        staff_width = staff.max_x - staff.min_x
+        shorter_than_usual = staff_width < usual_width / 2
+        beyond_left = staff.min_x < 0.01 * image_shape[1]
+        beyond_right = staff.max_x > 0.99 * image_shape[1]
+
+        if (beyond_left or beyond_right) and shorter_than_usual:
+            continue
+
         result.append(staff)
     return result
 

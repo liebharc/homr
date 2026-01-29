@@ -67,7 +67,7 @@ image_noise_limit = 50
 
 staff_position_tolerance = 50
 
-max_angle_for_lines_to_be_parallel = 10
+max_angle_for_lines_to_be_parallel = 5
 
 
 NOTEHEAD_SIZE_RATIO = 1.285714  # width/height

@@ -8,6 +8,7 @@ All notable changes to this project will be documented here.
 
 - **Greatly improved GPU inference**.
   Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
+- **Better quality and faster segnet model** by [@aicelen](https://github.com/aicelen)
 
 ### Changed
 
