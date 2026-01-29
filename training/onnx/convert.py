@@ -209,4 +209,4 @@ def convert_segnet() -> str:
         dynamo=True,
         external_data=False,
     )
-    return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"
+    return path_out

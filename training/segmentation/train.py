@@ -312,7 +312,9 @@ def train_segnet(visualize: bool = False) -> None:
     dense_root = os.path.join(dataset_root, "ds2_dense")
 
     run_id = get_run_id()
-    model_destination = os.path.join(git_root, "homr", "segmentation", f"segnet_{run_id}.pth")
+    model_destination = os.path.join(
+        git_root, "training", "architecture", "segmentation", f"segnet_{run_id}.pth"
+    )
     eprint("Starting training of ", model_destination)
 
     images_dir = os.path.join(dense_root, "images")
