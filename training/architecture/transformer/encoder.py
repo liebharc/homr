@@ -1,46 +1,61 @@
 from typing import Any
 
-from timm.layers import StdConv2dSame  # type: ignore
-from timm.models.resnetv2 import ResNetV2
-from timm.models.vision_transformer import VisionTransformer
-from timm.models.vision_transformer_hybrid import HybridEmbed  # type: ignore
+import timm
+import torch
+from timm.layers import trunc_normal_  # type: ignore
+from torch import nn
 
 from homr.transformer.configs import Config
 
 
+class ConvNeXtEncoder(nn.Module):
+    def __init__(self, config: Config):
+        super().__init__()
+        # Using convnext_tiny as a powerful but efficient backbone
+        self.model = timm.create_model(
+            "convnext_tiny.fb_in1k",
+            pretrained=True,
+            in_chans=config.channels,
+            num_classes=0,
+            global_pool="",
+            drop_path_rate=0.1,
+        )
+        # ConvNeXt stage 3 has a total stride of 16
+        # Stages are: stem (stride 4), stage 1 (stride 4), stage 2 (stride 8),
+        # stage 3 (stride 16), stage 4 (stride 32)
+        # We want stride 16 to match the previous patch_size=16 behavior
+        self.encoder_dim = config.encoder_dim
+
+        # Extract features up to stage 2 (stride 16)
+        self.feature_info = self.model.feature_info[2]  # type: ignore
+        in_features = int(self.feature_info["num_chs"])  # type: ignore
+
+        self.proj = nn.Linear(in_features, config.encoder_dim)
+
+        # Learnable positional embeddings
+        # Number of tokens = (1280/16) * (256/16) = 80 * 16 = 1280
+        num_patches = (config.max_height // 16) * (config.max_width // 16)
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, config.encoder_dim))
+        trunc_normal_(self.pos_embed, std=0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Get stages
+        # forward_intermediates returns (last_stage_tensor, [requested_stages_tensors])
+        _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
+        features = requested_stages[0]  # Get stage 2 (stride 16)
+        # features shape: (B, C, H/16, W/16)
+
+        # Rearrange to sequence: (B, C, H', W') -> (B, H'*W', C)
+        b, c, h, w = features.shape
+        features = features.view(b, c, -1).transpose(1, 2)
+
+        # Project to encoder_dim
+        features = self.proj(features)
+
+        # Add positional embeddings
+        features = features + self.pos_embed
+        return features
+
+
 def get_encoder(config: Config) -> Any:
-    backbone_layers = list(config.backbone_layers)
-    min_patch_size = 16
-    backbone = ResNetV2(
-        num_classes=0,
-        global_pool="",
-        in_chans=config.channels,
-        drop_rate=0.1,
-        output_stride=min_patch_size,
-        drop_path_rate=0.1,
-        layers=backbone_layers,
-        preact=True,
-        stem_type="same",
-        conv_layer=StdConv2dSame,
-    )
-
-    def embed_layer(**x: Any) -> Any:
-        ps = x.pop("patch_size", min_patch_size)
-        if ps % min_patch_size != 0 or ps < min_patch_size:
-            raise ValueError(
-                f"patch_size needs to be multiple of {min_patch_size} with current backbone configuration"  # noqa: E501
-            )
-        return HybridEmbed(**x, patch_size=ps // min_patch_size, backbone=backbone)
-
-    encoder = VisionTransformer(
-        img_size=(config.max_height, config.max_width),
-        patch_size=config.patch_size,
-        in_chans=config.channels,
-        num_classes=0,
-        embed_dim=config.encoder_dim,
-        depth=config.encoder_depth,
-        num_heads=config.encoder_heads,
-        embed_layer=embed_layer,
-        global_pool="",
-    )
-    return encoder
+    return ConvNeXtEncoder(config)

@@ -94,7 +94,8 @@ def convert_encoder() -> str:
     model.eval()
 
     # Prepare input tensor
-    input_tensor = torch.randn(1, 1, config.max_height, config.max_width).float()
+    # The transformer operates on rotated images: height and width are swapped
+    input_tensor = torch.randn(1, 1, config.max_width, config.max_height).float()
 
     # Export to onnx
     torch.onnx.export(
@@ -145,7 +146,7 @@ def convert_decoder() -> str:
     articulations = torch.randint(0, config.num_articulation_tokens, (1, 1)).long()
     cache_len = torch.tensor([cache_length]).long()
     cache = kv_cache
-    context = torch.randn((1, 1281, 312)).float()
+    context = torch.randn((1, 1280, 312)).float()
 
     dynamic_axes["context"] = {1: "cache_exists"}
 

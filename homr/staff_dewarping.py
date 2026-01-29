@@ -393,8 +393,8 @@ def warp_image_array_randomly(image: NDArray) -> NDArray:
     ]
     result = calculate_dewarp_transformation(
         image, [upper, source, lower], [upper, destination, lower]
-    ).dewarp(image, order=3)
-    return (255 * result).astype(np.uint8)
+    ).dewarp(image, fill_color=255, order=3)
+    return result.astype(np.uint8)
 
 
 if __name__ == "__main__":

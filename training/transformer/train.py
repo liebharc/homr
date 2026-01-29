@@ -122,7 +122,7 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 6 if fp32 else 16
+    batch_size = 6 if fp32 else 24
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -135,7 +135,7 @@ def train_transformer(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
         num_train_epochs=number_of_epochs,
-        weight_decay=0.01,
+        weight_decay=0.05,
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
         load_best_model_at_end=False,

@@ -30,6 +30,8 @@ class Staff2Score:
         """
         Inference an image (NDArray) using Tromr.
         """
+        image = np.rot90(image, k=-1, axes=(0, 1))
+
         x = _transform(image=image)
 
         t0 = perf_counter()
