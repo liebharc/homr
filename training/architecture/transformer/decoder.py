@@ -50,9 +50,10 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
+        # The transformer operates on rotated images: height and width are swapped
         self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
-        self.attention_width = config.max_width // config.patch_size
-        self.attention_height = config.max_height // config.patch_size
+        self.attention_width = config.max_height // config.patch_size
+        self.attention_height = config.max_width // config.patch_size
         self.patch_size = config.patch_size
 
         self.attn_layers = attn_layers
@@ -196,7 +197,7 @@ class ScoreTransformerWrapper(nn.Module):
         h, w = self.attention_height, self.attention_width
 
         image_token_count = h * w
-        image_attention = attention_all_layers[1 : image_token_count + 1]
+        image_attention = attention_all_layers[0:image_token_count]
 
         image_attention_2d = image_attention.reshape(h, w)
 
@@ -477,6 +478,7 @@ class ScoreDecoder(nn.Module):
             reduction="none",
             weight=weights,
             ignore_index=self.ignore_index,
+            label_smoothing=0.1,
         )
 
         # As reduction is "none", we can apply the mask to the loss
