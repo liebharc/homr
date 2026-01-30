@@ -13,6 +13,15 @@ an improvement or fix was done to the conversion.
 
 The training process itself takes depending on the hardware you use a 1-2 days.
 
+## Run 286 - after segnet update
+
+Commit: 87d30ed79a81b4f07a38a8f6419334c59633709a
+Day: 30 Jan 2026
+SER: 26%
+Validation result: Average metrics: diff: 6.86, ser: 0.0431, total_ser: 0.0577
+
+Updated segnet model for staff detection.
+
 ## Run 286
 
 Commit: 0daf75fea21e6ea6a865405e03a4bc7e73e9aa14
