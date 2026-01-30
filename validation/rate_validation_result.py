@@ -1,6 +1,7 @@
 import argparse
 import glob
 import os
+from dataclasses import dataclass
 from itertools import chain
 
 import editdistance
@@ -9,6 +10,24 @@ from homr.simple_logging import eprint
 from homr.staff_parsing import remove_duplicated_symbols  # type: ignore[attr-defined]
 from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
 from training.datasets.music_xml_parser import music_xml_file_to_tokens
+
+
+@dataclass
+class ValidationMetrics:
+    diff: float
+    ser: float
+    distance: int = 0
+    expected_length: int = 0
+
+    @property
+    def total_ser(self) -> float:
+        return self.distance / self.expected_length if self.expected_length > 0 else 0.0
+
+    def __str__(self) -> str:
+        s = f"diff: {self.diff:.2f}, ser: {self.ser:.4f}"
+        if self.expected_length > 0:
+            s += f", total_ser: {self.total_ser:.4f}"
+        return s
 
 
 def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
@@ -46,6 +65,20 @@ class MusicFile:
         keydiff_rating = 10  # Rate keydiff higher than notediff
         return keydiff_rating * keydist + notedist
 
+    def calculate_metrics(self, other: "MusicFile", compare_all: bool) -> ValidationMetrics:
+        diff = self.diff(other, compare_all)
+        if compare_all:
+            expected = other.symbolstr
+            actual = self.symbolstr
+        else:
+            expected = other.keys + other.notestr
+            actual = self.keys + self.notestr
+
+        distance = editdistance.eval(expected, actual)
+        expected_length = len(expected)
+        ser = distance / expected_length if expected_length > 0 else 0.0
+        return ValidationMetrics(float(diff), ser, distance, expected_length)
+
     def __str__(self) -> str:
         return str.join(" ", self.notestr)
 
@@ -73,20 +106,16 @@ def is_file_is_empty(filename: str) -> bool:
 
 def find_minimal_diff_against_all_other_files(
     file: MusicFile, files: list[MusicFile], compare_all: bool
-) -> tuple[int | None, MusicFile | None]:
-    minimal_diff = None
+) -> tuple[ValidationMetrics | None, MusicFile | None]:
+    minimal_metrics = None
     minimal_diff_file = None
     for other_file in files:
         if other_file != file:
-            diff = diff_against_reference(file, other_file, compare_all)
-            if minimal_diff is None or diff < minimal_diff:
-                minimal_diff = diff
+            metrics = file.calculate_metrics(other_file, compare_all)
+            if minimal_metrics is None or metrics.diff < minimal_metrics.diff:
+                minimal_metrics = metrics
                 minimal_diff_file = other_file
-    return minimal_diff, minimal_diff_file
-
-
-def diff_against_reference(file: MusicFile, reference: MusicFile, compare_all: bool) -> int:
-    return file.diff(reference, compare_all)
+    return minimal_metrics, minimal_diff_file
 
 
 def get_tokens_from_filename(filename: str) -> MusicFile:
@@ -99,9 +128,9 @@ def is_xml_or_musicxml(filename: str) -> bool:
     return filename.endswith((".xml", ".musicxml"))
 
 
-def rate_folder(foldername: str, compare_all: bool) -> tuple[float | None, int]:
+def rate_folder(foldername: str, compare_all: bool) -> tuple[ValidationMetrics | None, int]:
     files = all_files_in_folder(foldername)
-    all_diffs = []
+    all_metrics: list[ValidationMetrics] = []
     sum_of_failures = 0
     xmls: list[MusicFile] = []
     for file in files:
@@ -122,33 +151,43 @@ def rate_folder(foldername: str, compare_all: bool) -> tuple[float | None, int]:
     folder_base_name = os.path.basename(foldername.rstrip(os.path.sep))
     if len(reference) != 1:
         for xml in xmls:
-            minimal_diff, minimal_diff_file = find_minimal_diff_against_all_other_files(
+            metrics, minimal_diff_file = find_minimal_diff_against_all_other_files(
                 xml, xmls, compare_all
             )
-            if minimal_diff is None or minimal_diff_file is None:
+            if metrics is None or minimal_diff_file is None:
                 eprint("No minimal diff found for", xml.filename)
                 sum_of_failures += 1
                 continue
-            all_diffs.append(minimal_diff)
+            all_metrics.append(metrics)
     else:
         for xml in xmls:
             if xml.is_reference:
                 continue
-            diff = diff_against_reference(xml, reference[0], compare_all)
-            all_diffs.append(diff)
+            metrics = xml.calculate_metrics(reference[0], compare_all)
+            all_metrics.append(metrics)
 
-    average_diff = sum(all_diffs) / len(all_diffs)
-    eprint("In folder", folder_base_name, ": Average diff is", average_diff)
-    return average_diff, sum_of_failures
+    average_diff = sum(m.diff for m in all_metrics) / len(all_metrics)
+    average_ser = sum(m.ser for m in all_metrics) / len(all_metrics)
+    total_distance = sum(m.distance for m in all_metrics)
+    total_expected_length = sum(m.expected_length for m in all_metrics)
+    average_metrics = ValidationMetrics(
+        average_diff, average_ser, total_distance, total_expected_length
+    )
+
+    eprint("In folder", folder_base_name, ":", average_metrics)
+    return average_metrics, sum_of_failures
 
 
 def write_validation_result_for_folder(
-    foldername: str, diffs: float, failures: int, lines: list[str]
+    foldername: str, metrics: ValidationMetrics, failures: int, lines: list[str]
 ) -> None:
     with open(os.path.join(foldername, "validation_result.txt"), "w") as f:
         for line in lines:
             f.write(line + "\n")
-        f.write("Diffs: " + str(diffs) + "\n")
+        f.write("Diffs: " + str(metrics.diff) + "\n")
+        f.write("SER: " + str(metrics.ser) + "\n")
+        if metrics.expected_length > 0:
+            f.write("Total SER: " + str(metrics.total_ser) + "\n")
         f.write("Failures: " + str(failures) + "\n")
 
 
@@ -156,25 +195,33 @@ def rate_all_folders(foldername: str, compare_all: bool) -> bool:
     folders = get_all_direct_subfolders(foldername)
     if len(folders) == 0:
         return False
-    all_diffs = []
+    all_metrics: list[ValidationMetrics] = []
     sum_of_failures = 0
     lines = []
     for folder in folders:
-        diffs, failures = rate_folder(folder, compare_all)
-        if diffs is not None:
-            all_diffs.append(diffs)
+        metrics, failures = rate_folder(folder, compare_all)
+        if metrics is not None:
+            all_metrics.append(metrics)
         folder_base_name = os.path.basename(folder)
-        lines.append(folder_base_name + ": " + str(diffs) + ", " + str(failures))
+        lines.append(folder_base_name + ": " + str(metrics) + ", " + str(failures))
         sum_of_failures += failures
-    if len(all_diffs) == 0:
+    if len(all_metrics) == 0:
         eprint("Everything failed")
         return True
-    average_diff = sum(all_diffs) / len(all_diffs)
-    write_validation_result_for_folder(foldername, average_diff, sum_of_failures, lines)
+
+    average_diff = sum(m.diff for m in all_metrics) / len(all_metrics)
+    average_ser = sum(m.ser for m in all_metrics) / len(all_metrics)
+    total_distance = sum(m.distance for m in all_metrics)
+    total_expected_length = sum(m.expected_length for m in all_metrics)
+    average_metrics = ValidationMetrics(
+        average_diff, average_ser, total_distance, total_expected_length
+    )
+
+    write_validation_result_for_folder(foldername, average_metrics, sum_of_failures, lines)
     eprint()
     for line in lines:
         eprint(line)
-    eprint("Average diff:", average_diff)
+    eprint("Average metrics:", average_metrics)
     eprint("Sum of failures:", sum_of_failures)
     return True
 
