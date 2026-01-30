@@ -374,7 +374,7 @@ class ScoreDecoder(nn.Module):
         positions: torch.Tensor,
         mask: torch.Tensor,
         **kwargs: Any,
-    ) -> dict[str, torch.Tensor]:
+    ) -> dict[str, Any]:
         liftsi = lifts[:, :-1]
         liftso = lifts[:, 1:]
         articulationsi = articulations[:, :-1]
@@ -402,11 +402,11 @@ class ScoreDecoder(nn.Module):
         loss_consist = self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask
         )
-        loss_rhythm = self.masked_logits_cross_entropy(rhythmsp, rhythmso, mask)
-        loss_pitch = self.masked_logits_cross_entropy(pitchsp, pitchso, mask)
-        loss_lift = self.masked_logits_cross_entropy(liftsp, liftso, mask)
-        loss_articulations = self.masked_logits_cross_entropy(articulationsp, articulationso, mask)
-        loss_position = self.masked_logits_cross_entropy(positionsp, positionso, mask)
+        loss_rhythm = self.cross_entropy(rhythmsp, rhythmso)
+        loss_pitch = self.cross_entropy(pitchsp, pitchso)
+        loss_lift = self.cross_entropy(liftsp, liftso)
+        loss_articulations = self.cross_entropy(articulationsp, articulationso)
+        loss_position = self.cross_entropy(positionsp, positionso)
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
         alpha = 1
         beta = 1
@@ -421,6 +421,7 @@ class ScoreDecoder(nn.Module):
             "loss_position": loss_position,
             "loss_articulations": loss_articulations,
             "loss": loss,
+            "logits": (rhythmsp, pitchsp, liftsp, positionsp, articulationsp),
         }
 
     def calConsistencyLoss(
@@ -464,29 +465,20 @@ class ScoreDecoder(nn.Module):
 
         return loss
 
-    def masked_logits_cross_entropy(
+    def cross_entropy(
         self,
         logits: torch.Tensor,
         target: torch.Tensor,
-        mask: torch.Tensor,
         weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        # Calculate the cross-entropy loss
-        loss = F.cross_entropy(
+        return F.cross_entropy(
             logits.transpose(1, 2),
             target,
-            reduction="none",
+            reduction="mean",
             weight=weights,
             ignore_index=self.ignore_index,
             label_smoothing=0.1,
         )
-
-        # As reduction is "none", we can apply the mask to the loss
-        # and this way we ignore the loss for the padded tokens
-        loss = loss * mask
-        loss = loss.sum() / mask.sum()
-
-        return loss
 
 
 def init_cache(

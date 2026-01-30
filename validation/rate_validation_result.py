@@ -9,7 +9,7 @@ import editdistance
 from homr.simple_logging import eprint
 from homr.staff_parsing import remove_duplicated_symbols  # type: ignore[attr-defined]
 from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
-from training.datasets.music_xml_parser import music_xml_file_to_tokens
+from training.datasets.music_xml_parser import Measure, music_xml_file_to_tokens
 
 
 @dataclass
@@ -24,7 +24,7 @@ class ValidationMetrics:
         return self.distance / self.expected_length if self.expected_length > 0 else 0.0
 
     def __str__(self) -> str:
-        s = f"{self.diff:.1f} diffs,"
+        s = f"{self.diff:.1f} diffs"
         if self.expected_length > 0:
             s += f", SER: {100 * self.total_ser:.1f}%"
         return s
@@ -39,7 +39,7 @@ def _ignore_articulation(symbol: EncodedSymbol) -> EncodedSymbol:
 
 
 class MusicFile:
-    def __init__(self, filename: str, voices: list[list[list[EncodedSymbol]]]) -> None:
+    def __init__(self, filename: str, voices: list[list[Measure]]) -> None:
         self.filename = filename
         self.voices = voices
         voices_in_deq = list(chain.from_iterable(voices))

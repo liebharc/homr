@@ -12,13 +12,18 @@ class ConvNeXtEncoder(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
         # Using convnext_tiny as a powerful but efficient backbone
+        # Custom ConvNeXt configuration based on SMTNeXt paper
+        # Dims: [64, 128, 256, 512] (we use up to 256)
+        # Depths: [3, 3, 9, 3] (standard tiny depths as baseline)
         self.model = timm.create_model(
-            "convnext_tiny.fb_in1k",
-            pretrained=True,
+            "convnext_tiny",
+            pretrained=False,
             in_chans=config.channels,
             num_classes=0,
             global_pool="",
             drop_path_rate=0.1,
+            dims=[64, 128, 256, 512],
+            depths=[3, 3, 9, 3],
         )
         # ConvNeXt stage 3 has a total stride of 16
         # Stages are: stem (stride 4), stage 1 (stride 4), stage 2 (stride 8),

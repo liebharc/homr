@@ -3,7 +3,6 @@ import random
 from typing import Any
 
 import numpy as np
-from torchvision import transforms
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -39,9 +38,6 @@ class DataLoader:
         self.vocab = Vocabulary()
         self.config = config
         self.is_validation = is_validation
-        self.augmentation = transforms.RandomErasing(
-            p=0.1, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0
-        )
 
     def _add_mask_steps(self, corpus_list: list[str]) -> Any:
         result = []
@@ -69,7 +65,7 @@ class DataLoader:
             random.seed(idx)
             np.random.seed(idx)
 
-        img = distort_image(img)
+        img = distort_image(img, allow_occlusions=not self.is_validation)
 
         if self.is_validation:
             random.setstate(state)
@@ -78,10 +74,6 @@ class DataLoader:
         img = prepare_for_tensor(img)
         sample_img = ndarray_to_tensor(img)
         sample_img = rotate_and_unsqueeze(sample_img)
-
-        # Apply Random Erasing augmentation during training only
-        if not self.is_validation:
-            sample_img = self.augmentation(sample_img)
 
         tokens_full_filepath = entry["tokens"]
         tokens = self._read_tokens(tokens_full_filepath)

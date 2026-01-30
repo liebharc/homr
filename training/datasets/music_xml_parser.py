@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from typing import Iterable, SupportsIndex, TypeVar, overload
 
 import musicxml.xmlelement.xmlelement as mxl
 from musicxml.parser.parser import _parse_node
@@ -15,6 +16,61 @@ from training.datasets.staff_merging import (
     merge_upper_and_lower_staff,
 )
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
+
+_T = TypeVar("_T")
+
+
+class Measure(list[EncodedSymbol]):
+    """A list-like container that stores EncodedSymbol objects."""
+
+    def __init__(self, iterable: Iterable[EncodedSymbol] = ()) -> None:
+        """Initialize Measure from an iterable of EncodedSymbol objects."""
+        super().__init__(iterable)
+        self.new_page = False
+
+    @overload
+    def __setitem__(self, index: SupportsIndex, item: EncodedSymbol, /) -> None: ...
+
+    @overload
+    def __setitem__(self, index: slice, item: Iterable[EncodedSymbol], /) -> None: ...
+
+    def __setitem__(
+        self, index: SupportsIndex | slice, item: EncodedSymbol | Iterable[EncodedSymbol], /
+    ) -> None:
+        """Set item(s) at index."""
+        if isinstance(index, slice):
+            # Type narrowing: if index is slice, item must be Iterable
+            super().__setitem__(index, list(item) if not isinstance(item, list) else item)  # type: ignore[arg-type]
+        else:
+            # Type narrowing: if index is not slice, item is EncodedSymbol
+            super().__setitem__(index, item)  # type: ignore
+
+    @overload
+    def __add__(self, other: list[EncodedSymbol], /) -> "Measure": ...
+
+    @overload
+    def __add__(self, other: list[_T], /) -> list[EncodedSymbol | _T]: ...
+
+    def __add__(self, other: list, /) -> "Measure | list":
+        """Return a new Measure combining this one with another list."""
+        result = Measure(self)
+        result.extend(other)
+        return result
+
+    def __mul__(self, other: SupportsIndex, /) -> "Measure":
+        """Return a new Measure with items repeated."""
+        return Measure(super().__mul__(other))
+
+    __rmul__ = __mul__
+
+    def __repr__(self) -> str:
+        """Return a string representation of the Measure."""
+        return f"Measure({list(self)!r})"
+
+    def copy(self) -> "Measure":
+        """Return a shallow copy of the Measure."""
+        return Measure(self)
+
 
 DURATION_NUMBER = {v: k for k, v in DURATION_NAMES.items()}
 
@@ -43,6 +99,7 @@ class TokensMeasure:
     def __init__(self) -> None:
         self.symbols: list[EncodedSymbolWithPos] = []
         self.current_position = 0
+        self.new_page = False
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
@@ -51,6 +108,9 @@ class TokensMeasure:
             self.current_position += 1
             offset = 1 if "barline" in symbol.rhythm else 0
             self.symbols.append(EncodedSymbolWithPos(self.current_position + offset, symbol, True))
+
+    def mark_new_page(self) -> None:
+        self.new_page = True
 
     def append_symbol_to_staff(self, staff: int, symbol: EncodedSymbol) -> None:
         if has_rhythm_symbol_a_position(symbol.rhythm):
@@ -129,7 +189,7 @@ class TokensMeasure:
                 art = str.join("_", sorted(art_parts))
                 symbol.symbol.articulation = art
 
-    def complete_measure(self) -> list[EncodedSymbol]:  # noqa: C901
+    def complete_measure(self) -> Measure:  # noqa: C901
         self._fill_in_arpeggiate(self.symbols)
         result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
         grouped_symbols: dict[int, list[EncodedSymbolWithPos]] = {}
@@ -152,7 +212,9 @@ class TokensMeasure:
             for symbol_in_group in group_pos:
                 result_staff[self._get_staff_no(symbol_in_group)].append(symbol_in_group)
 
-        return merge_upper_and_lower_staff(result_staff)
+        result_measure = Measure(merge_upper_and_lower_staff(result_staff))
+        result_measure.new_page = self.new_page
+        return result_measure
 
 
 class TupletState:
@@ -198,8 +260,9 @@ class TupletState:
 class TokensPart:
     def __init__(self) -> None:
         self.current_measure: TokensMeasure | None = None
-        self.measures: list[list[EncodedSymbol]] = []
+        self.measures: list[Measure] = []
         self.tuplets = TupletState()
+        self.tremolo = False
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         current_measure = self.current_measure
@@ -220,6 +283,12 @@ class TokensPart:
             eprint("Expected to get clefs as first symbol")
             return
         self.current_measure.append_symbol(symbol)
+
+    def mark_new_page(self) -> None:
+        if self.current_measure is None:
+            eprint("Expected to get clefs as first symbol")
+            return
+        self.current_measure.mark_new_page()
 
     def append_rest(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
@@ -252,7 +321,7 @@ class TokensPart:
         self.current_measure = TokensMeasure()
         self.tuplets.on_end_of_measure()
 
-    def get_measures(self) -> list[list[EncodedSymbol]]:
+    def get_measures(self) -> list[Measure]:
         return self.measures
 
     def _get_current_position(self) -> int:
@@ -349,13 +418,19 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
         invisible = print_object == "no"
         if isinstance(child, mxl.XMLArticulations) and not invisible:
             for a in child.get_children():
-                name = a.__class__.__name__[3:]  # strip XML prefix, e.g., XMLStaccato -> Staccato
-                name = name[0].lower() + name[1:]
-                if name in ARTIC_MAPPING:
-                    if ARTIC_MAPPING[name]:
-                        articulations.append(ARTIC_MAPPING[name])
+                if isinstance(child, mxl.XMLTremolo) and not invisible:
+                    tremolo_type = str(child.attributes.get("type", ""))
+                    part.tremolo = tremolo_type == "start"
                 else:
-                    articulations.append(name)
+                    name = a.__class__.__name__[
+                        3:
+                    ]  # strip XML prefix, e.g., XMLStaccato -> Staccato
+                    name = name[0].lower() + name[1:]
+                    if name in ARTIC_MAPPING:
+                        if ARTIC_MAPPING[name]:
+                            articulations.append(ARTIC_MAPPING[name])
+                    else:
+                        articulations.append(name)
         if isinstance(child, mxl.XMLFermata) and not invisible:
             articulations.append("fermata")
         if isinstance(child, mxl.XMLOrnaments) and not invisible:
@@ -374,10 +449,14 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
             articulations.append("arpeggiate")
         if isinstance(child, mxl.XMLTied):
             tie_type = str(child.attributes.get("type", ""))
-            articulations.append("tie" + tie_type.capitalize())
+            articulations.append("slur" + tie_type.capitalize())
         if isinstance(child, mxl.XMLSlur):
             slur_type = str(child.attributes.get("type", ""))
             articulations.append("slur" + slur_type.capitalize())
+
+    if part.tremolo:
+        articulations.append("tremolo")
+
     articulations = list(set(articulations))
     if len(articulations) == 0:
         return empty
@@ -479,6 +558,12 @@ def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
         part.append_symbol(EncodedSymbol("voltaStart"))
 
 
+def _process_print(part: TokensPart, xmlprint: mxl.XMLPrint) -> None:
+    new_page = xmlprint.attributes.get("new-page", "")
+    if new_page == "yes":
+        part.mark_new_page()
+
+
 def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -> None:
     rests = measure_style.get_children_of_type(mxl.XMLMultipleRest)
     if len(rests) == 0:
@@ -488,7 +573,7 @@ def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -
     part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, "upper"))
 
 
-def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[EncodedSymbol]]:
+def _music_part_to_tokens(part: mxl.XMLPart) -> list[Measure]:
     tokens = TokensPart()
     for measure in part.get_children_of_type(mxl.XMLMeasure):
         for child in measure.get_children():
@@ -502,11 +587,13 @@ def _music_part_to_tokens(part: mxl.XMLPart) -> list[list[EncodedSymbol]]:
                 _process_forward(tokens, child)
             if isinstance(child, mxl.XMLBarline):
                 _process_barline(tokens, child)
+            if isinstance(child, mxl.XMLPrint):
+                _process_print(tokens, child)
         tokens.on_end_of_measure()
     return _cleanup_barlines_and_repeats(tokens.get_measures())
 
 
-def _cleanup_barlines_and_repeats(measures: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
+def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
     def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
         return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
 
@@ -536,9 +623,10 @@ def _cleanup_barlines_and_repeats(measures: list[list[EncodedSymbol]]) -> list[l
         return b
 
     last_symbol = EncodedSymbol("")
-    result: list[list[EncodedSymbol]] = []
+    result: list[Measure] = []
     for measure in measures:
-        measure_result: list[EncodedSymbol] = []
+        measure_result: Measure = Measure()
+        measure_result.new_page = measure.new_page
         for symbol in measure:
             if can_merge(symbol, last_symbol):
                 merged = merge_barlines_and_repeats(symbol, last_symbol)
@@ -558,22 +646,26 @@ def _cleanup_barlines_and_repeats(measures: list[list[EncodedSymbol]]) -> list[l
 
 def _music_xml_element_to_symbols(
     root: ET.Element,
-) -> list[list[list[EncodedSymbol]]]:
+) -> list[list[Measure]]:
     _remove_dynamics_attribute_from_nodes_recursive(root)
     parsed = _parse_node(root)
-    result: list[list[list[EncodedSymbol]]] = []
+    result: list[list[Measure]] = []
     for part in parsed.get_children_of_type(mxl.XMLPart):
         tokens = _music_part_to_tokens(part)
         result.append(tokens)
     return result
 
 
-def music_xml_string_to_tokens(content: str) -> list[list[list[EncodedSymbol]]]:
+def music_xml_string_to_tokens(content: str) -> list[list[Measure]]:
+    """
+    Returns a list of voices.
+    Each voice is a list of measures.
+    """
     xml = ET.fromstring(content)  # noqa: S314
     return _music_xml_element_to_symbols(xml)
 
 
-def music_xml_file_to_tokens(file_path: str) -> list[list[list[EncodedSymbol]]]:
+def music_xml_file_to_tokens(file_path: str) -> list[list[Measure]]:
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
     return _music_xml_element_to_symbols(xml.getroot())
@@ -587,9 +679,10 @@ def _remove_dynamics_attribute_from_nodes_recursive(node: ET.Element) -> None:
     if "dynamics" in node.attrib:
         del node.attrib["dynamics"]
 
+    filtered_tags = {"metronome", "ending", "direction"}
+
     for child in list(node):
-        # If the node is a <metronome> tag, remove it from its parent
-        if child.tag == "metronome":
+        if child.tag in filtered_tags:
             node.remove(child)
         _remove_dynamics_attribute_from_nodes_recursive(child)
 
@@ -614,7 +707,7 @@ if __name__ == "__main__":
         recursive=True,
     )
 
-    def process_file(file: str) -> tuple[str, list[list[EncodedSymbol]], Exception | None]:
+    def process_file(file: str) -> tuple[str, list[Measure], Exception | None]:
         try:
             voices = music_xml_file_to_tokens(file)
             tokens_list = []
