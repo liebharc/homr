@@ -1,8 +1,9 @@
 import os
 
 import torch
+from torch.export import Dim
 
-from homr.segmentation.config import segnet_path_torch
+from homr.segmentation.config import segnet_path_onnx, segnet_path_torch
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
@@ -182,10 +183,7 @@ def convert_segnet() -> str:
     """
     Converts the segnet model to onnx.
     """
-
-    dir_path = os.path.dirname(segnet_path_torch)
-    filename = os.path.splitext(os.path.basename(segnet_path_torch))[0]
-    path_out = os.path.join(dir_path, f"{filename}.onnx")
+    path_out = segnet_path_onnx
 
     if os.path.exists(path_out):
         eprint(path_out, "is already present")
@@ -196,17 +194,19 @@ def convert_segnet() -> str:
     model.eval()
 
     # Input dimension is 1x3x320x320
-    sample_inputs = torch.randn(1, 3, 320, 320)
+    sample_inputs = torch.randn(8, 3, 320, 320)
 
     torch.onnx.export(
         model,
         sample_inputs,  # type: ignore
         path_out,
-        opset_version=17,
+        opset_version=18,
         do_constant_folding=True,
         input_names=["input"],
         output_names=["output"],
         # dyamic axes are required for dynamic batch_size
-        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        dynamic_shapes={"image": (Dim("batch_size"), 3, 320, 320)},
+        dynamo=True,
+        external_data=False,
     )
-    return f"{os.path.splitext(segnet_path_torch)[0]}.onnx"
+    return path_out

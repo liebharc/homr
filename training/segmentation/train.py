@@ -225,34 +225,61 @@ class AddGrayGradient(A.ImageOnlyTransform):
 # training set images augmentation
 def get_training_augmentation() -> Any:
     train_transform = [
-        AddGrayGradient(alpha=0.4, direction="vertical", p=1.0),
-        A.HorizontalFlip(p=0.5),
+        # Multi-directional gradients with stronger effects (like your example image)
+        AddGrayGradient(alpha=0.7, direction="vertical", p=0.5),
+        AddGrayGradient(alpha=0.7, direction="horizontal", p=0.5),
+        # Removed horizontal flip - sheet music shouldn't be flipped
         A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=1, border_mode=0),
-        A.GaussNoise(p=0.2),
+        # Simulate faded ink and low contrast (like faded staff lines in your image)
+        A.RandomBrightnessContrast(
+            brightness_limit=0.4,
+            contrast_limit=(-0.5, -0.2),  # Strong contrast reduction for faded look
+            p=0.8,
+        ),
+        # Additional noise for degraded/photocopied documents
+        A.OneOf(
+            [
+                A.GaussNoise(var_limit=(15.0, 60.0), p=1.0),
+                A.ISONoise(color_shift=(0.01, 0.08), intensity=(0.2, 0.6), p=1.0),
+                A.MultiplicativeNoise(multiplier=(0.9, 1.1), p=1.0),
+            ],
+            p=0.6,
+        ),
         A.Perspective(p=0.5),
+        # Aggressive contrast adjustments to simulate various scanning/lighting conditions
         A.OneOf(
             [
-                A.CLAHE(p=1),
-                A.RandomBrightnessContrast(p=1),
-                A.RandomGamma(p=1),
+                A.CLAHE(clip_limit=6.0, p=1.0),
+                A.RandomBrightnessContrast(brightness_limit=0.5, contrast_limit=0.5, p=1.0),
+                A.RandomGamma(gamma_limit=(40, 160), p=1.0),
+                A.Equalize(p=1.0),
+            ],
+            p=0.95,
+        ),
+        # Blur from old photocopies or camera blur
+        A.OneOf(
+            [
+                A.Sharpen(alpha=(0.2, 0.6), lightness=(0.5, 1.0), p=1.0),
+                A.Blur(blur_limit=7, p=1.0),
+                A.MotionBlur(blur_limit=7, p=1.0),
+                A.GaussianBlur(blur_limit=7, p=1.0),
             ],
             p=0.9,
         ),
+        # Simulate faded/aged paper
         A.OneOf(
             [
-                A.Sharpen(p=1),
-                A.Blur(blur_limit=3, p=1),
-                A.MotionBlur(blur_limit=3, p=1),
+                A.RandomBrightnessContrast(brightness_limit=0.4, contrast_limit=(-0.4, 0.1), p=1.0),
+                A.HueSaturationValue(
+                    hue_shift_limit=15, sat_shift_limit=(-40, 10), val_shift_limit=30, p=1.0
+                ),
+                A.ToGray(p=1.0),
+                A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=1.0),
             ],
             p=0.9,
         ),
-        A.OneOf(
-            [
-                A.RandomBrightnessContrast(p=1),
-                A.HueSaturationValue(p=1),
-            ],
-            p=0.9,
-        ),
+        # Additional low-contrast and uneven lighting simulation
+        A.RandomToneCurve(scale=0.4, p=0.5),
     ]
     return A.Compose(train_transform)
 
@@ -285,7 +312,9 @@ def train_segnet(visualize: bool = False) -> None:
     dense_root = os.path.join(dataset_root, "ds2_dense")
 
     run_id = get_run_id()
-    model_destination = os.path.join(git_root, "homr", "segmentation", f"segnet_{run_id}.pth")
+    model_destination = os.path.join(
+        git_root, "training", "architecture", "segmentation", f"segnet_{run_id}.pth"
+    )
     eprint("Starting training of ", model_destination)
 
     images_dir = os.path.join(dense_root, "images")
@@ -299,8 +328,8 @@ def train_segnet(visualize: bool = False) -> None:
 
     validation_dataset = D2DenseDataset(val_images, augmentation=None)
 
-    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=False, num_workers=4)
-    validation_loader = DataLoader(validation_dataset, batch_size=24, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False, num_workers=6)
+    validation_loader = DataLoader(validation_dataset, batch_size=32, shuffle=False, num_workers=6)
 
     model = create_segnet()
 

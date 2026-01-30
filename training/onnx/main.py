@@ -14,16 +14,23 @@ from training.onnx.simplify import main as simplify_onnx_model
 from training.onnx.split_weights import split_weights
 
 
-def convert_all() -> None:
-    # Warnings might occur
+def convert_segnet_quant() -> None:
+    """
+    Converts and Quantizes the Segnet.
+    """
     path_to_segnet = convert_segnet()
     simplify_onnx_model(path_to_segnet)
     print(path_to_segnet)
     path_to_segnet_fp16 = quantization_fp16(path_to_segnet, segnet_path_onnx_fp16)
     print(path_to_segnet_fp16)
 
+
+def convert_transformer_quant() -> None:
+    """
+    Converts and Quantizes the Transformer (results in an encoder and a decoder).
+    """
     config = Config()
-    split_weights(config.filepaths.checkpoint)  # Make sure to the filepath of the transformer!
+    split_weights(config.filepaths.checkpoint)
     path_to_encoder = convert_encoder()
     simplify_onnx_model(path_to_encoder)
     print(path_to_encoder)
@@ -48,5 +55,4 @@ def convert_all() -> None:
 
 if __name__ == "__main__":
     # Converts pytorch models used by homr to onnx
-
-    convert_all()
+    convert_segnet_quant()

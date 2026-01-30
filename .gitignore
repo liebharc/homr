@@ -27,6 +27,7 @@ _build/
 *.pth
 *.onnx
 *.pt
+*.onnx.data
 
 # Byprodcuts of a training run
 /seg_unet.keras
@@ -41,6 +42,8 @@ _build/
 /*.musicxml
 /testdata
 /examples
+/canon
+*_try_*
 
 # WSL
 *Zone.Identifier
