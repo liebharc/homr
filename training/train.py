@@ -15,9 +15,6 @@ model_type = args.model_name
 if model_type == "segnet":
     dataset = download.download_deep_scores()
     train.train_segnet()
-elif model_type == "unet":
-    dataset = download.download_cvs_musicma()
-    train.train_unet()
 elif model_type == "transformer":
     transformer.train_transformer()
 else:

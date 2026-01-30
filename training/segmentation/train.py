@@ -1,4 +1,3 @@
-import glob
 import os
 import random
 from abc import abstractmethod
@@ -19,10 +18,7 @@ from homr.resize import calc_target_image_size, resize_image
 from homr.simple_logging import eprint
 from homr.staff_detection import make_lines_stronger
 from homr.type_definitions import NDArray
-from training.architecture.segmentation.model import (  # type: ignore
-    create_segnet,
-    create_unet,
-)
+from training.architecture.segmentation.model import create_segnet  # type: ignore
 from training.run_id import get_run_id
 from training.segmentation.build_label import (
     HALF_WHOLE_NOTE,
@@ -344,46 +340,5 @@ def train_segnet(visualize: bool = False) -> None:
     eprint(f"Saved model to {model_destination}")
 
 
-def train_unet(visualize: bool = False) -> None:
-    """
-    Segnet is layer #5 and #6 have replaced unet.
-    """
-    eprint("Unet is unused and the training code might be removed in future")
-
-    script_location = os.path.dirname(os.path.realpath(__file__))
-    git_root = Path(script_location).parent.parent.absolute()
-    dataset_root = os.path.join(git_root, "datasets")
-    cvc_root = os.path.join(dataset_root, "CvcMuscima-Distortions")
-
-    run_id = get_run_id()
-    model_destination = os.path.join(git_root, "homr", "segmentation", f"unet_{run_id}.pth")
-    eprint("Starting training of ", model_destination)
-
-    images = glob.glob(cvc_root + "/**/image/*.png", recursive=True)
-    train_images, val_images = random_split(images)
-
-    train_dataset = CvcMuscimaDataset(train_images, augmentation=get_training_augmentation())
-
-    if visualize:
-        visualize_dataset(train_dataset)
-
-    validation_dataset = CvcMuscimaDataset(val_images, augmentation=None)
-
-    train_loader = DataLoader(train_dataset, batch_size=24, shuffle=False, num_workers=4)
-    validation_loader = DataLoader(validation_dataset, batch_size=24, shuffle=False, num_workers=4)
-
-    model = create_unet()
-
-    trainer = pl.Trainer(max_epochs=3, log_every_n_steps=1)
-
-    trainer.fit(
-        model,
-        train_dataloaders=train_loader,
-        val_dataloaders=validation_loader,
-    )
-    torch.save(model.state_dict(), model_destination)
-    eprint(f"Saved model to {model_destination}")
-
-
 if __name__ == "__main__":
-    train_unet(True)
+    train_segnet(True)
