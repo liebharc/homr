@@ -24,9 +24,9 @@ class ValidationMetrics:
         return self.distance / self.expected_length if self.expected_length > 0 else 0.0
 
     def __str__(self) -> str:
-        s = f"diff: {self.diff:.2f}, ser: {self.ser:.4f}"
+        s = f"{self.diff:.1f} diffs,"
         if self.expected_length > 0:
-            s += f", total_ser: {self.total_ser:.4f}"
+            s += f", SER: {100 * self.total_ser:.1f}%"
         return s
 
 
@@ -221,7 +221,7 @@ def rate_all_folders(foldername: str, compare_all: bool) -> bool:
     eprint()
     for line in lines:
         eprint(line)
-    eprint("Average metrics:", average_metrics)
+    eprint(average_metrics)
     eprint("Sum of failures:", sum_of_failures)
     return True
 
