@@ -19,7 +19,6 @@ from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol, empty
-from training.datasets.convert_grandstaff import distort_image
 from training.datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
@@ -212,8 +211,8 @@ def _split_file_into_staffs(
                 total_staff_area = total_staff_area.merge_staff(staffs.pop(0))
             staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
             if not just_token_files:
-                y_offset = int(random.uniform(1.5, 2.5) * first_staff_height)
-                x_offset = 50
+                y_offset = int(random.uniform(1, 1.5) * first_staff_height)
+                x_offset = 10
                 x = total_staff_area.x - x_offset
                 y = total_staff_area.y - y_offset
                 width = total_staff_area.width + 2 * x_offset
@@ -224,8 +223,7 @@ def _split_file_into_staffs(
                 height = int(height * scale)
 
                 staff_image = image[y : y + height, x : x + width]
-                preprocessed = distort_image(staff_image)
-                preprocessed = add_image_into_tr_omr_canvas(preprocessed)
+                preprocessed = add_image_into_tr_omr_canvas(staff_image)
                 cv2.imwrite(staff_image_file_name, preprocessed)
             elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
                 raise ValueError(f"File {staff_image_file_name} not found")

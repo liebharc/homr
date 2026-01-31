@@ -10,7 +10,7 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
-        model_name = "pytorch_model_286-0daf75fea21e6ea6a865405e03a4bc7e73e9aa14"
+        model_name = "pytorch_model_302-9f744ae1743b909c85996e540871498dd41fc455"
         self.encoder_path = os.path.join(
             workspace,
             f"encoder_{model_name}.onnx",
@@ -62,6 +62,9 @@ class DecoderArgs:
         self.ff_glu = True
         self.rel_pos_bias = False
         self.use_scalenorm = False
+        self.attn_dropout = 0.1
+        self.ff_dropout = 0.1
+        self.layer_dropout = 0.1
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +73,9 @@ class DecoderArgs:
             "ff_glu": self.ff_glu,
             "rel_pos_bias": self.rel_pos_bias,
             "use_scalenorm": self.use_scalenorm,
+            "attn_dropout": self.attn_dropout,
+            "ff_dropout": self.ff_dropout,
+            "layer_dropout": self.layer_dropout,
         }
 
     def to_json_string(self) -> str:
@@ -94,7 +100,7 @@ class Config:
         self.num_lift_tokens = len(self.vocab.lift)
         self.num_articulation_tokens = len(self.vocab.articulation)
         self.num_position_tokens = len(self.vocab.position)
-        self.encoder_structure = "hybrid"
+        self.encoder_structure = "convnext"
         self.encoder_depth = 8
         self.backbone_layers = [3, 4, 6, 3]
         self.encoder_dim = 312

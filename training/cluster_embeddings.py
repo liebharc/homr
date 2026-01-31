@@ -13,8 +13,8 @@ from torchvision import transforms
 from tqdm import tqdm
 
 from homr.transformer.configs import default_config
-from homr.transformer.staff2score import readimg
-from homr.transformer.tromr_arch import load_model
+from training.architecture.transformer.staff2score import load_model_weights, readimg
+from training.architecture.transformer.tromr_arch import TrOMR
 
 MAX_NUMBER_OF_SAMPLES_WITH_IMAGES = 1000
 
@@ -96,7 +96,9 @@ def main(index_file, logdir, max_image_size, include_images):
         shutil.rmtree(logdir)
 
     config = default_config
-    model = load_model(config)
+    model = TrOMR(config)
+    model.load_state_dict(load_model_weights(config.filepaths.checkpoint), strict=False)
+    model.eval_mode()
     writer = SummaryWriter(log_dir=logdir)
 
     with open(index_file) as f:

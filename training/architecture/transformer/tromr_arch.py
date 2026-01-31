@@ -1,4 +1,3 @@
-import random
 from typing import Any
 
 import torch
@@ -43,15 +42,7 @@ class TrOMR(nn.Module):
             mask=mask,
             **kwargs,
         )
-        self._debug_log_loss(loss)
         return loss
-
-    def _debug_log_loss(self, loss: Any) -> None:
-        log_output = random.randint(1, 60) == 1
-        if not log_output:
-            return
-        debug_loss = {k: v.item() for k, v in loss.items()}
-        print(debug_loss)  # noqa: T201
 
     @torch.no_grad()
     def generate(self, x: torch.Tensor) -> list[EncodedSymbol]:
