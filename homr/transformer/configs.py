@@ -108,7 +108,6 @@ class Config:
         self.decoder_dim = 312
         self.decoder_depth = 8
         self.decoder_heads = 8
-        self.temperature = 0.01
         self.decoder_args = DecoderArgs()
         self.lift_vocab = self.vocab.lift
         self.pitch_vocab = self.vocab.pitch
@@ -138,7 +137,6 @@ class Config:
             "decoder_dim": self.decoder_dim,
             "decoder_depth": self.decoder_depth,
             "decoder_heads": self.decoder_heads,
-            "temperature": self.temperature,
             "decoder_args": self.decoder_args.to_dict(),
         }
 

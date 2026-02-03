@@ -1,4 +1,3 @@
-from math import ceil
 from typing import Any
 
 import torch
@@ -222,14 +221,6 @@ class ScoreTransformerWrapper(nn.Module):
         return center_of_attention
 
 
-def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
-    k = ceil((1 - thres) * logits.shape[-1])
-    val, ind = torch.topk(logits, k)
-    probs = torch.full_like(logits, float("-inf"))
-    probs.scatter_(1, ind, val)
-    return probs
-
-
 class ScoreDecoder(nn.Module):
     def __init__(
         self,
@@ -265,8 +256,6 @@ class ScoreDecoder(nn.Module):
         self,
         start_tokens: torch.Tensor,
         nonote_tokens: torch.Tensor,
-        temperature: float = 1.0,
-        filter_thres: float = 0.7,
         **kwargs: Any,
     ) -> list[EncodedSymbol]:
         was_training = self.net.training
@@ -320,23 +309,12 @@ class ScoreDecoder(nn.Module):
                 **kwargs,
             )
 
-            filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
-            filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
-            filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
-            filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
-            filtered_position_logits = top_k(positionsp[:, -1, :], thres=filter_thres)
-
-            lift_probs = F.softmax(filtered_lift_logits / temperature, dim=-1)
-            pitch_probs = F.softmax(filtered_pitch_logits / temperature, dim=-1)
-            rhythm_probs = F.softmax(filtered_rhythm_logits / temperature, dim=-1)
-            articulation_probs = F.softmax(filtered_articulations_logits / temperature, dim=-1)
-            position_probs = F.softmax(filtered_position_logits / temperature, dim=-1)
-
-            lift_sample = torch.multinomial(lift_probs, 1)
-            pitch_sample = torch.multinomial(pitch_probs, 1)
-            rhythm_sample = torch.multinomial(rhythm_probs, 1)
-            articulation_sample = torch.multinomial(articulation_probs, 1)
-            position_sample = torch.multinomial(position_probs, 1)
+            # Greedy decoding: pick the highest logit directly for each output
+            rhythm_sample = rhythmsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            pitch_sample = pitchsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            lift_sample = liftsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            articulation_sample = articulationsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            position_sample = positionsp[:, -1, :].argmax(dim=-1, keepdim=True)
 
             lift_token = detokenize(lift_sample, self.inv_lift_vocab)
             pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
