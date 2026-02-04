@@ -55,11 +55,20 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 317
+
+Commit: 6f72a0bc2577907503e7ec84ac9850a5a972ded0
+Day: 4 Feb 2026  
+Transformer Smoke Test: SER 15
+System Level: 25.9 diffs, SER: 15.5%
+
+ConvNext https://github.com/liebharc/homr/pull/59
+
 ## Run 286 - after segnet update
 
 Commit: 87d30ed79a81b4f07a38a8f6419334c59633709a  
 Day: 30 Jan 2026  
-Transformer Smoke Test: SER 11% (the SER reported for the previous runs was too large due to an unreasonable large temperature setting during the smoke test)
+Transformer Smoke Test: SER 14% (the SER reported for the previous runs was too large due to an unreasonable large temperature setting during the smoke test)
 System Level: 6.9 diffs, SER: 5.7%
 
 Updated segnet model for staff detection.

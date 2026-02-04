@@ -184,11 +184,10 @@ def write_validation_result_for_folder(
     with open(os.path.join(foldername, "validation_result.txt"), "w") as f:
         for line in lines:
             f.write(line + "\n")
-        f.write("Diffs: " + str(metrics.diff) + "\n")
-        f.write("SER: " + str(metrics.ser) + "\n")
+        f.write(f"Total: {metrics.diff:.1f} diffs")
         if metrics.expected_length > 0:
-            f.write("Total SER: " + str(metrics.total_ser) + "\n")
-        f.write("Failures: " + str(failures) + "\n")
+            f.write(f", SER: {100 * metrics.total_ser:.1f}%")
+        f.write("\nFailures: " + str(failures) + "\n")
 
 
 def rate_all_folders(foldername: str, compare_all: bool) -> bool:
