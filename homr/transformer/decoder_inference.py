@@ -1,4 +1,3 @@
-from math import ceil
 from typing import Any
 
 import numpy as np
@@ -6,7 +5,6 @@ import onnxruntime as ort
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from homr.transformer.utils import softmax
 from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
@@ -49,8 +47,6 @@ class ScoreDecoder:
         self,
         start_tokens: NDArray,
         nonote_tokens: NDArray,
-        temperature: float = 1.0,
-        filter_thres: float = 0.7,
         **kwargs: Any,
     ) -> list[EncodedSymbol]:
         num_dims = len(start_tokens.shape)
@@ -103,7 +99,7 @@ class ScoreDecoder:
             outputs = self.io_binding.get_outputs()
             cache = outputs[6:]
 
-            # And convert the outputs to np arrays...
+            # Greedy decoding: pick the highest logit directly for each output
             rhythmsp = outputs[0].numpy()
             pitchsp = outputs[1].numpy()
             liftsp = outputs[2].numpy()
@@ -111,24 +107,11 @@ class ScoreDecoder:
             articulationsp = outputs[4].numpy()
             attention = outputs[5].numpy()
 
-            # ...To continue with the normal CPU based processing
-            filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
-            filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
-            filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
-            filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
-            filtered_positions_logits = top_k(positionsp[:, -1, :], thres=filter_thres)
-
-            lift_probs = softmax(filtered_lift_logits / temperature, dim=-1)
-            pitch_probs = softmax(filtered_pitch_logits / temperature, dim=-1)
-            rhythm_probs = softmax(filtered_rhythm_logits / temperature, dim=-1)
-            articulation_probs = softmax(filtered_articulations_logits / temperature, dim=-1)
-            positions_probs = softmax(filtered_positions_logits / temperature, dim=-1)
-
-            lift_sample = np.array([[lift_probs.argmax()]])
-            pitch_sample = np.array([[pitch_probs.argmax()]])
-            rhythm_sample = np.array([[rhythm_probs.argmax()]])
-            articulation_sample = np.array([[articulation_probs.argmax()]])
-            position_sample = np.array([[positions_probs.argmax()]])
+            rhythm_sample = np.array([[rhythmsp[:, -1, :].argmax()]])
+            pitch_sample = np.array([[pitchsp[:, -1, :].argmax()]])
+            lift_sample = np.array([[liftsp[:, -1, :].argmax()]])
+            articulation_sample = np.array([[articulationsp[:, -1, :].argmax()]])
+            position_sample = np.array([[positionsp[:, -1, :].argmax()]])
 
             lift_token = detokenize(lift_sample, self.inv_lift_vocab)
             pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
@@ -180,30 +163,6 @@ class ScoreDecoder:
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
-
-
-def top_k(logits: NDArray, thres: float = 0.9) -> NDArray:
-    """Numpy implementation matching torch's top_k behavior"""
-    k = ceil((1 - thres) * logits.shape[-1])
-
-    # Get top k elements
-    flat_logits = logits.ravel()
-    indices = np.argpartition(flat_logits, -k)[-k:]  # Get indices of top k elements
-    indices = indices[np.argsort(-flat_logits[indices])]  # Sort them in descending order
-    values = flat_logits[indices]  # Get the corresponding values
-
-    # Create output array with -inf
-    output = np.full_like(logits, -np.inf)
-
-    # Scatter the topk values back into the output array
-    # For multi-dimensional arrays, we need to convert flat indices to multi-indices
-    if logits.ndim > 1:
-        multi_indices = np.unravel_index(indices, logits.shape)
-        output[multi_indices] = values
-    else:
-        output[indices] = values
-
-    return output
 
 
 def detokenize(tokens: NDArray, vocab: dict[int, str]) -> list[str]:

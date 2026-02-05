@@ -73,6 +73,20 @@ class SvgStaff(SvgRectangle):
             result.bar_line_x_positions.add(pos)
         return result
 
+    def extend_y_range(self, point: int) -> None:
+        """Extend the staff's vertical range to include the given point."""
+        top = self.y
+        bottom = self.y + self.height
+        if point < top:
+            self.y = point
+            self.height = bottom - point
+        elif point > bottom:
+            self.height = point - top
+
+    def contains_x_position(self, x: int) -> bool:
+        """Check if an x-coordinate falls within this staff's horizontal range."""
+        return self.x <= x <= self.x + self.width
+
     @property
     def number_of_measures(self) -> int:
         return len(self.bar_line_x_positions) - 1
@@ -90,6 +104,51 @@ class SvgMusicFile:
         self.width = width
         self.height = height
         self.staffs = staffs
+        self.number_of_measures = sum([staff.number_of_measures for staff in staffs])
+
+    def merge_voice_with_next_one(self, voice: int, number_of_voices: int) -> None:
+        """Merge a voice with the next voice within each group.
+
+        Args:
+            voice: Index of the voice to merge (0-based within each group)
+            number_of_voices: Number of voices per group
+
+        For example, if number_of_voices=3 and voice=1:
+        - Merges: staff[1] with staff[2], staff[4] with staff[5], etc.
+        - Result: [0, merged(1,2)], [3, merged(4,5)], ...
+        """
+        if voice < 0 or voice >= number_of_voices - 1:
+            raise ValueError(
+                f"Voice {voice} cannot be merged with the next voice. "
+                f"Valid range is [0, {number_of_voices - 2}] for {number_of_voices} voices."
+            )
+
+        new_staffs: list[SvgStaff] = []
+        i = 0
+
+        while i < len(self.staffs):
+            position_in_group = i % number_of_voices
+
+            if position_in_group == voice:
+                # Merge this staff with the next one
+                if i + 1 < len(self.staffs):
+                    merged_staff = self.staffs[i].merge_staff(self.staffs[i + 1])
+                    new_staffs.append(merged_staff)
+                    i += 2  # Skip both staffs
+                else:
+                    eprint(f"Cannot merge staff at index {i}: no next staff available")
+                    self.number_of_measures = 0
+                    self.staffs = []
+                    return
+            else:
+                # Just append this staff
+                new_staffs.append(self.staffs[i])
+                i += 1
+
+        self.staffs = new_staffs
+
+        # Recalculate number of measures
+        self.number_of_measures = sum(staff.number_of_measures for staff in self.staffs)
 
 
 def get_position_from_multiple_svg_files(musicxml_file: str) -> list[SvgMusicFile]:
@@ -143,6 +202,60 @@ def _combine_staff_lines_and_bar_lines(
     return staffs
 
 
+def _extend_staffs_with_stems(staffs: list[SvgStaff], stems: list[SvgRectangle]) -> None:
+    """Efficiently extend staff vertical ranges to include all stems.
+
+    This function finds the closest staff for each stem and extends that staff's
+    vertical range to include the stem's top and bottom points.
+
+    Args:
+        staffs: List of staffs (assumed to be sorted by y-coordinate)
+        stems: List of stems (will be sorted by y-coordinate internally)
+    """
+    if not staffs or not stems:
+        return
+
+    stems_sorted_by_y = sorted(stems, key=lambda s: s.y)
+
+    # Process each stem and find its closest staff
+    for stem in stems_sorted_by_y:
+        # Find the closest staff by checking which staff's y-range is closest
+        # We use the stem's x-coordinate to determine which staff it belongs to
+        stem_center_x = stem.x + stem.width // 2
+        stem_center_y = stem.y + stem.height // 2
+
+        # Find the best matching staff (one that contains the stem's x position
+        # and is closest in y)
+        best_staff = None
+        best_distance = float("inf")
+
+        for staff in staffs:
+            # Check if stem is within the horizontal range of this staff
+            if staff.contains_x_position(stem_center_x):
+                # Calculate vertical distance from stem center to staff center
+                staff_center_y = staff.y + staff.height // 2
+                distance = abs(stem_center_y - staff_center_y)
+
+                if distance < best_distance:
+                    best_distance = distance
+                    best_staff = staff
+
+        # If no staff contains the stem's x position, find the closest one by y
+        if best_staff is None:
+            for staff in staffs:
+                staff_center_y = staff.y + staff.height // 2
+                distance = abs(stem_center_y - staff_center_y)
+
+                if distance < best_distance:
+                    best_distance = distance
+                    best_staff = staff
+
+        # Extend the staff to include both top and bottom of the stem
+        if best_staff is not None:
+            best_staff.extend_y_range(stem.y)
+            best_staff.extend_y_range(stem.y + stem.height)
+
+
 def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     doc = minidom.parse(svg_file)  # noqa: S318
     svg_element = doc.getElementsByTagName("svg")[0]
@@ -151,12 +264,19 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     lines = doc.getElementsByTagName("polyline")
     staff_lines: list[SvgRectangle] = []
     bar_lines: list[SvgRectangle] = []
+    stems: list[SvgRectangle] = []
     for line in lines:
         class_name = line.getAttribute("class")
         if class_name == "StaffLines":
             staff_lines.append(_parse_paths(line.getAttribute("points")))
         if class_name == "BarLine":
             bar_lines.append(_parse_paths(line.getAttribute("points")))
+        if class_name == "Stem":
+            stems.append(_parse_paths(line.getAttribute("points")))
 
     combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
+
+    # Extend staffs using stem information
+    _extend_staffs_with_stems(combined, stems)
+
     return SvgMusicFile(svg_file, width, height, combined)

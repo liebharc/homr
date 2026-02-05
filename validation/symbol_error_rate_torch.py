@@ -158,7 +158,7 @@ def main() -> None:
     validation_data_set_location = os.path.join(data_set_location, "validation")
     download_path = os.path.join(data_set_location, "validation.zip")
     download_url = (
-        "https://github.com/liebharc/homr/releases/download/datasets/validation_tokens.zip"
+        "https://github.com/liebharc/homr/releases/download/datasets/validation_tokens_v2.zip"
     )
     if not os.path.exists(validation_data_set_location):
         try:
