@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from termcolor import colored
 
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.transformer.image_utils import distort_image
 
 parser = argparse.ArgumentParser(description="Show examples from a dataset index")
@@ -89,6 +90,7 @@ while not done:
             raise ValueError("Failed to read " + image_path)
         if not args.no_augmentation:
             image = distort_image(image)
+            image = add_image_into_tr_omr_canvas(image)
         if images is None:
             images = image
         else:

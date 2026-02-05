@@ -378,22 +378,49 @@ def warp_image_randomly(image: PIL.Image.Image) -> PIL.Image.Image:
 
 
 def warp_image_array_randomly(image: NDArray) -> NDArray:
-    center = (image.shape[1] // 2, image.shape[0] // 2)
-    num_points = 5
-    upper = [(i * image.shape[1] // num_points, 0) for i in range(num_points)]
-    source = [(i * image.shape[1] // num_points, center[1]) for i in range(num_points)]
-    lower = [(i * image.shape[1] // num_points, image.shape[0]) for i in range(num_points)]
-    max_random_offset = 20
-    destination = [
-        (
-            i * image.shape[1] // num_points,
-            center[1] + np.random.randint(-max_random_offset, max_random_offset),
-        )
-        for i in range(num_points)
-    ]
-    result = calculate_dewarp_transformation(
-        image, [upper, source, lower], [upper, destination, lower]
-    ).dewarp(image, fill_color=255, order=3)
+    """
+    Apply a smooth random warp to the image to simulate paper folding/bending.
+    Uses cv2.remap with a 1D vertical displacement pattern (tiled horizontally)
+    to create a realistic wavy look without "hard cuts" or 2D stretching.
+    """
+    height, width = image.shape[:2]
+
+    # Use a small grid: 5 columns, 2 identical rows for vertical-only wave
+    grid_w = 5
+    grid_h = 2
+
+    # Generate random vertical displacement (same for both rows)
+    # alpha controls the maximum displacement in pixels
+    alpha = np.random.uniform(5, 20)
+    dy_row = np.random.uniform(-1, 1, (1, grid_w)).astype(np.float32)
+
+    # Anchor left and right edges to zero displacement
+    dy_row[0, 0] = 0
+    dy_row[0, -1] = 0
+
+    # Tile vertically to create a consistent wave across the entire image height
+    dy_small = np.tile(dy_row, (grid_h, 1))
+    dx_small = np.zeros((grid_h, grid_w), dtype=np.float32)
+
+    # Upscale to full image size with cubic interpolation for smoothness
+    dx = cv2.resize(dx_small, (width, height), interpolation=cv2.INTER_CUBIC) * alpha
+    dy = cv2.resize(dy_small, (width, height), interpolation=cv2.INTER_CUBIC) * alpha
+
+    # Create coordinate maps for cv2.remap
+    x, y = np.meshgrid(np.arange(width), np.arange(height))
+    map_x = (x + dx).astype(np.float32)
+    map_y = (y + dy).astype(np.float32)
+
+    # Perform the warping
+    result = cv2.remap(
+        image,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255, 255, 255),
+    )
+
     return result.astype(np.uint8)
 
 

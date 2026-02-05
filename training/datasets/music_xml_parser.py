@@ -280,42 +280,36 @@ class TokensPart:
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_symbol(symbol)
 
     def mark_new_page(self) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.mark_new_page()
 
     def append_rest(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_rest(staff, is_chord, duration, invisible, symbol)
 
     def append_note(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_note(staff, is_chord, duration, invisible, symbol)
 
     def append_position_change(self, duration: int) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_position_change(duration)
 
     def on_end_of_measure(self) -> None:
         if self.current_measure is None:
-            eprint("Expected to get clefs as first symbol")
-            return
+            raise ValueError("Expected to get clefs as first symbol")
 
         self.measures.append(self.current_measure.complete_measure())
         self.current_measure = TokensMeasure()

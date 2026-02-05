@@ -11,7 +11,6 @@ from homr.circle_of_fifths import (
 )
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
-from homr.staff_parsing import add_image_into_tr_omr_canvas
 from training.datasets.primus_semantic_parser import convert_primus_semantic_to_tokens
 from training.transformer.image_utils import add_margin
 from training.transformer.training_vocabulary import token_lines_to_str
@@ -57,7 +56,6 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
         margin_bottom = random.randint(10, 30)
         preprocessed = add_margin(image, margin_top, margin_bottom, margin_left, margin_right)
         preprocessed = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2BGR)
-        preprocessed = add_image_into_tr_omr_canvas(preprocessed)
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)
     semantic_file = _find_semantic_file(path)
     if semantic_file is None:

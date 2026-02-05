@@ -59,7 +59,7 @@ Implementation: `rate_validation_result.py`
 
 Commit: 6f72a0bc2577907503e7ec84ac9850a5a972ded0
 Day: 4 Feb 2026  
-Transformer Smoke Test: SER 15
+Transformer Smoke Test: SER 15%
 System Level: 25.9 diffs, SER: 15.5%
 
 ConvNext https://github.com/liebharc/homr/pull/59

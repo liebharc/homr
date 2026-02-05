@@ -186,5 +186,7 @@ def train_transformer(
 if __name__ == "__main__":
     if "--fine" in sys.argv:
         train_transformer(fp32=False, fine_tune=True)
+    elif len(sys.argv) > 1:
+        raise ValueError("Unknown argument")
     else:
         train_transformer(smoke_test=True)

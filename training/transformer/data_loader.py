@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 
 from homr.simple_logging import eprint
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import Vocabulary
 from training.transformer.image_utils import (
@@ -66,6 +67,7 @@ class DataLoader:
             np.random.seed(idx)
 
         img = distort_image(img, allow_occlusions=not self.is_validation)
+        img = add_image_into_tr_omr_canvas(img)
 
         if self.is_validation:
             random.setstate(state)

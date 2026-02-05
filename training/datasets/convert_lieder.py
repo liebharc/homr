@@ -15,7 +15,6 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol, empty
 from training.datasets.musescore_svg import (
     SvgMusicFile,
@@ -308,8 +307,7 @@ def _split_file_into_staffs(
             height = int(height * scale)
 
             staff_image = image[y : y + height, x : x + width]
-            preprocessed = add_image_into_tr_omr_canvas(staff_image)
-            cv2.imwrite(staff_image_file_name, preprocessed)
+            cv2.imwrite(staff_image_file_name, staff_image)
         elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
             raise ValueError(f"File {staff_image_file_name} not found")
 

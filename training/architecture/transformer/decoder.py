@@ -377,19 +377,20 @@ class ScoreDecoder(nn.Module):
             **kwargs,
         )  # this calls ScoreTransformerWrapper.forward
 
-        loss_consist = self.calConsistencyLoss(
+        # From the TR OMR paper equation 2, we use however different values for alpha and beta
+        alpha = 0.1
+        beta = 1
+        loss_consist = beta * self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask
         )
-        loss_rhythm = self.cross_entropy(rhythmsp, rhythmso)
-        loss_pitch = self.cross_entropy(pitchsp, pitchso)
-        loss_lift = self.cross_entropy(liftsp, liftso)
-        loss_articulations = self.cross_entropy(articulationsp, articulationso)
-        loss_position = self.cross_entropy(positionsp, positionso)
-        # From the TR OMR paper equation 2, we use however different values for alpha and beta
-        alpha = 1
-        beta = 1
-        loss_sum = loss_rhythm + loss_pitch + loss_lift + loss_position + loss_articulations
-        loss = alpha * loss_sum + beta * loss_consist
+        loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso)
+        loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
+        loss_lift = alpha * self.cross_entropy(liftsp, liftso)
+        loss_articulations = alpha * self.cross_entropy(articulationsp, articulationso)
+        loss_position = alpha * self.cross_entropy(positionsp, positionso)
+        loss = (
+            loss_rhythm + loss_pitch + loss_lift + loss_articulations + loss_position + loss_consist
+        )
 
         return {
             "loss_rhythm": loss_rhythm,

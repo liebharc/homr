@@ -8,7 +8,6 @@ import numpy as np
 
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
-from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.type_definitions import NDArray
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
 from training.datasets.musescore_svg import SvgValidationError
@@ -58,8 +57,7 @@ def _prepare_image(image: NDArray) -> NDArray:
     margin_top = random.randint(10, 30)
     margin_bottom = random.randint(10, 30)
     image = add_margin(image, margin_top, margin_bottom, margin_left, margin_right)
-    result = add_image_into_tr_omr_canvas(image)
-    return result
+    return image
 
 
 def _get_image_bounds(dark_pixels_per_row: NDArray) -> tuple[int, int]:
