@@ -52,8 +52,8 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
             return []
         margin_left = random.randint(0, 10)
         margin_right = random.randint(0, 10)
-        margin_top = random.randint(10, 30)
-        margin_bottom = random.randint(10, 30)
+        margin_top = random.randint(60, 80)
+        margin_bottom = random.randint(60, 80)
         preprocessed = add_margin(image, margin_top, margin_bottom, margin_left, margin_right)
         preprocessed = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2BGR)
         cv2.imwrite(str(preprocessed_path.absolute()), preprocessed)

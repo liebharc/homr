@@ -57,7 +57,6 @@ class ScoreTransformerWrapper(nn.Module):
 
         self.attn_layers = attn_layers
         self.post_emb_norm = nn.LayerNorm(dim)
-        self.init_()
 
         self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
         self.to_logits_pitch = nn.Linear(dim, config.num_pitch_tokens)
@@ -65,14 +64,23 @@ class ScoreTransformerWrapper(nn.Module):
         self.to_logits_position = nn.Linear(dim, config.num_position_tokens)
         self.to_logits_articulations = nn.Linear(dim, config.num_articulation_tokens)
 
+        self.init_()
+
     def init_(self) -> None:
         if self.l2norm_embed:
             nn.init.normal_(self.lift_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pitch_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.rhythm_emb.emb.weight, std=1e-5)
-            nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.articulation_emb.emb.weight, std=1e-5)
-            return
+            nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
+        else:
+            # Use transformer standard initialization (std=0.02)
+            # This provides stronger gradients than 1e-5 for faster convergence
+            nn.init.normal_(self.lift_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.pitch_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.rhythm_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.articulation_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.pos_emb.emb.weight, std=0.02)
 
     def forward(
         self,
@@ -118,6 +126,7 @@ class ScoreTransformerWrapper(nn.Module):
                 out_articulations,
                 x,
                 attention,
+                None,
             )
 
         else:
@@ -222,15 +231,10 @@ class ScoreTransformerWrapper(nn.Module):
 
 
 class ScoreDecoder(nn.Module):
-    def __init__(
-        self,
-        transformer: ScoreTransformerWrapper,
-        config: Config,
-        ignore_index: int = -100,
-    ):
+    def __init__(self, transformer: ScoreTransformerWrapper, config: Config):
         super().__init__()
         self.pad_value = (config.pad_token,)
-        self.ignore_index = ignore_index
+        self.ignore_index = config.pad_token
         self.config = config
         self.net = transformer
         self.max_seq_len = config.max_seq_len
@@ -366,7 +370,7 @@ class ScoreDecoder(nn.Module):
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
 
-        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention = self.net(
+        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention, _cache = self.net(
             rhythms=rhythmsi,
             pitchs=pitchsi,
             lifts=liftsi,
@@ -378,12 +382,12 @@ class ScoreDecoder(nn.Module):
         )  # this calls ScoreTransformerWrapper.forward
 
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
-        alpha = 0.1
+        alpha = 0.3125
         beta = 1
         loss_consist = beta * self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask
         )
-        loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso)
+        loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso, label_smoothing=0.1)
         loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
         loss_lift = alpha * self.cross_entropy(liftsp, liftso)
         loss_articulations = alpha * self.cross_entropy(articulationsp, articulationso)
@@ -448,6 +452,7 @@ class ScoreDecoder(nn.Module):
         self,
         logits: torch.Tensor,
         target: torch.Tensor,
+        label_smoothing: float = 0.0,
         weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
         return F.cross_entropy(
@@ -456,7 +461,7 @@ class ScoreDecoder(nn.Module):
             reduction="mean",
             weight=weights,
             ignore_index=self.ignore_index,
-            label_smoothing=0.1,
+            label_smoothing=label_smoothing,
         )
 
 

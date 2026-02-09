@@ -80,7 +80,7 @@ def train_transformer(
 ) -> None:
     number_of_epochs = 70
     if smoke_test:
-        number_of_epochs = 15
+        number_of_epochs = 10
     elif fine_tune:
         number_of_epochs = 15
     resume_from_checkpoint = None
@@ -92,10 +92,12 @@ def train_transformer(
         shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
     if smoke_test:
-        number_of_files = 10000
+        number_of_files = -1
         train_index = load_and_mix_training_sets(
-            _check_datasets_are_present([lieder_train_index]),
-            [1.0],
+            _check_datasets_are_present(
+                [lieder_train_index, grandstaff_train_index, primus_train_index]
+            ),
+            [1.0, 1.0, 1.0],
             number_of_files,
         )
     else:

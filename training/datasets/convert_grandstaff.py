@@ -1,6 +1,5 @@
 import multiprocessing
 import os
-import random
 from pathlib import Path
 
 import cv2
@@ -11,7 +10,6 @@ from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
 from training.datasets.musescore_svg import SvgValidationError
-from training.transformer.image_utils import add_margin
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,
@@ -52,11 +50,6 @@ def _create_staff_image(path: str, basename: str) -> str:
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    margin_left = random.randint(0, 10)
-    margin_right = random.randint(0, 10)
-    margin_top = random.randint(10, 30)
-    margin_bottom = random.randint(10, 30)
-    image = add_margin(image, margin_top, margin_bottom, margin_left, margin_right)
     return image
 
 

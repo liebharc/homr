@@ -84,6 +84,8 @@ class HomrTrainer(Trainer):
         inputs: dict[str, torch.Tensor],
     ) -> None:
         rhythm, pitch, lift, position, articulations = outputs["logits"]
+        # Pull binary mask from inputs and align with y_out (shift by 1)
+        eval_mask = inputs["mask"][:, 1:]
 
         branches = [
             ("rhythm", rhythm, inputs["rhythms"]),
@@ -97,11 +99,13 @@ class HomrTrainer(Trainer):
             preds = logits.argmax(dim=-1)
             labels = input_labels[:, 1:]  # next-token alignment
 
-            min_len = min(preds.shape[1], labels.shape[1])
+            min_len = min(preds.shape[1], labels.shape[1], eval_mask.shape[1])
             preds = preds[:, :min_len]
             labels = labels[:, :min_len]
+            current_eval_mask = eval_mask[:, :min_len]
 
-            mask = labels != -100
+            # Combine explicit ignore_index with the binary mask
+            mask = (labels != -100) & current_eval_mask
             if not mask.any():
                 continue
 

@@ -391,7 +391,7 @@ def warp_image_array_randomly(image: NDArray) -> NDArray:
 
     # Generate random vertical displacement (same for both rows)
     # alpha controls the maximum displacement in pixels
-    alpha = np.random.uniform(5, 20)
+    alpha = np.random.uniform(5, 25)
     dy_row = np.random.uniform(-1, 1, (1, grid_w)).astype(np.float32)
 
     # Anchor left and right edges to zero displacement

@@ -20,6 +20,7 @@ class ScoreDecoder:
     ):
         super().__init__()
         self.ignore_index = ignore_index
+        self.config = config
         self.net = transformer
         self.io_binding = self.net.io_binding()
         self.max_seq_len = config.max_seq_len
@@ -143,11 +144,13 @@ class ScoreDecoder:
         cache = []
         input_names = []
         output_names = []
-        for i in range(32):
+        heads = self.config.decoder_heads
+        head_dim = self.config.decoder_dim // heads
+        for i in range(self.config.decoder_depth * 4):
             if self.fp16:  # the cache needs to be fp16 as well
                 cache.append(
                     ort.OrtValue.ortvalue_from_numpy(
-                        np.zeros((1, 8, cache_len, 64), dtype=np.float16),
+                        np.zeros((1, heads, cache_len, head_dim), dtype=np.float16),
                         "cuda" if self.use_gpu else "cpu",
                         self.device_id,
                     )
@@ -155,7 +158,7 @@ class ScoreDecoder:
             else:
                 cache.append(
                     ort.OrtValue.ortvalue_from_numpy(
-                        np.zeros((1, 8, cache_len, 64), dtype=np.float32),
+                        np.zeros((1, heads, cache_len, head_dim), dtype=np.float32),
                         "cuda" if self.use_gpu else "cpu",
                         self.device_id,
                     )
