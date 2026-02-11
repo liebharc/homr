@@ -1,10 +1,40 @@
 import os
 import shutil
 import sys
+from typing import Any
 
 import torch
 import torch._dynamo
-from transformers import EarlyStoppingCallback, TrainingArguments
+from transformers import EarlyStoppingCallback, TrainerCallback, TrainerControl, TrainerState, TrainingArguments
+
+
+class FreezeCallback(TrainerCallback):
+    """
+    Callback to freeze the backbone for a set number of epochs.
+    Standard practice is ~2 epochs.
+    """
+
+    def __init__(self, epochs_to_freeze: int = 2):
+        self.epochs_to_freeze = epochs_to_freeze
+        self._backbone_frozen = False
+
+    def on_train_begin(
+        self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
+    ) -> None:
+        model = kwargs.get("model")
+        if model and hasattr(model, "freeze_backbone"):
+            eprint(f"Freezing backbone for the first {self.epochs_to_freeze} epochs")
+            model.freeze_backbone()
+            self._backbone_frozen = True
+
+    def on_epoch_begin(
+        self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
+    ) -> None:
+        model = kwargs.get("model")
+        if model and self._backbone_frozen and state.epoch >= self.epochs_to_freeze:
+            eprint(f"Unfreezing backbone at epoch {state.epoch}")
+            model.unfreeze_backbone()
+            self._backbone_frozen = False
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -122,7 +152,7 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 6 if fp32 else 24
+    batch_size = 6 if fp32 else 18
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -170,12 +200,16 @@ def train_transformer(
         return
 
     try:
+        callbacks = [EarlyStoppingCallback(early_stopping_patience=3)]
+        if not fine_tune:
+            callbacks.append(FreezeCallback(epochs_to_freeze=2))
+
         trainer = HomrTrainer(
             model,
             train_args,
             train_dataset=datasets["train"],
             eval_dataset=datasets["validation"],
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+            callbacks=callbacks,
         )
 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)

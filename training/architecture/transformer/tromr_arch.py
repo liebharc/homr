@@ -64,6 +64,16 @@ class TrOMR(nn.Module):
         for param in self.encoder.parameters():
             param.requires_grad = False
 
+    def freeze_backbone(self) -> None:
+        """Freeze only the encoder backbone."""
+        if hasattr(self.encoder, "freeze_backbone"):
+            self.encoder.freeze_backbone()
+
+    def unfreeze_backbone(self) -> None:
+        """Unfreeze the encoder backbone."""
+        if hasattr(self.encoder, "unfreeze_backbone"):
+            self.encoder.unfreeze_backbone()
+
     def unfreeze_lift_decoder(self) -> None:
         for param in self.decoder.net.lift_emb.parameters():
             param.requires_grad = True
