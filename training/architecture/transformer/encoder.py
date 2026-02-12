@@ -56,33 +56,6 @@ class ConvNeXtEncoder(nn.Module):
         
         trunc_normal_(self.pos_embed_h, std=0.02)
         trunc_normal_(self.pos_embed_w, std=0.02)
-        
-        # IMPROVEMENT 2 (Optional): Add sinusoidal bias for staff periodicity
-        # Staff lines repeat with regular spacing - this gives an inductive bias
-        # Negligible memory/compute cost
-        self.use_sinusoidal_bias = True
-        if self.use_sinusoidal_bias:
-            # Register as buffer (not a parameter - not trained)
-            # Staff periodicity is vertical (pitch dimension)
-            position = torch.arange(num_patches_h, dtype=torch.float32).unsqueeze(1)
-            
-            # Multiple frequencies to capture staff spacing at different scales
-            # Assuming staff lines are ~2-3 patches apart after stride-16
-            freqs = torch.tensor([2.0, 2.5, 3.0])  # Match typical staff spacing
-            
-            # Create sinusoidal features
-            angles = position * (2 * torch.pi / freqs)
-            sin_bias = torch.sin(angles)  # (num_patches_h, 3)
-            cos_bias = torch.cos(angles)  # (num_patches_h, 3)
-            sinusoidal_bias = torch.cat([sin_bias, cos_bias], dim=-1)  # (num_patches_h, 6)
-            
-            self.register_buffer('sinusoidal_bias', sinusoidal_bias)
-            
-            # Small projection to encoder_dim
-            self.sin_proj = nn.Linear(6, config.encoder_dim)
-            # Initialize to near-zero so it starts as a small perturbation
-            nn.init.normal_(self.sin_proj.weight, std=0.001)
-            nn.init.zeros_(self.sin_proj.bias)
 
     def freeze_backbone(self) -> None:
         """Freeze only the ConvNeXt backbone parameters."""
@@ -116,14 +89,6 @@ class ConvNeXtEncoder(nn.Module):
         # Concatenate dimension: (1, 80, 16, D)
         pos_embed = torch.cat([pos_h, pos_w], dim=-1)
         features = features + pos_embed
-        
-        # Add sinusoidal staff-line bias if enabled
-        if self.use_sinusoidal_bias:
-            # sinusoidal_bias is (16, 6) -> project to (16, D)
-            sin_features = self.sin_proj(self.sinusoidal_bias)  # (H_patch, D)
-            # Reshape to (1, H_patch, 1, D) and expand to (1, H_patch, W_patch, D)
-            sin_features = sin_features.view(1, h, 1, -1).expand(-1, -1, w, -1)
-            features = features + sin_features
         
         # Flatten to sequence: (B, H, W, D) -> (B, H*W, D)
         features = features.reshape(b, h * w, -1)
