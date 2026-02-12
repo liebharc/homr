@@ -13,7 +13,7 @@ from training.transformer.image_utils import (
     ndarray_to_tensor,
     prepare_for_tensor,
     read_image_to_ndarray,
-    rotate_and_unsqueeze,
+    pad_to_3_dims,
 )
 from training.transformer.training_vocabulary import (
     DecoderBranches,
@@ -75,7 +75,7 @@ class DataLoader:
 
         img = prepare_for_tensor(img)
         sample_img = ndarray_to_tensor(img)
-        sample_img = rotate_and_unsqueeze(sample_img)
+        sample_img = pad_to_3_dims(sample_img)
 
         tokens_full_filepath = entry["tokens"]
         tokens = self._read_tokens(tokens_full_filepath)

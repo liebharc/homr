@@ -15,7 +15,7 @@ from training.transformer.image_utils import (
     ndarray_to_tensor,
     prepare_for_tensor,
     read_image_to_ndarray,
-    rotate_and_unsqueeze,
+    pad_to_3_dims,
 )
 from training.transformer.training_vocabulary import token_lines_to_str
 
@@ -49,7 +49,7 @@ class Staff2Score:
     def predict(self, image: NDArray) -> list[EncodedSymbol]:
         image = prepare_for_tensor(image)
         tensor = ndarray_to_tensor(image)
-        tensor = rotate_and_unsqueeze(tensor)
+        tensor = pad_to_3_dims(tensor)
         imgs_tensor = tensor.float().unsqueeze(0).to(self.device)
         return self._generate(
             imgs_tensor,
@@ -68,7 +68,7 @@ def readimg(config: Config, path: str) -> torch.Tensor:
     img = read_image_to_ndarray(path)
     img = prepare_for_tensor(img)
     tensor = ndarray_to_tensor(img)
-    return rotate_and_unsqueeze(tensor)
+    return pad_to_3_dims(tensor)
 
 
 if __name__ == "__main__":

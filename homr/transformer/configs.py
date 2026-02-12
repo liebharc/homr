@@ -114,7 +114,6 @@ class Config:
         self.articulation_vocab = self.vocab.articulation
         self.position_vocab = self.vocab.position
         self.use_gpu_inference = True
-        self.pretrained_backbone_encoder = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -137,8 +136,7 @@ class Config:
             "decoder_dim": self.decoder_dim,
             "decoder_depth": self.decoder_depth,
             "decoder_heads": self.decoder_heads,
-            "decoder_args": self.decoder_args.to_dict(),
-            "pretrained_backbone_encoder": self.pretrained_backbone_encoder,
+            "decoder_args": self.decoder_args.to_dict()
         }
 
     def to_json_string(self) -> str:

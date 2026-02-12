@@ -32,12 +32,9 @@ def ndarray_to_tensor(img: NDArray, mean: float = 0.7931, std: float = 0.1738) -
     return (tensor - mean_t) / std_t
 
 
-def rotate_and_unsqueeze(tensor: torch.Tensor) -> torch.Tensor:
+def pad_to_3_dims(tensor: torch.Tensor) -> torch.Tensor:
     if len(tensor.shape) == 2:
-        tensor = torch.rot90(tensor, k=-1, dims=(0, 1))
         tensor = tensor.unsqueeze(0)
-    else:
-        tensor = torch.rot90(tensor, k=-1, dims=(1, 2))
     return tensor
 
 

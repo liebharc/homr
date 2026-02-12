@@ -49,10 +49,9 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
-        # The transformer operates on rotated images: height and width are swapped
         self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
-        self.attention_width = config.max_height // config.patch_size
-        self.attention_height = config.max_width // config.patch_size
+        self.attention_width = config.max_width // config.patch_size
+        self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
 
         self.attn_layers = attn_layers

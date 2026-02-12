@@ -23,7 +23,7 @@ class ConvNeXtEncoder(nn.Module):
         # Use configurable pretrained flag
         self.model = timm.create_model(
             "convnext_tiny",
-            pretrained=config.pretrained_backbone_encoder,
+            pretrained=True,
             in_chans=config.channels,
             num_classes=0,
             global_pool="",
@@ -43,8 +43,8 @@ class ConvNeXtEncoder(nn.Module):
         # Instead of learning pos_embed for each of 1280 positions,
         # we learn separate embeddings for 80 horizontal + 16 vertical positions
         # Memory: (1280 * D) vs (80 * D + 16 * D) = ~14x less parameters
-        num_patches_h = config.max_width // 16   # 1280 / 16 = 80 (horizontal/time)
-        num_patches_w = config.max_height // 16  # 256 / 16 = 16 (vertical/pitch)
+        num_patches_h = config.max_height // 16   # 256 / 16 = 16 (vertical/pitch)
+        num_patches_w = config.max_width // 16    # 1280 / 16 = 80 (horizontal/time)
         
         # Split encoder_dim between height and width embeddings
         # Give slightly more capacity to vertical (pitch) dimension
@@ -63,8 +63,8 @@ class ConvNeXtEncoder(nn.Module):
         self.use_sinusoidal_bias = True
         if self.use_sinusoidal_bias:
             # Register as buffer (not a parameter - not trained)
-            # Staff lines typically span ~10-12 patches with period ~2-3 patches
-            position = torch.arange(num_patches_w, dtype=torch.float32).unsqueeze(1)
+            # Staff periodicity is vertical (pitch dimension)
+            position = torch.arange(num_patches_h, dtype=torch.float32).unsqueeze(1)
             
             # Multiple frequencies to capture staff spacing at different scales
             # Assuming staff lines are ~2-3 patches apart after stride-16
@@ -72,9 +72,9 @@ class ConvNeXtEncoder(nn.Module):
             
             # Create sinusoidal features
             angles = position * (2 * torch.pi / freqs)
-            sin_bias = torch.sin(angles)  # (num_patches_w, 3)
-            cos_bias = torch.cos(angles)  # (num_patches_w, 3)
-            sinusoidal_bias = torch.cat([sin_bias, cos_bias], dim=-1)  # (num_patches_w, 6)
+            sin_bias = torch.sin(angles)  # (num_patches_h, 3)
+            cos_bias = torch.cos(angles)  # (num_patches_h, 3)
+            sinusoidal_bias = torch.cat([sin_bias, cos_bias], dim=-1)  # (num_patches_h, 6)
             
             self.register_buffer('sinusoidal_bias', sinusoidal_bias)
             
@@ -120,9 +120,9 @@ class ConvNeXtEncoder(nn.Module):
         # Add sinusoidal staff-line bias if enabled
         if self.use_sinusoidal_bias:
             # sinusoidal_bias is (16, 6) -> project to (16, D)
-            sin_features = self.sin_proj(self.sinusoidal_bias)  # (16, D)
-            # Reshape to (1, 1, 16, D) and expand to (1, 80, 16, D)
-            sin_features = sin_features.view(1, 1, w, -1).expand(-1, h, -1, -1)
+            sin_features = self.sin_proj(self.sinusoidal_bias)  # (H_patch, D)
+            # Reshape to (1, H_patch, 1, D) and expand to (1, H_patch, W_patch, D)
+            sin_features = sin_features.view(1, h, 1, -1).expand(-1, -1, w, -1)
             features = features + sin_features
         
         # Flatten to sequence: (B, H, W, D) -> (B, H*W, D)
