@@ -11,9 +11,9 @@ from homr.transformer.vocabulary import Vocabulary
 from training.transformer.image_utils import (
     distort_image,
     ndarray_to_tensor,
+    pad_to_3_dims,
     prepare_for_tensor,
     read_image_to_ndarray,
-    pad_to_3_dims,
 )
 from training.transformer.training_vocabulary import (
     DecoderBranches,

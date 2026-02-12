@@ -122,7 +122,7 @@ def get_tokens_from_filename(filename: str) -> MusicFile:
     try:
         voices = music_xml_file_to_tokens(filename)
     except Exception as e:
-        print(e)
+        eprint(e)
         voices = []
     file = MusicFile(filename, voices)
     return file

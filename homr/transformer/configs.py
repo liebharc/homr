@@ -30,10 +30,7 @@ class FilePaths:
         )  # noqa: E501
 
         self.checkpoint = os.path.join(
-            root_dir,
-            "current_training",
-            "checkpoint-34482",
-            "model.safetensors"
+            root_dir, "current_training", "checkpoint-34482", "model.safetensors"
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
@@ -136,7 +133,7 @@ class Config:
             "decoder_dim": self.decoder_dim,
             "decoder_depth": self.decoder_depth,
             "decoder_heads": self.decoder_heads,
-            "decoder_args": self.decoder_args.to_dict()
+            "decoder_args": self.decoder_args.to_dict(),
         }
 
     def to_json_string(self) -> str:

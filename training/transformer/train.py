@@ -5,7 +5,29 @@ from typing import Any
 
 import torch
 import torch._dynamo
-from transformers import EarlyStoppingCallback, TrainerCallback, TrainerControl, TrainerState, TrainingArguments
+from transformers import (
+    EarlyStoppingCallback,
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
+    TrainingArguments,
+)
+
+from homr.simple_logging import eprint
+from homr.transformer.configs import Config
+from training.architecture.transformer.tromr_arch import TrOMR, load_model
+from training.datasets.convert_grandstaff import (
+    convert_grandstaff,
+    grandstaff_train_index,
+)
+from training.datasets.convert_lieder import convert_lieder, lieder_train_index
+from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
+from training.run_id import get_run_id
+from training.transformer.data_loader import label_names, load_dataset
+from training.transformer.metrics import HomrTrainer
+from training.transformer.mix_datasets import mix_training_sets
+
+torch._dynamo.config.suppress_errors = True
 
 
 class FreezeCallback(TrainerCallback):
@@ -31,26 +53,10 @@ class FreezeCallback(TrainerCallback):
         self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
     ) -> None:
         model = kwargs.get("model")
-        if model and self._backbone_frozen and state.epoch >= self.epochs_to_freeze:
+        if model and self._backbone_frozen and state.epoch and state.epoch >= self.epochs_to_freeze:
             eprint(f"Unfreezing backbone at epoch {state.epoch}")
             model.unfreeze_backbone()
             self._backbone_frozen = False
-
-from homr.simple_logging import eprint
-from homr.transformer.configs import Config
-from training.architecture.transformer.tromr_arch import TrOMR, load_model
-from training.datasets.convert_grandstaff import (
-    convert_grandstaff,
-    grandstaff_train_index,
-)
-from training.datasets.convert_lieder import convert_lieder, lieder_train_index
-from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
-from training.run_id import get_run_id
-from training.transformer.data_loader import label_names, load_dataset
-from training.transformer.metrics import HomrTrainer
-from training.transformer.mix_datasets import mix_training_sets
-
-torch._dynamo.config.suppress_errors = True
 
 
 def load_training_index(file_path: str) -> list[str]:
@@ -200,7 +206,7 @@ def train_transformer(
         return
 
     try:
-        callbacks = [EarlyStoppingCallback(early_stopping_patience=5)]
+        callbacks: list[TrainerCallback] = [EarlyStoppingCallback(early_stopping_patience=5)]
         if not fine_tune:
             callbacks.append(FreezeCallback(epochs_to_freeze=2))
 

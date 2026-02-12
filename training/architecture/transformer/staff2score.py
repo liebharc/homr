@@ -13,9 +13,9 @@ from homr.type_definitions import NDArray
 from training.architecture.transformer.tromr_arch import TrOMR
 from training.transformer.image_utils import (
     ndarray_to_tensor,
+    pad_to_3_dims,
     prepare_for_tensor,
     read_image_to_ndarray,
-    pad_to_3_dims,
 )
 from training.transformer.training_vocabulary import token_lines_to_str
 
