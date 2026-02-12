@@ -200,7 +200,7 @@ def train_transformer(
         return
 
     try:
-        callbacks = [EarlyStoppingCallback(early_stopping_patience=3)]
+        callbacks = [EarlyStoppingCallback(early_stopping_patience=5)]
         if not fine_tune:
             callbacks.append(FreezeCallback(epochs_to_freeze=2))
 

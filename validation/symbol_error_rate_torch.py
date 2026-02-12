@@ -87,7 +87,7 @@ def calc_symbol_error_rate_for_list(
             interesting_results.append((token_lines_to_str(expected), token_lines_to_str(actual)))
         percentage = round(i / total * 100)
         img_path_rel = os.path.relpath(img_path)
-        if ser > 0.5:
+        if ser > 25:
             eprint(f"SER: {ser}%, ({img_path_rel})")
             eprint("Expected:", token_lines_to_str(expected))
             eprint("Actual  :", token_lines_to_str(actual))

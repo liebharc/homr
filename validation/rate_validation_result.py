@@ -119,7 +119,11 @@ def find_minimal_diff_against_all_other_files(
 
 
 def get_tokens_from_filename(filename: str) -> MusicFile:
-    voices = music_xml_file_to_tokens(filename)
+    try:
+        voices = music_xml_file_to_tokens(filename)
+    except Exception as e:
+        print(e)
+        voices = []
     file = MusicFile(filename, voices)
     return file
 
