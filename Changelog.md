@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 ## Next
 
+### Changed
+
+- Minimum Python version is now **Python 3.11**
+
+## [0.6.1]
+
 ### Added
 
 - **Greatly improved GPU inference**.
