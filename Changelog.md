@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## Next
+## [0.6.1]
 
 ### Added
 
