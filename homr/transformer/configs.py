@@ -100,8 +100,11 @@ class Config:
         self.encoder_depth = 8
         self.backbone_layers = [3, 4, 6, 3]
         self.encoder_dim = 512
+        # encoder_h_dim balances how many dimensions the
+        # horizontal vs vertical embeddings get
+        self.encoder_h_dim = self.encoder_dim // 2
         self.encoder_heads = 8
-        self.decoder_dim = 512
+        self.decoder_dim = self.encoder_dim
         self.decoder_depth = 8
         self.decoder_heads = 8
         self.decoder_args = DecoderArgs()

@@ -39,7 +39,7 @@ class ConvNeXtEncoder(nn.Module):
 
         # Split encoder_dim between height and width embeddings
         # Give slightly more capacity to vertical (pitch) dimension
-        self.h_dim = config.encoder_dim // 2
+        self.h_dim = config.encoder_h_dim
         self.w_dim = config.encoder_dim - self.h_dim
 
         self.pos_embed_h = nn.Parameter(torch.zeros(1, num_patches_h, self.h_dim))

@@ -46,6 +46,7 @@ onnx="^1.20.0"
 onnx-simplifier="^0.4.36"
 onnxconverter-common="^1.16.0"
 albumentations = "^2.0.8"
+tensorboard = "^2.20.0"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]

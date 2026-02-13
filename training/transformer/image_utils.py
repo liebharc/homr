@@ -70,25 +70,6 @@ def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> 
     return out[..., 0] if squeeze else out
 
 
-def prepare_white_background(image: NDArray) -> NDArray:
-    """
-    Ensure image starts with a white background by replacing pure white pixels
-    and very light pixels with pure white (255). This simulates realistic scanning
-    where content is placed on white paper.
-    """
-    if image.ndim == 2:
-        # Grayscale: replace pixels > 250 with pure white
-        mask = image > 250
-        image = image.copy()
-        image[mask] = 255
-    elif image.ndim == 3:
-        # RGB: replace pixels where all channels > 250
-        mask = np.all(image > 250, axis=-1)
-        image = image.copy()
-        image[mask] = 255
-    return image
-
-
 def add_random_margins(
     image: NDArray,
     min_margin: int = 10,
@@ -314,144 +295,133 @@ def apply_clahe(image: NDArray, p: float = 0.1) -> NDArray:
         return result
 
 
-def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
+def distort_image(
+    image: NDArray,
+    allow_occlusions: bool = False
+) -> NDArray:
     """
     Apply data augmentation to an image.
 
     Args:
         image: Input image array
-        allow_occlusions: If True, applies occlusive augmentations like annotations,
-                         dropout, and shadows that may hide musical elements.
-                         Set to False for validation to preserve all information.
-                         Defaults to False for safety.
-
-    New pipeline order:
-        1. Prepare white background
-        2. Add pre-canvas random margins (white fill)
-        3. Apply geometric transforms (with white fill)
-        4. Apply morphological operations
-        5. Apply aging/brightness effects
-        6. Apply optional ink fade with gradients
-        7. Apply color jitter
-        8. Apply blur/sharpen
-        9. Apply diverse noise
-        10. Apply optional CLAHE
-        11. Apply minimal occlusions (if training mode)
-        12. Apply warp_image_randomly
-        13. Apply paper texture
-        14. Apply vignette
-        15. Add post-canvas random margins (white fill)
+        allow_occlusions: If True, applies occlusiv that may hide musical elements.
     """
-    # Step 1: Prepare white background
-    image = prepare_white_background(image)
 
-    # Step 2: Add pre-canvas random margins (white fill)
+    # Add white margins as the staff detection would create something similiar
     image = add_random_margins(image, min_margin=0, max_margin=20, fill_white=True)
 
-    # Determine background value for transforms that need it
-    image, background_value = _add_random_gray_tone(image)
+    image, background_value = _add_random_gray_tone(
+        image, contrast_reduction_p=0.2, min_contrast_range=(30, 70)
+    )
 
-    # Build transform list for albumentations
     transforms_list = [
-        # Step 3: Geometric distortions with WHITE fill (255, 255, 255)
         A.Rotate(
             limit=2,
             border_mode=cv2.BORDER_CONSTANT,
-            fill=(255, 255, 255),  # White fill for all channels
+            fill=(255, 255, 255),
             p=0.3,
         ),
-        # Perspective distortion (simulates photographed sheet music)
         A.Perspective(
             scale=(0.005, 0.015),
             fit_output=True,
             border_mode=cv2.BORDER_CONSTANT,
-            fill=(255, 255, 255),  # White fill for all channels
+            fill=(255, 255, 255),
             p=0.6,
         ),
-        # Step 4: Stroke width variations (different pens, printing quality, scan artifacts)
-        A.Morphological(scale=(2, 3), operation="erosion", p=0.2),  # thins strokes
-        # Step 5: Aging and fading effects (reduced severity)
+        A.OneOf(
+            [
+                A.Morphological(scale=(1, 1), operation="erosion", p=1.0),
+                A.Morphological(scale=(2, 3), operation="dilation", p=1.0),
+            ],
+            p=0.2,
+        ),
         A.OneOf(
             [
                 A.RandomBrightnessContrast(
-                    brightness_limit=0.2, contrast_limit=(-0.2, -0.1), p=1.0
+                    brightness_limit=0.3,
+                    contrast_limit=(-0.3, -0.1),
+                    p=1.0,
                 ),
-                A.RandomToneCurve(scale=0.2, p=1.0),
-                A.MultiplicativeNoise(multiplier=(0.85, 1.0), per_channel=True, p=1.0),
+                A.RandomToneCurve(scale=0.3, p=1.0),
+                A.MultiplicativeNoise(
+                    multiplier=(0.8, 1.0), per_channel=True, p=1.0
+                ),
             ],
-            p=0.15,
+            p=0.2,
         ),
-        # Step 7: Standard color/brightness variations (reduced)
-        A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1, hue=0.03, p=0.4),
-        # Step 8: Blur and sharpness (reduced)
+        A.ColorJitter(  
+            brightness=0.2,
+            contrast=0.2,
+            saturation=0.1,
+            hue=0.05,
+            p=0.5,
+        ),
         A.OneOf(
             [
-                A.GaussianBlur(blur_limit=(3, 5), sigma_limit=(0.1, 0.4), p=1.0),
+                A.GaussianBlur(blur_limit=(3, 5), sigma_limit=(0.1, 0.5), p=1.0),
                 A.Sharpen(alpha=(0.0, 0.1), lightness=(0.9, 1.0), p=1.0),
             ],
             p=0.3,
         ),
+        A.OneOf(
+            [
+                A.GaussNoise(
+                    std_range=(0.02, 0.06),
+                    mean_range=(0.0, 0.0),
+                    per_channel=False,
+                    noise_scale_factor=0.25,
+                    p=1.0,
+                ),
+                A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.3), p=1.0),
+            ],
+            p=0.5,
+        ),
     ]
-
-    # Step 11: Only add MINIMAL occlusive/destructive augmentations for training
-    # These are HEAVILY reduced to prevent the model from learning to hallucinate
     if allow_occlusions:
         transforms_list.extend(
             [
-                # Uneven exposure/scanning artifacts - REDUCED severity
                 A.RandomShadow(
                     shadow_roi=(0, 0, 1, 1),
-                    num_shadows_limit=(1, 2),  # Reduced from (1, 3)
-                    shadow_dimension=3,  # Reduced from 5
-                    p=0.05,  # HEAVILY reduced from 0.2
+                    num_shadows_limit=(1, 3),
+                    shadow_dimension=5,
+                    p=0.2,
                 ),
-                # Annotations, markings, and occlusions - REDUCED
-                # Small holes only, much less destructive
                 A.CoarseDropout(
-                    num_holes_range=(1, 3),  # Reduced from (2, 8)
-                    hole_height_range=(5, 15),  # Reduced from (10, 30)
-                    hole_width_range=(10, 30),  # Reduced from (20, 60)
-                    fill=255,  # White fill instead of black
-                    p=0.1,  # HEAVILY reduced from 0.4
+                    num_holes_range=(2, 8),
+                    hole_height_range=(10, 30),
+                    hole_width_range=(20, 60),
+                    fill=255,
+                    p=0.4,
                 ),
-                # Moisture damage, age spots - REDUCED
                 A.RandomFog(
-                    fog_coef_range=(0.05, 0.15),  # Reduced from (0.1, 0.3)
-                    alpha_coef=0.05,  # Reduced from 0.1
-                    p=0.05,  # HEAVILY reduced from 0.2
+                    fog_coef_range=(0.1, 0.3),
+                    alpha_coef=0.1,
+                    p=0.2,
                 ),
             ]
         )
 
     transform = A.Compose(transforms_list)
 
-    # Apply albumentations
     transformed = transform(image=image)
     augmented_image = transformed["image"]
 
-    # Step 6: Apply optional ink fade with gradients (NEW)
     augmented_image = apply_ink_fade(augmented_image, p=0.15)
-
-    # Step 9: Apply diverse noise (NEW - replaces old noise augmentation)
     augmented_image = apply_diverse_noise(augmented_image, p=0.5)
-
-    # Step 10: Apply optional CLAHE to amplify existing noise (NEW)
     augmented_image = apply_clahe(augmented_image, p=0.1)
 
-    # Step 12: Apply custom staff dewarping
     pil_image = Image.fromarray(augmented_image)
     augmented_image = warp_image_randomly(pil_image)
     augmented_array = np.array(augmented_image)
 
-    # Step 13: Paper texture overlay (non-destructive, reduced intensity)
     paper_texture = np.random.normal(loc=240, scale=8, size=augmented_array.shape).astype(np.uint8)
-    alpha = 0.15  # Reduced from 0.2 for subtlety
-    augmented_array = cv2.addWeighted(augmented_array, 1 - alpha, paper_texture, alpha, 0)
+    paper_alpha = 0.2
+    augmented_array = cv2.addWeighted(
+        augmented_array, 1 - paper_alpha, paper_texture, paper_alpha, 0
+    )
 
-    # Step 14: Vignette effect (non-destructive)
     augmented_array = _apply_vignette(augmented_array)
 
-    # Step 15: Add post-canvas random margins (white fill)
     augmented_array = add_random_margins(
         augmented_array, min_margin=0, max_margin=20, fill_white=True
     )
@@ -493,7 +463,9 @@ def _apply_vignette(image: NDArray) -> NDArray:
     return (image * mask).astype(np.uint8)
 
 
-def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
+def _add_random_gray_tone(
+    image_arr: NDArray, contrast_reduction_p: float, min_contrast_range: tuple[int, int] = (50, 70)
+) -> tuple[NDArray, int]:
     """
     Add a random gray background tone while ensuring minimum contrast is maintained.
     This simulates different paper colors and scanning conditions.
@@ -505,9 +477,9 @@ def _add_random_gray_tone(image_arr: NDArray) -> tuple[NDArray, int]:
 
     lightest_pixel_value = _find_lighest_non_white_pixel(gray)
 
-    # Occasionally use lower minimum contrast for more challenging cases (20% of time)
-    if np.random.random() < 0.2:
-        minimum_contrast = np.random.randint(50, 70)
+    # Occasionally use lower minimum contrast for more challenging cases
+    if np.random.random() < contrast_reduction_p:
+        minimum_contrast = np.random.randint(min_contrast_range[0], min_contrast_range[1])
     else:
         minimum_contrast = 70
 
