@@ -39,3 +39,40 @@ class TestModel(unittest.TestCase):
             result2.connections,
             [staff2.connections[0], staff2.connections[1], staff1.connections[0]],
         )
+
+    def test_create_grandstaffs_even(self) -> None:
+        staffs = [make_staff(i) for i in range(4)]
+        connections = [make_connection(i) for i in range(4)]
+        ms = MultiStaff(staffs, connections)
+
+        result = ms.create_grandstaffs()
+
+        self.assertEqual(len(result.staffs), 2)
+        self.assertEqual(result.staffs[0].min_y, staffs[0].min_y)
+        self.assertEqual(result.staffs[0].max_y, staffs[1].max_y)
+        self.assertEqual(result.staffs[1].min_y, staffs[2].min_y)
+        self.assertEqual(result.staffs[1].max_y, staffs[3].max_y)
+        self.assertEqual(result.connections, connections)
+
+    def test_create_grandstaffs_odd(self) -> None:
+        staffs = [make_staff(i) for i in range(5)]
+        connections = [make_connection(i) for i in range(5)]
+        ms = MultiStaff(staffs, connections)
+
+        result = ms.create_grandstaffs()
+
+        self.assertEqual(len(result.staffs), 3)
+        self.assertEqual(result.staffs[0].min_y, staffs[0].min_y)
+        self.assertEqual(result.staffs[0].max_y, staffs[0].max_y)
+        self.assertEqual(result.staffs[1].min_y, staffs[1].min_y)
+        self.assertEqual(result.staffs[1].max_y, staffs[2].max_y)
+        self.assertEqual(result.staffs[2].min_y, staffs[3].min_y)
+        self.assertEqual(result.staffs[2].max_y, staffs[4].max_y)
+        self.assertEqual(result.connections, connections)
+
+    def test_create_grandstaffs_empty(self) -> None:
+        ms = MultiStaff([], [])
+
+        result = ms.create_grandstaffs()
+
+        self.assertIs(result, ms)

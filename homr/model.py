@@ -420,12 +420,29 @@ class MultiStaff(DebugDrawable):
         return MultiStaff(unique_staffs, unique_connections)
 
     def create_grandstaffs(self) -> "MultiStaff":
-        if len(self.staffs) == 0:
+        """
+        Blindly creates grandstaffs, by combining staff 0&1, 2&3, ...
+        for odd numbers of staffs the first staff will be a single staff
+        """
+        n = len(self.staffs)
+        if n == 0:
             return self
-        merged = self.staffs[0]
-        for staff in self.staffs[1:]:
-            merged = merged.merge(staff)
-        return MultiStaff([merged], self.connections)
+
+        result = []
+        i = 0
+
+        if n % 2 == 1:
+            result.append(self.staffs[0])
+            i = 1
+
+        while i + 1 < n:
+            result.append(self.staffs[i].merge(self.staffs[i + 1]))
+            i += 2
+
+        if i < n:
+            result.append(self.staffs[i])
+
+        return MultiStaff(result, self.connections)
 
     def break_apart(self) -> list["MultiStaff"]:
         return [MultiStaff([staff], []) for staff in self.staffs]
