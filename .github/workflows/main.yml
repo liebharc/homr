@@ -28,7 +28,7 @@ jobs:
 
       - name: Install poetry
         run: |
-          python -m pip install poetry==1.8.2
+          python -m pip install poetry
 
       - name: Init
         run: make init-poetry
