@@ -521,7 +521,7 @@ def filter_unusual_anchors(anchors: list[StaffAnchor]) -> list[StaffAnchor]:
     unit_size_deviation = np.std(unit_sizes)
     result = []
     for anchor in anchors:
-        if abs(anchor.average_unit_size - average_unit_size) > 2 * unit_size_deviation:
+        if abs(anchor.average_unit_size - average_unit_size) > 3 * unit_size_deviation:
             continue
         result.append(anchor)
     return result
