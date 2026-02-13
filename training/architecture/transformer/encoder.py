@@ -59,11 +59,10 @@ class ConvNeXtEncoder(nn.Module):
             param.requires_grad = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Get features - same as original
         _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
         features = requested_stages[0]  # Get stage 2 (stride 16)
 
-        # features shape: (B, C, H, W) = (B, 256, 80, 16)
+        # features shape: (B, C, H, W) = (B, 384, 80, 16)
         b, c, h, w = features.shape
         # Rearrange to (B, H, W, C)
         features = features.permute(0, 2, 3, 1)
@@ -74,6 +73,13 @@ class ConvNeXtEncoder(nn.Module):
         # Add factorized positional embeddings
         # self.pos_embed_h is (1, 80, h_dim) -> (1, 80, 1, h_dim)
         # self.pos_embed_w is (1, 16, w_dim) -> (1, 1, 16, w_dim)
+        # Why this works:
+        # Each position gets a full embedding by combining a vertical and horizontal vector.
+        # Vertical embeddings are learned once and reused across all columns,
+        # so the model efficiently learns how pitch relates to row position.
+        # Horizontal embeddings handle time separately.
+        # This factorization focuses capacity where it matters and reduces
+        # parameters while preserving positional information.
         pos_h = self.pos_embed_h.unsqueeze(2).expand(-1, -1, w, -1)
         pos_w = self.pos_embed_w.unsqueeze(1).expand(-1, h, -1, -1)
 

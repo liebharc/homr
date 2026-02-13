@@ -114,7 +114,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 def train_transformer(
     fp32: bool = False, resume: str = "", smoke_test: bool = False, fine_tune: bool = False
 ) -> None:
-    number_of_epochs = 70
+    number_of_epochs = 35
     if smoke_test:
         number_of_epochs = 10
     elif fine_tune:
