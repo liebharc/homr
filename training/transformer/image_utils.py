@@ -295,10 +295,7 @@ def apply_clahe(image: NDArray, p: float = 0.1) -> NDArray:
         return result
 
 
-def distort_image(
-    image: NDArray,
-    allow_occlusions: bool = False
-) -> NDArray:
+def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
     """
     Apply data augmentation to an image.
 
@@ -343,13 +340,11 @@ def distort_image(
                     p=1.0,
                 ),
                 A.RandomToneCurve(scale=0.3, p=1.0),
-                A.MultiplicativeNoise(
-                    multiplier=(0.8, 1.0), per_channel=True, p=1.0
-                ),
+                A.MultiplicativeNoise(multiplier=(0.8, 1.0), per_channel=True, p=1.0),
             ],
             p=0.2,
         ),
-        A.ColorJitter(  
+        A.ColorJitter(
             brightness=0.2,
             contrast=0.2,
             saturation=0.1,

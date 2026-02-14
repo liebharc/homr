@@ -381,7 +381,7 @@ class ScoreDecoder(nn.Module):
         )  # this calls ScoreTransformerWrapper.forward
 
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
-        alpha = 0.3125
+        alpha = 1
         beta = 1
         loss_consist = beta * self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask

@@ -102,7 +102,7 @@ class Config:
         self.encoder_dim = 512
         # encoder_h_dim balances how many dimensions the
         # horizontal vs vertical embeddings get
-        self.encoder_h_dim = self.encoder_dim // 2
+        self.encoder_h_dim = self.encoder_dim // 3
         self.encoder_heads = 8
         self.decoder_dim = self.encoder_dim
         self.decoder_depth = 8
@@ -114,6 +114,11 @@ class Config:
         self.articulation_vocab = self.vocab.articulation
         self.position_vocab = self.vocab.position
         self.use_gpu_inference = True
+
+        # Scheduled Sampling parameters
+        self.scheduled_sampling_start_prob = 1.0
+        self.scheduled_sampling_end_prob = 0.7
+        self.scheduled_sampling_decay_steps = 20000
 
     def to_dict(self) -> dict[str, Any]:
         return {
