@@ -55,6 +55,15 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 328 Epch 21
+
+Commit: a78209527e2b8a4fb866fba9b2ef8540f4b8dad9
+Day: 14 Feb 2026  
+Transformer Smoke Test: SER 10%
+System Level: 16.0 diffs, SER: 9.3%
+
+Harder augmentation, https://github.com/liebharc/homr/pull/59
+
 ## Run 326 Epoch 13
 
 Commit: 290d4e79aa377681523ca676b984b9cee3eb16ce
