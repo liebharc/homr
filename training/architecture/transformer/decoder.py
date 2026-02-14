@@ -1,4 +1,3 @@
-from math import ceil
 from typing import Any
 
 import torch
@@ -57,7 +56,6 @@ class ScoreTransformerWrapper(nn.Module):
 
         self.attn_layers = attn_layers
         self.post_emb_norm = nn.LayerNorm(dim)
-        self.init_()
 
         self.to_logits_lift = nn.Linear(dim, config.num_lift_tokens)
         self.to_logits_pitch = nn.Linear(dim, config.num_pitch_tokens)
@@ -65,14 +63,23 @@ class ScoreTransformerWrapper(nn.Module):
         self.to_logits_position = nn.Linear(dim, config.num_position_tokens)
         self.to_logits_articulations = nn.Linear(dim, config.num_articulation_tokens)
 
+        self.init_()
+
     def init_(self) -> None:
         if self.l2norm_embed:
             nn.init.normal_(self.lift_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pitch_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.rhythm_emb.emb.weight, std=1e-5)
-            nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.articulation_emb.emb.weight, std=1e-5)
-            return
+            nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
+        else:
+            # Use transformer standard initialization (std=0.02)
+            # This provides stronger gradients than 1e-5 for faster convergence
+            nn.init.normal_(self.lift_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.pitch_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.rhythm_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.articulation_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.pos_emb.emb.weight, std=0.02)
 
     def forward(
         self,
@@ -118,6 +125,7 @@ class ScoreTransformerWrapper(nn.Module):
                 out_articulations,
                 x,
                 attention,
+                None,
             )
 
         else:
@@ -196,7 +204,7 @@ class ScoreTransformerWrapper(nn.Module):
         h, w = self.attention_height, self.attention_width
 
         image_token_count = h * w
-        image_attention = attention_all_layers[1 : image_token_count + 1]
+        image_attention = attention_all_layers[0:image_token_count]
 
         image_attention_2d = image_attention.reshape(h, w)
 
@@ -221,24 +229,11 @@ class ScoreTransformerWrapper(nn.Module):
         return center_of_attention
 
 
-def top_k(logits: torch.Tensor, thres: float = 0.9) -> torch.Tensor:
-    k = ceil((1 - thres) * logits.shape[-1])
-    val, ind = torch.topk(logits, k)
-    probs = torch.full_like(logits, float("-inf"))
-    probs.scatter_(1, ind, val)
-    return probs
-
-
 class ScoreDecoder(nn.Module):
-    def __init__(
-        self,
-        transformer: ScoreTransformerWrapper,
-        config: Config,
-        ignore_index: int = -100,
-    ):
+    def __init__(self, transformer: ScoreTransformerWrapper, config: Config):
         super().__init__()
         self.pad_value = (config.pad_token,)
-        self.ignore_index = ignore_index
+        self.ignore_index = config.pad_token
         self.config = config
         self.net = transformer
         self.max_seq_len = config.max_seq_len
@@ -264,8 +259,6 @@ class ScoreDecoder(nn.Module):
         self,
         start_tokens: torch.Tensor,
         nonote_tokens: torch.Tensor,
-        temperature: float = 1.0,
-        filter_thres: float = 0.7,
         **kwargs: Any,
     ) -> list[EncodedSymbol]:
         was_training = self.net.training
@@ -319,23 +312,12 @@ class ScoreDecoder(nn.Module):
                 **kwargs,
             )
 
-            filtered_lift_logits = top_k(liftsp[:, -1, :], thres=filter_thres)
-            filtered_pitch_logits = top_k(pitchsp[:, -1, :], thres=filter_thres)
-            filtered_rhythm_logits = top_k(rhythmsp[:, -1, :], thres=filter_thres)
-            filtered_articulations_logits = top_k(articulationsp[:, -1, :], thres=filter_thres)
-            filtered_position_logits = top_k(positionsp[:, -1, :], thres=filter_thres)
-
-            lift_probs = F.softmax(filtered_lift_logits / temperature, dim=-1)
-            pitch_probs = F.softmax(filtered_pitch_logits / temperature, dim=-1)
-            rhythm_probs = F.softmax(filtered_rhythm_logits / temperature, dim=-1)
-            articulation_probs = F.softmax(filtered_articulations_logits / temperature, dim=-1)
-            position_probs = F.softmax(filtered_position_logits / temperature, dim=-1)
-
-            lift_sample = torch.multinomial(lift_probs, 1)
-            pitch_sample = torch.multinomial(pitch_probs, 1)
-            rhythm_sample = torch.multinomial(rhythm_probs, 1)
-            articulation_sample = torch.multinomial(articulation_probs, 1)
-            position_sample = torch.multinomial(position_probs, 1)
+            # Greedy decoding: pick the highest logit directly for each output
+            rhythm_sample = rhythmsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            pitch_sample = pitchsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            lift_sample = liftsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            articulation_sample = articulationsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            position_sample = positionsp[:, -1, :].argmax(dim=-1, keepdim=True)
 
             lift_token = detokenize(lift_sample, self.inv_lift_vocab)
             pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
@@ -373,7 +355,7 @@ class ScoreDecoder(nn.Module):
         positions: torch.Tensor,
         mask: torch.Tensor,
         **kwargs: Any,
-    ) -> dict[str, torch.Tensor]:
+    ) -> dict[str, Any]:
         liftsi = lifts[:, :-1]
         liftso = lifts[:, 1:]
         articulationsi = articulations[:, :-1]
@@ -387,7 +369,7 @@ class ScoreDecoder(nn.Module):
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
 
-        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention = self.net(
+        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention, _cache = self.net(
             rhythms=rhythmsi,
             pitchs=pitchsi,
             lifts=liftsi,
@@ -398,19 +380,20 @@ class ScoreDecoder(nn.Module):
             **kwargs,
         )  # this calls ScoreTransformerWrapper.forward
 
-        loss_consist = self.calConsistencyLoss(
+        # From the TR OMR paper equation 2, we use however different values for alpha and beta
+        alpha = 0.3125
+        beta = 1
+        loss_consist = beta * self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask
         )
-        loss_rhythm = self.masked_logits_cross_entropy(rhythmsp, rhythmso, mask)
-        loss_pitch = self.masked_logits_cross_entropy(pitchsp, pitchso, mask)
-        loss_lift = self.masked_logits_cross_entropy(liftsp, liftso, mask)
-        loss_articulations = self.masked_logits_cross_entropy(articulationsp, articulationso, mask)
-        loss_position = self.masked_logits_cross_entropy(positionsp, positionso, mask)
-        # From the TR OMR paper equation 2, we use however different values for alpha and beta
-        alpha = 1
-        beta = 1
-        loss_sum = loss_rhythm + loss_pitch + loss_lift + loss_position + loss_articulations
-        loss = alpha * loss_sum + beta * loss_consist
+        loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso, label_smoothing=0.1)
+        loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
+        loss_lift = alpha * self.cross_entropy(liftsp, liftso)
+        loss_articulations = alpha * self.cross_entropy(articulationsp, articulationso)
+        loss_position = alpha * self.cross_entropy(positionsp, positionso)
+        loss = (
+            loss_rhythm + loss_pitch + loss_lift + loss_articulations + loss_position + loss_consist
+        )
 
         return {
             "loss_rhythm": loss_rhythm,
@@ -420,6 +403,7 @@ class ScoreDecoder(nn.Module):
             "loss_position": loss_position,
             "loss_articulations": loss_articulations,
             "loss": loss,
+            "logits": (rhythmsp, pitchsp, liftsp, positionsp, articulationsp),
         }
 
     def calConsistencyLoss(
@@ -463,28 +447,21 @@ class ScoreDecoder(nn.Module):
 
         return loss
 
-    def masked_logits_cross_entropy(
+    def cross_entropy(
         self,
         logits: torch.Tensor,
         target: torch.Tensor,
-        mask: torch.Tensor,
+        label_smoothing: float = 0.0,
         weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        # Calculate the cross-entropy loss
-        loss = F.cross_entropy(
+        return F.cross_entropy(
             logits.transpose(1, 2),
             target,
-            reduction="none",
+            reduction="mean",
             weight=weights,
             ignore_index=self.ignore_index,
+            label_smoothing=label_smoothing,
         )
-
-        # As reduction is "none", we can apply the mask to the loss
-        # and this way we ignore the loss for the padded tokens
-        loss = loss * mask
-        loss = loss.sum() / mask.sum()
-
-        return loss
 
 
 def init_cache(

@@ -2,14 +2,12 @@ import json
 import multiprocessing
 import os
 import platform
-import random
 import shutil
 import stat
+import subprocess
 import sys
-from io import BytesIO
 from pathlib import Path
 
-import cairosvg
 import cv2
 import numpy as np
 from PIL import Image
@@ -17,15 +15,13 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.vocabulary import EncodedSymbol, empty
-from training.datasets.convert_grandstaff import distort_image
 from training.datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
     get_position_from_multiple_svg_files,
 )
-from training.datasets.music_xml_parser import music_xml_file_to_tokens
+from training.datasets.music_xml_parser import Measure, music_xml_file_to_tokens
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,
@@ -35,8 +31,81 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 lieder = os.path.join(dataset_root, "Lieder-main")
+quartets = os.path.join(dataset_root, "StringQuartets-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
+
+
+class MusicXmlPage:
+    def __init__(self, voices: list[list[Measure]], number_of_measures: int = 0) -> None:
+        if len(voices) > 0:
+            self.number_of_measures = len(voices[0])
+        else:
+            self.number_of_measures = number_of_measures
+
+
+def split_into_pages(voices: list[list[Measure]]) -> list[MusicXmlPage]:
+    """Split voices into pages based on the new_page flag in measures.
+
+    When a measure has new_page=True, it starts a new page.
+    All voices must be synchronized - they must split at the same measure indices.
+
+    Raises:
+        ValueError: If voices have different lengths or page breaks don't align.
+    """
+    if not voices:
+        return []
+
+    if not voices[0]:
+        return []
+
+    # Validate all voices have the same length
+    first_voice_len = len(voices[0])
+    for i, voice in enumerate(voices[1:], start=1):
+        if len(voice) != first_voice_len:
+            raise ValueError(
+                f"Voice {i} has {len(voice)} measures, but voice 0 has {first_voice_len} measures. "
+                "All voices must have the same number of measures."
+            )
+
+    # Find page break positions for each voice
+    voice_page_breaks: list[list[int]] = []
+
+    for voice in voices:
+        page_breaks = [0]  # Start of first page
+
+        for measure_idx, measure in enumerate(voice):
+            if hasattr(measure, "new_page") and measure.new_page and measure_idx > 0:
+                page_breaks.append(measure_idx)
+
+        page_breaks.append(len(voice))  # End position
+        voice_page_breaks.append(page_breaks)
+
+    # Validate all voices have the same page break positions
+    reference_breaks = voice_page_breaks[0]
+    for voice_idx, breaks in enumerate(voice_page_breaks[1:], start=1):
+        if breaks != reference_breaks:
+            raise ValueError(
+                f"Voice {voice_idx} has page breaks at {breaks[1:-1]}, "
+                f"but voice 0 has page breaks at {reference_breaks[1:-1]}. "
+                "All voices must have page breaks at the same measure indices."
+            )
+
+    # Split all voices at the validated page break positions
+    pages: list[MusicXmlPage] = []
+
+    for i in range(len(reference_breaks) - 1):
+        start_idx = reference_breaks[i]
+        end_idx = reference_breaks[i + 1]
+
+        # Extract measures for this page from all voices
+        page_voices: list[list[Measure]] = []
+        for voice in voices:
+            page_voices.append(voice[start_idx:end_idx])
+
+        pages.append(MusicXmlPage(page_voices))
+
+    return pages
 
 
 def copy_all_mscx_files(working_dir: str, dest: str) -> None:
@@ -115,7 +184,7 @@ def write_text_to_file(text: str, path: str) -> None:
 
 
 class MeasureCutter:
-    def __init__(self, voice: list[list[EncodedSymbol]]) -> None:
+    def __init__(self, voice: list[Measure]) -> None:
         self.voice = voice
         self.number_of_staffs = _count_staffs(voice)
         if self.number_of_staffs == 1:
@@ -183,76 +252,88 @@ class MeasureCutter:
         return result
 
 
+def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
+    for symbol in symbols:
+        if symbol.rhythm.startswith("clef_percussion"):
+            return False
+    return True
+
+
 def _split_file_into_staffs(
-    voices: list[list[list[EncodedSymbol]]],
-    svg_files: list[SvgMusicFile],
+    number_of_voices: int,
+    svg_file: SvgMusicFile,
+    splitter: list[MeasureCutter],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
 ) -> list[str]:
     result: list[str] = []
-    splitter = [MeasureCutter(v) for v in voices]
-    for svg_file in svg_files:
-        png_file = svg_file.filename.replace(".svg", ".png")
+    png_file = svg_file.filename.replace(".svg", ".png")
+    if not just_token_files:
+        target_width = 1400
+        scale = target_width / svg_file.width
+        subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "rsvg-convert",
+                "-w",
+                "1400",
+                "-o",
+                png_file,
+                svg_file.filename,
+            ],
+            check=True,
+        )
+        pil_img = Image.open(png_file).convert("L")
+        image = np.array(pil_img)
+    # alternate through voices
+    staffs: list[SvgStaff] = sorted(svg_file.staffs.copy(), key=lambda x: x.y)
+    current_voice = 0
+    staff_number = 0
+    while len(staffs) > 0:
+        staff_number += 1
+        total_staff_area = staffs.pop(0)
+        measures = splitter[current_voice]
+        staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
         if not just_token_files:
-            target_width = 1400
-            scale = target_width / svg_file.width
-            png_data = cairosvg.svg2png(url=svg_file.filename, scale=scale)
-            pil_img = Image.open(BytesIO(png_data))
-            image = np.array(pil_img.convert("RGB"))[:, :, ::-1].copy()
-        # alternate through voices
-        staffs: list[SvgStaff] = sorted(svg_file.staffs.copy(), key=lambda x: x.y)
-        current_voice = 0
-        staff_number = 0
-        while len(staffs) > 0:
-            staff_number += 1
-            total_staff_area = staffs.pop(0)
-            first_staff_height = total_staff_area.height
-            measures = splitter[current_voice]
-            for _ in range(measures.number_of_staffs - 1):
-                total_staff_area = total_staff_area.merge_staff(staffs.pop(0))
-            staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
-            if not just_token_files:
-                y_offset = int(random.uniform(1.5, 2.5) * first_staff_height)
-                x_offset = 50
-                x = total_staff_area.x - x_offset
-                y = total_staff_area.y - y_offset
-                width = total_staff_area.width + 2 * x_offset
-                height = total_staff_area.height + 2 * y_offset
-                x = int(x * scale)
-                y = int(y * scale)
-                width = int(width * scale)
-                height = int(height * scale)
+            y_offset = 50
+            x_offset_right = 10
+            x_offset_left = 40
+            x = total_staff_area.x - x_offset_left
+            y = total_staff_area.y - y_offset
+            width = total_staff_area.width + x_offset_right + x_offset_left
+            height = total_staff_area.height + 2 * y_offset
+            x = int(x * scale)
+            y = int(y * scale)
+            width = int(width * scale)
+            height = int(height * scale)
 
-                staff_image = image[y : y + height, x : x + width]
-                preprocessed = distort_image(staff_image)
-                preprocessed = add_image_into_tr_omr_canvas(preprocessed)
-                cv2.imwrite(staff_image_file_name, preprocessed)
-            elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
-                raise ValueError(f"File {staff_image_file_name} not found")
+            staff_image = image[y : y + height, x : x + width]
+            cv2.imwrite(staff_image_file_name, staff_image)
+        elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
+            raise ValueError(f"File {staff_image_file_name} not found")
 
-            token_file_name = png_file.replace(".png", f"-{staff_number}.tokens")
-            selected_measures: list[EncodedSymbol] = measures.extract_measures(
-                total_staff_area.number_of_measures
+        token_file_name = png_file.replace(".png", f"-{staff_number}.tokens")
+        selected_measures: list[EncodedSymbol] = measures.extract_measures(
+            total_staff_area.number_of_measures
+        )
+
+        if calc_ratio_of_tuplets(selected_measures) <= 0.2 and contains_only_supported_clefs(
+            selected_measures
+        ):
+            selected_measures = strip_naturals(selected_measures)
+            tokens_content = token_lines_to_str(selected_measures)
+            write_text_to_file(tokens_content, token_file_name)
+            result.append(
+                str(Path(staff_image_file_name).relative_to(git_root))
+                + ","
+                + str(Path(token_file_name).relative_to(git_root))
+                + "\n"
             )
-
-            if calc_ratio_of_tuplets(selected_measures) <= 0.2:
-                selected_measures = strip_naturals(selected_measures)
-                tokens_content = token_lines_to_str(selected_measures)
-                write_text_to_file(tokens_content, token_file_name)
-                result.append(
-                    str(Path(staff_image_file_name).relative_to(git_root))
-                    + ","
-                    + str(Path(token_file_name).relative_to(git_root))
-                    + "\n"
-                )
-            current_voice = (current_voice + 1) % len(voices)
-    if any(len(measure) > 0 for measure in voices):
-        raise ValueError("Warning: Not all measures were processed")
+        current_voice = (current_voice + 1) % number_of_voices
 
     return result
 
 
-def _count_staffs(voice: list[list[EncodedSymbol]]) -> int:
+def _count_staffs(voice: list[Measure]) -> int:
     if len(voice) == 0:
         return 0
     first_measure = voice[0]
@@ -266,36 +347,88 @@ def _count_staffs(voice: list[list[EncodedSymbol]]) -> int:
     return 1
 
 
+def is_grandstaff(voice: list[Measure]) -> bool:
+    if len(voice) == 0:
+        return False
+    first_measure = voice[0]
+    if len(first_measure) < 3:
+        return False
+    return (
+        first_measure[0].rhythm.startswith("clef")
+        and first_measure[1].rhythm == "chord"
+        and first_measure[2].rhythm.startswith("clef")
+    )
+
+
+def get_svg_voice_count(voice: list[Measure]) -> int:
+    """
+    The concepts get confusing here: The SVG treats
+    a grandstaff as two voices. While in MusicXML it's a
+    single voice.
+    """
+    if is_grandstaff(voice):
+        return 2
+    return 1
+
+
 def convert_xml_and_svg_file(
     file: Path, just_token_files: bool, fail_if_image_is_missing: bool = True
 ) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
-        number_of_voices = sum([_count_staffs(v) for v in voices])
-        number_of_measures = len(voices[0])
+        splitter = [MeasureCutter(v) for v in voices]
+        pages = split_into_pages(voices)
         svg_files = get_position_from_multiple_svg_files(str(file))
-        measures_in_svg = [sum(s.number_of_measures for s in file.staffs) for file in svg_files]
-        sum_of_measures_in_xml = number_of_measures * number_of_voices
-        if sum(measures_in_svg) != sum_of_measures_in_xml:
-            # This happens for:
-            # The voices have a different number of measures, e.g.
-            # because singing starts after a piano intro
-            # Special layout decisions, e.g. a key or time change
-            # might add a bar at the end of one line,
-            # that looks like an extra measure in our SVG parsing
-            # (example: second page of lc6570092)
-            eprint(
-                file,
-                "INFO: Number of measures in SVG files",
-                sum(measures_in_svg),
-                "does not match number of measures in XML",
-                sum_of_measures_in_xml,
-            )
+        number_of_voices = sum([get_svg_voice_count(voice) for voice in voices])
+        for voice_idx, voice in enumerate(voices):
+            if is_grandstaff(voice):
+                for svg_file in svg_files:
+                    svg_file.merge_voice_with_next_one(voice_idx, number_of_voices)
+                number_of_voices -= 1
 
-            return []
-        return _split_file_into_staffs(
-            voices, svg_files, just_token_files, fail_if_image_is_missing
-        )
+        result: list[str] = []
+        if len(pages) != len(svg_files):
+            total_svg_measures = sum(svg.number_of_measures for svg in svg_files) / number_of_voices
+            total_xml_measures = sum(page.number_of_measures for page in pages)
+            if total_xml_measures == total_svg_measures:
+                # This happens if the layout required extra pages
+                pages = [
+                    MusicXmlPage([], svg.number_of_measures // number_of_voices)
+                    for svg in svg_files
+                ]
+            else:
+                eprint(
+                    file,
+                    "INFO: Number of pages in SVG files",
+                    len(svg_files),
+                    "does not match number of pages in XML",
+                    len(pages),
+                )
+
+                return []
+        for i, page in enumerate(pages):
+            svg_file = svg_files[i]
+            number_of_measures_per_voice_svg = svg_file.number_of_measures / number_of_voices
+            if page.number_of_measures != number_of_measures_per_voice_svg:
+                eprint(
+                    file,
+                    "Page",
+                    i + 1,
+                    "INFO: Number of measures in SVG files",
+                    number_of_measures_per_voice_svg,
+                    "does not match number of measures in XML",
+                    page.number_of_measures,
+                )
+                # Remove the measures from the cutter
+                for cutter in splitter:
+                    cutter.extract_measures(page.number_of_measures)
+                continue
+            result.extend(
+                _split_file_into_staffs(
+                    number_of_voices, svg_file, splitter, just_token_files, fail_if_image_is_missing
+                )
+            )
+        return result
 
     except Exception as e:
         eprint("Error while processing", file, e)
@@ -334,6 +467,17 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
         )
         unzip_file(lieder_archive, dataset_root)
 
+        eprint("Downloading StringQuartets from https://github.com/OpenScore/StringQuartets")
+        quartets_archive = os.path.join(dataset_root, "StringQuartets.zip")
+        download_file(
+            "https://github.com/OpenScore/StringQuartets/archive/refs/heads/main.zip",
+            quartets_archive,
+        )
+        unzip_file(quartets_archive, dataset_root)
+        shutil.copytree(
+            os.path.join(quartets, "scores"), os.path.join(lieder, "scores"), dirs_exist_ok=True
+        )
+
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
@@ -370,6 +514,6 @@ if __name__ == "__main__":
     if "--only-tokens" in sys.argv:
         only_recreate_token_files = True
     elif len(sys.argv) > 1:
-        _convert_token_and_image(Path(sys.argv[1]))
+        eprint(str.join("", _convert_token_and_image(Path(sys.argv[1]))))
         sys.exit(0)
     convert_lieder(only_recreate_token_files)

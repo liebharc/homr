@@ -393,8 +393,56 @@ def warp_image_array_randomly(image: NDArray) -> NDArray:
     ]
     result = calculate_dewarp_transformation(
         image, [upper, source, lower], [upper, destination, lower]
-    ).dewarp(image, order=3)
-    return (255 * result).astype(np.uint8)
+    ).dewarp(image, fill_color=255, order=3)
+
+    return result.astype(np.uint8)
+
+
+def warp_image_array_randomly2(image: NDArray) -> NDArray:
+    """
+    Apply a smooth random warp to the image to simulate paper folding/bending.
+    Uses cv2.remap with a 1D vertical displacement pattern (tiled horizontally)
+    to create a realistic wavy look without "hard cuts" or 2D stretching.
+    """
+    height, width = image.shape[:2]
+
+    # Use a small grid: 5 columns, 2 identical rows for vertical-only wave
+    grid_w = 5
+    grid_h = 2
+
+    # Generate random vertical displacement (same for both rows)
+    # alpha controls the maximum displacement in pixels
+    alpha = np.random.uniform(5, 25)
+    dy_row = np.random.uniform(-1, 1, (1, grid_w)).astype(np.float32)
+
+    # Anchor left and right edges to zero displacement
+    dy_row[0, 0] = 0
+    dy_row[0, -1] = 0
+
+    # Tile vertically to create a consistent wave across the entire image height
+    dy_small = np.tile(dy_row, (grid_h, 1))
+    dx_small = np.zeros((grid_h, grid_w), dtype=np.float32)
+
+    # Upscale to full image size with cubic interpolation for smoothness
+    dx = cv2.resize(dx_small, (width, height), interpolation=cv2.INTER_CUBIC) * alpha
+    dy = cv2.resize(dy_small, (width, height), interpolation=cv2.INTER_CUBIC) * alpha
+
+    # Create coordinate maps for cv2.remap
+    x, y = np.meshgrid(np.arange(width), np.arange(height))
+    map_x = (x + dx).astype(np.float32)
+    map_y = (y + dy).astype(np.float32)
+
+    # Perform the warping
+    result = cv2.remap(
+        image,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255, 255, 255),
+    )
+
+    return result.astype(np.uint8)
 
 
 if __name__ == "__main__":

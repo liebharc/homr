@@ -7,6 +7,9 @@ import cv2
 import numpy as np
 from termcolor import colored
 
+from homr.staff_parsing import add_image_into_tr_omr_canvas
+from training.transformer.image_utils import distort_image
+
 parser = argparse.ArgumentParser(description="Show examples from a dataset index")
 parser.add_argument("index", type=str, help="Index file name")
 parser.add_argument("number_of_images", type=int, help="Number of images to show at once")
@@ -16,14 +19,9 @@ parser.add_argument(
     help="Show the images in the order they are in the index file",
 )
 parser.add_argument(
-    "--min-ser",
-    type=int,
-    help="Minimum SER to show",
-)
-parser.add_argument(
-    "--max-ser",
-    type=int,
-    help="Maximum SER to show",
+    "--no-augmentation",
+    action="store_true",
+    help="Skip augmentation/distortion",
 )
 parser.add_argument(
     "--search",
@@ -40,20 +38,9 @@ index_file = open(index_file_name)
 index_lines = index_file.readlines()
 index_file.close()
 
-ser_position = 2
 
 if not args.sorted:
     np.random.shuffle(index_lines)
-
-if args.min_ser is not None:
-    index_lines = [
-        line for line in index_lines if int(line.split(",")[ser_position]) >= args.min_ser
-    ]
-
-if args.max_ser is not None:
-    index_lines = [
-        line for line in index_lines if int(line.split(",")[ser_position]) <= args.max_ser
-    ]
 
 
 def print_color(text: str, highlights: list[str], color: Any) -> None:
@@ -98,21 +85,18 @@ while not done:
     print("==========================================")
     print()
     for image_path, tokens in batch:
-        ser: None | int = None
-        if len(cells) > ser_position:
-            ser = int(cells[ser_position])
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError("Failed to read " + image_path)
+        if not args.no_augmentation:
+            image = distort_image(image)
+            image = add_image_into_tr_omr_canvas(image)
         if images is None:
             images = image
         else:
             images = np.concatenate((images, image), axis=0)
         print()
-        if ser is not None:
-            print(">>> " + image_path + f" SER: {ser}%")
-        else:
-            print(">>> " + image_path)
+        print(">>> " + image_path)
         print_color(tokens, highlight, "green")
         if search:
             print("Count:", tokens.count(search))

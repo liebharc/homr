@@ -55,4 +55,4 @@ def convert_transformer_quant() -> None:
 
 if __name__ == "__main__":
     # Converts pytorch models used by homr to onnx
-    convert_segnet_quant()
+    convert_transformer_quant()

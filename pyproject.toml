@@ -35,17 +35,18 @@ pyclean = "^3.1.0"
 coverage = "^7.8.2"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
-torchvision = "^0.24.1"
 transformers = {extras = ["torch"], version = "^4.53.2"}
 cairosvg = "^2.8.2"
 types-requests = "^2.32.4.20250611"
 segmentation-models-pytorch = "^0.5.0"
 pytorch-lightning = "^2.5.2"
 x-transformers = "^2.4.9"
-torch = "^2.9.1"
+torch = "2.7.1"
 onnx="^1.20.0"
 onnx-simplifier="^0.4.36"
 onnxconverter-common="^1.16.0"
+albumentations = "^2.0.8"
+tensorboard = "^2.20.0"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]

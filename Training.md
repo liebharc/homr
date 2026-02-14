@@ -55,11 +55,47 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 328 Epch 21
+
+Commit: a78209527e2b8a4fb866fba9b2ef8540f4b8dad9
+Day: 14 Feb 2026  
+Transformer Smoke Test: SER 10%
+System Level: 16.0 diffs, SER: 9.3%
+
+Harder augmentation, https://github.com/liebharc/homr/pull/59
+
+## Run 326 Epoch 13
+
+Commit: 290d4e79aa377681523ca676b984b9cee3eb16ce
+Day: 13 Feb 2026  
+Transformer Smoke Test: SER 13%
+System Level: 42.8 diffs, SER: 32.8%
+
+Backtracking, removed 90deg rotation and sinusoidal bias, https://github.com/liebharc/homr/pull/59
+
+## Run 322 Epoch 14
+
+Commit: fd3d66d7d989003ec4cadd1d594ca2e820ece941
+Day: 12 Feb 2026  
+Transformer Smoke Test: SER 12%
+System Level: 18.1 diffs, SER: 22.4%
+
+Improved pitch accuracy, https://github.com/liebharc/homr/pull/59
+
+## Run 317
+
+Commit: 6f72a0bc2577907503e7ec84ac9850a5a972ded0
+Day: 4 Feb 2026  
+Transformer Smoke Test: SER 15%
+System Level: 25.9 diffs, SER: 15.5%
+
+ConvNext, https://github.com/liebharc/homr/pull/59
+
 ## Run 286 - after segnet update
 
 Commit: 87d30ed79a81b4f07a38a8f6419334c59633709a  
 Day: 30 Jan 2026  
-Transformer Smoke Test: SER 26%  
+Transformer Smoke Test: SER 14% (the SER reported for the previous runs was too large due to an unreasonable large temperature setting during the smoke test)
 System Level: 6.9 diffs, SER: 5.7%
 
 Updated segnet model for staff detection.
@@ -68,8 +104,8 @@ Updated segnet model for staff detection.
 
 Commit: 0daf75fea21e6ea6a865405e03a4bc7e73e9aa14  
 Day: 4 Jan 2026  
-Transformer Smoke Test: SER 26%  
-System levle: 7.4 diffs
+Transformer Smoke Test: SER 26% (higher, due to an error in the smoke test)
+System Level: 7.4 diffs
 
 After fixing an issue with accidentals during the conversion of the PrIMuS dataset Run 242 (a00be6debbedf617acdf39558c89ba6113c06af3)
 was used as basis of a 15 epoch run which only trained the lift decoder.
@@ -78,8 +114,8 @@ was used as basis of a 15 epoch run which only trained the lift decoder.
 
 Commit: a00be6debbedf617acdf39558c89ba6113c06af3  
 Day: 9 Dec 2025  
-Transformer Smoke Test: SER 23% after fixing some errors in the SER calculation itself, before 36%  
-System levle: 7.2 diffs after fixing an error in the validation result calculation itself, before 8.1
+Transformer Smoke Test: SER 23% (some errors in the smoke test fixed, still higher as some issue remained)
+System Level: 7.2 diffs after fixing an error in the validation result calculation itself, before 8.1
 
 Singe staff images now use the full resolution.
 
@@ -87,7 +123,7 @@ Singe staff images now use the full resolution.
 
 Commit: 922ad08f8895f6d9c0ae61954cd78a021ff950a7  
 Day: 26 Oct 2025  
-Transformer Smoke Test: SER 37%  
+Transformer Smoke Test: SER 37% (higher, due to an error in the smoke test)
 System Level: 9.8 diffs, 8.6 after some tweaks to the staff image preparation
 
 Volta brackets, bf16
@@ -96,10 +132,10 @@ Volta brackets, bf16
 
 Commit:ea96f0150ec74388df8cb0bb78ee2c36782a00d9  
 Day: 01 Oct 2025  
-Transformer Smoke Test: SER 39%  
+Transformer Smoke Test: SER 39% (higher, due to an error in the smoke test)
 System Level: 9.8 diffs
 
-Grandstaff support. With the grandstaff support the SER numbers can't be directly compared to the previous runs anymore. Validations results still can be used for comparison.
+Grandstaff support.
 
 Some notes about other experiments which have been performed on the lieder dataset with only 15 epochs:
 
