@@ -30,7 +30,7 @@ note_8 C4 # _ upper
 note_8 D4 # _ upper
 barline . . . ."""
         tokens = read_token_lines(tabi_measure_18_upper.splitlines())
-        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        xml, _ = generate_xml(XmlGeneratorArguments(), [tokens], "")
         actual = self._xml_to_str(xml)
         expected = """XMLScorePartwise([XMLWork([XMLWorkTitle()]),
 XMLPart([XMLMeasure([XMLAttributes([XMLDivisions(value: 4),
@@ -95,7 +95,7 @@ rest_4 _ _ _ lower
 note_2 E4 _ _ upper&note_2 C2 _ _ lower
 barline . . . ."""
         tokens = read_token_lines(grandstaff.splitlines())
-        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        xml, _ = generate_xml(XmlGeneratorArguments(), [tokens], "")
         actual = self._xml_to_str(xml)
         expected = """XMLScorePartwise([XMLWork([XMLWorkTitle()]),
 XMLPart([XMLMeasure([XMLAttributes([XMLDivisions(value: 1),
@@ -184,7 +184,7 @@ note_4 C5 # slurStart upper&note_4 E3 _ slurStart lower
 note_4 D5 # slurStop upper&note_4 F3 _ slurStop lower
 barline . . . .""".splitlines()
         )
-        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        xml, _ = generate_xml(XmlGeneratorArguments(), [tokens], "")
         slurs: list[tuple[str, int | None, int | None]] = []
 
         def walk(node: Any, staff: int | None = None) -> None:
@@ -226,7 +226,7 @@ note_4 C5 # tieStart upper&note_4 C3 # tieStart lower
 note_4 C5 # tieStop upper&note_4 C3 # tieStop lower
 barline . . . .""".splitlines()
         )
-        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        xml, _ = generate_xml(XmlGeneratorArguments(), [tokens], "")
         ties: list[tuple[str, int | None, int | None]] = []
 
         def walk(node: Any, staff: int | None = None) -> None:
@@ -268,7 +268,7 @@ note_8 C5 # _ upper&note_4 G4 # tieStart upper
 note_4 G4 # tieStop upper
 barline . . . .""".splitlines()
         )
-        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        xml, _ = generate_xml(XmlGeneratorArguments(), [tokens], "")
         ties: list[tuple[str, int | None, int | None, int | None]] = []
 
         def walk(node: Any, staff: int | None = None, voice: int | None = None) -> None:

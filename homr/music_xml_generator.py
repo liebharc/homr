@@ -248,23 +248,35 @@ class XmlGeneratorArguments:
 
 def generate_xml(
     args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
-) -> mxl.XMLElement:
+) -> tuple[mxl.XMLElement, list[int]]:
     root = mxl.XMLScorePartwise()
     root.add_child(build_work(title))
     root.add_child(build_defaults(args))
     root.add_child(build_part_list(len(staffs)))
+    measure_counts_per_staff_line: list[int] = []
     for index, staff in enumerate(staffs):
-        root.add_child(build_part(args, staff, index))
-    return root
+        part, measure_counts = build_part(args, staff, index)
+        root.add_child(part)
+        measure_counts_per_staff_line.extend(measure_counts)
+    return root, measure_counts_per_staff_line
 
 
-def build_part(args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int) -> mxl.XMLPart:
+def count_measures_for_encoded_staff(staff: list[EncodedSymbol]) -> int:
+    return len(build_measures(XmlGeneratorArguments(), staff, False))
+
+
+def build_part(
+    args: XmlGeneratorArguments,
+    voice: list[EncodedSymbol],
+    index: int,
+) -> tuple[mxl.XMLPart, list[int]]:
     part = mxl.XMLPart(id=get_part_id(index))
     is_first_part = index == 0
     measures = build_measures(args, voice, is_first_part)
     for measure in measures:
         part.add_child(measure)
-    return part
+    staff_count = _max_staff_number(voice)
+    return part, [len(measures)] * staff_count
 
 
 def build_measures(
@@ -898,5 +910,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         file = sys.argv[1]
     tokens = read_tokens(file)
-    xml = generate_xml(XmlGeneratorArguments(True), [tokens], "")
+    xml, _ = generate_xml(XmlGeneratorArguments(True), [tokens], "")
     xml.write(file.replace(".tokens", ".musicxml"))

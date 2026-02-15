@@ -265,7 +265,7 @@ def parse_staff_image(
 
 def parse_staffs(
     debug: Debug, staffs: list[MultiStaff], image: NDArray, config: Config, selected_staff: int = -1
-) -> list[list[EncodedSymbol]]:
+) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -276,6 +276,7 @@ def parse_staffs(
     number_of_voices = _get_number_of_voices(staffs)
     i = 0
     voices = []
+    parsed_staff_lines = []
     regions = StaffRegions(staffs)
     for voice in range(number_of_voices):
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
@@ -290,9 +291,10 @@ def parse_staffs(
                 eprint("Skipping empty staff", i)
                 i += 1
                 continue
-            result_staff.append(EncodedSymbol("newline"))
-            result_for_voice.extend(result_staff)
+            result_staff_with_newline = [*result_staff, EncodedSymbol("newline")]
+            parsed_staff_lines.append(result_staff_with_newline)
+            result_for_voice.extend(result_staff_with_newline)
             i += 1
 
         voices.append(remove_duplicated_symbols(result_for_voice))
-    return voices
+    return voices, parsed_staff_lines

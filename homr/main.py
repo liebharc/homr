@@ -12,10 +12,7 @@ import onnxruntime as ort
 
 from homr import color_adjust, download_utils
 from homr.autocrop import autocrop
-from homr.bar_line_detection import (
-    detect_bar_lines,
-    prepare_bar_line_image,
-)
+from homr.bar_line_detection import detect_bar_lines, prepare_bar_line_image
 from homr.bounding_boxes import (
     BoundingEllipse,
     RotatedBoundingBox,
@@ -28,7 +25,11 @@ from homr.brace_dot_detection import (
 )
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff
-from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
+from homr.music_xml_generator import (
+    XmlGeneratorArguments,
+    count_measures_for_encoded_staff,
+    generate_xml,
+)
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.resize import resize_image
@@ -164,7 +165,7 @@ def process_image(
     image_path: str,
     config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
-) -> None:
+) -> list[int]:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
     debug_cleanup: Debug | None = None
@@ -187,7 +188,7 @@ def process_image(
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.use_gpu_inference
 
-        result_staffs = parse_staffs(
+        result_staffs, parsed_staff_lines = parse_staffs(
             debug,
             multi_staffs,
             image,
@@ -199,10 +200,14 @@ def process_image(
         eprint("Found title:", title)
 
         eprint("Writing XML", result_staffs)
-        xml = generate_xml(xml_generator_args, result_staffs, title)
+        xml, measures_count = generate_xml(xml_generator_args, result_staffs, title)
         xml.write(xml_file)
+        input_staff_measure_counts = [
+            count_measures_for_encoded_staff(staff_line) for staff_line in parsed_staff_lines
+        ]
+        eprint("Measures count per parsed staff line:", input_staff_measure_counts)
 
-        eprint("Finished parsing " + str(len(result_staffs)) + " staves")
+        eprint("Finished parsing " + str(len(result_staffs)) + " voices")
         teaser_file = replace_extension(image_path, "_teaser.png")
         if config.write_staff_positions:
             staff_position_files = replace_extension(image_path, ".txt")
@@ -211,6 +216,7 @@ def process_image(
         debug.clean_debug_files_from_previous_runs()
 
         eprint("Result was written to", xml_file)
+        return input_staff_measure_counts
     except:
         if os.path.exists(xml_file):
             os.remove(xml_file)

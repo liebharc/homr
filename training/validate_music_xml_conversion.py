@@ -9,7 +9,7 @@ def validate_conversion(file: str) -> bool:
     expected = read_tokens(file)
     tmp = file.replace(".tokens", ".musicxml.tmp")
 
-    xml = generate_xml(XmlGeneratorArguments(None, None, None), [expected], "")
+    xml, _ = generate_xml(XmlGeneratorArguments(None, None, None), [expected], "")
     xml.write(tmp)
 
     actual = music_xml_file_to_tokens(tmp)
