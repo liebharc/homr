@@ -38,10 +38,23 @@ class HomrTrainer(Trainer):
     def compute_loss(
         self,
         model: torch.nn.Module,
-        inputs: dict[str, torch.Tensor],
+        inputs: dict[str, Any],
         return_outputs: bool = False,
         num_items_in_batch: Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        if model.training:
+            # Calculate sampling probability
+            config = getattr(model, "config", None)
+            if config:
+                start_p = config.scheduled_sampling_start_prob
+                end_p = config.scheduled_sampling_end_prob
+                decay = config.scheduled_sampling_decay_steps
+                step = self.state.global_step
+                sampling_prob = max(end_p, start_p - (start_p - end_p) * (step / decay))
+                inputs["sampling_prob"] = sampling_prob
+            else:
+                inputs["sampling_prob"] = 1.0
+
         outputs = model(**inputs)
         loss = outputs["loss"]
 

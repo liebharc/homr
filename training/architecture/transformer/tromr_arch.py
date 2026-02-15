@@ -29,6 +29,7 @@ class TrOMR(nn.Module):
         articulations: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
+        sampling_prob: float = 1.0,
         **kwargs: Any,
     ) -> Any:
         context = self.encoder(inputs)
@@ -40,6 +41,7 @@ class TrOMR(nn.Module):
             positions=positions,
             context=context,
             mask=mask,
+            sampling_prob=sampling_prob,
             **kwargs,
         )
         return loss

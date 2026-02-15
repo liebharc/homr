@@ -354,6 +354,7 @@ class ScoreDecoder(nn.Module):
         articulations: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
+        sampling_prob: float = 1.0,
         **kwargs: Any,
     ) -> dict[str, Any]:
         liftsi = lifts[:, :-1]
@@ -364,11 +365,60 @@ class ScoreDecoder(nn.Module):
         pitchso = pitchs[:, 1:]
         rhythmsi = rhythms[:, :-1]
         rhythmso = rhythms[:, 1:]
+        positionsi = positions[:, :-1]
         positionso = positions[:, 1:]
 
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
 
+        # Scheduled Sampling: Two-pass approach
+        if self.training and sampling_prob < 1.0:
+            with torch.no_grad():
+                self.net.eval()
+                # First pass to get predictions
+                r_logits, p_logits, l_logits, pos_logits, a_logits, _, _, _ = self.net(
+                    rhythms=rhythmsi,
+                    pitchs=pitchsi,
+                    lifts=liftsi,
+                    articulations=articulationsi,
+                    mask=mask,
+                    cache=None,
+                    return_center_of_attention=False,
+                    **kwargs,
+                )
+                self.net.train()
+
+                # Greedy sampling (excluding BOS at index 0)
+                # logits[:, t] predicts tokens[:, t+1] (which is input[:, t+1])
+                # So logits[:, :-1] corresponds to inputs[:, 1:]
+                r_sample = r_logits[:, :-1].argmax(dim=-1)
+                p_sample = p_logits[:, :-1].argmax(dim=-1)
+                l_sample = l_logits[:, :-1].argmax(dim=-1)
+                a_sample = a_logits[:, :-1].argmax(dim=-1)
+                pos_sample = pos_logits[:, :-1].argmax(dim=-1)
+
+                # Determine which indices to replace
+                mix_mask = (
+                    torch.rand(r_sample.shape, device=rhythms.device) > sampling_prob
+                ).long()
+
+                # Mix inputs
+                rhythmsi = rhythmsi.clone()
+                rhythmsi[:, 1:] = (1 - mix_mask) * rhythmsi[:, 1:] + mix_mask * r_sample
+
+                pitchsi = pitchsi.clone()
+                pitchsi[:, 1:] = (1 - mix_mask) * pitchsi[:, 1:] + mix_mask * p_sample
+
+                liftsi = liftsi.clone()
+                liftsi[:, 1:] = (1 - mix_mask) * liftsi[:, 1:] + mix_mask * l_sample
+
+                articulationsi = articulationsi.clone()
+                articulationsi[:, 1:] = (1 - mix_mask) * articulationsi[:, 1:] + mix_mask * a_sample
+
+                positionsi = positionsi.clone()
+                positionsi[:, 1:] = (1 - mix_mask) * positionsi[:, 1:] + mix_mask * pos_sample
+
+        # Second pass (or standard pass) with (possibly mixed) inputs
         rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention, _cache = self.net(
             rhythms=rhythmsi,
             pitchs=pitchsi,
