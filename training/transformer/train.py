@@ -158,7 +158,7 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 6 if fp32 else 18
+    batch_size = 6 if fp32 else 12
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -207,8 +207,8 @@ def train_transformer(
 
     try:
         callbacks: list[TrainerCallback] = [EarlyStoppingCallback(early_stopping_patience=5)]
-        if not fine_tune:
-            callbacks.append(FreezeCallback(epochs_to_freeze=2))
+        #if not fine_tune:
+        #    callbacks.append(FreezeCallback(epochs_to_freeze=2))
 
         trainer = HomrTrainer(
             model,
