@@ -10,7 +10,7 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
-        model_name = "pytorch_model_326-290d4e79aa377681523ca676b984b9cee3eb16ce"
+        model_name = "pytorch_model_331-e10346542968cc71fbcce0c0696f3ac963f11ae1"
         self.encoder_path = os.path.join(
             workspace,
             f"encoder_{model_name}.onnx",
@@ -30,7 +30,11 @@ class FilePaths:
         )  # noqa: E501
 
         self.checkpoint = os.path.join(
-            root_dir, "current_training", "checkpoint-32019", "model.safetensors"
+            root_dir,
+            "training",
+            "architecture",
+            "transformer",
+            f"{model_name}.pth",
         )
 
         self.rhythmtokenizer = os.path.join(workspace, "tokenizer_rhythm.json")
