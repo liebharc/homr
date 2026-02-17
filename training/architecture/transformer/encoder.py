@@ -14,14 +14,12 @@ class ConvNeXtEncoder(nn.Module):
 
         # Use configurable pretrained flag
         self.model = timm.create_model(
-            "convnext_tiny",
+            "convnextv2_tiny",
             pretrained=True,
             in_chans=config.channels,
             num_classes=0,
             global_pool="",
             drop_path_rate=0.1,
-            dims=[96, 192, 384, 768],
-            depths=[3, 3, 9, 3],
         )
 
         self.encoder_dim = config.encoder_dim
@@ -62,7 +60,7 @@ class ConvNeXtEncoder(nn.Module):
         _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
         features = requested_stages[0]  # Get stage 2 (stride 16)
 
-        # features shape: (B, C, H, W) = (B, 384, 80, 16)
+        # features shape: (B, C, H, W) = (B, 384, 16, 80)
         b, c, h, w = features.shape
         # Rearrange to (B, H, W, C)
         features = features.permute(0, 2, 3, 1)
