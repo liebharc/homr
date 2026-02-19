@@ -8,7 +8,7 @@ processed using tools such as [musescore](https://musescore.com/).
 
 ## Prerequisites
 
-- Python 3.10
+- Python 3.11
 - Poetry
 - Optional: NVidia GPU with CUDA 12.1
 
@@ -16,9 +16,9 @@ processed using tools such as [musescore](https://musescore.com/).
 
 - Clone the repository
 - Install dependencies for:
-    - GPU (requires CUDA): `poetry install --only main,gpu`
-    - CPU: `poetry install --only main`
-    - Development: `poetry install`
+  - GPU (requires CUDA): `poetry install --only main,gpu`
+  - CPU: `poetry install --only main`
+  - Development: `poetry install`
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 - To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
