@@ -55,6 +55,24 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 334
+
+Commit: 6d996c3d118c1e183f8412832383168e52630ce8
+Day: 17 Feb 2026  
+Transformer Smoke Test: SER 6%
+System Level: 10.2 diffs, SER: 13.6%
+
+convnextv2_base, https://github.com/liebharc/homr/pull/59
+
+## Run 333
+
+Commit: bb0ced2ff0cacdbd8ee33db4533a04c9e77f0ca8
+Day: 17 Feb 2026  
+Transformer Smoke Test: SER 18%
+System Level: 14.4 diffs, SER: 14.5%
+
+convnextv2_tiny, https://github.com/liebharc/homr/pull/59
+
 ## Run 331
 
 Commit: e10346542968cc71fbcce0c0696f3ac963f11ae1
