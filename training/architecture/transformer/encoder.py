@@ -14,7 +14,7 @@ class ConvNeXtEncoder(nn.Module):
 
         # Use configurable pretrained flag
         self.model = timm.create_model(
-            "convnextv2_tiny",
+            "convnext_tiny",
             pretrained=True,
             in_chans=config.channels,
             num_classes=0,
