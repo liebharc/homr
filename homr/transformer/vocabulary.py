@@ -391,12 +391,14 @@ class EncodedSymbol:
         articulation: str = nonote,
         position: str = nonote,
         coordinates: tuple[float, float] | None = None,
+        lyric: str | None = None,
     ) -> None:
         self.rhythm = rhythm
         self.pitch = pitch
         self.lift = lift
         self.articulation = articulation
         self.position = position
+        self.lyric = lyric
 
         # These coordinates are derived from transformer attention and are inherently imprecise,
         # since the model is optimized for predictive accuracy rather than spatial localization.

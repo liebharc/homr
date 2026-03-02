@@ -24,6 +24,7 @@ from homr.brace_dot_detection import (
     prepare_brace_dot_image,
 )
 from homr.debug import Debug
+from homr.lyrics_detection import lyrics_by_measure_per_verse, set_lyrics_ocr_backend
 from homr.model import InputPredictions, MultiStaff
 from homr.music_xml_generator import (
     XmlGeneratorArguments,
@@ -41,6 +42,7 @@ from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.title_detection import detect_title, download_ocr_weights
 from homr.transformer.configs import Config, default_config
+from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -161,6 +163,78 @@ class ProcessingConfig:
     use_gpu_inference: bool
 
 
+def print_lyrics_per_measure(voices: list[list[EncodedSymbol]]) -> None:
+    has_any_lyrics = False
+    for voice_index, voice in enumerate(voices):
+        grouped_by_verse = lyrics_by_measure_per_verse(voice)
+        if len(grouped_by_verse) == 0:
+            continue
+        for verse_no in sorted(grouped_by_verse):
+            grouped = grouped_by_verse[verse_no]
+            lines = [
+                f"Measure {measure_no}: {' '.join(measure_lyrics)}"
+                for measure_no, measure_lyrics in enumerate(grouped, start=1)
+                if len(measure_lyrics) > 0
+            ]
+            if len(lines) == 0:
+                continue
+            has_any_lyrics = True
+            if len(grouped_by_verse) == 1 and verse_no == 1:
+                eprint(f"Lyrics per measure (voice {voice_index + 1}):")
+            else:
+                eprint(f"Lyrics per measure (voice {voice_index + 1}, verse {verse_no}):")
+            for line in lines:
+                eprint(" ", line)
+
+    if not has_any_lyrics:
+        eprint("Lyrics per measure: no lyrics detected")
+
+
+def write_lyrics_ocr_teaser(image_path: str, staff_previews: list[NDArray]) -> None:
+    if len(staff_previews) == 0:
+        return
+
+    normalized: list[NDArray] = []
+    max_width = max(image.shape[1] for image in staff_previews)
+    for index, image in enumerate(staff_previews, start=1):
+        if image.ndim == 2:
+            staff_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            staff_image = image.copy()
+        cv2.putText(
+            staff_image,
+            f"staff {index}",
+            (16, 26),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (30, 30, 30),
+            2,
+        )
+        if staff_image.shape[1] < max_width:
+            delta = max_width - staff_image.shape[1]
+            staff_image = cv2.copyMakeBorder(
+                staff_image,
+                top=0,
+                bottom=0,
+                left=0,
+                right=delta,
+                borderType=cv2.BORDER_CONSTANT,
+                value=(255, 255, 255),
+            )
+        normalized.append(staff_image)
+
+    separator = np.full((16, max_width, 3), 245, dtype=np.uint8)
+    rows: list[NDArray] = []
+    for i, image in enumerate(normalized):
+        rows.append(image)
+        if i < len(normalized) - 1:
+            rows.append(separator)
+    combined = cv2.vconcat(rows)
+    output_file = replace_extension(image_path, "_lyrics_ocr_teaser.png")
+    cv2.imwrite(output_file, combined)
+    eprint("Lyrics OCR teaser was written to", output_file)
+
+
 def process_image(
     image_path: str,
     config: ProcessingConfig,
@@ -188,7 +262,7 @@ def process_image(
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.use_gpu_inference
 
-        result_staffs, parsed_staff_lines = parse_staffs(
+        result_staffs, parsed_staff_lines, lyrics_ocr_previews = parse_staffs(
             debug,
             multi_staffs,
             image,
@@ -213,9 +287,11 @@ def process_image(
             staff_position_files = replace_extension(image_path, ".txt")
             save_staff_positions(multi_staffs, image.shape, staff_position_files)
         debug.write_teaser(teaser_file, multi_staffs)
+        write_lyrics_ocr_teaser(image_path, lyrics_ocr_previews)
         debug.clean_debug_files_from_previous_runs()
 
         eprint("Result was written to", xml_file)
+        print_lyrics_per_measure(result_staffs)
         return input_staff_measure_counts
     except:
         if os.path.exists(xml_file):
@@ -391,7 +467,15 @@ def main() -> None:
         default=GpuSupport.AUTO,
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--lyrics-ocr-backend",
+        type=str,
+        choices=["auto", "paddle"],
+        default="auto",
+        help="Lyrics OCR backend: auto or paddle.",
+    )
     args = parser.parse_args()
+    set_lyrics_ocr_backend(args.lyrics_ocr_backend)
 
     has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
 

@@ -132,6 +132,7 @@ def _merge_multi_staff_if_they_share_a_staff(staffs: list[MultiStaff]) -> list[M
 
 
 def _create_grandstaffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
+    print(f"Creating grandstaffs for {len(staffs)} staffs")
     if len(staffs) == 0:
         return staffs
     if len(staffs[0].staffs) != 2:

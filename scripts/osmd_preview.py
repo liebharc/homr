@@ -10,14 +10,13 @@ import time
 import webbrowser
 from pathlib import Path
 
-
 HTML_TEMPLATE = """<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OSMD Preview</title>
-    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.9.0/build/opensheetmusicdisplay.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.9.4/build/opensheetmusicdisplay.min.js"></script>
     <style>
       body {{ font-family: system-ui, -apple-system, sans-serif; margin: 0; }}
       header {{ padding: 12px 16px; background: #f5f5f5; border-bottom: 1px solid #ddd; }}
@@ -32,8 +31,16 @@ HTML_TEMPLATE = """<!doctype html>
     <script>
       const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd-container", {{
         backend: "svg",
-        drawingParameters: "default"
+        drawingParameters: "default",
+        autoBeam: false,
+        autoBeamOptions: {{
+          beam_rests: false,
+          beam_middle_rests_only: false,
+          maintain_stem_directions: false,
+          groups: [[3,4],[1,4]], // example, see below
+        }}
       }});
+      osmd.EngravingRules.RenderXMeasuresPerLineAkaSystem = 4;
       osmd
         .load("{score_file}")
         .then(() => osmd.render())
@@ -80,7 +87,9 @@ def main() -> None:
 
     port = args.port or _find_free_port()
     os.chdir(temp_dir)
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), http.server.SimpleHTTPRequestHandler)
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", port), http.server.SimpleHTTPRequestHandler
+    )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
@@ -103,4 +112,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

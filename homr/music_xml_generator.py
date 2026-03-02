@@ -485,6 +485,23 @@ def get_staff(symbol: EncodedSymbol) -> int:
     return 2 if symbol.position == "lower" else 1
 
 
+def _get_symbol_lyric_verses(symbol: EncodedSymbol) -> dict[int, str]:
+    verses: dict[int, str] = {}
+    dynamic = getattr(symbol, "lyric_verses", None)
+    if isinstance(dynamic, dict):
+        for verse, text in dynamic.items():
+            if not isinstance(verse, int) or verse < 1 or not isinstance(text, str):
+                continue
+            normalized = text.strip()
+            if normalized:
+                verses[verse] = normalized
+    if symbol.lyric:
+        normalized = symbol.lyric.strip()
+        if normalized:
+            verses.setdefault(1, normalized)
+    return dict(sorted(verses.items(), key=lambda pair: pair[0]))
+
+
 def build_clef(model_clef: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
     sign_and_line = model_clef.rhythm.split("_")[1]
     sign = sign_and_line[0]
@@ -694,6 +711,10 @@ def build_note_or_rest(
         elif model_note.lift != empty:
             pitch.add_child(mxl.XMLAlter(value_=LIFT_TO_ALTER[model_note.lift]))
         note.add_child(pitch)
+    for verse, lyric_text in _get_symbol_lyric_verses(model_note).items():
+        lyric = mxl.XMLLyric(number=str(verse))
+        lyric.add_child(mxl.XMLText(value_=lyric_text))
+        note.add_child(lyric)
 
     if "G" in model_note.rhythm:
         note.add_child(mxl.XMLGrace())

@@ -54,9 +54,11 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     width = min(width, image.shape[1] - x)
     height = min(height, int(top_staff.min_y) - y)
     above_staff = image[y : y + height, x : x + width]
+    if above_staff.size == 0:
+        return ""
 
-    ocr_input: str = debug.write_model_input_image("_tesseract_input.png", above_staff)
-    ocr_results = _reader(ocr_input)
+    debug.write_model_input_image("_tesseract_input.png", above_staff)
+    ocr_results = _reader(above_staff)
 
     if not ocr_results or not ocr_results[0]:
         return ""

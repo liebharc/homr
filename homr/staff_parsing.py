@@ -6,6 +6,12 @@ import numpy as np
 from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
+from homr.lyrics_detection import (
+    LyricAssignment,
+    LyricCandidate,
+    assign_lyrics_to_symbols,
+    detect_lyric_candidates,
+)
 from homr.model import MultiStaff, Staff
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
@@ -231,14 +237,76 @@ def _dewarp_staff(
     return staff.transform_coordinates(transform_coordinates)
 
 
+def _render_lyrics_ocr_preview(
+    staff_image: NDArray,
+    symbols: list[EncodedSymbol],
+    lyrics: list[LyricCandidate],
+    assignments: list[LyricAssignment],
+) -> NDArray:
+    if staff_image.ndim == 2:
+        preview = cv2.cvtColor(staff_image, cv2.COLOR_GRAY2BGR)
+    else:
+        preview = staff_image.copy()
+
+    for symbol in symbols:
+        center = symbol.coordinates
+        if center is None or not symbol.rhythm.startswith(("note", "rest")):
+            continue
+        if not np.isfinite(center[0]) or not np.isfinite(center[1]):
+            continue
+        color = (60, 120, 255) if symbol.position == "lower" else (255, 120, 30)
+        cv2.circle(preview, (int(center[0]), int(center[1])), 3, color=color, thickness=-1)
+
+    verse_colors = [
+        (35, 190, 75),
+        (40, 140, 240),
+        (205, 80, 155),
+        (80, 80, 220),
+    ]
+    for lyric in lyrics:
+        cv2.circle(preview, (int(lyric.x), int(lyric.y)), 3, color=(140, 140, 140), thickness=1)
+
+    for assignment in assignments:
+        symbol = symbols[assignment.symbol_index]
+        note_center = symbol.coordinates
+        has_invalid_center = (
+            note_center is None
+            or not np.isfinite(note_center[0])
+            or not np.isfinite(note_center[1])
+        )
+        if has_invalid_center:
+            continue
+        color = verse_colors[(assignment.verse - 1) % len(verse_colors)]
+        lyric = assignment.lyric
+        lyric_center = (int(lyric.x), int(lyric.y))
+        note_center_int = (int(note_center[0]), int(note_center[1]))
+        cv2.line(preview, lyric_center, note_center_int, color=color, thickness=1)
+        cv2.circle(preview, lyric_center, 3, color=color, thickness=-1)
+        label = f"{assignment.verse}:{lyric.text}"
+        cv2.putText(
+            preview,
+            label,
+            (lyric_center[0] + 3, lyric_center[1] - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.35,
+            color,
+            1,
+        )
+
+    return preview
+
+
 def parse_staff_image(
     debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions, config: Config
-) -> list[EncodedSymbol]:
+) -> tuple[list[EncodedSymbol], NDArray]:
     staff_image, transformed_staff = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
+    lyrics = detect_lyric_candidates(staff_image, result)
+    assignments = assign_lyrics_to_symbols(result, lyrics)
+    lyrics_preview = _render_lyrics_ocr_preview(staff_image, result, lyrics, assignments)
     if debug.debug:
         result_image = staff_image.copy()
         for i, symbol in enumerate(result):
@@ -260,12 +328,12 @@ def parse_staff_image(
             )
 
         debug.write_image_with_fixed_suffix(f"_staff-{index}_output.jpg", result_image)
-    return result
+    return result, lyrics_preview
 
 
 def parse_staffs(
     debug: Debug, staffs: list[MultiStaff], image: NDArray, config: Config, selected_staff: int = -1
-) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
+) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]], list[NDArray]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
@@ -277,7 +345,9 @@ def parse_staffs(
     i = 0
     voices = []
     parsed_staff_lines = []
+    lyrics_ocr_previews: list[NDArray] = []
     regions = StaffRegions(staffs)
+
     for voice in range(number_of_voices):
         staffs_for_voice = [staff.staffs[voice] for staff in staffs]
         result_for_voice = []
@@ -286,7 +356,9 @@ def parse_staffs(
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
-            result_staff = parse_staff_image(debug, i, staff, image, regions, config)
+            result_staff, lyrics_preview = parse_staff_image(
+                debug, i, staff, image, regions, config
+            )
             if len(result_staff) == 0:
                 eprint("Skipping empty staff", i)
                 i += 1
@@ -294,7 +366,8 @@ def parse_staffs(
             result_staff_with_newline = [*result_staff, EncodedSymbol("newline")]
             parsed_staff_lines.append(result_staff_with_newline)
             result_for_voice.extend(result_staff_with_newline)
+            lyrics_ocr_previews.append(lyrics_preview)
             i += 1
 
         voices.append(remove_duplicated_symbols(result_for_voice))
-    return voices, parsed_staff_lines
+    return voices, parsed_staff_lines, lyrics_ocr_previews
