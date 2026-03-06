@@ -5,10 +5,10 @@ from pathlib import Path
 
 import safetensors.torch as safetensors
 import torch
-from homr.transformer.tromr_arch import TrOMR
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
+from homr.transformer.tromr_arch import TrOMR
 
 
 def load_checkpoint(path, model):
