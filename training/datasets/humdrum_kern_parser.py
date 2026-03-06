@@ -147,7 +147,7 @@ class HumdrumKernConverter:
         if not suffix:
             return empty
 
-        mapping = {":": "arpeggiate", "[": "tieStart", "]": "tieStop"}
+        mapping = {":": "arpeggiate", "[": "slurStart", "]": "slurStop"}
         articulations = []
         for char in suffix:
             articulations.append(mapping[char])

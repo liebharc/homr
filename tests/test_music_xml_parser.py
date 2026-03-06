@@ -154,9 +154,9 @@ class TestMusicXmlParser(unittest.TestCase):
         expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
 keySignature_1 . . . .
 timeSignature/4 . . . .
-note_1 G4 _ tieStart_tieStop upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ slurStop lower
+note_1 G4 _ slurStart_slurStop upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ slurStop lower
 rest_4 _ _ _ lower
-note_2 E4 _ tieStart upper&note_2 C2 _ _ lower
+note_2 E4 _ slurStart upper&note_2 C2 _ _ lower
 barline . . . ."""
         self.assertEqual(token_str, expected)
 
@@ -444,7 +444,7 @@ barline . . . ."""
         expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
 keySignature_1 . . . .
 timeSignature/4 . . . .
-note_12 B5 _ slurStart_tieStop upper&note_12 G5 _ _ upper&note_4 B1 _ _ lower
+note_12 B5 _ slurStart_slurStop upper&note_12 G5 _ _ upper&note_4 B1 _ _ lower
 note_12 G5 _ staccato upper&note_12 D5 # _ upper
 note_12 D5 # staccato upper&note_12 B4 _ _ upper
 note_2 B4 _ slurStart_slurStop upper&note_4 G4 _ _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower

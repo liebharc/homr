@@ -145,7 +145,7 @@ def convert_decoder() -> str:
     articulations = torch.randint(0, config.num_articulation_tokens, (1, 1)).long()
     cache_len = torch.tensor([cache_length]).long()
     cache = kv_cache
-    context = torch.randn((1, 1281, 312)).float()
+    context = torch.randn((1, 1280, config.encoder_dim)).float()
 
     dynamic_axes["context"] = {1: "cache_exists"}
 

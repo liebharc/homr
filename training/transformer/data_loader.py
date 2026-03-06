@@ -1,10 +1,20 @@
 import os
+import random
 from typing import Any
 
+import numpy as np
+
 from homr.simple_logging import eprint
+from homr.staff_parsing import add_image_into_tr_omr_canvas
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import Vocabulary
-from training.architecture.transformer.staff2score import readimg
+from training.transformer.image_utils import (
+    distort_image,
+    ndarray_to_tensor,
+    pad_to_3_dims,
+    prepare_for_tensor,
+    read_image_to_ndarray,
+)
 from training.transformer.training_vocabulary import (
     DecoderBranches,
     read_tokens,
@@ -23,10 +33,12 @@ class DataLoader:
         self,
         corpus_list: list[str],
         config: Config,
+        is_validation: bool = False,
     ) -> None:
         self.corpus_list = self._add_mask_steps(corpus_list)
         self.vocab = Vocabulary()
         self.config = config
+        self.is_validation = is_validation
 
     def _add_mask_steps(self, corpus_list: list[str]) -> Any:
         result = []
@@ -44,8 +56,26 @@ class DataLoader:
 
     def __getitem__(self, idx: int) -> Any:
         entry = self.corpus_list[idx]
-        sample_filepath = entry["image"]
-        sample_img = readimg(self.config, os.path.join(git_root, sample_filepath))
+        sample_filepath = os.path.join(git_root, entry["image"])
+
+        img = read_image_to_ndarray(sample_filepath)
+
+        if self.is_validation:
+            state = random.getstate()
+            np_state = np.random.get_state()
+            random.seed(idx)
+            np.random.seed(idx)
+
+        img = distort_image(img, allow_occlusions=not self.is_validation)
+        img = add_image_into_tr_omr_canvas(img)
+
+        if self.is_validation:
+            random.setstate(state)
+            np.random.set_state(np_state)
+
+        img = prepare_for_tensor(img)
+        sample_img = ndarray_to_tensor(img)
+        sample_img = pad_to_3_dims(sample_img)
 
         tokens_full_filepath = entry["tokens"]
         tokens = self._read_tokens(tokens_full_filepath)
@@ -78,11 +108,13 @@ def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> 
         "train": DataLoader(
             training_list,
             config,
+            is_validation=False,
         ),
         "train_list": training_list,
         "validation": DataLoader(
             validation_list,
             config,
+            is_validation=True,
         ),
         "validation_list": validation_list,
     }

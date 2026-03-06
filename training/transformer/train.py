@@ -1,11 +1,15 @@
 import os
 import shutil
 import sys
+from typing import Any
 
 import torch
 import torch._dynamo
 from transformers import (
-    Trainer,
+    EarlyStoppingCallback,
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
     TrainingArguments,
 )
 
@@ -20,9 +24,39 @@ from training.datasets.convert_lieder import convert_lieder, lieder_train_index
 from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
+from training.transformer.metrics import HomrTrainer
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
+
+
+class FreezeCallback(TrainerCallback):
+    """
+    Callback to freeze the backbone for a set number of epochs.
+    Standard practice is ~2 epochs.
+    """
+
+    def __init__(self, epochs_to_freeze: int = 2):
+        self.epochs_to_freeze = epochs_to_freeze
+        self._backbone_frozen = False
+
+    def on_train_begin(
+        self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
+    ) -> None:
+        model = kwargs.get("model")
+        if model and hasattr(model, "freeze_backbone"):
+            eprint(f"Freezing backbone for the first {self.epochs_to_freeze} epochs")
+            model.freeze_backbone()
+            self._backbone_frozen = True
+
+    def on_epoch_begin(
+        self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
+    ) -> None:
+        model = kwargs.get("model")
+        if model and self._backbone_frozen and state.epoch and state.epoch >= self.epochs_to_freeze:
+            eprint(f"Unfreezing backbone at epoch {state.epoch}")
+            model.unfreeze_backbone()
+            self._backbone_frozen = False
 
 
 def load_training_index(file_path: str) -> list[str]:
@@ -80,9 +114,9 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 def train_transformer(
     fp32: bool = False, resume: str = "", smoke_test: bool = False, fine_tune: bool = False
 ) -> None:
-    number_of_epochs = 70
+    number_of_epochs = 35
     if smoke_test:
-        number_of_epochs = 15
+        number_of_epochs = 10
     elif fine_tune:
         number_of_epochs = 15
     resume_from_checkpoint = None
@@ -96,8 +130,10 @@ def train_transformer(
     if smoke_test:
         number_of_files = -1
         train_index = load_and_mix_training_sets(
-            _check_datasets_are_present([lieder_train_index]),
-            [1.0],
+            _check_datasets_are_present(
+                [lieder_train_index, grandstaff_train_index, primus_train_index]
+            ),
+            [1.0, 1.0, 1.0],
             number_of_files,
         )
     else:
@@ -122,26 +158,28 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 6 if fp32 else 16
+    batch_size = 6 if fp32 else 18
 
     train_args = TrainingArguments(
         checkpoint_folder,
         torch_compile=compile_model,
         overwrite_output_dir=True,
         eval_strategy="epoch",
+        save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
         gradient_accumulation_steps=4,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
         num_train_epochs=number_of_epochs,
-        weight_decay=0.01,
+        weight_decay=0.05,
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
-        load_best_model_at_end=False,
-        metric_for_best_model="loss",
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_accuracy",
+        greater_is_better=True,
+        report_to=["tensorboard"],
         logging_dir=os.path.join("logs", f"run{run_id}"),
-        save_strategy="epoch",
         label_names=label_names,
         bf16=not fp32,
         dataloader_pin_memory=True,
@@ -168,11 +206,16 @@ def train_transformer(
         return
 
     try:
-        trainer = Trainer(
+        callbacks: list[TrainerCallback] = [EarlyStoppingCallback(early_stopping_patience=5)]
+        if not fine_tune:
+            callbacks.append(FreezeCallback(epochs_to_freeze=2))
+
+        trainer = HomrTrainer(
             model,
             train_args,
             train_dataset=datasets["train"],
             eval_dataset=datasets["validation"],
+            callbacks=callbacks,
         )
 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
@@ -185,5 +228,7 @@ def train_transformer(
 if __name__ == "__main__":
     if "--fine" in sys.argv:
         train_transformer(fp32=False, fine_tune=True)
+    elif len(sys.argv) > 1:
+        raise ValueError("Unknown argument")
     else:
         train_transformer(smoke_test=True)
