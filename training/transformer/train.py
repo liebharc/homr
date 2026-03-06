@@ -163,7 +163,6 @@ def train_transformer(
     train_args = TrainingArguments(
         checkpoint_folder,
         torch_compile=compile_model,
-        overwrite_output_dir=True,
         eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,

@@ -40,7 +40,7 @@ class HomrTrainer(Trainer):
         model: torch.nn.Module,
         inputs: dict[str, Any],
         return_outputs: bool = False,
-        num_items_in_batch: Tensor | None = None,
+        num_items_in_batch: Tensor | int | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if model.training:
             # Calculate sampling probability

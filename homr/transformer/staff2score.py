@@ -2,6 +2,7 @@ import os
 from time import perf_counter
 
 import numpy as np
+from PIL import Image
 
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
@@ -78,7 +79,6 @@ def test_transformer_on_image(path_to_img: str) -> None:
     Args:
         path_to_img(str): Path to the image to test
     """
-    from PIL import Image
 
     model = Staff2Score(Config())
     image = Image.open(path_to_img)

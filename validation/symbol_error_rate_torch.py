@@ -25,7 +25,9 @@ def calc_symbol_error_rate_for_list(
 ) -> None:
     model: Any
     if onnx:
-        from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx
+        from homr.transformer.staff2score import (  # noqa: PLC0415
+            Staff2Score as Staff2ScoreOnnx,
+        )
 
         config = ConfigTorch()
         config.use_gpu_inference = use_gpu
@@ -33,7 +35,7 @@ def calc_symbol_error_rate_for_list(
         result_file = "onnx_ser.txt"
 
     else:
-        from training.architecture.transformer.staff2score import (
+        from training.architecture.transformer.staff2score import (  # noqa: PLC0415
             Staff2Score as Staff2ScoreTorch,
         )
 

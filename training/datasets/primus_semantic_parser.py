@@ -52,7 +52,7 @@ class PrimusConverter:
 
     @staticmethod
     def parse_note(symbol: str) -> EncodedSymbol:
-        base = symbol.split("note-")[-1]
+        base = symbol.rsplit("note-", maxsplit=1)[-1]
         parts = base.split("_")
         pitch_part = parts[0]
         duration = str.join("_", parts[1:])

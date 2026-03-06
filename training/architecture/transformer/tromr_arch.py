@@ -88,7 +88,7 @@ def load_model(config: Config) -> TrOMR:
     model = TrOMR(config)
     checkpoint_path = config.filepaths.checkpoint
     if checkpoint_path.endswith(".safetensors"):
-        import safetensors
+        import safetensors  # noqa: PLC0415
 
         tensors = {}
         with safetensors.safe_open(checkpoint_path, framework="pt", device=0) as f:

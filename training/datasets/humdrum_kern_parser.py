@@ -154,7 +154,7 @@ class HumdrumKernConverter:
         return str.join("_", articulations)
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
-        clef_name = clef.split()[0].replace("*clef", "clef_")
+        clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
         return EncodedSymbol(clef_name, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
@@ -175,11 +175,11 @@ class HumdrumKernConverter:
             "*k[f#c#g#d#a#e#]": 6,
             "*k[f#c#g#d#a#e#b#]": 7,
         }
-        circle = mapping[key_signature.split()[0]]
+        circle = mapping[key_signature.split(maxsplit=1)[0]]
         return EncodedSymbol(f"keySignature_{circle}")
 
     def parse_time_signature(self, ts: str) -> EncodedSymbol:
-        ts_val = ts.split()[0].replace("*M", "")
+        ts_val = ts.split(maxsplit=1)[0].replace("*M", "")
         parts = ts_val.split("/")
         return EncodedSymbol(f"timeSignature/{parts[1]}")
 
@@ -217,7 +217,7 @@ class HumdrumKernConverter:
         return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
-        symbol = line.split(" ")[0]
+        symbol = line.split(" ", maxsplit=1)[0]
         mapping = {
             "=:|!|:": ["repeatEndStart"],
             "=": ["barline"],
