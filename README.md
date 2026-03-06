@@ -8,7 +8,7 @@ processed using tools such as [musescore](https://musescore.com/).
 
 ## Prerequisites
 
-- Python 3.10
+- Python 3.11
 - Poetry
 - Optional: NVidia GPU with CUDA 12.1
 
@@ -16,9 +16,9 @@ processed using tools such as [musescore](https://musescore.com/).
 
 - Clone the repository
 - Install dependencies for:
-    - GPU (requires CUDA): `poetry install --only main,gpu`
-    - CPU: `poetry install --only main`
-    - Development: `poetry install`
+  - GPU (requires CUDA): `poetry install --only main,gpu`
+  - CPU: `poetry install --only main`
+  - Development: `poetry install`
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 - To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
@@ -42,50 +42,52 @@ articulation, double sharps/flats, and other musical symbols.
 
 ## Technical Details
 
-homr employs segmentation techniques outlined in [oemer](https://github.com/BreezeWhite/oemer) to identify staff lines,
-clefs, bar lines, and note heads in an image. These components are combined to determine the position of staffs within
-the picture.
+homr uses a two-stage pipeline: **segmentation** for structural analysis followed by **semantic symbol recognition** via transformer models.
 
-Subsequently, each staff image undergoes transformation using a transformer model (based
-on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR)) to identify symbols present on the staff. Pitch
-information is cross-validated with note head data obtained from the segmentation model.
+### Stage 1: Image Segmentation and Structural Analysis
 
-The results are then converted into MusicXML format and saved to disk.
+homr employs UNet-based segmentation models (adapted from [oemer](https://github.com/BreezeWhite/oemer)) to extract structural components from the sheet music image:
 
-### Image Predictions
+- **Staff lines and symbols**: Detected via trained segmentation networks that identify:
+  - Staff line fragments
+  - Note heads
+  - Stems and rests
+  - Bar lines
+  - Clefs and key signatures
 
-homr utilizes oemer's UNet implementations to isolate staff lines and other symbols for note head identification. These
-predictions serve as input for staff and symbol detection.
+The segmentation process generates bounding boxes for each detected element. These predictions serve as inputs for the staff detection algorithm.
 
-Preprocessing the image has shown to enhance robustness against noisy backgrounds and variations in brightness.
+### Stage 2: Staff Detection and Merging
 
-### Staff and Symbol Detection
+Using the segmentation outputs, homr constructs staffs through the following steps:
 
-The detection process involves extracting model data types from the image predictions. A key concept is the "staff
-anchor," which serves as a reference point ensuring accurate staff detection amidst symbols that might obscure it. Clefs
-and bar lines are currently utilized as anchor symbols.
+1. **Staff Anchor Detection**: The algorithm identifies "staff anchors" (clefs and bar lines) that serve as reference points for accurate staff localization, even when symbols partially obscure staff lines.
 
-For each anchor, the algorithm attempts to locate five staff lines and constructs the remainder of the staff around
-these anchors.
+2. **Unit Size Estimation**: For each staff, the algorithm calculates the "unit size" (distance between staff lines). This accommodates camera perspective variations and non-uniform staff spacing.
 
-#### Unit Sizes
+3. **Staff Reconstruction**: Around each anchor, five staff lines are located and the remaining staff structure is reconstructed using the estimated unit size.
 
-The unit size denotes the distance between staff lines, which may vary due to camera perspective. To accommodate this,
-the unit size is calculated per staff.
+4. **Grand Staff Merging**: Braces and brackets are identified to merge related staffs, supporting:
+   - Grand staffs (piano, organ)
+   - Multiple voices on a single staff
+   - Mixed instrument groups
 
-#### Connecting Staffs
+### Stage 3: Semantic Symbol Recognition via Transformer
 
-Support for multiple voices and grand staffs is facilitated by identifying braces and brackets to combine individual
-staffs.
+Each staff is dewarped (perspective-corrected) and passed through a transformer-based model (based on [Polyphonic-TrOMR](https://github.com/NetEase/Polyphonic-TrOMR)) that performs **end-to-end symbol sequence recognition**. The model outputs:
 
-### Rhythm Parsing
+- **Rhythm symbols**: Note durations, rests, and tuplet information
+- **Pitch information**: Absolute pitch values with accidentals (sharps, flats, naturals)
+- **Articulation marks**: Accents, staccato, tenuto, and slur markers
+- **Performance annotations**: Dynamic expressions and other musical notation
 
-Dewarped images of each staff are computed and passed through a transformer to extract staff contents. From this point
-onward, semantic information from the sheet music is utilized rather than pixel-based data.
+The transformer model generates these predictions in sequence, processing the dewarped staff image to understand the spatial and temporal relationships between musical symbols.
 
-### XML Generation
+**Note**: The transformer output provides the sequence of symbols but does not include explicit positional information (horizontal or vertical coordinates). However, the model computes the center of attention as a byproduct of the attention mechanism, which can be used to estimate the focus point on the staff image.
 
-The previous outputs in terms of result model objects are used to generate music XML.
+### Stage 4: MusicXML Output
+
+The symbol sequence is converted into MusicXML format and saved to disk. The resulting file can be processed with tools like [musescore](https://musescore.com/) or [relieur](https://github.com/papoteur-mga/relieur) (for multi-image combinations).
 
 ## Citation
 

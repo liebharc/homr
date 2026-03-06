@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented here.
 
+## [0.7.0]
+
+### Changed
+
+- Minimum Python version is now **Python 3.11**
+
+## [0.6.2]
+
+### Added
+
+- **Improved accuracy**
+
 ## [0.6.1]
 
 ### Added

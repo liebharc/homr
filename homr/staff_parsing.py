@@ -96,7 +96,7 @@ def center_image_on_canvas(
             dtype=np.uint8,
         )
     else:
-        new_image = np.full(  # type: ignore
+        new_image = np.full(
             (tr_omr_max_height, tr_omr_max_width, 3),
             255,
             dtype=np.uint8,
@@ -133,7 +133,7 @@ def remove_black_contours_at_edges_of_image(gray: NDArray, unit_size: float) -> 
         if not is_at_edge_of_image:
             continue
         average_gray_intensity = 127
-        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity  # type: ignore
+        is_mostly_dark = np.mean(thresh[y : y + h, x : x + w]) < average_gray_intensity
         if is_mostly_dark:
             continue
         gray[y : y + h, x : x + w] = 255

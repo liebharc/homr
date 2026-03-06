@@ -6,15 +6,16 @@ The vocabulary is closely linked to how the transformer operates. Symbols are di
 2. **Pitch**: represents absolute pitches (C0–B9).
 3. **Lift**: represents accidentals (sharp, flat, natural, etc.).
 4. **Articulation**: represents articulation markings (staccato, accent, trill, etc.).
+5. **Position**: represents staff position for notes, rests, and clefs (upper or lower staff).
 
 The vocabulary follows these rules:
 
-1. All branches except rhythm are optional. For example, the symbol for a key signature is `keySignature_0 . . .`, where the dots indicate that a key signature has no pitch, lift, or articulation.
+1. All branches except rhythm are optional. For example, the symbol for a key signature is `keySignature_0 . . . .`, where the dots indicate that a key signature has no pitch, lift, articulation, or position.
 2. Symbols that occur simultaneously appear on one line and are separated by `&`:
    - notes and rests may occur at the same time
    - multiple clefs may occur at the same time
    - all other symbols are expected to appear sequentially
-   - `&` serves as shorthand for `chord _ _ _`
+   - `&` serves as shorthand for `chord _ _ _ _`
 3. Barlines and repeats mark the end of a measure.
 4. Note durations follow the conventions of [Humdrum Kern](https://www.humdrum.org/guide/ch06/), which are also related to how [MusicXML encodes durations](https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/duration/):
    - e.g. `4, 8` are quarter and eighth notes
@@ -29,14 +30,14 @@ The complete vocabulary is defined in `homr/transformer/vocabulary.py`.
 ## Full example
 
 ```
-clef_G2 . . .
-keySignature_4 . . .
-timeSignature/8 . . .
+clef_G2 . . . upper
+keySignature_4 . . . .
+timeSignature/8 . . . .
 note_4. G3 # _&note_4. C4 # _&note_16 E4 # _
 note_16 F4 # _
 note_4 E4 # _
 note_8 E4 # _
 note_8 C4 # _
 note_8 D4 # _
-barline . . .
+barline . . . .
 ```
