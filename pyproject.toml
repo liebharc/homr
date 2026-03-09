@@ -9,14 +9,14 @@ homepage = "https://github.com/liebharc/homr"
 documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
-python = "<3.13,>=3.11"
+python = "<3.16,>=3.11"
 numpy = "^2.4.2"
 opencv-python-headless = "^4.13.0.92"
 Pillow = "^12.1.1"
 types-Pillow = "^10.2.0.20240822"
 typing_extensions = "^4.15.0"
 musicxml = "1.4"
-rapidocr-onnxruntime = "^1.4.4"
+rapidocr = "^3.7.0"
 onnxruntime="^1.24.1"
 requests="^2.32.5"
 
@@ -35,7 +35,7 @@ pyclean = "^3.5.0"
 coverage = "^7.13.4"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
-transformers = {extras = ["torch"], version = "^5.2.0"}
+transformers = {extras = ["torch"], version = "^4.53.2"}
 cairosvg = "^2.8.2"
 types-requests = "^2.32.4.20260107"
 segmentation-models-pytorch = "^0.5.0"

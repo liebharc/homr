@@ -2,7 +2,7 @@ import re
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from rapidocr_onnxruntime import RapidOCR
+from rapidocr import RapidOCR
 
 from homr.debug import Debug
 from homr.model import Staff
@@ -58,10 +58,17 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     ocr_input: str = debug.write_model_input_image("_tesseract_input.png", above_staff)
     ocr_results = _reader(ocr_input)
 
-    if not ocr_results or not ocr_results[0]:
+    if ocr_results.txts is None:
         return ""
 
-    filtered_results = [r for r in ocr_results[0] if not is_tempo_marking(r[1])]
+    results = [
+        (box, txt, score)
+        for box, txt, score in zip(
+            ocr_results.boxes, ocr_results.txts, ocr_results.scores, strict=True
+        )
+    ]
+
+    filtered_results = [r for r in results if not is_tempo_marking(r[1])]
 
     if not filtered_results:
         return ""
