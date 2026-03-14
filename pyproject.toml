@@ -25,7 +25,7 @@ paddleocr = "3.4.0"
 paddlepaddle-gpu = { version = "^3.1.0", source = "paddle" }
 
 [tool.poetry.group.gpu.dependencies]
-onnxruntime-gpu = {version = "^1.18.0", markers = "platform_system != 'Darwin'"}
+onnxruntime-gpu = {version = "^1.20.0", markers = "platform_system != 'Darwin'"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
