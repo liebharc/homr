@@ -39,14 +39,14 @@ pyclean = "^3.1.0"
 coverage = "^7.8.2"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
-torchvision = "^0.22.1"
+torchvision = { version = "0.22.1+cu118", source = "torch-cu118" }
 transformers = {extras = ["torch"], version = "^4.53.2"}
 cairosvg = "^2.8.2"
 types-requests = "^2.32.4.20250611"
 segmentation-models-pytorch = "^0.5.0"
 pytorch-lightning = "^2.5.2"
 x-transformers = "^2.4.9"
-torch = "^2.7.1"
+torch = { version = "2.7.1+cu118", source = "torch-cu118" }
 onnx="^1.20.0"
 onnx-simplifier="^0.4.36"
 onnxconverter-common="^1.16.0"
@@ -155,4 +155,9 @@ homr = "homr.main:main"
 [[tool.poetry.source]]
 name = "paddle"
 url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "torch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
 priority = "explicit"

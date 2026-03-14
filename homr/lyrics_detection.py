@@ -61,7 +61,7 @@ _backend_preference = "auto"
 _reader_lock = threading.Lock()
 
 # Lyrics OCR Paddle configuration.
-_PADDLE_OCR_VERSIONS = ["PP-OCRv5", "PP-OCRv4", "PP-OCRv3"]
+_PADDLE_OCR_VERSION = "PP-OCRv5"
 _PADDLE_OCR_LANG = "en"
 _PADDLE_OCR_DET_LIMIT_SIDE_LEN = 768
 
@@ -127,34 +127,20 @@ def _initialize_reader() -> None:
     #                 paddle_errors: list[str] = []
     #                 for version in _PADDLE_OCR_VERSIONS:
     #                     try:
-    paddle_errors: list[str] = []
-    for version in _PADDLE_OCR_VERSIONS:
-        paddle_kwargs: dict[str, Any] = {
-            "lang": _PADDLE_OCR_LANG,
-            "ocr_version": version,
-            "use_textline_orientation": True,
-            "use_gpu": True,
-            "text_det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
-        }
-        try:
-            _reader = PaddleOCR(**paddle_kwargs)
-            break
-        except (TypeError, AssertionError) as ex:
-            paddle_errors.append(f"{version}: {ex}")
-    if _reader is None:
-        # PaddleOCR 2.x compatibility: this version does not support
-        # the newer constructor arguments used in PaddleOCR 3.x.
-        legacy_kwargs: dict[str, Any] = {
-            "lang": _PADDLE_OCR_LANG,
-            "use_angle_cls": True,
-            "use_gpu": True,
-            "det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
-        }
-        try:
-            _reader = PaddleOCR(**legacy_kwargs)
-        except Exception as ex:
-            paddle_errors.append("legacy: " + str(ex))
-            raise RuntimeError("Failed to initialize PaddleOCR: " + " | ".join(paddle_errors)) from ex
+    paddle_kwargs: dict[str, Any] = {
+        "lang": _PADDLE_OCR_LANG,
+        "ocr_version": _PADDLE_OCR_VERSION,
+        "use_textline_orientation": True,
+        "device": "gpu:0",
+        "text_det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
+    }
+    try:
+        _reader = PaddleOCR(**paddle_kwargs)
+    except Exception as ex:
+        raise RuntimeError(
+            "Failed to initialize PaddleOCR v5 GPU mode. "
+            "Expected PaddleOCR 3.x with PP-OCRv5 support."
+        ) from ex
     _reader_backend = "paddle"
             #                 eprint(f"Lyrics OCR backend: paddle ({version})")
             #                 return
