@@ -10,8 +10,8 @@ documentation = "https://github.com/liebharc/homr"
 
 [tool.poetry.dependencies]
 python = "<3.13,>=3.10"
-numpy = "^2.2.6"
-opencv-python-headless = "^4.12.0.88"
+numpy = "<2.0.0"
+opencv-python-headless = "<=4.12.0.88"
 Pillow = "^11.3.0"
 types-Pillow = "^10.2.0.20240822"
 scipy = "^1.15.3"
@@ -21,8 +21,8 @@ musicxml = "1.4"
 rapidocr-onnxruntime = "^1.4.4"
 onnxruntime="^1.22.1"
 requests="^2.32.5"
-paddleocr = "^3.0.0"
-paddlepaddle = "^3.3.0"
+paddleocr = "3.4.0"
+paddlepaddle-gpu = { version = "^3.1.0", source = "paddle" }
 
 [tool.poetry.group.gpu.dependencies]
 onnxruntime-gpu = {version = "^1.22.0", markers = "platform_system != 'Darwin'"}
@@ -151,3 +151,8 @@ testpaths = ["tests"]
 
 [tool.poetry.scripts]
 homr = "homr.main:main"
+
+[[tool.poetry.source]]
+name = "paddle"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+priority = "explicit"

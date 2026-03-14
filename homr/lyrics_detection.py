@@ -1,7 +1,9 @@
 import os
 import re
+import sys
 import tempfile
 import threading
+import types
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +15,20 @@ from homr.simple_logging import eprint
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
 from homr.type_definitions import NDArray
 
+# PaddleOCR 3.x imports `modelscope` via `paddlex` at import time.
+# In this project that path can pull in torch and fail due to CUDA/NCCL ABI
+# conflicts unrelated to OCR. We provide a minimal stub so PaddleOCR can load
+# and continue using its other model hosters.
+if "modelscope" not in sys.modules:
+    modelscope_stub = types.ModuleType("modelscope")
+
+    def _modelscope_snapshot_download(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("ModelScope download is disabled in this runtime.")
+
+    modelscope_stub.snapshot_download = _modelscope_snapshot_download
+    sys.modules["modelscope"] = modelscope_stub
+
+from paddleocr import PaddleOCR
 
 @dataclass(frozen=True)
 class LyricCandidate:
@@ -45,9 +61,9 @@ _backend_preference = "auto"
 _reader_lock = threading.Lock()
 
 # Lyrics OCR Paddle configuration.
-_PADDLE_OCR_VERSIONS = ["PP-OCRv5"]
+_PADDLE_OCR_VERSIONS = ["PP-OCRv5", "PP-OCRv4", "PP-OCRv3"]
 _PADDLE_OCR_LANG = "en"
-_PADDLE_OCR_DET_LIMIT_SIDE_LEN = 1536
+_PADDLE_OCR_DET_LIMIT_SIDE_LEN = 768
 
 
 def set_lyrics_ocr_backend(backend: str) -> None:
@@ -90,61 +106,80 @@ def _english_word_set() -> set[str]:
 def _initialize_reader() -> None:
     global _reader  # noqa: PLW0603
     global _reader_backend  # noqa: PLW0603
-    if _reader is not None:
-        return
-    with _reader_lock:
-        if _reader is None:
-            errors: list[str] = []
-            if _backend_preference in ("auto", "paddle"):
-                try:
-                    paddleocr_home = os.path.join(tempfile.gettempdir(), "homr-paddleocr-cache")
-                    os.environ["PADDLEOCR_HOME"] = paddleocr_home
-                    os.environ["PADDLE_OCR_BASE_DIR"] = paddleocr_home
-                    os.makedirs(paddleocr_home, exist_ok=True)
-                    paddlex_home = os.path.join(tempfile.gettempdir(), "homr-paddlex-cache")
-                    os.environ["PADDLE_PDX_CACHE_HOME"] = paddlex_home
-                    os.makedirs(paddlex_home, exist_ok=True)
-                    os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
+    # if _reader is not None:
+    #     return
+    # with _reader_lock:
+    #     if _reader is None:
+    #         errors: list[str] = []
+    #         if _backend_preference in ("auto", "paddle"):
+    #             try:
+    #                 paddleocr_home = os.path.join(tempfile.gettempdir(), "homr-paddleocr-cache")
+    #                 os.environ["PADDLEOCR_HOME"] = paddleocr_home
+    #                 os.environ["PADDLE_OCR_BASE_DIR"] = paddleocr_home
+    #                 os.makedirs(paddleocr_home, exist_ok=True)
+    #                 paddlex_home = os.path.join(tempfile.gettempdir(), "homr-paddlex-cache")
+    #                 os.environ["PADDLE_PDX_CACHE_HOME"] = paddlex_home
+    #                 os.makedirs(paddlex_home, exist_ok=True)
+    #                 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
-                    from paddleocr import PaddleOCR  # type: ignore[import-not-found]
+            # from paddleocr import PaddleOCR  # type: ignore[import-not-found]
 
-                    paddle_errors: list[str] = []
-                    for version in _PADDLE_OCR_VERSIONS:
-                        try:
-                            paddle_kwargs: dict[str, Any] = {
-                                "lang": _PADDLE_OCR_LANG,
-                                "ocr_version": version,
-                                "use_textline_orientation": True,
-                                "text_det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
-                                "text_detection_model_name": "PP-OCRv5_server_det",
-                                "text_recognition_model_name": "PP-OCRv5_server_rec",
-                            }
-                            _reader = PaddleOCR(**paddle_kwargs)
-                            _reader_backend = "paddle"
-                            eprint(f"Lyrics OCR backend: paddle ({version})")
-                            return
-                        except TypeError:
-                            # PaddleOCR 2.x compatibility path.
-                            legacy_kwargs: dict[str, Any] = {
-                                "lang": _PADDLE_OCR_LANG,
-                                "ocr_version": version,
-                                "use_angle_cls": True,
-                                "det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
-                            }
-                            _reader = PaddleOCR(**legacy_kwargs)
-                            _reader_backend = "paddle"
-                            eprint(f"Lyrics OCR backend: paddle ({version})")
-                            return
-                        except Exception as ex:
-                            paddle_errors.append(f"{version}: {ex}")
-                    raise RuntimeError(" | ".join(paddle_errors))
-                except Exception as ex:
-                    errors.append("paddle: " + str(ex))
+    #                 paddle_errors: list[str] = []
+    #                 for version in _PADDLE_OCR_VERSIONS:
+    #                     try:
+    paddle_errors: list[str] = []
+    for version in _PADDLE_OCR_VERSIONS:
+        paddle_kwargs: dict[str, Any] = {
+            "lang": _PADDLE_OCR_LANG,
+            "ocr_version": version,
+            "use_textline_orientation": True,
+            "use_gpu": True,
+            "text_det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
+        }
+        try:
+            _reader = PaddleOCR(**paddle_kwargs)
+            break
+        except (TypeError, AssertionError) as ex:
+            paddle_errors.append(f"{version}: {ex}")
+    if _reader is None:
+        # PaddleOCR 2.x compatibility: this version does not support
+        # the newer constructor arguments used in PaddleOCR 3.x.
+        legacy_kwargs: dict[str, Any] = {
+            "lang": _PADDLE_OCR_LANG,
+            "use_angle_cls": True,
+            "use_gpu": True,
+            "det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
+        }
+        try:
+            _reader = PaddleOCR(**legacy_kwargs)
+        except Exception as ex:
+            paddle_errors.append("legacy: " + str(ex))
+            raise RuntimeError("Failed to initialize PaddleOCR: " + " | ".join(paddle_errors)) from ex
+    _reader_backend = "paddle"
+            #                 eprint(f"Lyrics OCR backend: paddle ({version})")
+            #                 return
+            #             except TypeError:
+            #                 # PaddleOCR 2.x compatibility path.
+            #                 legacy_kwargs: dict[str, Any] = {
+            #                     "lang": _PADDLE_OCR_LANG,
+            #                     "ocr_version": version,
+            #                     "use_angle_cls": True,
+            #                     "det_limit_side_len": _PADDLE_OCR_DET_LIMIT_SIDE_LEN,
+            #                 }
+            #                 _reader = PaddleOCR(**legacy_kwargs)
+            #                 _reader_backend = "paddle"
+            #                 eprint(f"Lyrics OCR backend: paddle ({version})")
+            #                 return
+            #             except Exception as ex:
+            #                 paddle_errors.append(f"{version}: {ex}")
+            #         raise RuntimeError(" | ".join(paddle_errors))
+            #     except Exception as ex:
+            #         errors.append("paddle: " + str(ex))
 
-            if _backend_preference == "rapid":
-                errors.append("rapid: disabled by configuration")
+            # if _backend_preference == "rapid":
+            #     errors.append("rapid: disabled by configuration")
 
-            raise RuntimeError("Failed to initialize lyric OCR backend: " + "; ".join(errors))
+            # raise RuntimeError("Failed to initialize lyric OCR backend: " + "; ".join(errors))
 
 
 def _is_bbox(candidate: Any) -> bool:
@@ -272,7 +307,10 @@ def _run_ocr(image: NDArray) -> list[tuple[list[list[float]], str, float]]:
 
     image_for_ocr = _normalize_ocr_image(image)
 
-    raw = _reader.predict(image_for_ocr)
+    if hasattr(_reader, "predict"):
+        raw = _reader.predict(image_for_ocr)
+    else:
+        raw = _reader.ocr(image_for_ocr, cls=True)
 
     return _normalize_ocr_results(raw)
 
