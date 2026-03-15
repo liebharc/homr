@@ -93,7 +93,26 @@ class DataLoader:
         return result
 
 
+def _filter_valid_samples(samples: list[str]) -> list[str]:
+    # Skip index contains token files which have a large number of ledger lines
+    # which we don't want to include in training
+    with open(os.path.join(script_location, "skip_index.txt")) as f:
+        skip_files = set([line.strip() for line in f.readlines()])
+    valid_samples: list[str] = []
+    filter_count = 0
+    for entry in samples:
+        image, token_file = entry.strip().split(",")
+        if token_file in skip_files:
+            filter_count += 1
+            continue
+        valid_samples.append(entry)
+    if filter_count > 0:
+        eprint(f"Filtered out {filter_count} samples based on skip_index.txt")
+    return valid_samples
+
+
 def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
+    samples = _filter_valid_samples(samples)
     val_idx = int(len(samples) * val_split)
     training_list = samples[val_idx:]
     validation_list = samples[:val_idx]

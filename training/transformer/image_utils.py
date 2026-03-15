@@ -320,7 +320,7 @@ def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
         ),
         A.Perspective(
             scale=(0.005, 0.015),
-            fit_output=True,
+            fit_output=not allow_occlusions,
             border_mode=cv2.BORDER_CONSTANT,
             fill=(255, 255, 255),
             p=0.6,
