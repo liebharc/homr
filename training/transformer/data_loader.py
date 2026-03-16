@@ -97,7 +97,7 @@ def _filter_valid_samples(samples: list[str]) -> list[str]:
     # Skip index contains token files which have a large number of ledger lines
     # which we don't want to include in training
     with open(os.path.join(script_location, "skip_index.txt")) as f:
-        skip_files = set([line.strip() for line in f.readlines()])
+        skip_files = {line.strip() for line in f.readlines()}
     valid_samples: list[str] = []
     filter_count = 0
     for entry in samples:
