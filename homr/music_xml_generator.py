@@ -1,5 +1,6 @@
 import math
 from collections import defaultdict
+from dataclasses import dataclass
 from fractions import Fraction
 
 import musicxml.xmlelement.xmlelement as mxl
@@ -105,30 +106,55 @@ class XmlGeneratorArguments:
         self.tempo = tempo
 
 
+def build_identification() -> mxl.XMLIdentification:
+    """Identification/encoding so validators and apps (e.g. MuseScore) can attribute the file."""
+    ident = mxl.XMLIdentification()
+    enc = mxl.XMLEncoding()
+    enc.add_child(mxl.XMLSoftware(value_="homr"))
+    ident.add_child(enc)
+    return ident
+
+
 def generate_xml(
     args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
 ) -> mxl.XMLElement:
-    root = mxl.XMLScorePartwise()
+    root = mxl.XMLScorePartwise(version="4.0")
     root.add_child(build_work(title))
+    root.add_child(build_identification())
     root.add_child(build_defaults(args))
-    root.add_child(build_part_list(len(staffs)))
+    has_two_staves_by_part = [_voice_has_two_staves(staff) for staff in staffs]
+    root.add_child(build_part_list(has_two_staves_by_part))
     for index, staff in enumerate(staffs):
-        root.add_child(build_part(args, staff, index))
+        root.add_child(build_part(args, staff, index, has_two_staves_by_part[index]))
     return root
 
 
-def build_part(args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int) -> mxl.XMLPart:
+def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
+    """True if any symbol uses the lower staff (e.g. piano left hand / bass clef)."""
+    return any(s.position == "lower" for s in voice)
+
+
+def build_part(
+    args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int, has_two_staves: bool
+) -> mxl.XMLPart:
     part = mxl.XMLPart(id=get_part_id(index))
     is_first_part = index == 0
-    measures = build_measures(args, voice, is_first_part)
+    measures = build_measures(args, voice, is_first_part, has_two_staves)
     for measure in measures:
         part.add_child(measure)
     return part
 
 
 def build_measures(
-    args: XmlGeneratorArguments, voice: list[EncodedSymbol], is_first_part: bool
+    args: XmlGeneratorArguments,
+    voice: list[EncodedSymbol],
+    is_first_part: bool,
+    has_two_staves: bool = False,
 ) -> list[mxl.XMLMeasure]:
+    def close_current_measure() -> None:
+        rebalance_measure_voices(current_measure)
+        measures.append(current_measure)
+
     measure_number = 1
     groups = add_tuplet_start_stop(group_into_chords(voice))
     division, nominator = find_division_and_time_signature_nominator(groups)
@@ -137,6 +163,9 @@ def build_measures(
     current_measure = mxl.XMLMeasure(number=str(measure_number))
     first_attributes = build_or_get_attributes(current_measure, None)
     first_attributes.add_child(build_divisions(division))
+    if has_two_staves:
+        first_attributes.add_child(mxl.XMLStaves(value_=2))
+        first_attributes.add_child(mxl.XMLPartSymbol(value_="brace"))
     if is_first_part:
         direction = build_add_time_direction(args)
         if direction:
@@ -181,11 +210,11 @@ def build_measures(
                 barline = build_or_get_barline(current_measure, "right")
                 build_barline_style(symbol, barline)
 
-            measures.append(current_measure)
+            close_current_measure()
             measure_number += 1
             current_measure = mxl.XMLMeasure(number=str(measure_number))
         elif rhythm == "repeatStart":
-            measures.append(current_measure)
+            close_current_measure()
             measure_number += 1
             current_measure = mxl.XMLMeasure(number=str(measure_number))
 
@@ -195,14 +224,14 @@ def build_measures(
             barline = build_or_get_barline(current_measure, "right")
             build_repeat(symbol, barline)
 
-            measures.append(current_measure)
+            close_current_measure()
             measure_number += 1
             current_measure = mxl.XMLMeasure(number=str(measure_number))
         elif rhythm == "repeatEndStart":
             barline = build_or_get_barline(current_measure, "right")
             build_repeat(EncodedSymbol("repeatEnd"), barline)
 
-            measures.append(current_measure)
+            close_current_measure()
             measure_number += 1
             current_measure = mxl.XMLMeasure(number=str(measure_number))
             barline = build_or_get_barline(current_measure, "right")
@@ -219,7 +248,7 @@ def build_measures(
             eprint("Symbol isn't supported yet ", symbol)
 
     if len(current_measure.get_children()) > 0:
-        measures.append(current_measure)
+        close_current_measure()
     return measures
 
 
@@ -254,22 +283,38 @@ def get_part_id(index: int) -> str:
     return "P" + str(index + 1)
 
 
-def build_part_list(staffs: int) -> mxl.XMLPartList:
+def _part_metadata(has_two_staves: bool) -> tuple[str, str, str, int]:
+    """Return (part_name, instrument_name, instrument_sound, midi_program) for a part.
+
+    We classify by staff layout only:
+    - single-staff parts -> Voice
+    - two-staff parts -> Piano
+    midi_program is 1-based (MusicXML: 1-128; 1 = Acoustic Grand Piano, 54 = Voice Oohs).
+    """
+    if has_two_staves:
+        return ("Piano", "Piano", "keyboard.piano", 1)
+    return ("Voice", "Voice", "voice", 54)
+
+
+def build_part_list(has_two_staves_by_part: list[bool]) -> mxl.XMLPartList:
     part_list = mxl.XMLPartList()
-    for part in range(staffs):
+    for part, has_two_staves in enumerate(has_two_staves_by_part):
         part_id = get_part_id(part)
+        part_name_str, instrument_name_str, instrument_sound_str, midi_program = _part_metadata(
+            has_two_staves
+        )
         score_part = mxl.XMLScorePart(id=part_id)
-        part_name = mxl.XMLPartName(value_="")
+        part_name = mxl.XMLPartName(value_=part_name_str)
         score_part.add_child(part_name)
         score_instrument = mxl.XMLScoreInstrument(id=part_id + "-I1")
-        instrument_name = mxl.XMLInstrumentName(value_="Piano")
+        instrument_name = mxl.XMLInstrumentName(value_=instrument_name_str)
         score_instrument.add_child(instrument_name)
-        instrument_sound = mxl.XMLInstrumentSound(value_="keyboard.piano")
+        instrument_sound = mxl.XMLInstrumentSound(value_=instrument_sound_str)
         score_instrument.add_child(instrument_sound)
         score_part.add_child(score_instrument)
         midi_instrument = mxl.XMLMidiInstrument(id=part_id + "-I1")
-        midi_instrument.add_child(mxl.XMLMidiChannel(value_=1))
-        midi_instrument.add_child(mxl.XMLMidiProgram(value_=1))
+        midi_instrument.add_child(mxl.XMLMidiChannel(value_=part + 1))
+        midi_instrument.add_child(mxl.XMLMidiProgram(value_=midi_program))
         midi_instrument.add_child(mxl.XMLVolume(value_=100))
         midi_instrument.add_child(mxl.XMLPan(value_=0))
         score_part.add_child(midi_instrument)
@@ -309,6 +354,86 @@ def build_key(model_key: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
 
 def get_staff(symbol: EncodedSymbol) -> int:
     return 2 if symbol.position == "lower" else 1
+
+
+def get_xml_voice(staff_num: int, rhythmic_layer: int) -> int:
+    """Build a stable MusicXML voice number per staff and rhythmic layer.
+
+    Voice numbers are part-global in MusicXML, so using only the staff number can merge
+    independent layers on the same staff. Reserve 4 voices per staff:
+    staff 1 -> voices 1-4, staff 2 -> voices 5-8.
+    """
+    return (staff_num - 1) * 4 + rhythmic_layer + 1
+
+
+@dataclass
+class TimedNoteEvent:
+    staff_num: int
+    start: int
+    end: int
+    notes: list[mxl.XMLNote]
+
+
+def rebalance_measure_voices(measure: mxl.XMLMeasure) -> None:
+    """Assign stable non-overlapping voices per staff for a whole measure."""
+    timed_events: list[TimedNoteEvent] = []
+    current_time = 0
+    last_note_start = 0
+    for child in measure.get_children():
+        if isinstance(child, mxl.XMLBackup):
+            durations = child.get_children_of_type(mxl.XMLDuration)
+            if len(durations) > 0:
+                current_time -= int(durations[0].value_)
+            continue
+        if child.__class__.__name__ == "XMLForward":
+            durations = child.get_children_of_type(mxl.XMLDuration)
+            if len(durations) > 0:
+                current_time += int(durations[0].value_)
+            continue
+        if not isinstance(child, mxl.XMLNote):
+            continue
+
+        duration_nodes = child.get_children_of_type(mxl.XMLDuration)
+        duration = int(duration_nodes[0].value_) if len(duration_nodes) > 0 else 0
+        staff_nodes = child.get_children_of_type(mxl.XMLStaff)
+        staff_num = int(staff_nodes[0].value_) if len(staff_nodes) > 0 else 1
+        is_chord_tone = len(child.get_children_of_type(mxl.XMLChord)) > 0
+        start = last_note_start if is_chord_tone else current_time
+        end = start + duration
+        if not is_chord_tone:
+            last_note_start = start
+            current_time += duration
+
+        if (
+            is_chord_tone
+            and len(timed_events) > 0
+            and timed_events[-1].staff_num == staff_num
+            and timed_events[-1].start == start
+            and timed_events[-1].end == end
+        ):
+            timed_events[-1].notes.append(child)
+        else:
+            timed_events.append(TimedNoteEvent(staff_num, start, end, [child]))
+
+    by_staff: dict[int, list[TimedNoteEvent]] = defaultdict(list)
+    for event in timed_events:
+        by_staff[event.staff_num].append(event)
+
+    for staff_num, events in by_staff.items():
+        sorted_events = sorted(events, key=lambda e: (e.start, e.end))
+        active: list[tuple[int, int]] = []  # (end, local voice number 1..n)
+        for event in sorted_events:
+            active = [(active_end, voice_no) for active_end, voice_no in active if active_end > event.start]
+            used_voices = {voice_no for _, voice_no in active}
+            voice_no = 1
+            while voice_no in used_voices:
+                voice_no += 1
+            active.append((event.end, voice_no))
+            xml_voice = str(get_xml_voice(staff_num, voice_no - 1))
+            for note in event.notes:
+                voice_nodes = note.get_children_of_type(mxl.XMLVoice)
+                if len(voice_nodes) > 0:
+                    voice_nodes[0].value_ = xml_voice
 
 
 def build_clef(model_clef: EncodedSymbol, attributes: mxl.XMLAttributes) -> None:
@@ -384,6 +509,20 @@ DURATION_NAMES = {
 }
 
 
+def _fraction_to_duration_type_and_value(
+    f: Fraction, state: ConversionState
+) -> tuple[str, int]:
+    """Map a duration (in whole notes) to MusicXML type name and duration value in divisions."""
+    if f <= 0:
+        return "quarter", 0
+    # 1/f gives kern-like value (4=quarter, 2=half, 1=whole); pick nearest standard type
+    one_over_f = 1 / f
+    key = min(DURATION_NAMES.keys(), key=lambda k: abs(k - one_over_f))
+    if key == 0:
+        key = 4
+    return DURATION_NAMES[key], int(f * state.division)
+
+
 def build_articulations(
     note: mxl.XMLNote, articualations: str, tuplet_mark: str, state: ConversionState
 ) -> None:
@@ -455,15 +594,21 @@ def build_articulations(
 
 
 def build_note_or_rest(
-    model_note: EncodedSymbol, voice: int, is_chord: bool, state: ConversionState, tuplet_mark: str
+    model_note: EncodedSymbol,
+    rhythmic_layer: int,
+    is_chord: bool,
+    state: ConversionState,
+    tuplet_mark: str,
+    duration_override: Fraction | None = None,
 ) -> mxl.XMLNote:
     note = mxl.XMLNote()
     if is_chord:
         note.add_child(mxl.XMLChord())
     model_pitch = model_note.pitch
     model_duration = model_note.get_duration()
+    duration = duration_override if duration_override is not None else model_duration.fraction
     if model_pitch == empty:
-        if model_duration.fraction.numerator == 0:
+        if duration_override is None and model_duration.fraction.numerator == 0:
             note.add_child(mxl.XMLRest(measure="yes"))
         else:
             note.add_child(mxl.XMLRest())
@@ -485,6 +630,12 @@ def build_note_or_rest(
         base_duration = model_duration.kern
         duration_name = DURATION_NAMES[base_duration]
         note.add_child(mxl.XMLType(value_=duration_name))
+    elif duration_override is not None:
+        duration_name, duration_value = _fraction_to_duration_type_and_value(
+            duration_override, state
+        )
+        note.add_child(mxl.XMLType(value_=duration_name))
+        note.add_child(mxl.XMLDuration(value_=duration_value))
     elif model_duration.fraction.numerator > 0:
         base_duration = 1 if model_duration.kern == 0 else model_duration.kern
         duration_name = DURATION_NAMES[base_duration]
@@ -495,16 +646,20 @@ def build_note_or_rest(
         note.add_child(mxl.XMLType(value_=duration_name))
         note.add_child(mxl.XMLDuration(value_=state.beats))
 
-    note.add_child(mxl.XMLStaff(value_=get_staff(model_note)))
-    note.add_child(mxl.XMLVoice(value_=(str(voice + 1))))
-    for _ in range(model_duration.dots):
-        note.add_child(mxl.XMLDot())
-    if model_duration.actual_notes != model_duration.normal_notes:
-        time_modification = mxl.XMLTimeModification()
-        time_modification.add_child(mxl.XMLActualNotes(value_=model_duration.actual_notes))
-        time_modification.add_child(mxl.XMLNormalNotes(value_=model_duration.normal_notes))
-        note.add_child(time_modification)
-        build_articulations(note, model_note.articulation, tuplet_mark, state)
+    staff_num = get_staff(model_note)
+    note.add_child(mxl.XMLStaff(value_=staff_num))
+    note.add_child(mxl.XMLVoice(value_=str(get_xml_voice(staff_num, rhythmic_layer))))
+    if duration_override is None:
+        for _ in range(model_duration.dots):
+            note.add_child(mxl.XMLDot())
+        if model_duration.actual_notes != model_duration.normal_notes:
+            time_modification = mxl.XMLTimeModification()
+            time_modification.add_child(mxl.XMLActualNotes(value_=model_duration.actual_notes))
+            time_modification.add_child(mxl.XMLNormalNotes(value_=model_duration.normal_notes))
+            note.add_child(time_modification)
+            build_articulations(note, model_note.articulation, tuplet_mark, state)
+        else:
+            build_articulations(note, model_note.articulation, "", state)
     else:
         build_articulations(note, model_note.articulation, "", state)
 
@@ -527,21 +682,19 @@ def build_multi_measure_rest(
 
 def build_note_chord(
     note_chord: SymbolChord, state: ConversionState, chord_duration: Fraction
-) -> list[mxl.XMLNote]:
+) -> list[mxl.XMLElement]:
     _slurs_ties, note_chord = note_chord.strip_slur_ties()
     by_duration = _group_notes(note_chord.symbols)
-    result = []
+    result: list[mxl.XMLElement] = []
     final_duration = Fraction(0)
-    for i, group_duration in enumerate(sorted(by_duration)):
+    sorted_durations = sorted(by_duration)
+    for i, group_duration in enumerate(sorted_durations):
         is_first = True
         for note_loop in by_duration[group_duration]:
             note = note_loop
-            # Disabled slurs and ties until the detection is more robust
-            # if i == 0 and is_first:
-            #    note = note.add_articulations(slurs_ties)
             result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
             is_first = False
-        if i != len(by_duration) - 1 and group_duration > Fraction(0):
+        if i != len(sorted_durations) - 1 and group_duration > Fraction(0):
             backup = mxl.XMLBackup()
             backup.add_child(mxl.XMLDuration(value_=int(group_duration * state.division)))
             result.append(backup)
