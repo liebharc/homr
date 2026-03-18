@@ -400,19 +400,18 @@ def rebalance_measure_voices(measure: mxl.XMLMeasure) -> None:
         is_chord_tone = len(child.get_children_of_type(mxl.XMLChord)) > 0
         start = last_note_start if is_chord_tone else current_time
         end = start + duration
-        if not is_chord_tone:
-            last_note_start = start
-            current_time += duration
-
-        if (
-            is_chord_tone
-            and len(timed_events) > 0
+        if is_chord_tone and (
+            len(timed_events) > 0
             and timed_events[-1].staff_num == staff_num
             and timed_events[-1].start == start
             and timed_events[-1].end == end
         ):
             timed_events[-1].notes.append(child)
+        elif is_chord_tone:
+            timed_events.append(TimedNoteEvent(staff_num, start, end, [child]))
         else:
+            last_note_start = start
+            current_time += duration
             timed_events.append(TimedNoteEvent(staff_num, start, end, [child]))
 
     by_staff: dict[int, list[TimedNoteEvent]] = defaultdict(list)
@@ -599,16 +598,14 @@ def build_note_or_rest(
     is_chord: bool,
     state: ConversionState,
     tuplet_mark: str,
-    duration_override: Fraction | None = None,
 ) -> mxl.XMLNote:
     note = mxl.XMLNote()
     if is_chord:
         note.add_child(mxl.XMLChord())
     model_pitch = model_note.pitch
     model_duration = model_note.get_duration()
-    duration = duration_override if duration_override is not None else model_duration.fraction
     if model_pitch == empty:
-        if duration_override is None and model_duration.fraction.numerator == 0:
+        if model_duration.fraction.numerator == 0:
             note.add_child(mxl.XMLRest(measure="yes"))
         else:
             note.add_child(mxl.XMLRest())
@@ -630,12 +627,6 @@ def build_note_or_rest(
         base_duration = model_duration.kern
         duration_name = DURATION_NAMES[base_duration]
         note.add_child(mxl.XMLType(value_=duration_name))
-    elif duration_override is not None:
-        duration_name, duration_value = _fraction_to_duration_type_and_value(
-            duration_override, state
-        )
-        note.add_child(mxl.XMLType(value_=duration_name))
-        note.add_child(mxl.XMLDuration(value_=duration_value))
     elif model_duration.fraction.numerator > 0:
         base_duration = 1 if model_duration.kern == 0 else model_duration.kern
         duration_name = DURATION_NAMES[base_duration]
@@ -649,17 +640,14 @@ def build_note_or_rest(
     staff_num = get_staff(model_note)
     note.add_child(mxl.XMLStaff(value_=staff_num))
     note.add_child(mxl.XMLVoice(value_=str(get_xml_voice(staff_num, rhythmic_layer))))
-    if duration_override is None:
-        for _ in range(model_duration.dots):
-            note.add_child(mxl.XMLDot())
-        if model_duration.actual_notes != model_duration.normal_notes:
-            time_modification = mxl.XMLTimeModification()
-            time_modification.add_child(mxl.XMLActualNotes(value_=model_duration.actual_notes))
-            time_modification.add_child(mxl.XMLNormalNotes(value_=model_duration.normal_notes))
-            note.add_child(time_modification)
-            build_articulations(note, model_note.articulation, tuplet_mark, state)
-        else:
-            build_articulations(note, model_note.articulation, "", state)
+    for _ in range(model_duration.dots):
+        note.add_child(mxl.XMLDot())
+    if model_duration.actual_notes != model_duration.normal_notes:
+        time_modification = mxl.XMLTimeModification()
+        time_modification.add_child(mxl.XMLActualNotes(value_=model_duration.actual_notes))
+        time_modification.add_child(mxl.XMLNormalNotes(value_=model_duration.normal_notes))
+        note.add_child(time_modification)
+        build_articulations(note, model_note.articulation, tuplet_mark, state)
     else:
         build_articulations(note, model_note.articulation, "", state)
 
