@@ -422,7 +422,11 @@ def rebalance_measure_voices(measure: mxl.XMLMeasure) -> None:
         sorted_events = sorted(events, key=lambda e: (e.start, e.end))
         active: list[tuple[int, int]] = []  # (end, local voice number 1..n)
         for event in sorted_events:
-            active = [(active_end, voice_no) for active_end, voice_no in active if active_end > event.start]
+            active = [
+                (active_end, voice_no)
+                for active_end, voice_no in active
+                if active_end > event.start
+            ]
             used_voices = {voice_no for _, voice_no in active}
             voice_no = 1
             while voice_no in used_voices:
@@ -506,20 +510,6 @@ DURATION_NAMES = {
     64: "64th",
     128: "128th",
 }
-
-
-def _fraction_to_duration_type_and_value(
-    f: Fraction, state: ConversionState
-) -> tuple[str, int]:
-    """Map a duration (in whole notes) to MusicXML type name and duration value in divisions."""
-    if f <= 0:
-        return "quarter", 0
-    # 1/f gives kern-like value (4=quarter, 2=half, 1=whole); pick nearest standard type
-    one_over_f = 1 / f
-    key = min(DURATION_NAMES.keys(), key=lambda k: abs(k - one_over_f))
-    if key == 0:
-        key = 4
-    return DURATION_NAMES[key], int(f * state.division)
 
 
 def build_articulations(
