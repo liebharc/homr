@@ -4,7 +4,14 @@ import re
 import unittest
 from typing import Any
 
-from homr.music_xml_generator import SymbolChord, XmlGeneratorArguments, generate_xml
+import musicxml.xmlelement.xmlelement as mxl
+
+from homr.music_xml_generator import (
+    SymbolChord,
+    XmlGeneratorArguments,
+    generate_xml,
+    rebalance_measure_voices,
+)
 from homr.transformer.vocabulary import EncodedSymbol
 from training.transformer.training_vocabulary import (
     read_token_lines,
@@ -126,12 +133,12 @@ XMLNotations()]),
 XMLBackup([XMLDuration(value: 4)]),
 XMLNote([XMLPitch([XMLStep(value: G)]),
 XMLDuration(value: 1),
-XMLVoice(value: 1),
+XMLVoice(value: 5),
 XMLStaff(value: 2),
 XMLNotations()]),
 XMLNote([XMLRest(),
 XMLDuration(value: 1),
-XMLVoice(value: 1),
+XMLVoice(value: 5),
 XMLStaff(value: 2),
 XMLNotations()]),
 XMLNote([XMLPitch([XMLStep(value: E)]),
@@ -142,7 +149,7 @@ XMLNotations()]),
 XMLBackup([XMLDuration(value: 2)]),
 XMLNote([XMLPitch([XMLStep(value: C)]),
 XMLDuration(value: 2),
-XMLVoice(value: 1),
+XMLVoice(value: 5),
 XMLStaff(value: 2),
 XMLNotations()])])])])"""
         self.assertEqual(self._norm_expected(expected), actual)
@@ -195,6 +202,45 @@ XMLNotations()])])])])"""
             ],
         )
 
+    def test_rebalance_measure_voices_assigns_stable_voices_per_staff(self) -> None:
+        measure = mxl.XMLMeasure()
+
+        note1 = self._build_test_note(duration=4, staff=1, voice=1)
+        measure.add_child(note1)
+        measure.add_child(self._build_test_backup(duration=4))
+
+        # Overlaps note1, so this must move to voice 2.
+        note2 = self._build_test_note(duration=2, staff=1, voice=1)
+        measure.add_child(note2)
+
+        # Starts later but still overlaps with note1, reusing voice 2.
+        note3 = self._build_test_note(duration=2, staff=1, voice=1)
+        measure.add_child(note3)
+
+        # Chord tone sharing note3's timing; should get the same voice as note3.
+        note4 = self._build_test_note(duration=2, staff=1, voice=1, is_chord=True)
+        measure.add_child(note4)
+
+        measure.add_child(self._build_test_backup(duration=4))
+        note5 = self._build_test_note(duration=4, staff=2, voice=1)
+        measure.add_child(note5)
+        measure.add_child(self._build_test_backup(duration=4))
+
+        # Overlaps note5 on staff 2.
+        note6 = self._build_test_note(duration=2, staff=2, voice=1)
+        measure.add_child(note6)
+
+        rebalance_measure_voices(measure)
+
+        # Same-start events are processed by (start, end), so shorter durations
+        # receive lower local voice numbers first.
+        self.assertEqual(self._read_note_voice(note1), "2")
+        self.assertEqual(self._read_note_voice(note2), "1")
+        self.assertEqual(self._read_note_voice(note3), "1")
+        self.assertEqual(self._read_note_voice(note4), "1")
+        self.assertEqual(self._read_note_voice(note5), "6")
+        self.assertEqual(self._read_note_voice(note6), "5")
+
     def _norm_expected(self, expected: str) -> str:
         norm = expected.replace("\n", "")
         norm = re.sub(r",\s+", ",", norm)
@@ -219,6 +265,11 @@ XMLNotations()])])])])"""
                 "XMLType",
                 "XMLPartList",
                 "XMLDefaults",
+                "XMLIdentification",
+                "XMLEncoding",
+                "XMLSoftware",
+                "XMLStaves",
+                "XMLPartSymbol",
             )
 
             if name in ignore_nodes:
@@ -247,3 +298,24 @@ XMLNotations()])])])])"""
                 return f"{name}()"
 
         return recurse(xml)
+
+    def _build_test_note(
+        self, duration: int, staff: int, voice: int, is_chord: bool = False
+    ) -> mxl.XMLNote:
+        note = mxl.XMLNote()
+        if is_chord:
+            note.add_child(mxl.XMLChord())
+        note.add_child(mxl.XMLDuration(value_=duration))
+        note.add_child(mxl.XMLStaff(value_=staff))
+        note.add_child(mxl.XMLVoice(value_=str(voice)))
+        return note
+
+    def _build_test_backup(self, duration: int) -> mxl.XMLBackup:
+        backup = mxl.XMLBackup()
+        backup.add_child(mxl.XMLDuration(value_=duration))
+        return backup
+
+    def _read_note_voice(self, note: mxl.XMLNote) -> str:
+        voices = note.get_children_of_type(mxl.XMLVoice)
+        self.assertGreater(len(voices), 0)
+        return str(voices[0].value_)
