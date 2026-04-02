@@ -6,6 +6,8 @@ processed using tools such as [musescore](https://musescore.com/).
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/liebharc/homr/blob/main/colab.ipynb)
 
+You might also want to check out [Andromr](https://github.com/aicelen/Andromr), an Android app for optical music recognition using homr.
+
 ## Prerequisites
 
 - Python 3.11
