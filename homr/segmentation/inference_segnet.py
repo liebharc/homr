@@ -22,6 +22,9 @@ class Segnet:
         self.use_gpu = False
         if use_gpu_inference:
             try:
+                # I had this issue: https://github.com/microsoft/onnxruntime/issues/21684
+                # If torch is installed, this fixes "libcudnn.so.9: cannot open shared object file"
+                ort.preload_dlls()
                 self.model = ort.InferenceSession(
                     segnet_path_onnx_fp16, providers=["CUDAExecutionProvider"]
                 )

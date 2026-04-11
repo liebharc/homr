@@ -77,10 +77,6 @@ def convert_encoder() -> str:
 
     path_out = config.filepaths.encoder_path
 
-    if os.path.exists(path_out):
-        eprint(path_out, "is already present")
-        return path_out
-
     # Get Encoder
     model = get_encoder(config)
 
@@ -120,10 +116,6 @@ def convert_decoder() -> str:
     model.eval()
 
     path_out = config.filepaths.decoder_path
-
-    if os.path.exists(path_out):
-        eprint(path_out, "is already present")
-        return path_out
 
     model.load_state_dict(
         torch.load(r"decoder_weights.pt", weights_only=True, map_location=torch.device("cpu")),
@@ -184,10 +176,6 @@ def convert_segnet() -> str:
     Converts the segnet model to onnx.
     """
     path_out = segnet_path_onnx
-
-    if os.path.exists(path_out):
-        eprint(path_out, "is already present")
-        return path_out
 
     model = create_segnet()
     model.load_state_dict(torch.load(segnet_path_torch, weights_only=True), strict=True)

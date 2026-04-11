@@ -38,10 +38,6 @@ def quantization_fp16(model_path: str, out_path: str | None = None) -> str:
     if out_path is None:
         out_path = model_path
 
-    if os.path.exists(out_path):
-        eprint(out_path, "is already present")
-        return out_path
-
     model = onnx.load(model_path)
     model_fp16 = float16.convert_float_to_float16(model)
     onnx.save(model_fp16, out_path)
