@@ -5,8 +5,9 @@ import onnx
 from onnxruntime.transformers.fusion_skiplayernorm import FusionSkipLayerNormalization
 from onnxruntime.transformers.onnx_model import OnnxModel
 
-from homr.transformer.configs import Config
 from homr.simple_logging import eprint
+from homr.transformer.configs import Config
+
 
 @dataclass()
 class DecoderAttentionBlock:
@@ -67,7 +68,7 @@ def _collect_decoder_attention_blocks(model: OnnxModel) -> list[DecoderAttention
     return blocks
 
 
-def _fuse_decoder_attention_to_mha(model: OnnxModel, num_heads: int) -> int:
+def _fuse_decoder_attention_to_mha(model: OnnxModel, num_heads: int) -> None:
     graph = model.graph()
     output_name_to_node = model.output_name_to_node()
     blocks = _collect_decoder_attention_blocks(model)
@@ -111,7 +112,7 @@ def _fuse_decoder_attention_to_mha(model: OnnxModel, num_heads: int) -> int:
         model.prune_graph()
 
 
-def _fuse_skip_layer_norm(model: OnnxModel):
+def _fuse_skip_layer_norm(model: OnnxModel) -> None:
     FusionSkipLayerNormalization(model).apply()
     model.topological_sort()
     model.prune_graph()
@@ -121,7 +122,7 @@ def fuse_decoder(
     model_path: str,
     output_path: str | None = None,
     fuse_skip_layer_norm: bool = True,
-) -> str:
+) -> None:
     config = Config()
     num_heads = config.decoder_heads
 

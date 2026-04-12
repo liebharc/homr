@@ -5,8 +5,6 @@ from onnxconverter_common import float16
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from onnxruntime.quantization.shape_inference import quant_pre_process
 
-from homr.simple_logging import eprint
-
 
 def quantization_int8(model_path: str, out_path: str | None = None, preprocess: bool = True) -> str:
     """

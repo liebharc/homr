@@ -1,10 +1,7 @@
-import os
-
 import torch
 from torch.export import Dim
 
 from homr.segmentation.config import segnet_path_onnx, segnet_path_torch
-from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.segmentation.model import create_segnet  # type: ignore
 from training.architecture.transformer.decoder import (

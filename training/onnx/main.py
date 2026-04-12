@@ -9,10 +9,11 @@ from training.onnx.convert import (
     convert_encoder,
     convert_segnet,
 )
+from training.onnx.fuse import fuse_decoder
 from training.onnx.quantization import quantization_fp16, quantization_int8
 from training.onnx.simplify import main as simplify_onnx_model
 from training.onnx.split_weights import split_weights
-from training.onnx.fuse import fuse_decoder
+
 
 def segnet_to_onnx() -> None:
     """
