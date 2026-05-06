@@ -5,6 +5,8 @@ FROM python:3.11
 
 WORKDIR /app
 
+RUN apt update && apt install -y libgl1
+
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 RUN git clone https://github.com/liebharc/homr .
