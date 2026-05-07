@@ -71,3 +71,6 @@ max_angle_for_lines_to_be_parallel = 10
 
 
 NOTEHEAD_SIZE_RATIO = 1.285714  # width/height
+
+grandstaff_x_distance_threshold_factor = 5
+grandstaff_y_overlap_threshold_factor = 0.5

@@ -419,30 +419,103 @@ class MultiStaff(DebugDrawable):
                 unique_connections.append(connection)
         return MultiStaff(unique_staffs, unique_connections)
 
-    def create_grandstaffs(self) -> "MultiStaff":
-        """
-        Blindly creates grandstaffs, by combining staff 0&1, 2&3, ...
-        for odd numbers of staffs the first staff will be a single staff
-        """
-        n = len(self.staffs)
-        if n == 0:
-            return self
+    """
+    rules to determain whether two staffs should be merged into a grandstaff by current brace:
+    1. x_distance: the left side of staff should be close enough
+       (within 5* the average unit size) to the brace symbol
+    2. y_overlap: the top and bottom of the brace symbol should overlap (at least 50% of) the staffs
+    return scores = y_overlap(higher the better) - x_distance(lower the better)
+    """
 
-        result = []
+    def _score_brace_with_staff_pair(
+        self, symbol: RotatedBoundingBox, upper_staff: Staff, lower_staff: Staff
+    ) -> float:
+        unit_size = float(np.median([upper_staff.average_unit_size, lower_staff.average_unit_size]))
+        x_distance_threshold = constants.grandstaff_x_distance_threshold_factor * unit_size
+        y_overlap_threshold = constants.grandstaff_y_overlap_threshold_factor * symbol.size[1]
+
+        symbol_min_x = symbol.center[0]
+        staff_min_x = min(upper_staff.min_x, lower_staff.min_x)
+        x_distance = abs(staff_min_x - symbol_min_x)
+
+        symbol_min_y = symbol.center[1] - symbol.size[1] / 2
+        symbol_max_y = symbol.center[1] + symbol.size[1] / 2
+        y_overlap = min(symbol_max_y, lower_staff.max_y) - max(symbol_min_y, upper_staff.min_y)
+
+        if (
+            x_distance < x_distance_threshold
+            and y_overlap > y_overlap_threshold
+            and y_overlap > x_distance
+        ):
+            return y_overlap - x_distance
+        else:
+            return 0
+
+    class GrandStaffPair:
+        def __init__(self, pair_index: list[int], score: float):
+            self.pair_index = pair_index
+            self.score = score
+
+        def get_score(self) -> float:
+            return self.score
+
+        def get_index(self) -> list[int]:
+            return self.pair_index
+
+        def __repr__(self) -> str:
+            return f"staff pair: {self.pair_index} with score: {self.score})"
+
+    def _select_grandstaffs(
+        self, brace_dot: list[RotatedBoundingBox]
+    ) -> list["MultiStaff.GrandStaffPair"]:
+        pair_scores: list[MultiStaff.GrandStaffPair] = []
+        # step1: we try each two staffs combination, like (0,1), (1,2), (2,3), ...
+        for i in range(len(self.staffs) - 1):
+            best_score = max(
+                (
+                    self._score_brace_with_staff_pair(symbol, self.staffs[i], self.staffs[i + 1])
+                    for symbol in brace_dot
+                ),
+            )
+            # step2: we try all braces for the current staff pair to see if there is a good match
+            if best_score > 0:
+                pair_scores.append(MultiStaff.GrandStaffPair([i, i + 1], best_score))
+
+        # step3: we can't simply return pair_scores, because some staff may be used more than once,
+        # like ([0,1], score=0.5), ([1,2], score=0.8)
+        # in this case, we only select highest score pair, which is ([1,2], score=0.8)
+        result: list[MultiStaff.GrandStaffPair] = []
+        used_staff_index: set[int] = set()
+        for pair in sorted(pair_scores, key=lambda pair: pair.get_score(), reverse=True):
+            if any(index in used_staff_index for index in pair.get_index()):
+                continue
+
+            result.append(pair)
+            used_staff_index.update(pair.get_index())
+
+        return result
+
+    def _merge_selected_pairs(self, pairs: list["MultiStaff.GrandStaffPair"]) -> list[Staff]:
+        result: list[Staff] = []
         i = 0
-
-        if n % 2 == 1:
-            result.append(self.staffs[0])
-            i = 1
-
-        while i + 1 < n:
-            result.append(self.staffs[i].merge(self.staffs[i + 1]))
-            i += 2
-
-        if i < n:
+        while i < len(self.staffs):
+            if any(i in pair.get_index() for pair in pairs):
+                result.append(self.staffs[i].merge(self.staffs[i + 1]))
+                i += 2
+                continue
+            # not grandstaff
             result.append(self.staffs[i])
+            i += 1
+        return result
 
-        return MultiStaff(result, self.connections)
+    def create_grandstaffs(self, brace_dot: list[RotatedBoundingBox]) -> "MultiStaff":
+        if len(self.staffs) < 2:
+            return self
+        pairs = self._select_grandstaffs(brace_dot)
+        if not pairs:
+            return self
+        merged_staffs = self._merge_selected_pairs(pairs)
+        return MultiStaff(merged_staffs, self.connections)
 
     def break_apart(self) -> list["MultiStaff"]:
         return [MultiStaff([staff], []) for staff in self.staffs]
