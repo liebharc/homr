@@ -86,6 +86,8 @@ ARTIC_MAPPING: dict[str, str] = {
     "scoop": "",
     "doit": "",
     "caesura": "",
+    "otherOrnament": "",
+    "otherArticulation": "",
 }
 
 
@@ -669,16 +671,25 @@ def _remove_dynamics_attribute_from_nodes_recursive(node: ET.Element) -> None:
     """
     We don't need the dynamics attribute in the XML, but XSD validation
     sometimes fails if its negative. So we remove it.
+
+    Also strips unwanted nodes (and their children) entirely.
     """
     if "dynamics" in node.attrib:
         del node.attrib["dynamics"]
-
-    filtered_tags = {"metronome", "ending", "direction"}
-
+    filtered_tags = {
+        "metronome",
+        "ending",
+        "direction",
+        "identification",
+        "miscellaneous",
+        "defaults",
+        "credit",
+    }
     for child in list(node):
         if child.tag in filtered_tags:
             node.remove(child)
-        _remove_dynamics_attribute_from_nodes_recursive(child)
+        else:
+            _remove_dynamics_attribute_from_nodes_recursive(child)
 
 
 if __name__ == "__main__":
