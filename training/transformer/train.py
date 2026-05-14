@@ -36,7 +36,7 @@ class FreezeCallback(TrainerCallback):
     Standard practice is ~2 epochs.
     """
 
-    def __init__(self, epochs_to_freeze: int = 2):
+    def __init__(self, epochs_to_freeze: int = 1):
         self.epochs_to_freeze = epochs_to_freeze
         self._backbone_frozen = False
 
