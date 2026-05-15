@@ -171,7 +171,14 @@ def _create_musicxml_and_svg_files() -> None:
 
     eprint("Starting with", len(all_jobs), "jobs, with the first being", all_jobs[0])
 
-    if os.system(MuseScore + " --force -j job.json") != 0:  # noqa: S605
+    env = os.environ.copy()
+    # No need to run GUI, so we can use offscreen backend
+    env["QT_QUICK_BACKEND"] = "software"
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    p = subprocess.run([MuseScore, "--force", "-j", "job.json"], env=env)  # noqa: S603, PLW1510
+
+    if p.returncode != 0:
         eprint("Error running MuseScore")
         os.remove("job.json")
         sys.exit(1)
