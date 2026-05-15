@@ -8,6 +8,20 @@ from homr.simple_logging import eprint
 
 
 def download_file(url: str, filename: str) -> None:
+    max_tries = 3
+    for i in range(max_tries):
+        try:
+            _download_file(url, filename)
+            return
+        except requests.exceptions.RequestException as e:
+            eprint(f"Error downloading file {url}: {e}. Retrying {i}/{max_tries}...")
+            if os.path.exists(filename):
+                os.remove(filename)
+
+    raise Exception(f"Failed to download file {url}.")
+
+
+def _download_file(url: str, filename: str) -> None:
     response = requests.get(url, stream=True, timeout=5)
     total = int(response.headers.get("content-length", 0))
     totalMb = round(total / 1024 / 1024)
