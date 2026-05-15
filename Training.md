@@ -17,13 +17,16 @@ Prerequisites:
 - Linux
 - CUDA
 - rsvg-convert, e.g. via `sudo apt install librsvg2-bin`
+- libfuse, e.g. via `sudo apt install libfuse2t64` on Ubuntu24 or `sudo apt install libfuse2` on Ubuntu22/20
+- libjack, e.g. via `sudo apt install libjack-jackd2-0`
 
 Download the datasets and convert them to the format required for training:
 
 - `training/datasets/convert_primus.py`
 - `training/datasets/convert_grandstaff.py`
 - `training/datasets/convert_lieder.py`  
-  This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
+  - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
+  - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
 Some checks:
 
@@ -32,6 +35,7 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
+You can check the log and see number of training files to be 197k: `Total number of training files to choose from 197032`
 This takes around 2–4 days.
 
 ## Results

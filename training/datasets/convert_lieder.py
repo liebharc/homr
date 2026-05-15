@@ -175,7 +175,12 @@ def _create_musicxml_and_svg_files() -> None:
             os.remove("job.json")
             continue
 
-        # Batch failed — retry each job individually
+        env = os.environ.copy()
+        # No need to run GUI, so we can use offscreen backend
+        env["QT_QUICK_BACKEND"] = "software"
+        env["QT_QPA_PLATFORM"] = "offscreen"
+
+        # Batch failed - retry each job individually
         eprint(f"Batch {batch_idx + 1} failed, retrying individually")
         os.remove("job.json")
 
@@ -474,7 +479,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(musescore_path):
         eprint("Downloading MuseScore from https://musescore.org/")
         download_file(
-            "https://cdn.jsdelivr.net/musescore/v4.6.5/MuseScore-Studio-4.6.5.253511702-x86_64.AppImage",
+            "https://github.com/musescore/MuseScore/releases/download/v4.6.5/MuseScore-Studio-4.6.5.253511702-x86_64.AppImage",
             musescore_path,
         )
 
