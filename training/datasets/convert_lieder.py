@@ -454,7 +454,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(musescore_path):
         eprint("Downloading MuseScore from https://musescore.org/")
         download_file(
-            "https://cdn.jsdelivr.net/musescore/v4.2.1/MuseScore-4.2.1.240230938-x86_64.AppImage",
+            "https://github.com/musescore/MuseScore/releases/download/v4.2.1/MuseScore-4.2.1.240230938-x86_64.AppImage",
             musescore_path,
         )
         os.chmod(musescore_path, stat.S_IXUSR)
