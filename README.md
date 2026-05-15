@@ -14,7 +14,14 @@ You might also want to check out [Andromr](https://github.com/aicelen/Andromr), 
 - Poetry
 - Optional: NVidia GPU with CUDA 12.1
 
-## Getting started
+## Getting started (uv)
+
+The easiest way to get started is using `uvx` (`uv` must be installed). However, this might not make use of the GPU
+- `uvx homr <img>`
+- The resulting MusicXML file will be saved in the same directory as the input image
+- To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
+
+## Getting started (poetry)
 
 - Clone the repository
 - Install dependencies for:
