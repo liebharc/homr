@@ -138,7 +138,9 @@ class ScoreDecoder:
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
 
-        return symbols
+        from homr.transformer.notation_conversion import from_transformer_format
+
+        return from_transformer_format(symbols)
 
     def init_cache(self, cache_len: int = 0) -> tuple[list[NDArray], list[str], list[str]]:
         cache = []

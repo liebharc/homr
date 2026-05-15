@@ -98,29 +98,38 @@ class KeyTransformation(AbstractKeyTransformation):
         """
         Returns the accidental if it wasn't placed before.
         """
-
-        if accidental in ["#", "b", "N"]:
-            previous_accidental = "N"
-            if note in self.sharps:
-                self.sharps.remove(note)
-                previous_accidental = "#"
-            if note in self.flats:
-                self.flats.remove(note)
-                previous_accidental = "b"
-            if accidental == "#":
-                self.sharps.add(note)
-            elif accidental == "b":
-                self.flats.add(note)
-            return accidental if accidental != previous_accidental else ""
-        else:
-            if note in self.sharps:
-                self.sharps.remove(note)
-                return "N"
-
-            if note in self.flats:
-                self.flats.remove(note)
-                return "N"
+        if accidental is None:
             return ""
+
+        # Get previous state
+        previous_accidental = self.get_accidental(note)
+
+        if accidental == previous_accidental:
+            return ""
+
+        # Update state (we only track #, b, N in sharps/flats sets)
+        if note in self.sharps:
+            self.sharps.remove(note)
+        if note in self.flats:
+            self.flats.remove(note)
+
+        if accidental == "#":
+            self.sharps.add(note)
+        elif accidental == "b":
+            self.flats.add(note)
+
+        # Always return the accidental if it changed the state
+        return accidental
+
+    def get_accidental(self, note: str) -> str:
+        """
+        Returns the current accidental for the given note in the current measure.
+        """
+        if note in self.sharps:
+            return "#"
+        if note in self.flats:
+            return "b"
+        return "N"
 
     def reset_at_end_of_measure(self) -> "KeyTransformation":
         return KeyTransformation(self.circle_of_fifth)
@@ -172,6 +181,20 @@ def maintain_accidentals_during_measure(
         else:
             results.append(symbol)
 
+    return results
+
+
+def strip_naturals(
+    symbols: list[EncodedSymbol],
+) -> list[EncodedSymbol]:
+    results = []
+    for symbol in symbols:
+        if symbol.lift == "N":
+            results.append(symbol.change_lift(empty))
+        else:
+            results.append(symbol)
+
+    return results
     return results
 
 
