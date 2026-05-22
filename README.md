@@ -1,6 +1,6 @@
 # adversarial-homr
 
-Robustness analysis of :contentReference[oaicite:0]{index=0} against adversarial attacks and real-world image perturbations in Optical Music Recognition (OMR).
+Robustness analysis of HOMR against adversarial attacks and real-world image perturbations in Optical Music Recognition (OMR).
 
 This project evaluates how HOMR performs under conditions such as:
 - Noise and blur
