@@ -37,12 +37,22 @@ class FreezeCallback(TrainerCallback):
     """
 
     def __init__(self, epochs_to_freeze: int = 2):
+        """
+        Configure how long the backbone remains frozen.
+
+        Args:
+            epochs_to_freeze: Number of initial epochs before the backbone is
+                unfrozen.
+        """
         self.epochs_to_freeze = epochs_to_freeze
         self._backbone_frozen = False
 
     def on_train_begin(
         self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
     ) -> None:
+        """
+        Freeze the model backbone at the start of training when supported.
+        """
         model = kwargs.get("model")
         if model and hasattr(model, "freeze_backbone"):
             eprint(f"Freezing backbone for the first {self.epochs_to_freeze} epochs")
@@ -52,6 +62,9 @@ class FreezeCallback(TrainerCallback):
     def on_epoch_begin(
         self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs: Any
     ) -> None:
+        """
+        Unfreeze the backbone once the configured freeze window has elapsed.
+        """
         model = kwargs.get("model")
         if model and self._backbone_frozen and state.epoch and state.epoch >= self.epochs_to_freeze:
             eprint(f"Unfreezing backbone at epoch {state.epoch}")
@@ -60,11 +73,30 @@ class FreezeCallback(TrainerCallback):
 
 
 def load_training_index(file_path: str) -> list[str]:
+    """
+    Read a dataset index file.
+
+    Args:
+        file_path: Path to an index file containing ``image_path,token_path`` lines.
+
+    Returns:
+        Raw index lines, preserving their trailing newlines.
+    """
     with open(file_path) as f:
         return f.readlines()
 
 
 def check_data_source(all_file_paths: list[str]) -> bool:
+    """
+    Verify that every referenced file in a dataset index exists.
+
+    Args:
+        all_file_paths: Index entries where each line contains comma-separated
+            file paths.
+
+    Returns:
+        True when all referenced paths exist or are marked as ``nosymbols``.
+    """
     result = True
     for file_paths in all_file_paths:
         paths = file_paths.strip().split(",")
@@ -80,6 +112,17 @@ def check_data_source(all_file_paths: list[str]) -> bool:
 def load_and_mix_training_sets(
     index_paths: list[str], weights: list[float], number_of_files: int
 ) -> list[str]:
+    """
+    Load, validate and mix multiple dataset indexes for transformer training.
+
+    Args:
+        index_paths: Dataset index files to load.
+        weights: Sampling weights aligned with ``index_paths``.
+        number_of_files: Number of mixed entries to return, or ``-1`` to keep all.
+
+    Returns:
+        Mixed list of raw index entries.
+    """
     if len(index_paths) != len(weights):
         eprint("Error: Number of index paths and weights do not match")
         sys.exit(1)
@@ -99,6 +142,15 @@ git_root = os.path.join(script_location, "..", "..")
 
 
 def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
+    """
+    Ensure selected dataset indexes exist, converting datasets when needed.
+
+    Args:
+        selected_datasets: Paths to dataset index files requested for training.
+
+    Returns:
+        The same list of dataset paths after any missing datasets were generated.
+    """
     for dataset in selected_datasets:
         if dataset == primus_train_index and not os.path.exists(primus_train_index):
             convert_primus_dataset()
@@ -114,6 +166,15 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 def train_transformer(
     fp32: bool = False, resume: str = "", smoke_test: bool = False, fine_tune: bool = False
 ) -> None:
+    """
+    Run transformer training or fine-tuning with the configured HOMR datasets.
+
+    Args:
+        fp32: Use full precision training instead of bf16.
+        resume: Checkpoint folder name under ``current_training`` to resume from.
+        smoke_test: Use the shorter smoke-test epoch count.
+        fine_tune: Load the configured checkpoint and train only the lift decoder.
+    """
     number_of_epochs = 35
     if smoke_test:
         number_of_epochs = 10

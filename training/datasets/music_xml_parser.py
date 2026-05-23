@@ -29,10 +29,18 @@ class Measure(list[EncodedSymbol]):
         self.new_page = False
 
     @overload
-    def __setitem__(self, index: SupportsIndex, item: EncodedSymbol, /) -> None: ...
+    def __setitem__(self, index: SupportsIndex, item: EncodedSymbol, /) -> None:
+        """
+        Type overload for assigning one encoded symbol.
+        """
+        ...
 
     @overload
-    def __setitem__(self, index: slice, item: Iterable[EncodedSymbol], /) -> None: ...
+    def __setitem__(self, index: slice, item: Iterable[EncodedSymbol], /) -> None:
+        """
+        Type overload for assigning a slice of encoded symbols.
+        """
+        ...
 
     def __setitem__(
         self, index: SupportsIndex | slice, item: EncodedSymbol | Iterable[EncodedSymbol], /
@@ -46,10 +54,18 @@ class Measure(list[EncodedSymbol]):
             super().__setitem__(index, item)  # type: ignore
 
     @overload
-    def __add__(self, other: list[EncodedSymbol], /) -> "Measure": ...
+    def __add__(self, other: list[EncodedSymbol], /) -> "Measure":
+        """
+        Type overload for adding encoded-symbol lists.
+        """
+        ...
 
     @overload
-    def __add__(self, other: list[_T], /) -> list[EncodedSymbol | _T]: ...
+    def __add__(self, other: list[_T], /) -> list[EncodedSymbol | _T]:
+        """
+        Type overload for adding arbitrary lists.
+        """
+        ...
 
     def __add__(self, other: list, /) -> "Measure | list":
         """Return a new Measure combining this one with another list."""
@@ -97,11 +113,17 @@ class TokensMeasure:
     """
 
     def __init__(self) -> None:
+        """
+        Initialize empty positioned-symbol state for one measure.
+        """
         self.symbols: list[EncodedSymbolWithPos] = []
         self.current_position = 0
         self.new_page = False
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
+        """
+        Append a non-note symbol at the next measure position.
+        """
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
         else:
@@ -110,9 +132,15 @@ class TokensMeasure:
             self.symbols.append(EncodedSymbolWithPos(self.current_position + offset, symbol, True))
 
     def mark_new_page(self) -> None:
+        """
+        Mark this measure as the start of a new rendered page.
+        """
         self.new_page = True
 
     def append_symbol_to_staff(self, staff: int, symbol: EncodedSymbol) -> None:
+        """
+        Append a non-note symbol to a specific staff at the current position.
+        """
         if has_rhythm_symbol_a_position(symbol.rhythm):
             symbol.position = self._get_staff_position(staff)
         if symbol.rhythm.startswith("note"):
@@ -121,6 +149,9 @@ class TokensMeasure:
             self.symbols.append(EncodedSymbolWithPos(self.current_position, symbol, True))
 
     def append_position_change(self, duration: int) -> None:
+        """
+        Move the current MusicXML cursor by a signed duration.
+        """
         new_position = self.current_position + duration
         if new_position < 0:
             raise ValueError(
@@ -131,11 +162,17 @@ class TokensMeasure:
     def append_rest(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
+        """
+        Append a rest using the same positioning rules as notes.
+        """
         self.append_note(staff, is_chord, duration, invisible, symbol)
 
     def append_note(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
+        """
+        Append a note at the current cursor position or previous chord position.
+        """
         is_grace = "G" in symbol.rhythm
         symbol.position = self._get_staff_position(staff)
         if is_chord:
@@ -153,11 +190,17 @@ class TokensMeasure:
             self.current_position += duration
 
     def _get_staff_no(self, symbol: EncodedSymbolWithPos) -> int:
+        """
+        Convert a positioned symbol's staff label to a zero-based staff index.
+        """
         if symbol.symbol.position == "lower":
             return 1
         return 0
 
     def _get_staff_position(self, staff: int) -> str:
+        """
+        Convert a zero-based staff index into a HOMR staff-position token.
+        """
         if staff == 0:
             return "upper"
         return "lower"
@@ -190,6 +233,9 @@ class TokensMeasure:
                 symbol.symbol.articulation = art
 
     def complete_measure(self) -> Measure:  # noqa: C901
+        """
+        Merge positioned upper/lower staff symbols into a finalized measure.
+        """
         self._fill_in_arpeggiate(self.symbols)
         result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
         grouped_symbols: dict[int, list[EncodedSymbolWithPos]] = {}
@@ -218,12 +264,21 @@ class TokensMeasure:
 
 
 class TupletState:
+    """
+    Track visible MusicXML tuplet state across note positions.
+    """
 
     def __init__(self) -> None:
+        """
+        Initialize tuplet state for a measure.
+        """
         self.started = False
         self.last_stop_position = -1
 
     def get_tuplet_factor(self, note: mxl.XMLNote, position: int) -> float:
+        """
+        Return the duration multiplier implied by a note's tuplet notation.
+        """
         notations = note.get_children_of_type(mxl.XMLNotations)
         was_started = self.started or self.last_stop_position == position
         if len(notations) > 0:
@@ -254,17 +309,30 @@ class TupletState:
         return float(actual) / float(normal)
 
     def on_end_of_measure(self) -> None:
+        """
+        Reset measure-local tuplet stop tracking.
+        """
         self.last_stop_position = -1
 
 
 class TokensPart:
+    """
+    Accumulate MusicXML measures for one part while preserving time positions.
+    """
+
     def __init__(self) -> None:
+        """
+        Initialize empty part state.
+        """
         self.current_measure: TokensMeasure | None = None
         self.measures: list[Measure] = []
         self.tuplets = TupletState()
         self.tremolo = False
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
+        """
+        Append initial or changed clefs to the current measure.
+        """
         current_measure = self.current_measure
         if current_measure is not None:
             for staff, clef in enumerate(clefs):
@@ -279,11 +347,17 @@ class TokensPart:
             self.current_measure = measure
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
+        """
+        Append a non-note symbol to the current measure.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_symbol(symbol)
 
     def mark_new_page(self) -> None:
+        """
+        Mark the current measure as starting a new rendered page.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.mark_new_page()
@@ -291,6 +365,9 @@ class TokensPart:
     def append_rest(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
+        """
+        Append a rest symbol to the current measure.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_rest(staff, is_chord, duration, invisible, symbol)
@@ -298,16 +375,25 @@ class TokensPart:
     def append_note(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
+        """
+        Append a note symbol to the current measure.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_note(staff, is_chord, duration, invisible, symbol)
 
     def append_position_change(self, duration: int) -> None:
+        """
+        Move the current MusicXML time cursor forward or backward.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
         self.current_measure.append_position_change(duration)
 
     def on_end_of_measure(self) -> None:
+        """
+        Finalize the current measure and start a new one.
+        """
         if self.current_measure is None:
             raise ValueError("Expected to get clefs as first symbol")
 
@@ -316,14 +402,23 @@ class TokensPart:
         self.tuplets.on_end_of_measure()
 
     def get_measures(self) -> list[Measure]:
+        """
+        Return finalized measures for this part.
+        """
         return self.measures
 
     def _get_current_position(self) -> int:
+        """
+        Return the current MusicXML time cursor.
+        """
         if self.current_measure is None:
             return 0
         return self.current_measure.current_position
 
     def get_tuplet_factor(self, note: mxl.XMLNote, is_chord: bool, duration: int) -> float:
+        """
+        Return the tuplet factor for a note at the current cursor position.
+        """
         position = self._get_current_position()
         if is_chord:
             position -= duration
@@ -331,6 +426,9 @@ class TokensPart:
 
 
 def _lift_from_pitch_or_accidental(pitch: mxl.XMLPitch, note: mxl.XMLNote) -> str:
+    """
+    Derive a HOMR lift token from explicit accidental or pitch alteration.
+    """
     # explicit courtesy accidental overrides calculated
     accs = note.get_children_of_type(mxl.XMLAccidental)
     if accs:
@@ -344,11 +442,17 @@ def _lift_from_pitch_or_accidental(pitch: mxl.XMLPitch, note: mxl.XMLNote) -> st
 
 
 def _count_dots(note: mxl.XMLNote) -> int:
+    """
+    Count augmentation dots on a MusicXML note.
+    """
     dots = note.get_children_of_type(mxl.XMLDot)
     return len(dots)
 
 
 def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
+    """
+    Convert clef, key, time and multi-rest attributes into part tokens.
+    """
     clefs = attribute.get_children_of_type(mxl.XMLClef)
     if len(clefs) > 0:
         clefs_tokens: list[tuple[EncodedSymbol, int]] = []
@@ -378,6 +482,9 @@ def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
 
 
 def _alter_to_lifts(alter: int) -> str:
+    """
+    Convert a MusicXML pitch alteration integer to a HOMR lift token.
+    """
     if alter < -1:
         return "bb"
     if alter == -1:
@@ -390,18 +497,27 @@ def _alter_to_lifts(alter: int) -> str:
 
 
 def _pitch_name(pitch: mxl.XMLPitch) -> str:
+    """
+    Convert a MusicXML pitch element to HOMR pitch notation.
+    """
     step = pitch.get_children_of_type(mxl.XMLStep)[0].value_
     octave = pitch.get_children_of_type(mxl.XMLOctave)[0].value_
     return f"{step}{octave}"
 
 
 def _rhythm_token(base: str, number: int, dots: int, is_grace: bool) -> str:
+    """
+    Build a HOMR rhythm token from duration parts.
+    """
     dot_str = "." * min(dots, 2)
     grace = "G" if is_grace else ""
     return f"{base}_{number}{grace}{dot_str}"
 
 
 def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> str:
+    """
+    Collect supported articulations, ornaments, ties and slurs from a note.
+    """
     notations = note.get_children_of_type(mxl.XMLNotations)
     if not notations:
         return empty
@@ -458,6 +574,9 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
 
 
 def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
+    """
+    Convert one MusicXML note or rest into part token state.
+    """
     staff = 0
     note_heads = note.get_children_of_type(mxl.XMLNotehead)
     for note_head in note_heads:
@@ -507,16 +626,25 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
 
 
 def _process_backup(part: TokensPart, backup: mxl.XMLBackup) -> None:
+    """
+    Apply a MusicXML backup cursor movement.
+    """
     backup_value = int(backup.get_children_of_type(mxl.XMLDuration)[0].value_)
     part.append_position_change(-backup_value)
 
 
 def _process_forward(part: TokensPart, backup: mxl.XMLBackup) -> None:
+    """
+    Apply a MusicXML forward cursor movement.
+    """
     forward_value = int(backup.get_children_of_type(mxl.XMLDuration)[0].value_)
     part.append_position_change(forward_value)
 
 
 def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
+    """
+    Convert repeat, volta and styled barline elements into tokens.
+    """
     bar_style = ""  # style: light-heavy, light-light, "heave-heavy"
     bar_style_nodes = barline.get_children_of_type(mxl.XMLBarStyle)
     if len(bar_style_nodes) > 0:
@@ -553,12 +681,18 @@ def _process_barline(part: TokensPart, barline: mxl.XMLBarline) -> None:
 
 
 def _process_print(part: TokensPart, xmlprint: mxl.XMLPrint) -> None:
+    """
+    Capture MusicXML page-break print directives.
+    """
     new_page = xmlprint.attributes.get("new-page", "")
     if new_page == "yes":
         part.mark_new_page()
 
 
 def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -> None:
+    """
+    Convert MusicXML multiple-rest measure style into a multirest token.
+    """
     rests = measure_style.get_children_of_type(mxl.XMLMultipleRest)
     if len(rests) == 0:
         return
@@ -568,6 +702,9 @@ def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -
 
 
 def _music_part_to_tokens(part: mxl.XMLPart) -> list[Measure]:
+    """
+    Convert one MusicXML part into finalized HOMR measures.
+    """
     tokens = TokensPart()
     for measure in part.get_children_of_type(mxl.XMLMeasure):
         for child in measure.get_children():
@@ -588,10 +725,19 @@ def _music_part_to_tokens(part: mxl.XMLPart) -> list[Measure]:
 
 
 def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
+    """
+    Normalize measure-ending barlines and adjacent repeat symbols.
+    """
     def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
+        """
+        Return true for barline and repeat symbols.
+        """
         return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
 
     def is_barline_repeat_or_other(symbol: EncodedSymbol) -> str:
+        """
+        Classify a symbol for barline/repeat merge rules.
+        """
         if symbol.rhythm.startswith("repeat"):
             return "repeat"
         if "barline" in symbol.rhythm:
@@ -599,6 +745,9 @@ def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
         return "other"
 
     def can_merge(a: EncodedSymbol, b: EncodedSymbol) -> bool:
+        """
+        Return true when adjacent barline/repeat symbols can be merged.
+        """
         a_cat = is_barline_repeat_or_other(a)
         b_cat = is_barline_repeat_or_other(b)
         if a_cat == "other" or b_cat == "other":
@@ -608,6 +757,9 @@ def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
         return True
 
     def merge_barlines_and_repeats(a: EncodedSymbol, b: EncodedSymbol) -> EncodedSymbol:
+        """
+        Merge adjacent barline/repeat symbols into the rendered equivalent.
+        """
         if (a.rhythm == "repeatStart" and b.rhythm == "repeatEnd") or (
             a.rhythm == "repeatEnd" and b.rhythm == "repeatStart"
         ):
@@ -641,6 +793,9 @@ def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
 def _music_xml_element_to_symbols(
     root: ET.Element,
 ) -> list[list[Measure]]:
+    """
+    Convert a parsed MusicXML root element into part/measure token lists.
+    """
     _remove_dynamics_attribute_from_nodes_recursive(root)
     parsed = _parse_node(root)
     result: list[list[Measure]] = []
@@ -660,6 +815,9 @@ def music_xml_string_to_tokens(content: str) -> list[list[Measure]]:
 
 
 def music_xml_file_to_tokens(file_path: str) -> list[list[Measure]]:
+    """
+    Parse a MusicXML file into part/measure token lists.
+    """
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
     return _music_xml_element_to_symbols(xml.getroot())
@@ -702,6 +860,9 @@ if __name__ == "__main__":
     )
 
     def process_file(file: str) -> tuple[str, list[Measure], Exception | None]:
+        """
+        Parse one MusicXML file for the command-line validation helper.
+        """
         try:
             voices = music_xml_file_to_tokens(file)
             tokens_list = []

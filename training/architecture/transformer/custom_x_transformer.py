@@ -43,6 +43,13 @@ __all__ = [
 
 
 class CustomAttentionLayers(AttentionLayers):
+    """
+    HOMR copy of x-transformers attention layers with decoder cache support.
+
+    This class keeps the upstream attention-layer behavior while exposing cache
+    handling needed by the ONNX decoder export path.
+    """
+
     def forward(
         self,
         x,
@@ -68,6 +75,37 @@ class CustomAttentionLayers(AttentionLayers):
         in_attn_cond=None,  # https://arxiv.org/abs/2105.04090
         layers_execute_order: tuple[int, ...] | None = None,
     ):
+        """
+        Run attention layers with optional key/value cache state.
+
+        Args:
+            x: Input hidden states.
+            context: Optional cross-attention context.
+            mask: Optional input mask.
+            context_mask: Optional context mask.
+            attn_mask: Optional attention mask.
+            self_attn_kv_mask: Optional self-attention key/value mask.
+            mems: Optional recurrent memories.
+            mem_masks: Optional memory masks.
+            seq_start_pos: Optional sequence start positions for left padding.
+            seq_pos_offset: Positional offset for cached decoding.
+            cache: Optional previously returned layer intermediates.
+            input_not_include_cache: Whether ``x`` excludes cached tokens.
+            cache_age: Age value assigned to updated cache entries.
+            return_hiddens: Whether to return layer intermediates.
+            rotary_pos_emb: Optional rotary position embeddings.
+            pos: Optional input positions.
+            context_pos: Optional context positions.
+            attn_bias: Optional attention bias.
+            deep_embeds_and_ids: Optional deep embeddings and token ids.
+            condition: Optional adaptive-layernorm condition.
+            in_attn_cond: Optional in-attention condition.
+            layers_execute_order: Optional execution order for layers.
+
+        Returns:
+            Output hidden states, and optionally ``LayerIntermediates`` when
+            ``return_hiddens`` is true.
+        """
         assert not (
             self.cross_attend ^ exists(context)
         ), "context must be passed in if cross_attend is set to True"
@@ -415,6 +453,13 @@ class CustomAttentionLayers(AttentionLayers):
 
 
 class CustomDecoder(CustomAttentionLayers):
+    """
+    Causal decoder variant of ``CustomAttentionLayers``.
+    """
+
     def __init__(self, **kwargs):
+        """
+        Initialize a causal attention stack for autoregressive decoding.
+        """
         assert "causal" not in kwargs, "cannot set causality on decoder"
         super().__init__(causal=True, **kwargs)

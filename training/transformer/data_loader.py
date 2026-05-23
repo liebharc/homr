@@ -29,18 +29,43 @@ label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations"]
 
 
 class DataLoader:
+    """
+    Dataset adapter that turns index entries into transformer training samples.
+
+    Each sample combines an augmented staff image tensor with the padded decoder
+    branch tensors parsed from the matching ``.tokens`` file.
+    """
+
     def __init__(
         self,
         corpus_list: list[str],
         config: Config,
         is_validation: bool = False,
     ) -> None:
+        """
+        Store dataset entries and augmentation mode.
+
+        Args:
+            corpus_list: Index lines in ``image_path,token_path`` format.
+            config: Transformer configuration used by the training run.
+            is_validation: When true, image augmentation is seeded by sample index
+                and occluding transforms are disabled for reproducible validation.
+        """
         self.corpus_list = self._add_mask_steps(corpus_list)
         self.vocab = Vocabulary()
         self.config = config
         self.is_validation = is_validation
 
     def _add_mask_steps(self, corpus_list: list[str]) -> Any:
+        """
+        Parse raw index lines into dictionaries used by ``__getitem__``.
+
+        Args:
+            corpus_list: Index lines in ``image_path,token_path`` format.
+
+        Returns:
+            List of dictionaries with ``image`` and ``tokens`` keys.
+        """
         result = []
         for entry in corpus_list:
             image, token_file = entry.strip().split(",")
@@ -48,13 +73,35 @@ class DataLoader:
         return result
 
     def __len__(self) -> int:
+        """
+        Return the number of indexed training examples.
+        """
         return len(self.corpus_list)
 
     def _read_tokens(self, path: str) -> DecoderBranches:
+        """
+        Read a token file and convert it to decoder branch tensors.
+
+        Args:
+            path: Path to a ``.tokens`` file.
+
+        Returns:
+            Padded branch tensors and validity mask for the decoder.
+        """
         tokens = read_tokens(path)
         return to_decoder_branches(tokens)
 
     def __getitem__(self, idx: int) -> Any:
+        """
+        Build one model-ready sample from an index entry.
+
+        Args:
+            idx: Dataset index to load.
+
+        Returns:
+            Dictionary containing the input image tensor, decoder branch labels and
+            branch mask expected by ``HomrTrainer``.
+        """
         entry = self.corpus_list[idx]
         sample_filepath = os.path.join(git_root, entry["image"])
 
@@ -94,6 +141,15 @@ class DataLoader:
 
 
 def _filter_valid_samples(samples: list[str]) -> list[str]:
+    """
+    Remove known problematic samples listed in ``skip_index.txt``.
+
+    Args:
+        samples: Raw dataset index entries.
+
+    Returns:
+        Entries whose token files are not present in the skip list.
+    """
     # Skip index contains token files which have a large number of ledger lines
     # which we don't want to include in training
     with open(os.path.join(script_location, "skip_index.txt")) as f:
@@ -112,6 +168,19 @@ def _filter_valid_samples(samples: list[str]) -> list[str]:
 
 
 def load_dataset(samples: list[str], config: Config, val_split: float = 0.0) -> dict[str, Any]:
+    """
+    Split raw index entries into training and validation dataset objects.
+
+    Args:
+        samples: Raw ``image_path,token_path`` index entries.
+        config: Transformer configuration passed to each dataset.
+        val_split: Fraction of entries reserved for validation from the start of
+            the filtered sample list.
+
+    Returns:
+        Dictionary containing train/validation datasets and their underlying index
+        lists.
+    """
     samples = _filter_valid_samples(samples)
     val_idx = int(len(samples) * val_split)
     training_list = samples[val_idx:]

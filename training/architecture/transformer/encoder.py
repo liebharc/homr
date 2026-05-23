@@ -9,7 +9,22 @@ from homr.transformer.configs import Config
 
 
 class ConvNeXtEncoder(nn.Module):
+    """
+    ConvNeXt-based image encoder for transformer staff recognition.
+
+    The encoder extracts stride-16 feature maps, projects them into the configured
+    transformer dimension and flattens the spatial grid into a sequence with
+    factorized vertical and horizontal positional embeddings.
+    """
+
     def __init__(self, config: Config):
+        """
+        Build the ConvNeXt backbone, projection layer and positional embeddings.
+
+        Args:
+            config: Transformer configuration defining channels, dimensions and
+                maximum input geometry.
+        """
         super().__init__()
 
         # Use configurable pretrained flag
@@ -57,6 +72,15 @@ class ConvNeXtEncoder(nn.Module):
             param.requires_grad = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Encode input staff images into a transformer context sequence.
+
+        Args:
+            x: Batched image tensor with shape ``B x C x H x W``.
+
+        Returns:
+            Encoded context tensor with shape ``B x N x D``.
+        """
         _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
         features = requested_stages[0]  # Get stage 2 (stride 16)
 
@@ -92,4 +116,13 @@ class ConvNeXtEncoder(nn.Module):
 
 
 def get_encoder(config: Config) -> Any:
+    """
+    Create the configured transformer image encoder.
+
+    Args:
+        config: Transformer configuration.
+
+    Returns:
+        Encoder module used by ``TrOMR``.
+    """
     return ConvNeXtEncoder(config)

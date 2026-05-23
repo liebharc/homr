@@ -10,13 +10,29 @@ from training.architecture.transformer.encoder import get_encoder
 
 
 class TrOMR(nn.Module):
+    """
+    End-to-end transformer model for optical music recognition.
+
+    ``TrOMR`` combines an image encoder with the multi-branch score decoder used
+    during both supervised training and autoregressive generation.
+    """
+
     def __init__(self, config: Config):
+        """
+        Create the encoder and decoder from a shared configuration.
+
+        Args:
+            config: Model and vocabulary configuration.
+        """
         super().__init__()
         self.encoder = get_encoder(config)
         self.decoder = get_decoder(config)
         self.config = config
 
     def eval_mode(self) -> None:
+        """
+        Put both encoder and decoder into evaluation mode.
+        """
         self.decoder.eval()
         self.encoder.eval()
 
@@ -32,6 +48,23 @@ class TrOMR(nn.Module):
         sampling_prob: float = 1.0,
         **kwargs: Any,
     ) -> Any:
+        """
+        Run the training forward pass and return decoder losses.
+
+        Args:
+            inputs: Batched input image tensor.
+            rhythms: Rhythm label ids, including BOS/EOS/PAD.
+            pitchs: Pitch label ids aligned with ``rhythms``.
+            lifts: Accidental/lift label ids aligned with ``rhythms``.
+            articulations: Articulation label ids aligned with ``rhythms``.
+            positions: Staff-position label ids aligned with ``rhythms``.
+            mask: Boolean mask identifying non-padding positions.
+            sampling_prob: Scheduled-sampling probability passed to the decoder.
+            **kwargs: Additional decoder arguments.
+
+        Returns:
+            Decoder output dictionary containing total and per-branch losses.
+        """
         context = self.encoder(inputs)
         loss = self.decoder(
             rhythms=rhythms,
@@ -48,6 +81,15 @@ class TrOMR(nn.Module):
 
     @torch.no_grad()
     def generate(self, x: torch.Tensor) -> list[EncodedSymbol]:
+        """
+        Generate encoded music symbols from input staff images.
+
+        Args:
+            x: Batched image tensor on the target device.
+
+        Returns:
+            Autoregressively decoded symbol sequence.
+        """
         start_token = torch.tensor([[1]], dtype=torch.long, device=x.device)
         nonote_token = torch.tensor([[0]], dtype=torch.long, device=x.device)
 
@@ -77,6 +119,9 @@ class TrOMR(nn.Module):
             self.encoder.unfreeze_backbone()
 
     def unfreeze_lift_decoder(self) -> None:
+        """
+        Unfreeze only the lift branch embedding and output projection.
+        """
         for param in self.decoder.net.lift_emb.parameters():
             param.requires_grad = True
         for param in self.decoder.net.to_logits_lift.parameters():

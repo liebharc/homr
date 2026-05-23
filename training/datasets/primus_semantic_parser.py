@@ -24,6 +24,10 @@ duration_map = {
 
 
 class PrimusConverter:
+    """
+    Parser for Camera-PrIMuS semantic tokens.
+    """
+
     @staticmethod
     def split_pitch_accidental(pitch_str: str) -> tuple[str, str]:
         """Split pitch string into base pitch and accidental."""
@@ -37,6 +41,9 @@ class PrimusConverter:
 
     @staticmethod
     def parse_duration(duration: str, is_grace_note: bool = False) -> str:
+        """
+        Convert a PrIMuS duration string into HOMR's kern-like duration token.
+        """
         dot_count = duration.count(".")
         dur_clean = duration.replace(".", "")
         grace = "G" if is_grace_note else ""
@@ -46,12 +53,19 @@ class PrimusConverter:
 
     @staticmethod
     def get_articulations(duration: str) -> tuple[str, str]:
+        """
+        Split supported articulations from a PrIMuS duration suffix.
+        PrIMuS only contains fermatas?
+        """
         if duration.endswith("fermata"):
             return duration.replace("_fermata", ""), "fermata"
         return duration, empty
 
     @staticmethod
     def parse_note(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS note or grace-note token.
+        """
         base = symbol.rsplit("note-", maxsplit=1)[-1]
         parts = base.split("_")
         pitch_part = parts[0]
@@ -66,6 +80,9 @@ class PrimusConverter:
 
     @staticmethod
     def parse_rest(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS rest token.
+        """
         duration = symbol.split("rest-")[1]
         duration, articulation = PrimusConverter.get_articulations(duration)
         rhythm_key = PrimusConverter.parse_duration(duration)
@@ -74,6 +91,9 @@ class PrimusConverter:
 
     @staticmethod
     def parse_multirest(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS multirest token, clamping to the supported vocabulary.
+        """
         _, measures = symbol.split("-")
         num = min(int(measures), 10)
         if num == 1:
@@ -83,16 +103,25 @@ class PrimusConverter:
 
     @staticmethod
     def parse_clef(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS clef token.
+        """
         return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty)
 
     @staticmethod
     def parse_key_signature(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS key-signature token into circle-of-fifths form.
+        """
         key = symbol.split("-")[1]
         circle = key_signature_to_circle_of_fifth(key)
         return EncodedSymbol(f"keySignature_{circle}")
 
     @staticmethod
     def parse_time_signature(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS time-signature token.
+        """
         _, fraction = symbol.split("-")
         if fraction == "C":
             denom = "4"
@@ -104,14 +133,23 @@ class PrimusConverter:
 
     @staticmethod
     def parse_barline(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS barline token.
+        """
         return EncodedSymbol("barline")
 
     @staticmethod
     def parse_tie(symbol: str) -> EncodedSymbol:
+        """
+        Parse a PrIMuS tie token as a tie/slur marker.
+        """
         return EncodedSymbol("tieSlur")
 
     @classmethod
     def convert_symbol(cls, symbol: str) -> EncodedSymbol:  # noqa: PLR0911
+        """
+        Dispatch one PrIMuS semantic token to the matching parser.
+        """
         if symbol.startswith(("note-", "gracenote-")):
             return cls.parse_note(symbol)
         elif symbol.startswith("rest-"):
@@ -133,6 +171,15 @@ class PrimusConverter:
 
 
 def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
+    """
+    Convert one PrIMuS semantic annotation string into encoded HOMR tokens.
+
+    Args:
+        semantic: Whitespace-separated PrIMuS semantic notation.
+
+    Returns:
+        Encoded symbols with a final barline and upper-staff positions assigned.
+    """
     symbols = re.split("\\s+", semantic.strip())
     tokens = [PrimusConverter.convert_symbol(sym) for sym in symbols]
     if tokens[-1].rhythm != "barline":

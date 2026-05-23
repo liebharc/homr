@@ -9,6 +9,18 @@ from homr.type_definitions import NDArray
 
 
 def read_image_to_ndarray(path: str) -> NDArray:
+    """
+    Read an image file into an OpenCV-style ndarray.
+
+    Args:
+        path: Image file path.
+
+    Returns:
+        BGR image data, or an inverted alpha channel for four-channel inputs.
+
+    Raises:
+        ValueError: If OpenCV cannot read the image.
+    """
     img: NDArray = cv2.imread(path, cv2.IMREAD_COLOR_BGR)  # type: ignore
     if img is None:
         raise ValueError("Failed to read image from " + path)
@@ -19,12 +31,32 @@ def read_image_to_ndarray(path: str) -> NDArray:
 
 
 def prepare_for_tensor(img: NDArray) -> NDArray:
+    """
+    Convert BGR image data to grayscale when needed.
+
+    Args:
+        img: Image array in grayscale or BGR format.
+
+    Returns:
+        Grayscale image array suitable for tensor conversion.
+    """
     if len(img.shape) == 3 and img.shape[-1] == 3:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     return img
 
 
 def ndarray_to_tensor(img: NDArray, mean: float = 0.7931, std: float = 0.1738) -> torch.Tensor:
+    """
+    Normalize an image ndarray and convert it to a torch tensor.
+
+    Args:
+        img: Grayscale image array with pixel values in ``[0, 255]``.
+        mean: Dataset normalization mean.
+        std: Dataset normalization standard deviation.
+
+    Returns:
+        Normalized tensor with the same spatial dimensions as the input.
+    """
     img_array = img.astype(np.float32) / 255.0
     tensor = torch.tensor(img_array)
     mean_t = torch.tensor([mean]).view(1, 1, 1)
@@ -33,12 +65,35 @@ def ndarray_to_tensor(img: NDArray, mean: float = 0.7931, std: float = 0.1738) -
 
 
 def pad_to_3_dims(tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Ensure an image tensor has an explicit channel dimension.
+
+    Args:
+        tensor: A two-dimensional ``H x W`` tensor or an existing ``C x H x W``
+            tensor.
+
+    Returns:
+        Tensor with shape ``C x H x W``.
+    """
     if len(tensor.shape) == 2:
         tensor = tensor.unsqueeze(0)
     return tensor
 
 
 def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> NDArray:
+    """
+    Add deterministic margins using the image background color.
+
+    Args:
+        image: Grayscale or color image.
+        top: Number of pixels to add above the image.
+        bottom: Number of pixels to add below the image.
+        left: Number of pixels to add left of the image.
+        right: Number of pixels to add right of the image.
+
+    Returns:
+        Image padded with the per-channel modal background value.
+    """
     # Works for (H, W) and (H, W, C) by treating channels uniformly
 
     if image.ndim == 2:

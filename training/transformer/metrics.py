@@ -23,6 +23,9 @@ class HomrTrainer(Trainer):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Initialize trainer state and metric accumulators.
+        """
         super().__init__(*args, **kwargs)
 
         # Training loss accumulators
@@ -42,6 +45,20 @@ class HomrTrainer(Trainer):
         return_outputs: bool = False,
         num_items_in_batch: Tensor | int | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """
+        Compute model loss and collect per-branch training loss components.
+
+        Args:
+            model: Transformer model being trained.
+            inputs: Batch dictionary containing image tensors, labels and masks.
+            return_outputs: When true, return the model output dictionary with the
+                loss.
+            num_items_in_batch: Optional batch-size metadata passed by
+                ``transformers.Trainer``.
+
+        Returns:
+            The scalar loss, or ``(loss, outputs)`` when ``return_outputs`` is true.
+        """
         if model.training:
             # Calculate sampling probability
             config = getattr(model, "config", None)
@@ -74,6 +91,19 @@ class HomrTrainer(Trainer):
         prediction_loss_only: bool,
         ignore_keys: list[str] | None = None,
     ) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
+        """
+        Run one evaluation step and update custom loss and accuracy accumulators.
+
+        Args:
+            model: Transformer model being evaluated.
+            inputs: Prepared evaluation batch.
+            prediction_loss_only: Unused Trainer flag retained for API compatibility.
+            ignore_keys: Optional output keys ignored by the base Trainer API.
+
+        Returns:
+            Tuple containing the detached loss and no logits or labels, because this
+            trainer accumulates metrics internally.
+        """
 
         inputs = self._prepare_inputs(inputs)
 
@@ -96,6 +126,13 @@ class HomrTrainer(Trainer):
         outputs: dict[str, Any],
         inputs: dict[str, torch.Tensor],
     ) -> None:
+        """
+        Accumulate masked next-token accuracy for every decoder branch.
+
+        Args:
+            outputs: Model output dictionary containing branch logits.
+            inputs: Batch labels and mask aligned with the decoder inputs.
+        """
         rhythm, pitch, lift, position, articulations = outputs["logits"]
         # Pull binary mask from inputs and align with y_out (shift by 1)
         eval_mask = inputs["mask"][:, 1:]
@@ -129,6 +166,17 @@ class HomrTrainer(Trainer):
             self._acc_total[name] += int(total)
 
     def evaluation_loop(self, *args, metric_key_prefix="eval", **kwargs):  # type: ignore
+        """
+        Run the base evaluation loop and append HOMR-specific metrics.
+
+        Args:
+            *args: Positional arguments passed through to ``Trainer.evaluation_loop``.
+            metric_key_prefix: Prefix used for generated metric names.
+            **kwargs: Keyword arguments passed through to ``Trainer.evaluation_loop``.
+
+        Returns:
+            The base evaluation output with added per-branch losses and accuracies.
+        """
         # Reset eval accumulators
         self._eval_loss_sum.clear()
         self._eval_loss_count.clear()
@@ -164,6 +212,13 @@ class HomrTrainer(Trainer):
         return output
 
     def log(self, logs: dict[str, float], start_time: float | None = None) -> None:
+        """
+        Add averaged per-branch training losses to Trainer logs.
+
+        Args:
+            logs: Metric dictionary emitted by the Trainer.
+            start_time: Optional timing value passed by recent Trainer versions.
+        """
         if self._loss_count and "loss" in logs:
             for component in LOSS_COMPONENTS:
                 if self._loss_count[component] > 0:

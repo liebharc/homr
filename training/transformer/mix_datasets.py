@@ -6,6 +6,17 @@ import numpy as np
 def _calc_number_of_files_to_take(
     data_sources: list[dict[str, Any]], number_of_files: int
 ) -> list[int]:
+    """
+    Allocate a requested sample count across weighted data sources.
+
+    Args:
+        data_sources: Source metadata dictionaries containing ``len``, ``weight``
+            and original ``id`` values.
+        number_of_files: Total number of files to allocate.
+
+    Returns:
+        Number of files to take from each original source id.
+    """
     files_to_take = [0 for _ in data_sources]
     while number_of_files > 0:
         total_weight = sum([s["weight"] for s in data_sources])
@@ -32,6 +43,15 @@ def _calc_number_of_files_to_take(
 
 
 def _take_all_training_sets(indexes: list[list[str]]) -> list[str]:
+    """
+    Concatenate and shuffle all dataset index entries.
+
+    Args:
+        indexes: Dataset index lists.
+
+    Returns:
+        One shuffled list containing every entry from every source.
+    """
     train_index = []
     for index in indexes:
         train_index += index
@@ -42,6 +62,18 @@ def _take_all_training_sets(indexes: list[list[str]]) -> list[str]:
 def mix_training_sets(
     data_sources: list[list[str]], weights: list[float], number_of_files: int
 ) -> list[str]:
+    """
+    Deterministically shuffle and mix multiple training indexes.
+
+    Args:
+        data_sources: Index entries grouped by source dataset.
+        weights: Relative sampling weights aligned with ``data_sources``.
+        number_of_files: Total number of entries to select, or ``-1`` to include
+            all entries.
+
+    Returns:
+        Shuffled mixed index entries for the training run.
+    """
     # We want the training and validation sets to be the same for each run
     # if the input hasn't changed and therefore set the seed here.
     np.random.seed(1720697007)

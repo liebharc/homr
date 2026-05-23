@@ -23,6 +23,16 @@ primus_train_index = os.path.join(primus, "index.txt")
 
 
 def _replace_suffix(path: Path, suffix: str) -> Path:
+    """
+    Replace a PrIMuS image suffix with a derived artifact suffix.
+
+    Args:
+        path: Source image path.
+        suffix: Target suffix such as ``.semantic``, ``.tokens`` or ``-pre.jpg``.
+
+    Returns:
+        Path with the recognized image suffix replaced.
+    """
     suffixes = [".jpg", ".jpeg", ".png"]
     if suffix == ".semantic":
         suffixes.insert(0, "_distorted.jpg")
@@ -33,6 +43,15 @@ def _replace_suffix(path: Path, suffix: str) -> Path:
 
 
 def _find_semantic_file(path: Path) -> Path | None:
+    """
+    Locate the semantic annotation file for a PrIMuS image.
+
+    Args:
+        path: Source image path.
+
+    Returns:
+        Matching ``.semantic`` path, or ``None`` when it does not exist.
+    """
     semantic_file = _replace_suffix(path, ".semantic")
     if semantic_file.exists():
         return semantic_file
@@ -40,6 +59,17 @@ def _find_semantic_file(path: Path) -> Path | None:
 
 
 def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
+    """
+    Convert one PrIMuS image and semantic file into training artifacts.
+
+    Args:
+        path: Source image path.
+        only_recreate_token_files: When true, skip image preprocessing and only
+            regenerate token files.
+
+    Returns:
+        Zero or one dataset index line for the converted sample.
+    """
     if "-pre.jpg" in str(path):
         return []
     if "," in str(path):
@@ -75,14 +105,27 @@ def _convert_file(path: Path, only_recreate_token_files: bool) -> list[str]:
 
 
 def _convert_file_only_tokens(path: Path) -> list[str]:
+    """
+    Recreate only the token file for one PrIMuS image path.
+    """
     return _convert_file(path, True)
 
 
 def _convert_semantic_and_image(path: Path) -> list[str]:
+    """
+    Recreate both the preprocessed image and token file for one PrIMuS image path.
+    """
     return _convert_file(path, False)
 
 
 def convert_primus_dataset(only_recreate_token_files: bool = False) -> None:
+    """
+    Download, convert and index the Camera-PrIMuS dataset.
+
+    Args:
+        only_recreate_token_files: When true, keep existing preprocessed images and
+            regenerate only ``.tokens`` files.
+    """
     if not os.path.exists(primus):
         eprint("Downloading Camera-PrIMuS from https://grfia.dlsi.ua.es/primus/")
         primus_archive = os.path.join(dataset_root, "CameraPrIMuS.tgz")

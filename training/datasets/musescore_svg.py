@@ -7,17 +7,31 @@ from homr.simple_logging import eprint
 
 
 class SvgValidationError(Exception):
+    """
+    Raised when SVG-derived staff geometry is invalid for dataset conversion.
+    """
+
     pass
 
 
 class SvgRectangle:
+    """
+    Integer rectangle parsed from a MuseScore SVG element.
+    """
+
     def __init__(self, x: int, y: int, width: int, height: int):
+        """
+        Store rectangle bounds.
+        """
         self.x = x
         self.y = y
         self.width = width
         self.height = height
 
     def intersects(self, rect2: "SvgRectangle") -> bool:
+        """
+        Check whether this rectangle overlaps another rectangle.
+        """
         # Unpack the rectangles
         x1, y1, width1, height1 = [self.x, self.y, self.width, self.height]
         x2, y2, width2, height2 = [rect2.x, rect2.y, rect2.width, rect2.height]
@@ -31,6 +45,9 @@ class SvgRectangle:
         return True
 
     def merge(self, other: "SvgRectangle") -> "SvgRectangle":
+        """
+        Return the bounding rectangle covering this rectangle and another one.
+        """
         x = min(self.x, other.x)
         y = min(self.y, other.y)
         width = max(self.x + self.width, other.x + other.width) - x
@@ -38,14 +55,27 @@ class SvgRectangle:
         return SvgRectangle(x, y, width, height)
 
     def __str__(self) -> str:
+        """
+        Format rectangle bounds for debugging.
+        """
         return f"({self.x}, {self.y}, {self.width}, {self.height})"
 
     def __repr__(self) -> str:
+        """
+        Return the debug representation of the rectangle.
+        """
         return self.__str__()
 
 
 class SvgStaff(SvgRectangle):
+    """
+    Staff bounding box with detected barline positions.
+    """
+
     def __init__(self, x: int, y: int, width: int, height: int):
+        """
+        Initialize a staff rectangle and seed start/end barlines.
+        """
         super().__init__(x, y, width, height)
         self.bar_line_x_positions = set()
 
@@ -55,6 +85,9 @@ class SvgStaff(SvgRectangle):
         self.min_measure_width = 50
 
     def add_bar_line(self, bar_line: SvgRectangle) -> None:
+        """
+        Add a barline x-position if it is not already represented.
+        """
         already_present = any(
             abs(bar_line.x - x) < self.min_measure_width for x in self.bar_line_x_positions
         )
@@ -62,6 +95,9 @@ class SvgStaff(SvgRectangle):
             self.bar_line_x_positions.add(bar_line.x)
 
     def merge_staff(self, other: "SvgStaff") -> "SvgStaff":
+        """
+        Merge two staff boxes that contain the same number of measures.
+        """
         if self.number_of_measures != other.number_of_measures:
             raise ValueError("Can't merge staffs with a different number of measures")
         x_min = min(self.x, other.x)
@@ -89,17 +125,33 @@ class SvgStaff(SvgRectangle):
 
     @property
     def number_of_measures(self) -> int:
+        """
+        Return the number of measure spans implied by barline positions.
+        """
         return len(self.bar_line_x_positions) - 1
 
     def __str__(self) -> str:
+        """
+        Format staff bounds and measure count for debugging.
+        """
         return f"({self.x}, {self.y}, {self.width}, {self.height}): {self.number_of_measures}"
 
     def __repr__(self) -> str:
+        """
+        Return the debug representation of the staff.
+        """
         return self.__str__()
 
 
 class SvgMusicFile:
+    """
+    Staff geometry extracted from one rendered MuseScore SVG page.
+    """
+
     def __init__(self, filename: str, width: float, height: float, staffs: list[SvgStaff]):
+        """
+        Store SVG page dimensions and detected staffs.
+        """
         self.filename = filename
         self.width = width
         self.height = height
@@ -152,6 +204,9 @@ class SvgMusicFile:
 
 
 def get_position_from_multiple_svg_files(musicxml_file: str) -> list[SvgMusicFile]:
+    """
+    Load staff-position information from all SVG pages for a MusicXML file.
+    """
     pattern = musicxml_file.replace(".musicxml", "*.svg")
     svgs = glob.glob(pattern)
     sorted_by_id = sorted(svgs, key=lambda x: int(x.split("-")[-1].split(".")[0]))
@@ -162,6 +217,9 @@ def get_position_from_multiple_svg_files(musicxml_file: str) -> list[SvgMusicFil
 
 
 def _parse_paths(points: str) -> SvgRectangle:
+    """
+    Parse a two-point SVG polyline into a rectangle.
+    """
     [start, end] = points.split()
     [x1, y1] = start.split(",")
     [x2, y2] = end.split(",")
@@ -176,6 +234,9 @@ def _parse_paths(points: str) -> SvgRectangle:
 def _combine_staff_lines_and_bar_lines(
     staff_lines: list[SvgRectangle], bar_lines: list[SvgRectangle]
 ) -> list[SvgStaff]:
+    """
+    Group staff lines into staffs and attach intersecting barlines.
+    """
     if len(staff_lines) % constants.number_of_lines_on_a_staff != 0:
         eprint("Warning: Staff lines are not a multiple of 5, but is ", len(staff_lines))
         return []
@@ -257,6 +318,9 @@ def _extend_staffs_with_stems(staffs: list[SvgStaff], stems: list[SvgRectangle])
 
 
 def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
+    """
+    Parse one MuseScore SVG page into staff geometry.
+    """
     doc = minidom.parse(svg_file)  # noqa: S318
     svg_element = doc.getElementsByTagName("svg")[0]
     width = float(svg_element.getAttribute("width").replace("px", ""))

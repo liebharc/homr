@@ -37,7 +37,14 @@ musescore_path = os.path.join(dataset_root, "MuseScore")
 
 
 class MusicXmlPage:
+    """
+    Lightweight page descriptor derived from MusicXML measures.
+    """
+
     def __init__(self, voices: list[list[Measure]], number_of_measures: int = 0) -> None:
+        """
+        Store the number of measures on a page.
+        """
         if len(voices) > 0:
             self.number_of_measures = len(voices[0])
         else:
@@ -109,6 +116,9 @@ def split_into_pages(voices: list[list[Measure]]) -> list[MusicXmlPage]:
 
 
 def copy_all_mscx_files(working_dir: str, dest: str) -> None:
+    """
+    Copy all MuseScore ``.mscx`` files from a tree into one directory.
+    """
     for root, _dirs, files in os.walk(working_dir):
         for file in files:
             if file.endswith(".mscx"):
@@ -117,6 +127,9 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
 
 
 def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]:
+    """
+    Build MuseScore batch-conversion jobs for missing output formats.
+    """
     jobs: list[dict[str, str]] = []
 
     # List of files where MuseScore seems to hang up
@@ -148,6 +161,9 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
 
 
 def _create_musicxml_and_svg_files() -> None:
+    """
+    Flatten MuseScore files and render missing MusicXML/SVG artifacts.
+    """
     dest = os.path.join(lieder, "flat")
     os.makedirs(dest, exist_ok=True)
     copy_all_mscx_files(os.path.join(lieder, "scores"), dest)
@@ -179,12 +195,22 @@ def _create_musicxml_and_svg_files() -> None:
 
 
 def write_text_to_file(text: str, path: str) -> None:
+    """
+    Write text content to a file path.
+    """
     with open(path, "w") as f:
         f.write(text)
 
 
 class MeasureCutter:
+    """
+    Stateful helper that cuts a voice into staff-sized training examples.
+    """
+
     def __init__(self, voice: list[Measure]) -> None:
+        """
+        Initialize current clef, key and time-signature state for one voice.
+        """
         self.voice = voice
         self.number_of_staffs = _count_staffs(voice)
         if self.number_of_staffs == 1:
@@ -198,11 +224,23 @@ class MeasureCutter:
         self.time = EncodedSymbol("timeSignature/4")
 
     def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
+        """
+        Convert a symbol's staff position to a zero-based staff index.
+        """
         if symbol.position == "lower":
             return 1
         return 0
 
     def extract_measures(self, count: int) -> list[EncodedSymbol]:
+        """
+        Remove and serialize the next measures from this voice.
+
+        Args:
+            count: Number of measures to extract.
+
+        Returns:
+            Flat token sequence with leading clef, key and time context inserted.
+        """
         clefs = self.clefs.copy()
         key = self.key
         time = self.time
@@ -253,6 +291,9 @@ class MeasureCutter:
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
+    """
+    Check whether a token sequence avoids unsupported percussion clefs.
+    """
     for symbol in symbols:
         if symbol.rhythm.startswith("clef_percussion"):
             return False
@@ -266,6 +307,9 @@ def _split_file_into_staffs(
     just_token_files: bool,
     fail_if_image_is_missing: bool,
 ) -> list[str]:
+    """
+    Cut one SVG page into staff images and matching token files.
+    """
     result: list[str] = []
     png_file = svg_file.filename.replace(".svg", ".png")
     if not just_token_files:
@@ -334,6 +378,9 @@ def _split_file_into_staffs(
 
 
 def _count_staffs(voice: list[Measure]) -> int:
+    """
+    Infer whether a voice starts as a single staff or grandstaff.
+    """
     if len(voice) == 0:
         return 0
     first_measure = voice[0]
@@ -348,6 +395,9 @@ def _count_staffs(voice: list[Measure]) -> int:
 
 
 def is_grandstaff(voice: list[Measure]) -> bool:
+    """
+    Return true when a MusicXML voice begins with upper and lower clefs.
+    """
     if len(voice) == 0:
         return False
     first_measure = voice[0]
@@ -374,6 +424,9 @@ def get_svg_voice_count(voice: list[Measure]) -> int:
 def convert_xml_and_svg_file(
     file: Path, just_token_files: bool, fail_if_image_is_missing: bool = True
 ) -> list[str]:
+    """
+    Convert one rendered Lieder MusicXML/SVG score into training index entries.
+    """
     try:
         voices = music_xml_file_to_tokens(str(file))
         splitter = [MeasureCutter(v) for v in voices]
@@ -436,14 +489,23 @@ def convert_xml_and_svg_file(
 
 
 def _convert_file_only_token(path: Path) -> list[str]:
+    """
+    Worker wrapper that regenerates token files only.
+    """
     return convert_xml_and_svg_file(path, True)
 
 
 def _convert_token_and_image(path: Path) -> list[str]:
+    """
+    Worker wrapper that regenerates both token and staff image files.
+    """
     return convert_xml_and_svg_file(path, False)
 
 
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
+    """
+    Download, render, convert and index the Lieder training dataset.
+    """
     if platform.system() == "Windows":
         eprint("Transformer training is only implemented for Linux")
         eprint("Feel free to submit a PR to support Windows")

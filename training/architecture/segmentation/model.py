@@ -22,6 +22,9 @@ class CamVidModel(pl.LightningModule):
         skip_weights_download: bool = False,
         **kwargs,
     ) -> None:
+        """
+        Build the segmentation network, normalization buffers and loss function.
+        """
         super().__init__()
         self.model = smp.create_model(
             arch,
@@ -47,12 +50,18 @@ class CamVidModel(pl.LightningModule):
         self.test_step_outputs = []
 
     def forward(self, image):
+        """
+        Normalize a batch of images and predict segmentation logits.
+        """
         # Normalize image
         image = (image - self.mean) / self.std
         mask = self.model(image)
         return mask
 
     def shared_step(self, batch, stage):
+        """
+        Run one train/validation/test step and compute segmentation statistics.
+        """
         image, mask = batch
 
         # Ensure the mask is a long (index) tensor
@@ -87,6 +96,9 @@ class CamVidModel(pl.LightningModule):
         }
 
     def shared_epoch_end(self, outputs, stage):
+        """
+        Aggregate per-step segmentation metrics for an epoch.
+        """
         # Aggregate step metrics
         tp = torch.cat([x["tp"] for x in outputs])
         fp = torch.cat([x["fp"] for x in outputs])
@@ -110,33 +122,54 @@ class CamVidModel(pl.LightningModule):
         self.log_dict(metrics, prog_bar=True)
 
     def training_step(self, batch, batch_idx):
+        """
+        Run one Lightning training step.
+        """
         train_loss_info = self.shared_step(batch, "train")
         self.training_step_outputs.append(train_loss_info)
         return train_loss_info
 
     def on_train_epoch_end(self):
+        """
+        Log and clear accumulated training metrics at epoch end.
+        """
         self.shared_epoch_end(self.training_step_outputs, "train")
         self.training_step_outputs.clear()
 
     def validation_step(self, batch, batch_idx):
+        """
+        Run one Lightning validation step.
+        """
         valid_loss_info = self.shared_step(batch, "valid")
         self.validation_step_outputs.append(valid_loss_info)
         return valid_loss_info
 
     def on_validation_epoch_end(self):
+        """
+        Log and clear accumulated validation metrics at epoch end.
+        """
         self.shared_epoch_end(self.validation_step_outputs, "valid")
         self.validation_step_outputs.clear()
 
     def test_step(self, batch, batch_idx):
+        """
+        Run one Lightning test step.
+        """
         test_loss_info = self.shared_step(batch, "test")
         self.test_step_outputs.append(test_loss_info)
         return test_loss_info
 
     def on_test_epoch_end(self):
+        """
+        Log and clear accumulated test metrics at epoch end.
+        """
         self.shared_epoch_end(self.test_step_outputs, "test")
         self.test_step_outputs.clear()
 
     def configure_optimizers(self):
+        """
+        Configure optimizer and cosine learning-rate scheduler for Lightning.
+        """
         optimizer = torch.optim.Adam(self.parameters(), lr=2e-4)
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
         return {
@@ -150,6 +183,16 @@ class CamVidModel(pl.LightningModule):
 
 
 def create_segnet(skip_weights_download: bool = False) -> CamVidModel:
+    """
+    Create the HOMR segmentation model.
+
+    Args:
+        skip_weights_download: When true, initialize the encoder without ImageNet
+            weights.
+
+    Returns:
+        Configured ``CamVidModel`` for six-class segmentation.
+    """
     return CamVidModel(
         encoder_name="resnet18", out_classes=6, skip_weights_download=skip_weights_download
     )

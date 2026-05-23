@@ -44,6 +44,9 @@ if not args.sorted:
 
 
 def print_color(text: str, highlights: list[str], color: Any) -> None:
+    """
+    Print token text while coloring words that contain selected highlights.
+    """
     for line in text.splitlines():
         words = line.split()
         for word in words:

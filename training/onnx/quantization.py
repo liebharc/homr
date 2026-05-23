@@ -35,6 +35,16 @@ def quantization_int8(model_path: str, out_path: str | None = None, preprocess: 
 
 
 def quantization_fp16(model_path: str, out_path: str | None = None) -> str:
+    """
+    Convert an ONNX model to fp16 weights.
+
+    Args:
+        model_path: Path to the source ONNX model.
+        out_path: Optional output path. Defaults to overwriting ``model_path``.
+
+    Returns:
+        Path to the fp16 model.
+    """
     if out_path is None:
         out_path = model_path
 
