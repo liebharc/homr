@@ -1,0 +1,2 @@
+index,source_image,poisoned_image,reference_xml,epsilon_phys,alpha,mode
+0,dataset\images\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.png,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p1000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.png,,0.1,1.0,L

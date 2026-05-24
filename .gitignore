@@ -56,3 +56,9 @@ _build/
 /runs
 /training/architecture/transformer/*/
 *.tokens
+ 
+# Local dataset and generated artifacts
+dataset/mxl/
+dataset/images/
+dataset/PDMX.csv
+attacks/artifacts/

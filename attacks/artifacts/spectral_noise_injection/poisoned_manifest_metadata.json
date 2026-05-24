@@ -1,0 +1,16 @@
+{
+  "seed": 42,
+  "epsilon_phys_grid": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.5
+  ],
+  "alpha": 1.0,
+  "source_image_count": 1,
+  "output_root": "attacks\\artifacts\\spectral_noise_injection\\poisoned_images",
+  "poisoned_image_root": "attacks\\artifacts\\spectral_noise_injection\\poisoned_images",
+  "reference_root": "dataset\\mxl"
+}
