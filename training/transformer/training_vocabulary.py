@@ -107,12 +107,9 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
 
 
 def read_tokens(filepath: str) -> list[EncodedSymbol]:
-    from homr.transformer.notation_conversion import to_transformer_format
-
     with open(filepath, encoding="utf-8") as f:
         lines = f.readlines()
-        symbols = read_token_lines(lines)
-        return to_transformer_format(symbols)
+        return read_token_lines(lines)
 
 
 class DecoderBranches:

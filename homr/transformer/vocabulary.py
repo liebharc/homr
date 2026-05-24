@@ -86,7 +86,7 @@ def build_rhythm() -> dict[str, int]:
 
 
 def build_lift() -> dict[str, int]:
-    lifts = [nonote, empty, "sharp", "flat", "natural", "double_sharp", "double_flat"]
+    lifts = [nonote, empty, "#", "##", "N", "b", "bb"]
     return build_dict(lifts)
 
 
@@ -233,11 +233,9 @@ def build_articulation() -> dict[str, int]:
 
 def build_pitch() -> dict[str, int]:
     pitch = [nonote, empty]
-    # Agnostic staff positions
-    # LL14 to LL1 (below staff), L1-L5, S1-S4 (staff), LH1 to LH14 (above staff)
-    pitch.extend([f"LL{i}" for i in range(14, 0, -1)])
-    pitch.extend(["L1", "S1", "L2", "S2", "L3", "S3", "L4", "S4", "L5"])
-    pitch.extend([f"LH{i}" for i in range(1, 15)])
+    note_names = ["C", "D", "E", "F", "G", "A", "B"]
+    octave = range(10)
+    pitch.extend(reversed([f"{n}{octave}" for octave, n in itertools.product(octave, note_names)]))
     return build_dict(pitch)
 
 

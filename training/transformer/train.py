@@ -36,7 +36,7 @@ class FreezeCallback(TrainerCallback):
     Standard practice is ~2 epochs.
     """
 
-    def __init__(self, epochs_to_freeze: int):
+    def __init__(self, epochs_to_freeze: int = 1):
         self.epochs_to_freeze = epochs_to_freeze
         self._backbone_frozen = False
 
@@ -207,7 +207,7 @@ def train_transformer(
     try:
         callbacks: list[TrainerCallback] = [EarlyStoppingCallback(early_stopping_patience=5)]
         if not fine_tune:
-            callbacks.append(FreezeCallback(epochs_to_freeze=1))
+            callbacks.append(FreezeCallback(epochs_to_freeze=2))
 
         trainer = HomrTrainer(
             model,

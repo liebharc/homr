@@ -94,25 +94,20 @@ class DataLoader:
 
 
 def _filter_valid_samples(samples: list[str]) -> list[str]:
-    from homr.transformer.notation_conversion import is_too_many_ledger_lines
-
-    # Filter out token files which have a large number of ledger lines (> 5)
+    # Skip index contains token files which have a large number of ledger lines
+    # which we don't want to include in training
+    with open(os.path.join(script_location, "skip_index.txt")) as f:
+        skip_files = {line.strip() for line in f.readlines()}
     valid_samples: list[str] = []
     filter_count = 0
     for entry in samples:
-        try:
-            image, token_file = entry.strip().split(",")
-            tokens = read_tokens(token_file)
-            if is_too_many_ledger_lines(tokens):
-                filter_count += 1
-                continue
-            valid_samples.append(entry)
-        except Exception as e:
-            eprint(f"Error reading {entry}: {e}")
+        image, token_file = entry.strip().split(",")
+        if token_file in skip_files:
+            filter_count += 1
             continue
-            
+        valid_samples.append(entry)
     if filter_count > 0:
-        eprint(f"Filtered out {filter_count} samples due to too many ledger lines (> 5)")
+        eprint(f"Filtered out {filter_count} samples based on skip_index.txt")
     return valid_samples
 
 
