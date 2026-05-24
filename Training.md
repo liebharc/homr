@@ -59,6 +59,24 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 368
+
+Commit: aad3b0899cee5b931aae3dd4345d371a8634669c
+Day: 24 May 2026  
+Transformer Smoke Test: SER 5%
+System Level: 12.3 diffs, SER: 16.2%
+
+Agnostic data format, with less complexity when it comes to pitch and accidentals.
+
+## Run 367
+
+Commit: 39ff998262112d75b425cdd99c43ab61441a3f4e
+Day: 22 May 2026  
+Transformer Smoke Test: SER 7%
+System Level: 7.0 diffs, SER: 5.2%
+
+Updated MuseScore version used to convert the Lieder dataset and switched to sinusoidal positional embedding.
+
 ## Run 334
 
 Commit: 6d996c3d118c1e183f8412832383168e52630ce8
