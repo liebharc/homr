@@ -185,7 +185,7 @@ def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     if tokens[-1].rhythm != "barline":
         tokens.append(EncodedSymbol("barline"))
     for symbol in tokens:
-        if has_rhythm_symbol_a_position(symbol.rhythm):
+        if has_rhythm_symbol_a_position(symbol.rhythm): # Where is lower parsed for the position?
             symbol.position = "upper"
     return tokens
 
