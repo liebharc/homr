@@ -107,59 +107,18 @@ def build_articulation() -> dict[str, int]:
         "accent",
         "accent_arpeggiate",
         "accent_arpeggiate_fermata",
-        "accent_arpeggiate_slurStart",
-        "accent_arpeggiate_slurStart_staccato",
-        "accent_arpeggiate_slurStop",
-        "accent_arpeggiate_slurStop_staccato",
         "accent_arpeggiate_staccato",
         "accent_breathMark",
         "accent_breathMark_fermata",
-        "accent_breathMark_slurStart",
-        "accent_breathMark_slurStop",
         "accent_fermata",
-        "accent_fermata_slurStart",
-        "accent_fermata_slurStart_trill",
-        "accent_fermata_slurStop",
-        "accent_slurStart",
-        "accent_slurStart_slurStop",
-        "accent_slurStart_slurStop_tenuto",
-        "accent_slurStart_slurStop_trill",
-        "accent_slurStart_staccato",
-        "accent_slurStart_tenuto",
-        "accent_slurStart_tieStart",
-        "accent_slurStart_tieStop",
-        "accent_slurStart_tremolo",
-        "accent_slurStart_trill",
-        "accent_slurStop",
-        "accent_slurStop_staccato",
-        "accent_slurStop_tenuto",
-        "accent_slurStop_tieStart",
-        "accent_slurStop_tremolo",
-        "accent_slurStop_trill",
         "accent_staccatissimo",
         "accent_staccato",
         "accent_staccato_tenuto",
         "accent_tenuto",
-        "accent_tieStart",
-        "accent_tieStart_trill",
-        "accent_tieStop",
         "accent_tremolo",
         "accent_trill",
         "arpeggiate",
         "arpeggiate_fermata",
-        "arpeggiate_fermata_slurStart",
-        "arpeggiate_fermata_slurStop",
-        "arpeggiate_slurStart",
-        "arpeggiate_slurStart_slurStop",
-        "arpeggiate_slurStart_staccatissimo",
-        "arpeggiate_slurStart_staccato",
-        "arpeggiate_slurStart_staccato_tenuto",
-        "arpeggiate_slurStart_tenuto",
-        "arpeggiate_slurStart_tremolo",
-        "arpeggiate_slurStop",
-        "arpeggiate_slurStop_staccatissimo",
-        "arpeggiate_slurStop_staccato",
-        "arpeggiate_slurStop_tenuto",
         "arpeggiate_staccatissimo",
         "arpeggiate_staccato",
         "arpeggiate_tenuto",
@@ -167,82 +126,23 @@ def build_articulation() -> dict[str, int]:
         "arpeggiate_trill",
         "breathMark",
         "breathMark_fermata",
-        "breathMark_fermata_slurStop",
         "breathMark_fermata_tenuto",
-        "breathMark_slurStart",
-        "breathMark_slurStart_trill",
-        "breathMark_slurStop",
-        "breathMark_slurStop_staccato",
-        "breathMark_slurStop_trill",
         "breathMark_staccato",
         "breathMark_staccato_tenuto",
         "breathMark_tenuto",
         "breathMark_tremolo",
         "fermata",
-        "fermata_slurStart",
-        "fermata_slurStart_slurStop",
-        "fermata_slurStart_trill",
-        "fermata_slurStop",
-        "fermata_slurStop_staccato",
-        "fermata_slurStop_tenuto",
-        "fermata_slurStop_tremolo",
-        "fermata_slurStop_trill",
-        "fermata_slurStop_turn",
         "fermata_staccato",
         "fermata_tenuto",
-        "fermata_tieStart_tieStop",
-        "fermata_tieStop",
         "fermata_tremolo",
         "fermata_trill",
-        "slurStart",
-        "slurStart_slurStop",
-        "slurStart_slurStop_staccato",
-        "slurStart_slurStop_staccato_tenuto",
-        "slurStart_slurStop_tenuto",
-        "slurStart_slurStop_tieStart_tieStop",
-        "slurStart_slurStop_tremolo",
-        "slurStart_slurStop_trill",
-        "slurStart_slurStop_turn",
-        "slurStart_staccatissimo",
-        "slurStart_staccato",
-        "slurStart_staccato_tenuto",
-        "slurStart_staccato_tieStop",
-        "slurStart_tenuto",
-        "slurStart_tenuto_tieStart",
-        "slurStart_tenuto_trill",
-        "slurStart_tieStart",
-        "slurStart_tieStart_tieStop",
-        "slurStart_tieStop",
-        "slurStart_tieStop_trill",
-        "slurStart_tremolo",
-        "slurStart_trill",
-        "slurStart_turn",
-        "slurStop",
-        "slurStop_staccatissimo",
-        "slurStop_staccato",
-        "slurStop_staccato_tenuto",
-        "slurStop_tenuto",
-        "slurStop_tieStart",
-        "slurStop_tieStart_tieStop",
-        "slurStop_tieStop",
-        "slurStop_tremolo",
-        "slurStop_trill",
-        "slurStop_turn",
         "staccatissimo",
         "staccato",
         "staccato_tenuto",
-        "staccato_tieStart",
-        "staccato_tieStop",
         "staccato_tremolo",
         "staccato_trill",
         "staccato_turn",
         "tenuto",
-        "tieStart",
-        "tieStart_tieStop",
-        "tieStart_tieStop_trill",
-        "tieStart_trill",
-        "tieStop",
-        "tieStop_trill",
         "tremolo",
         "trill",
         "turn",
@@ -251,6 +151,12 @@ def build_articulation() -> dict[str, int]:
     articulation.extend(articulations_lieder)
 
     return build_dict(articulation)
+
+
+def build_slur():
+    slur = [nonote, empty]
+    slur.extend["slurStart_slurStop", "slur_Start", "slurStop"]
+    return build_dict(slur)
 
 
 def build_pitch() -> dict[str, int]:
@@ -272,6 +178,7 @@ class Vocabulary:
         self.articulation = build_articulation()
         self.pitch = build_pitch()
         self.position = build_position()
+        self.slur = build_slur()
 
 
 class SymbolDuration:
@@ -363,6 +270,7 @@ class EncodedSymbol:
         lift: str = nonote,
         articulation: str = nonote,
         position: str = nonote,
+        slur: str = nonote,
         coordinates: tuple[float, float] | None = None,
     ) -> None:
         self.rhythm = rhythm
@@ -370,6 +278,7 @@ class EncodedSymbol:
         self.lift = lift
         self.articulation = articulation
         self.position = position
+        self.slur = slur
 
         # These coordinates are derived from transformer attention and are inherently imprecise,
         # since the model is optimized for predictive accuracy rather than spatial localization.
@@ -419,7 +328,7 @@ class EncodedSymbol:
 
     def is_valid(self) -> bool:
         has_position = has_rhythm_symbol_a_position(self.rhythm)
-        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position]]
+        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position, self.slur]]
         return all(item == has_position for item in is_note)
 
     def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
@@ -481,12 +390,13 @@ class EncodedSymbol:
                 and self.lift == __value.lift
                 and self.articulation == __value.articulation
                 and self.position == __value.position
+                and self.slur == __value.slur
             )
         else:
             return False
 
     def __hash__(self) -> int:
-        return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position))
+        return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur))
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, EncodedSymbol):
@@ -696,11 +606,12 @@ if __name__ == "__main__":
     eprint("Articulation=", json.dumps(vocab.articulation, indent=2))
     eprint("Pitch=", json.dumps(vocab.pitch, indent=2))
     eprint("Positions=", json.dumps(vocab.position, indent=2))
+    eprint("Slurs=", json.dumps(vocab.slur, indent=2))
 
     valid_combinations = []
 
-    for r, li, a, p, pos in itertools.product(
-        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.position
+    for r, li, a, p, pos, sl in itertools.product(
+        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.position, vocab.slur
     ):
         symbol = EncodedSymbol(r, li, a, p, pos)
         is_valid = symbol.is_valid()

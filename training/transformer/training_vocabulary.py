@@ -101,6 +101,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             else:
                 upper_slurs_ties.add(articulation)
         annotation_resorted.append(symbol_stripped)
+
+    # Adding slurs&ties to the aritculations
     if len(upper_slurs_ties) > 0:
         first_upper = next(
             (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
