@@ -28,6 +28,7 @@ def check_token_line(line: EncodedSymbol) -> None:
         or line.articulation not in vocab.articulation
         or line.pitch not in vocab.pitch
         or line.position not in vocab.position
+        or line.slur not in vocab.slur
     ):
         raise ValueError("Invalid symbol " + str(line))
 
@@ -179,12 +180,12 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
             if "tieSlur" in entry:
                 continue
             parts = entry.strip().split()
-            if len(parts) == 5:
-                rhythm, pitch, lift, articulation, position = parts
+            if len(parts) == 6:
+                rhythm, pitch, lift, articulation, position, slur = parts
             else:
-                rhythm, pitch, lift, articulation = parts
+                rhythm, pitch, lift, articulation, slur = parts
                 position = "upper"
-            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position)
+            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position, slur)
             is_first = i == 0
             if not is_first:
                 result.append(EncodedSymbol("chord"))
@@ -225,6 +226,7 @@ class DecoderBranches:
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         positions: torch.Tensor,
+        slur: torch.Tensor,
         mask: torch.Tensor,
     ) -> None:
         """
@@ -244,6 +246,7 @@ class DecoderBranches:
         self.lifts = lifts
         self.articulations = articulations
         self.positions = positions
+        self.slur = slur
         self.mask = mask
 
 
@@ -269,6 +272,7 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     pitchs = [nonote_token]
     lifts = [nonote_token]
     articulations = [nonote_token]
+    slurs = [nonote_token]
     position = [nonote_token]
     mask = [True]
     for symbol in symbols:
@@ -277,6 +281,7 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         lifts.append(vocab.lift[symbol.lift])
         articulations.append(vocab.articulation[symbol.articulation])
         position.append(vocab.position[symbol.position])
+        slurs.append(vocab.slur[symbol.slur])
         mask.append(True)
 
     rhythms.append(end_of_seq)
@@ -284,6 +289,7 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
     lifts.append(nonote_token)
     articulations.append(nonote_token)
     position.append(nonote_token)
+    slurs.append(nonote_token)
     mask.append(True)
 
     while len(rhythms) < default_config.max_seq_len:
@@ -292,6 +298,7 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         lifts.append(nonote_token)
         articulations.append(nonote_token)
         position.append(nonote_token)
+        slurs.append(nonote_token)
         mask.append(False)
 
     return DecoderBranches(
@@ -300,6 +307,7 @@ def to_decoder_branches(symbols: list[EncodedSymbol]) -> DecoderBranches:
         articulations=torch.tensor(articulations),
         pitchs=torch.tensor(pitchs),
         positions=torch.tensor(position),
+        slurs=torch.tensor(slurs),
         mask=torch.tensor(mask),
     )
 
@@ -320,6 +328,7 @@ class VocabularyStats:
         self.lift: dict[str, int] = defaultdict(int)
         self.articulation: dict[str, int] = defaultdict(int)
         self.pitch: dict[str, int] = defaultdict(int)
+        self.slur: dict[str, int] = defaultdict(int)
         self.max_seq_len = 0
 
     def add_lines(self, lines: list[EncodedSymbol]) -> None:
@@ -333,6 +342,7 @@ class VocabularyStats:
             self.rhythm[line.rhythm] += 1
             self.lift[line.lift] += 1
             self.articulation[line.articulation] += 1
+            self.slur[line.slur] += 1
             self.pitch[line.pitch] += 1
         self.max_seq_len = max(self.max_seq_len, len(lines))
 
@@ -348,6 +358,7 @@ class VocabularyStats:
             json.dumps(self.rhythm, indent=2, sort_keys=True),
             json.dumps(self.lift, indent=2, sort_keys=True),
             json.dumps(self.articulation, indent=2, sort_keys=True),
+            json.dumps(self.slur, indent=2, sort_keys=True),
             json.dumps(self.pitch, indent=2, sort_keys=True),
             f"max_seq_len={self.max_seq_len}",
         ]
