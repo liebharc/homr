@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import json
 import multiprocessing
 import os
@@ -7,6 +9,10 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+
+script_location = os.path.dirname(os.path.realpath(__file__))
+git_root = Path(script_location).parent.parent.absolute()
+sys.path.insert(0, str(git_root))
 
 import cv2
 import numpy as np
@@ -27,8 +33,6 @@ from training.transformer.training_vocabulary import (
     token_lines_to_str,
 )
 
-script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 lieder = os.path.join(dataset_root, "Lieder-main")
 quartets = os.path.join(dataset_root, "StringQuartets-main")
@@ -312,6 +316,7 @@ def _split_file_into_staffs(
     """
     result: list[str] = []
     png_file = svg_file.filename.replace(".svg", ".png")
+    image = None
     if not just_token_files:
         target_width = 1400
         scale = target_width / svg_file.width
@@ -373,6 +378,9 @@ def _split_file_into_staffs(
                 + "\n"
             )
         current_voice = (current_voice + 1) % number_of_voices
+
+    if image is not None:
+        del image
 
     return result
 
@@ -546,7 +554,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     with open(lieder_train_index, "w") as f:
         file_number = 0
         skipped_files = 0
-        with multiprocessing.Pool() as p:
+        with multiprocessing.Pool(processes=4, maxtasksperchild=2) as p:
             for result in p.imap_unordered(
                 (
                     _convert_file_only_token

@@ -160,7 +160,7 @@ class HumdrumKernConverter:
         """
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
 
-    def _articulation_from_suffix(self, suffix: str) -> str:
+    def _articulation_from_suffix(self, suffix: str) -> tuple[str, str]:
         """
         Convert supported kern note suffix markers to articulation tokens.
         """
@@ -173,13 +173,17 @@ class HumdrumKernConverter:
         suffix = suffix.replace(self.ignore_tie_continue, "")
 
         if not suffix:
-            return empty
+            return empty, empty
 
         mapping = {":": "arpeggiate", "[": "slurStart", "]": "slurStop"}
         articulations = []
+        slurs = []
         for char in suffix:
-            articulations.append(mapping[char])
-        return str.join("_", articulations)
+            if char == ":":
+                articulations.append(mapping[char])
+            elif char in {"]", "["}:
+                slurs.append(mapping[char])
+        return str.join("_", articulations), str.join("_", slurs)
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         """
@@ -255,12 +259,12 @@ class HumdrumKernConverter:
 
         rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
         if is_rest:
-            return EncodedSymbol(rhythm_key, empty, empty, empty)
+            return EncodedSymbol(rhythm_key, empty, empty, empty, slur=empty)
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
-        articulation_val = self._articulation_from_suffix(suffix)
-        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
+        articulation_val, slur_val = self._articulation_from_suffix(suffix)
+        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur=slur_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
         """

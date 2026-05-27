@@ -155,7 +155,7 @@ def build_articulation() -> dict[str, int]:
 
 def build_slur():
     slur = [nonote, empty]
-    slur.extend["slurStart_slurStop", "slur_Start", "slurStop"]
+    slur.extend(["slurStart_slurStop", "slurStart", "slurStop"])
     return build_dict(slur)
 
 
@@ -328,8 +328,12 @@ class EncodedSymbol:
 
     def is_valid(self) -> bool:
         has_position = has_rhythm_symbol_a_position(self.rhythm)
-        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position, self.slur]]
-        return all(item == has_position for item in is_note)
+        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position]]
+        if not all(item == has_position for item in is_note):
+            return False
+        if self.rhythm.startswith(("note", "rest")):
+            return self.slur != nonote
+        return self.slur == nonote
 
     def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
         all_articulations = []
@@ -337,6 +341,14 @@ class EncodedSymbol:
         all_articulations.extend([a for a in self.articulation.split("_") if a])
         result = copy.copy(self)
         result.articulation = str.join("_", sorted(all_articulations))
+        return result
+
+    def add_slurs(self, slurs: list[str]) -> "EncodedSymbol":
+        all_slurs = []
+        all_slurs.extend(slurs)
+        all_slurs.extend([a for a in self.slur.split("_") if a])
+        result = copy.copy(self)
+        result.slur = str.join("_", sorted(all_slurs))
         return result
 
     def strip_articulations(
@@ -359,6 +371,26 @@ class EncodedSymbol:
 
         return stripped, result
 
+    def strip_slurs(
+        self, to_be_removed: list[str], remove_all: bool = False
+    ) -> tuple[list[str], "EncodedSymbol"]:
+        stripped = []
+        remaining = []
+        for slur in self.slur.split("_"):
+            if not slur:
+                continue
+            if remove_all or slur in to_be_removed:
+                stripped.append(slur)
+            else:
+                remaining.append(slur)
+        result = copy.copy(self)
+        if remaining:
+            result.slur = str.join("_", remaining)
+        else:
+            result.slur = empty
+
+        return stripped, result
+
     def get_duration(self) -> SymbolDuration:
         """
         Convert a Humdrum **kern duration into a Fraction (relative to a whole note).
@@ -377,7 +409,9 @@ class EncodedSymbol:
         return duration
 
     def __str__(self) -> str:
-        return str.join(" ", (self.rhythm, self.pitch, self.lift, self.articulation, self.position))
+        return str.join(
+            " ", (self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur)
+        )
 
     def __repr__(self) -> str:
         return str(self)
@@ -396,7 +430,9 @@ class EncodedSymbol:
             return False
 
     def __hash__(self) -> int:
-        return hash((self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur))
+        return hash(
+            (self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur)
+        )
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, EncodedSymbol):
@@ -613,7 +649,7 @@ if __name__ == "__main__":
     for r, li, a, p, pos, sl in itertools.product(
         vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.position, vocab.slur
     ):
-        symbol = EncodedSymbol(r, li, a, p, pos)
+        symbol = EncodedSymbol(r, li, a, p, pos, sl)
         is_valid = symbol.is_valid()
         if not is_valid:
             continue

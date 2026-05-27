@@ -95,12 +95,12 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     lower_slurs_ties = set()
     annotation_resorted: list[EncodedSymbol] = []
     for symbol in sorted_chord:
-        stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
-        for articulation in stripped:
+        stripped, symbol_stripped = symbol.strip_slurs([], remove_all=True)
+        for slur in stripped:
             if symbol.position == "lower":
-                lower_slurs_ties.add(articulation)
+                lower_slurs_ties.add(slur)
             else:
-                upper_slurs_ties.add(articulation)
+                upper_slurs_ties.add(slur)
         annotation_resorted.append(symbol_stripped)
 
     # Adding slurs&ties to the aritculations
@@ -109,7 +109,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
         )
         if first_upper is not None:
-            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_articulations(
+            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_slurs(
                 list(upper_slurs_ties)
             )
     if len(lower_slurs_ties) > 0:
@@ -117,7 +117,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
         )
         if first_lower is not None:
-            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_articulations(
+            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_slurs(
                 list(lower_slurs_ties)
             )
     return str.join("&", [str(c) for c in annotation_resorted])
@@ -173,6 +173,23 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
     Returns:
         Flat sequence of encoded symbols ready for validation or tensor conversion.
     """
+
+    def split_legacy_articulation(value: str) -> tuple[str, str]:
+        articulations = []
+        slurs = []
+        for part in value.split("_"):
+            if part in ("slurStart", "tieStart"):
+                slurs.append("slurStart")
+            elif part in ("slurStop", "tieStop"):
+                slurs.append("slurStop")
+            elif part:
+                articulations.append(part)
+
+        return (
+            str.join("_", sorted(articulations)) if articulations else "_",
+            str.join("_", sorted(set(slurs))) if slurs else "_",
+        )
+
     result = []
     for line in lines:
         entries = line.split("&")
@@ -182,9 +199,13 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
             parts = entry.strip().split()
             if len(parts) == 6:
                 rhythm, pitch, lift, articulation, position, slur = parts
+            elif len(parts) == 5:
+                rhythm, pitch, lift, articulation, position = parts
+                articulation, slur = split_legacy_articulation(articulation)
             else:
-                rhythm, pitch, lift, articulation, slur = parts
+                rhythm, pitch, lift, articulation = parts
                 position = "upper"
+                articulation, slur = split_legacy_articulation(articulation)
             symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position, slur)
             is_first = i == 0
             if not is_first:

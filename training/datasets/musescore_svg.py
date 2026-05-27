@@ -322,25 +322,28 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     Parse one MuseScore SVG page into staff geometry.
     """
     doc = minidom.parse(svg_file)  # noqa: S318
-    svg_element = doc.getElementsByTagName("svg")[0]
-    width = float(svg_element.getAttribute("width").replace("px", ""))
-    height = float(svg_element.getAttribute("height").replace("px", ""))
-    lines = doc.getElementsByTagName("polyline")
-    staff_lines: list[SvgRectangle] = []
-    bar_lines: list[SvgRectangle] = []
-    stems: list[SvgRectangle] = []
-    for line in lines:
-        class_name = line.getAttribute("class")
-        if class_name == "StaffLines":
-            staff_lines.append(_parse_paths(line.getAttribute("points")))
-        if class_name == "BarLine":
-            bar_lines.append(_parse_paths(line.getAttribute("points")))
-        if class_name == "Stem":
-            stems.append(_parse_paths(line.getAttribute("points")))
+    try:
+        svg_element = doc.getElementsByTagName("svg")[0]
+        width = float(svg_element.getAttribute("width").replace("px", ""))
+        height = float(svg_element.getAttribute("height").replace("px", ""))
+        lines = doc.getElementsByTagName("polyline")
+        staff_lines: list[SvgRectangle] = []
+        bar_lines: list[SvgRectangle] = []
+        stems: list[SvgRectangle] = []
+        for line in lines:
+            class_name = line.getAttribute("class")
+            if class_name == "StaffLines":
+                staff_lines.append(_parse_paths(line.getAttribute("points")))
+            if class_name == "BarLine":
+                bar_lines.append(_parse_paths(line.getAttribute("points")))
+            if class_name == "Stem":
+                stems.append(_parse_paths(line.getAttribute("points")))
 
-    combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
+        combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
 
-    # Extend staffs using stem information
-    _extend_staffs_with_stems(combined, stems)
+        # Extend staffs using stem information
+        _extend_staffs_with_stems(combined, stems)
 
-    return SvgMusicFile(svg_file, width, height, combined)
+        return SvgMusicFile(svg_file, width, height, combined)
+    finally:
+        doc.unlink()
