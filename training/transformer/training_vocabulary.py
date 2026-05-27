@@ -4,7 +4,12 @@ from collections import defaultdict
 import torch
 
 from homr.transformer.configs import default_config
-from homr.transformer.vocabulary import EncodedSymbol, Vocabulary, sort_token_chords
+from homr.transformer.vocabulary import (
+    EncodedSymbol,
+    Vocabulary,
+    has_rhythm_symbol_a_position,
+    sort_token_chords,
+)
 
 vocab = Vocabulary()
 
@@ -201,6 +206,15 @@ class VocabularyStats:
 
     def __repr__(self) -> str:
         return str(self)
+
+
+def map_rhythm_symbol_with_position() -> torch.Tensor:
+    rhythm_vocab = vocab.rhythm
+    rhythm_map = torch.zeros(len(rhythm_vocab), dtype=torch.bool)
+    for rhythm, idx in rhythm_vocab.items():
+        if has_rhythm_symbol_a_position(rhythm):
+            rhythm_map[idx] = True
+    return rhythm_map
 
 
 if __name__ == "__main__":

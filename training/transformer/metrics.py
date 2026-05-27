@@ -1,9 +1,12 @@
+import os
 from collections import defaultdict
 from typing import Any
 
 import torch
 from torch import Tensor
 from transformers import Trainer
+
+from training.transformer.training_vocabulary import map_rhythm_symbol_with_position
 
 LOSS_COMPONENTS = [
     "loss_rhythm",
@@ -34,6 +37,8 @@ class HomrTrainer(Trainer):
         self._eval_loss_count: dict[str, int] = defaultdict(int)
         self._acc_correct: dict[str, int] = defaultdict(int)
         self._acc_total: dict[str, int] = defaultdict(int)
+
+        self._rhythm_map = map_rhythm_symbol_with_position()
 
     def compute_loss(
         self,
@@ -100,6 +105,11 @@ class HomrTrainer(Trainer):
         # Pull binary mask from inputs and align with y_out (shift by 1)
         eval_mask = inputs["mask"][:, 1:]
 
+        rhythms_output = inputs["rhythms"][:, 1:]
+        _rhythm_map_on_device = self._rhythm_map.to(rhythms_output.device)
+        rhythms_output_clamped = rhythms_output.clamp(min=0, max=_rhythm_map_on_device.shape[0] - 1)
+        is_positional = _rhythm_map_on_device[rhythms_output_clamped]
+
         branches = [
             ("rhythm", rhythm, inputs["rhythms"]),
             ("pitch", pitch, inputs["pitchs"]),
@@ -127,6 +137,16 @@ class HomrTrainer(Trainer):
 
             self._acc_correct[name] += int(correct)
             self._acc_total[name] += int(total)
+
+            if name == "pitch" and os.environ.get("DEBUG_PITCH_RHYTHM_ACCURACY", "0") == "1":
+                current_is_pos = is_positional[:, :min_len]
+                is_correct = preds == labels
+                is_pos = mask & current_is_pos
+                is_nonpos = mask & (~current_is_pos)
+                self._acc_correct["pitch_posRhy"] += int((is_correct & is_pos).sum().item())
+                self._acc_total["pitch_posRhy"] += int(is_pos.sum().item())
+                self._acc_correct["pitch_nonposRhy"] += int((is_correct & is_nonpos).sum().item())
+                self._acc_total["pitch_nonposRhy"] += int(is_nonpos.sum().item())
 
     def evaluation_loop(self, *args, metric_key_prefix="eval", **kwargs):  # type: ignore
         # Reset eval accumulators
