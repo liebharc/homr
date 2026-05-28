@@ -99,6 +99,17 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
                 upper_slurs.add(slur)
 
         annotation_resorted.append(symbol_stripped)
+    
+    def _remove_item_helper(s: set, input_item: str):
+        if len(s) > 1:
+            s.discard(input_item)
+        return s
+
+    upper_artics = _remove_item_helper(upper_artics, ".")
+    lower_artics =  _remove_item_helper(lower_artics, ".")
+    upper_slurs = _remove_item_helper(upper_slurs,".")
+    lower_slurs = _remove_item_helper(lower_slurs, ".")
+
     if len(upper_slurs) > 0:
         first_upper = next(
             (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
@@ -164,8 +175,9 @@ def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
         Text suitable for writing to a ``.tokens`` file.
     """
     chords = sort_token_chords(symbols)
-
+    print(f"Chords: {chords}")
     chord_strings = [_chord_to_str(c) for c in chords]
+    print(f"Result: {chord_strings}")
     return str.join("\n", chord_strings)
 
 
