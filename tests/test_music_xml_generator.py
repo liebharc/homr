@@ -94,13 +94,13 @@ XMLNotations()])])])])"""
         self.assertEqual(self._norm_expected(expected), actual)
 
     def test_grand_staff_generation(self) -> None:
-        grandstaff = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_1 . . . .
-timeSignature/4 . . . .
-note_1 G4 _ _ upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ _ lower
-rest_4 _ _ _ lower
-note_2 E4 _ _ upper&note_2 C2 _ _ lower
-barline . . . ."""
+        grandstaff = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . .
+note_1 G4 _ _ _ upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper&note_4 G3 _ _ _ lower
+rest_4 _ _ _ _ lower
+note_2 E4 _ _ _ upper&note_2 C2 _ _ _ lower
+barline . . . . ."""
         tokens = read_token_lines(grandstaff.splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
         actual = self._xml_to_str(xml)
