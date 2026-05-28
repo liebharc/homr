@@ -492,17 +492,17 @@ barline . . . ."""
 *	*v	*v
 =	="""
         tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_0 . . . .
-timeSignature/4 . . . .
-note_16 B4 _ _ upper&rest_8 _ _ _ upper&note_8 E2 _ _ lower
-note_16 G4 # _ upper
-note_8 E5 _ _ upper&note_16 E4 _ _ upper&rest_8 _ _ _ lower
-note_16 G4 # _ upper
-note_8 F5 _ _ upper&note_16 B4 _ _ upper&rest_4 _ _ _ lower
-note_16 G4 # _ upper
-note_8 E5 _ _ upper&note_16 E4 _ _ upper
-note_16 G4 # _ upper
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_16 B4 _ _ _ upper&rest_8 _ _ _ _ upper&note_8 E2 _ _ _ lower
+note_16 G4 # _ _ upper
+note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper&rest_8 _ _ _ _ lower
+note_16 G4 # _ _ upper
+note_8 F5 _ _ _ upper&note_16 B4 _ _ _ upper&rest_4 _ _ _ _ lower
+note_16 G4 # _ _ upper
+note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper
+note_16 G4 # _ _ upper
+barline . . . . ."""
         self.maxDiff = None
         self.assertEqual(tokens, expected)
