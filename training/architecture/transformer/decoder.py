@@ -46,6 +46,10 @@ class ScoreTransformerWrapper(nn.Module):
         self.articulation_emb = TokenEmbedding(
             config.decoder_dim, config.num_articulation_tokens, l2norm_embed=l2norm_embed
         )
+        self.slur_emb = TokenEmbedding(
+            config.decoder_dim, config.num_slur_tokens, l2norm_embed=l2norm_embed
+        )
+
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
@@ -62,7 +66,7 @@ class ScoreTransformerWrapper(nn.Module):
         self.to_logits_rhythm = nn.Linear(dim, config.num_rhythm_tokens)
         self.to_logits_position = nn.Linear(dim, config.num_position_tokens)
         self.to_logits_articulations = nn.Linear(dim, config.num_articulation_tokens)
-
+        self.to_logits_slurs = nn.Linear(dim, config.num_slur_tokens)
         self.init_()
 
     def init_(self) -> None:
@@ -71,6 +75,7 @@ class ScoreTransformerWrapper(nn.Module):
             nn.init.normal_(self.pitch_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.rhythm_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.articulation_emb.emb.weight, std=1e-5)
+            nn.init.normal_(self.slur_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pos_emb.emb.weight, std=1e-5)
         else:
             # Use transformer standard initialization (std=0.02)
@@ -79,6 +84,7 @@ class ScoreTransformerWrapper(nn.Module):
             nn.init.normal_(self.pitch_emb.emb.weight, std=0.02)
             nn.init.normal_(self.rhythm_emb.emb.weight, std=0.02)
             nn.init.normal_(self.articulation_emb.emb.weight, std=0.02)
+            nn.init.normal_(self.slur_emb.emb.weight, std=0.02)
             nn.init.normal_(self.pos_emb.emb.weight, std=0.02)
 
     def forward(
@@ -87,6 +93,7 @@ class ScoreTransformerWrapper(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
+        slurs: torch.Tensor,
         context: torch.Tensor | None = None,
         cache_len: torch.Tensor | None = None,
         mask: torch.Tensor | None = None,
@@ -100,6 +107,7 @@ class ScoreTransformerWrapper(nn.Module):
                 + self.pitch_emb(pitchs)
                 + self.lift_emb(lifts)
                 + self.articulation_emb(articulations)
+                + self.slur_emb(slurs)
                 + self.pos_emb(rhythms)
             )
 
@@ -116,6 +124,7 @@ class ScoreTransformerWrapper(nn.Module):
             out_pitchs = self.to_logits_pitch(x)
             out_rhythms = self.to_logits_rhythm(x)
             out_articulations = self.to_logits_articulations(x)
+            out_slurs = self.to_logits_slurs(x)
             out_positions = self.to_logits_position(x)
             return (
                 out_rhythms,
@@ -123,6 +132,7 @@ class ScoreTransformerWrapper(nn.Module):
                 out_lifts,
                 out_positions,
                 out_articulations,
+                out_slurs,
                 x,
                 attention,
                 None,
@@ -134,6 +144,7 @@ class ScoreTransformerWrapper(nn.Module):
                 + self.pitch_emb(pitchs)
                 + self.lift_emb(lifts)
                 + self.articulation_emb(articulations)
+                + self.slur_emb(slurs)
                 + self.pos_emb(rhythms, offset=cache_len)
             )
 
@@ -171,13 +182,14 @@ class ScoreTransformerWrapper(nn.Module):
             out_pitchs = self.to_logits_pitch(x)
             out_rhythms = self.to_logits_rhythm(x)
             out_articulations = self.to_logits_articulations(x)
+            out_slurs = self.to_logits_slurs(x)
             out_positions = self.to_logits_position(x)
             return (
                 out_rhythms,
                 out_pitchs,
                 out_lifts,
                 out_positions,
-                out_articulations,
+                out_slurs,
                 x,
                 attention,
                 cache_out,
@@ -243,6 +255,7 @@ class ScoreDecoder(nn.Module):
         self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
+        self.inv_slur_vocab = {v: k for k, v in config.slur_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
 
         note_mask = torch.zeros(config.num_rhythm_tokens)
@@ -274,6 +287,7 @@ class ScoreDecoder(nn.Module):
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
+        out_slurs = nonote_tokens
         mask = kwargs.pop("mask", None)
         context_first = kwargs.pop("context")
         context_later = context_first[:, :0]
@@ -293,17 +307,19 @@ class ScoreDecoder(nn.Module):
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
+            x_slurs = out_slurs[:, -1:]
 
             if step == 0:
                 context = context_first
             else:
                 context = context_later
 
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, _, _, cache = self.net(
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, _, _, cache = self.net(
                 rhythms=x_rhythm,
                 pitchs=x_pitch,
                 lifts=x_lift,
                 articulations=x_articulations,
+                slurs=x_slurs,
                 context=context,
                 cache_len=torch.Tensor([step]).to(self.device).long(),
                 mask=mask,
@@ -317,12 +333,14 @@ class ScoreDecoder(nn.Module):
             pitch_sample = pitchsp[:, -1, :].argmax(dim=-1, keepdim=True)
             lift_sample = liftsp[:, -1, :].argmax(dim=-1, keepdim=True)
             articulation_sample = articulationsp[:, -1, :].argmax(dim=-1, keepdim=True)
+            slur_sample = slursp[:, -1, :].argmax(dim=-1, keepdim=True)
             position_sample = positionsp[:, -1, :].argmax(dim=-1, keepdim=True)
 
             lift_token = detokenize(lift_sample, self.inv_lift_vocab)
             pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
             rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
             articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
+            slur_token = detokenize(slur_sample, self.inv_slur_vocab)
             position_token = detokenize(position_sample, self.inv_position_vocab)
 
             if rhythm_sample[0][0] == self.eos_token:
@@ -333,6 +351,7 @@ class ScoreDecoder(nn.Module):
                 pitch=pitch_token[0],
                 lift=lift_token[0],
                 articulation=articulation_token[0],
+                slur=slur_token[0],
                 position=position_token[0],
             )
             symbols.append(symbol)
@@ -341,6 +360,7 @@ class ScoreDecoder(nn.Module):
             out_pitch = torch.cat((out_pitch, pitch_sample), dim=-1)
             out_rhythm = torch.cat((out_rhythm, rhythm_sample), dim=-1)
             out_articulations = torch.cat((out_articulations, articulation_sample), dim=-1)
+            out_slurs = torch.cat((out_slurs, slur_sample), dim=-1)
             mask = F.pad(mask, (0, 1), value=True)
 
         self.net.train(was_training)
@@ -352,6 +372,7 @@ class ScoreDecoder(nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
+        slurs: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
         sampling_prob: float = 1.0,
@@ -361,6 +382,8 @@ class ScoreDecoder(nn.Module):
         liftso = lifts[:, 1:]
         articulationsi = articulations[:, :-1]
         articulationso = articulations[:, 1:]
+        slursi = slurs[:, :-1]
+        slurso = slurs[:, 1:]
         pitchsi = pitchs[:, :-1]
         pitchso = pitchs[:, 1:]
         rhythmsi = rhythms[:, :-1]
@@ -376,11 +399,12 @@ class ScoreDecoder(nn.Module):
             with torch.no_grad():
                 self.net.eval()
                 # First pass to get predictions
-                r_logits, p_logits, l_logits, pos_logits, a_logits, _, _, _ = self.net(
+                r_logits, p_logits, l_logits, pos_logits, a_logits, s_logits, _, _, _ = self.net(
                     rhythms=rhythmsi,
                     pitchs=pitchsi,
                     lifts=liftsi,
                     articulations=articulationsi,
+                    slurs=slursi,
                     mask=mask,
                     cache=None,
                     return_center_of_attention=False,
@@ -395,6 +419,7 @@ class ScoreDecoder(nn.Module):
                 p_sample = p_logits[:, :-1].argmax(dim=-1)
                 l_sample = l_logits[:, :-1].argmax(dim=-1)
                 a_sample = a_logits[:, :-1].argmax(dim=-1)
+                s_sample = s_logits[:, :-1].argmax(dim=-1)
                 pos_sample = pos_logits[:, :-1].argmax(dim=-1)
 
                 # Determine which indices to replace
@@ -415,15 +440,19 @@ class ScoreDecoder(nn.Module):
                 articulationsi = articulationsi.clone()
                 articulationsi[:, 1:] = (1 - mix_mask) * articulationsi[:, 1:] + mix_mask * a_sample
 
+                slursi = slursi.clone()
+                slursi[:, 1:] = (1 - mix_mask) * slursi[:, 1:] + mix_mask * s_sample
+
                 positionsi = positionsi.clone()
                 positionsi[:, 1:] = (1 - mix_mask) * positionsi[:, 1:] + mix_mask * pos_sample
 
         # Second pass (or standard pass) with (possibly mixed) inputs
-        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, x, _attention, _cache = self.net(
+        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, x, _attention, _cache = self.net(
             rhythms=rhythmsi,
             pitchs=pitchsi,
             lifts=liftsi,
             articulations=articulationsi,
+            slurs=slursi,
             mask=mask,
             cache=None,
             return_center_of_attention=False,
@@ -434,15 +463,16 @@ class ScoreDecoder(nn.Module):
         alpha = 1
         beta = 1
         loss_consist = beta * self.calConsistencyLoss(
-            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, mask
+            rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, mask
         )
         loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso, label_smoothing=0.1)
         loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
         loss_lift = alpha * self.cross_entropy(liftsp, liftso)
         loss_articulations = alpha * self.cross_entropy(articulationsp, articulationso)
+        loss_slurs = alpha * self.cross_entropy(slursp, slurso)
         loss_position = alpha * self.cross_entropy(positionsp, positionso)
         loss = (
-            loss_rhythm + loss_pitch + loss_lift + loss_articulations + loss_position + loss_consist
+            loss_rhythm + loss_pitch + loss_lift + loss_articulations + loss_slurs + loss_position + loss_consist
         )
 
         return {
@@ -452,6 +482,7 @@ class ScoreDecoder(nn.Module):
             "loss_consist": loss_consist,
             "loss_position": loss_position,
             "loss_articulations": loss_articulations,
+            "loss_slurs": loss_slurs,
             "loss": loss,
             "logits": (rhythmsp, pitchsp, liftsp, positionsp, articulationsp),
         }
@@ -463,6 +494,7 @@ class ScoreDecoder(nn.Module):
         liftsp: torch.Tensor,
         positionsp: torch.Tensor,
         articulationsp: torch.Tensor,
+        slursp: torch.Tensor,
         mask: torch.Tensor,
         gamma: int = 10,
     ) -> torch.Tensor:
@@ -481,6 +513,9 @@ class ScoreDecoder(nn.Module):
         articulationsp_soft = torch.softmax(articulationsp, dim=2)
         articulationsp_note = torch.sum(articulationsp_soft[:, :, 1:], dim=2) * mask
 
+        slursp_soft = torch.softmax(slursp, dim=2)
+        slursp_note = torch.sum(slursp_soft[:, :, 1:], dim=2) * mask
+
         loss = (
             gamma
             * (
@@ -488,8 +523,9 @@ class ScoreDecoder(nn.Module):
                 + F.l1_loss(positionsp_note, liftsp_note, reduction="none")
                 + F.l1_loss(positionsp_note, pitchsp_note, reduction="none")
                 + F.l1_loss(positionsp_note, articulationsp_note, reduction="none")
+                + F.l1_loss(positionsp_note, slursp_note, reduction="none")
             )
-            / 4.0
+            / 5.0
         )
 
         # Apply the mask to the loss and average over the non-masked elements

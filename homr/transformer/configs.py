@@ -99,6 +99,7 @@ class Config:
         self.num_pitch_tokens = len(self.vocab.pitch)
         self.num_lift_tokens = len(self.vocab.lift)
         self.num_articulation_tokens = len(self.vocab.articulation)
+        self.num_slur_tokens = len(self.vocab.slur)
         self.num_position_tokens = len(self.vocab.position)
         self.encoder_structure = "convnext"
         self.encoder_depth = 8
@@ -116,6 +117,7 @@ class Config:
         self.pitch_vocab = self.vocab.pitch
         self.rhythm_vocab = self.vocab.rhythm
         self.articulation_vocab = self.vocab.articulation
+        self.slur_vocab = self.vocab.slur
         self.position_vocab = self.vocab.position
         self.use_gpu_inference = True
 
