@@ -191,16 +191,5 @@ def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
 
 
 if __name__ == "__main__":
-    import glob
-    import os
-
-    from homr.simple_logging import eprint
-
-    stats = VocabularyStats()
-    for file in glob.glob(os.path.join("datasets", "Corpus", "**", "**.semantic"), recursive=True):
-        with open(file, encoding="utf-8", errors="ignore") as f:
-            first_line = f.readline().strip()
-            tokens = convert_primus_semantic_to_tokens(first_line)
-            check_token_lines(tokens)
-            stats.add_lines(tokens)
-    eprint("Stats", stats)
+    a = convert_primus_semantic_to_tokens("clef-G2 keySignature-DM timeSignature-2/4       note-F#4_sixteenth      note-F#4_eighth.        note-F#4_sixteenth      note-E4_eighth. barline note-F#4_eighth.        note-E4_sixteenth   note-E4_sixteenth        note-B4_eighth. barline note-A4_sixteenth       note-F#4_eighth.        note-F#4_eighth.        note-D4_sixteenth       barline note-E4_eighth. note-D4_sixteenth   note-E4_sixteenth        note-F#4_sixteenth      rest-sixteenth")
+    print(a)

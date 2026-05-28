@@ -183,14 +183,20 @@ class HumdrumKernConverter:
                 articulations.append(mapping[char])
             elif char in {"]", "["}:
                 slurs.append(mapping[char])
-        return str.join("_", articulations), str.join("_", slurs)
+        
+        if slurs and articulations:
+            return str.join("_", articulations), str.join("_", slurs)
+        elif slurs:
+            return empty, str.join("_", slurs)
+        elif articulations:
+            return str.join("_", articulations), empty
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         """
         Parse a kern clef control token.
         """
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
-        return EncodedSymbol(clef_name, empty, empty, empty)
+        return EncodedSymbol(clef_name, empty, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
         """
@@ -259,12 +265,12 @@ class HumdrumKernConverter:
 
         rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
         if is_rest:
-            return EncodedSymbol(rhythm_key, empty, empty, empty, slur=empty)
+            return EncodedSymbol(rhythm_key, empty, empty, empty, empty)
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
         articulation_val, slur_val = self._articulation_from_suffix(suffix)
-        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur=slur_val)
+        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
         """
@@ -289,8 +295,8 @@ class HumdrumKernConverter:
         Return the default clef for a Grandstaff staff number.
         """
         if staff_no == 0:
-            return EncodedSymbol("clef_G2", empty, empty, empty, "upper")
-        return EncodedSymbol("clef_F4", empty, empty, empty, "lower")
+            return EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")
+        return EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower")
 
     def _add_line_numbers(self, lines: list[str]) -> list[tuple[int, str]]:
         """
