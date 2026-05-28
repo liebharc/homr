@@ -174,22 +174,6 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
         Flat sequence of encoded symbols ready for validation or tensor conversion.
     """
 
-    def split_legacy_articulation(value: str) -> tuple[str, str]:
-        articulations = []
-        slurs = []
-        for part in value.split("_"):
-            if part in ("slurStart", "tieStart"):
-                slurs.append("slurStart")
-            elif part in ("slurStop", "tieStop"):
-                slurs.append("slurStop")
-            elif part:
-                articulations.append(part)
-
-        return (
-            str.join("_", sorted(articulations)) if articulations else "_",
-            str.join("_", sorted(set(slurs))) if slurs else "_",
-        )
-
     result = []
     for line in lines:
         entries = line.split("&")
