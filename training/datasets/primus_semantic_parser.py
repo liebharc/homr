@@ -169,6 +169,44 @@ class PrimusConverter:
         else:
             return EncodedSymbol(symbol)
 
+def change_tieSlur(tokens: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    result = []
+    for i in range(len(tokens) - 2):
+        if tokens[i+1] == EncodedSymbol("tieSlur"):
+            index_next = find_next_note(tokens, i)
+            if index_next:
+                tokens[index_next].slur = "slurStop"
+
+            index_last = find_last_note(tokens, i)
+            if index_last:
+                if tokens[index_last].slur == "slurStop":
+                    tokens[index_last].slur = "slurStart_slurStop"
+                else:
+                    tokens[index_last].slur = "slurStart"
+
+        if tokens[i] != EncodedSymbol("tieSlur"):
+            result.append(tokens[i])
+
+    result.append(tokens[-2])
+    result.append(tokens[-1])
+    return result
+
+def find_next_note(tokens: list[EncodedSymbol], idx: int) -> int:
+    """
+    Find next note (after index), we dont want to append a slur to a barline
+    """
+    for i in range(idx+2, len(tokens)):
+        if tokens[i].rhythm.startswith("note"):
+            return i
+
+def find_last_note(tokens: list[EncodedSymbol], idx: int) -> int:
+    """
+    Find last note (before index), we dont want to append a slur to a barline
+    """
+    for i in range(idx, 0, -1):
+        if tokens[i].rhythm.startswith("note"):
+            return i
+
 
 def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     """
@@ -187,6 +225,7 @@ def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     for symbol in tokens:
         if has_rhythm_symbol_a_position(symbol.rhythm): # Where is lower parsed for the position?
             symbol.position = "upper"
+    tokens = change_tieSlur(tokens)
     return tokens
 
 

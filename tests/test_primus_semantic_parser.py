@@ -28,10 +28,9 @@ note_8 B5 b _ _ upper
 note_8 A5 _ _ _ upper
 note_8 G5 _ _ _ upper
 barline . . . . .
-note_4. F5 _ _ _ upper
-tieSlur . . . . .
+note_4. F5 _ _ slurStart upper
 barline . . . . .
-note_4. F5 _ _ _ upper
+note_4. F5 _ _ slurStop upper
 barline . . . . .
 note_4. A4 _ _ _ upper
 barline . . . . ."""

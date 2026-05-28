@@ -175,9 +175,7 @@ def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
         Text suitable for writing to a ``.tokens`` file.
     """
     chords = sort_token_chords(symbols)
-    print(f"Chords: {chords}")
     chord_strings = [_chord_to_str(c) for c in chords]
-    print(f"Result: {chord_strings}")
     return str.join("\n", chord_strings)
 
 

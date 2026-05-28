@@ -66,9 +66,6 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend([f"rest_{d}" for d in kern_values])
     rhythm.extend([f"rest_{d}" for d in irregular_durations])
 
-    # Note relations (https://en.wikipedia.org/wiki/List_of_musical_symbols)
-    rhythm.extend(["tieSlur"])  #  "gliss"
-
     # Dynamics
     # rhythm.extend(
     #    [f"dynamic_{d}" for d in ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp"]]
