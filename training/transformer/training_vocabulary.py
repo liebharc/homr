@@ -75,50 +75,62 @@ def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
     return 1000000 + position
 
 
+
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
-    """
-    Convert a chord group into the textual token-file representation.
-
-    The chord is sorted into a canonical order before serialization. Articulations
-    are temporarily stripped from all chord members and then attached to the first
-    symbol of the matching staff position, which keeps chord text deterministic when
-    multiple notes carry tie/slur-style articulation markers.
-
-    Args:
-        chord: Symbols that occur at the same musical time position.
-
-    Returns:
-        A single token-file line with chord members separated by ``&``.
-    """
     sorted_chord = sorted(chord, key=_symbol_to_sortable)
-    upper_slurs_ties = set()
-    lower_slurs_ties = set()
+    upper_slurs = set()
+    lower_slurs = set()
+    upper_artics = set()
+    lower_artics = set()
+
     annotation_resorted: list[EncodedSymbol] = []
     for symbol in sorted_chord:
-        stripped, symbol_stripped = symbol.strip_slurs([], remove_all=True)
-        for slur in stripped:
+        artic_stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
+        slur_stripped, symbol_stripped = symbol_stripped.strip_slurs([], remove_all=True)
+        for articulation in artic_stripped:
             if symbol.position == "lower":
-                lower_slurs_ties.add(slur)
+                lower_artics.add(articulation)
             else:
-                upper_slurs_ties.add(slur)
-        annotation_resorted.append(symbol_stripped)
+                upper_artics.add(articulation)
+        for slur in slur_stripped:
+            if symbol.position == "lower":
+                lower_slurs.add(slur)
+            else:
+                upper_slurs.add(slur)
 
-    # Adding slurs&ties to the aritculations
-    if len(upper_slurs_ties) > 0:
+        annotation_resorted.append(symbol_stripped)
+    if len(upper_slurs) > 0:
         first_upper = next(
             (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
         )
         if first_upper is not None:
             annotation_resorted[first_upper] = annotation_resorted[first_upper].add_slurs(
-                list(upper_slurs_ties)
+                list(upper_slurs)
             )
-    if len(lower_slurs_ties) > 0:
+    if len(lower_slurs) > 0:
         first_lower = next(
             (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
         )
         if first_lower is not None:
             annotation_resorted[first_lower] = annotation_resorted[first_lower].add_slurs(
-                list(lower_slurs_ties)
+                list(lower_slurs)
+            )
+
+    if len(upper_artics) > 0:
+        first_upper = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
+        )
+        if first_upper is not None:
+            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_articulations(
+                list(upper_artics)
+            )
+    if len(lower_artics) > 0:
+        first_lower = next(
+            (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
+        )
+        if first_lower is not None:
+            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_articulations(
+                list(lower_artics)
             )
     return str.join("&", [str(c) for c in annotation_resorted])
 
