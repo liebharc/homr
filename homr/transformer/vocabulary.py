@@ -328,12 +328,8 @@ class EncodedSymbol:
 
     def is_valid(self) -> bool:
         has_position = has_rhythm_symbol_a_position(self.rhythm)
-        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.position]]
-        if not all(item == has_position for item in is_note):
-            return False
-        if self.rhythm.startswith(("note", "rest")):
-            return self.slur != nonote
-        return self.slur == nonote
+        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.slur, self.position]]
+        return all(item == has_position for item in is_note)
 
     def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
         all_articulations = []
