@@ -1,8 +1,4 @@
 class Symbols:
-    """
-    Dense dataset class ids grouped by HOMR segmentation target categories.
-    """
-
     BACKGROUND = [0]
     LEDGERLINE = [2]
     BARLINE_BETWEEN = [3]

@@ -16,16 +16,6 @@ HALF_WHOLE_NOTE = DEF.NOTEHEADS_HOLLOW + DEF.NOTEHEADS_WHOLE + [42]
 
 
 def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
-    """
-    Fill hollow notehead interiors for a target dense-dataset class color.
-
-    Args:
-        gt: Dense segmentation label image.
-        tar_color: Hollow notehead class id to fill.
-
-    Returns:
-        Binary mask for the filled target notehead class.
-    """
     if tar_color not in HALF_WHOLE_NOTE:
         raise ValueError("The color is not a notehead color")
     tar = np.where(gt == tar_color, 1, 0).astype(np.uint8)
@@ -83,18 +73,6 @@ def fill_hole(gt: NDArray, tar_color: int) -> NDArray:
 def find_example(
     dataset_path: str, color: int, max_count: int = 100, mark_value: int = 255
 ) -> NDArray | None:
-    """
-    Find and highlight an example mask containing a given class color.
-
-    Args:
-        dataset_path: Directory of segmentation masks.
-        color: Class id to search for.
-        max_count: Maximum number of shuffled files to inspect.
-        mark_value: Pixel value used to highlight matching pixels.
-
-    Returns:
-        Highlighted mask array, or ``None`` when no example is found.
-    """
     files = os.listdir(dataset_path)
     random.shuffle(files)
     for ff in files[:max_count]:

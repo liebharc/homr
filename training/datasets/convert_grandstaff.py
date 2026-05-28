@@ -23,15 +23,6 @@ grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")
 
 
 def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
-    """
-    Count dark pixels in each image row.
-
-    Args:
-        image: BGR staff image.
-
-    Returns:
-        One-dimensional array of dark-pixel counts per row.
-    """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     dark_pixels_per_row = np.zeros(gray.shape[0])
     dark_threshold = 200
@@ -59,28 +50,10 @@ def _create_staff_image(path: str, basename: str) -> str:
 
 
 def _prepare_image(image: NDArray) -> NDArray:
-    """
-    Placeholder hook for Grandstaff image preprocessing.
-
-    Args:
-        image: Cropped staff image.
-
-    Returns:
-        Image currently unchanged.
-    """
     return image
 
 
 def _get_image_bounds(dark_pixels_per_row: NDArray) -> tuple[int, int]:
-    """
-    Find leading and trailing white margins around staff content.
-
-    Args:
-        dark_pixels_per_row: Count of dark pixels per image row.
-
-    Returns:
-        Number of rows to trim from the top and bottom.
-    """
     white_upper_area_size = 0
     for i in range(dark_pixels_per_row.shape[0]):
         if dark_pixels_per_row[i] > 0:
@@ -105,16 +78,6 @@ def _check_staff_image(path: str, basename: str) -> str:
 
 
 def _kern_to_tokens(path: str, basename: str) -> str:
-    """
-    Convert one Humdrum ``.krn`` file into a HOMR token file.
-
-    Args:
-        path: Path to the ``.krn`` file.
-        basename: Output path prefix without extension.
-
-    Returns:
-        Token file path, or an empty string when the sample is skipped.
-    """
     with open(path) as text_file:
         result = convert_kern_to_tokens(text_file.readlines())
 
@@ -127,16 +90,6 @@ def _kern_to_tokens(path: str, basename: str) -> str:
 
 
 def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> str:  # noqa: PLR0911
-    """
-    Convert one Grandstaff source file into an index entry.
-
-    Args:
-        path: Humdrum ``.krn`` source path.
-        ony_recreate_token_files: When true, reuse the existing preprocessed image.
-
-    Returns:
-        Dataset index entry, or an empty string when conversion fails or is skipped.
-    """
     try:
         basename = str(path).replace(".krn", "")
         image_file = str(path).replace(".krn", ".jpg")
@@ -159,29 +112,14 @@ def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> str:  #
 
 
 def _convert_file_only_tokens(path: Path) -> tuple[Path, str]:
-    """
-    Worker wrapper that regenerates only token files.
-    """
     return path, _convert_file(path, True)
 
 
 def _convert_tokens_and_image(path: Path) -> tuple[Path, str]:
-    """
-    Worker wrapper that regenerates tokens and preprocessed images.
-    """
     return path, _convert_file(path, False)
 
 
 def _filter_out_known_bad_ones(path: Path) -> bool:
-    """
-    Exclude known Grandstaff files with unusable image content.
-
-    Args:
-        path: Candidate ``.krn`` path.
-
-    Returns:
-        True when the file should be converted.
-    """
     # These images contain to meaningful data or have
     # artifacts like large black areas
     bad_files = {
@@ -202,13 +140,6 @@ def _filter_out_known_bad_ones(path: Path) -> bool:
 
 
 def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
-    """
-    Download, convert and index the Grandstaff dataset.
-
-    Args:
-        only_recreate_token_files: When true, regenerate tokens while keeping
-            existing preprocessed images.
-    """
     if not os.path.exists(grandstaff_root):
         eprint(
             "Downloading grandstaff from https://sites.google.com/view/multiscore-project/datasets"

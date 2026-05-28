@@ -6,15 +6,6 @@ from training.transformer.training_vocabulary import read_tokens, token_lines_to
 
 
 def validate_conversion(file: str) -> bool:
-    """
-    Round-trip a token file through MusicXML and compare the resulting tokens.
-
-    Args:
-        file: Path to a ``.tokens`` file.
-
-    Returns:
-        True when generated MusicXML parses back to the same token sequence.
-    """
     expected = read_tokens(file)
     tmp = file.replace(".tokens", ".musicxml.tmp")
 
@@ -48,15 +39,6 @@ if __name__ == "__main__":
         sys.exit(0)
 
     def process_file(index_entry: str) -> tuple[str, bool]:
-        """
-        Validate the token file referenced by one dataset index entry.
-
-        Args:
-            index_entry: Raw ``image_path,token_path`` index line.
-
-        Returns:
-            Tuple of token path and validation result.
-        """
         try:
             file = index_entry.strip().split(",")[1]
             return file, validate_conversion(file)

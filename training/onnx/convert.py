@@ -16,14 +16,7 @@ from training.architecture.transformer.encoder import get_encoder
 
 
 class DecoderWrapper(torch.nn.Module):
-    """
-    ONNX export wrapper exposing decoder cache tensors as flat inputs/outputs.
-    """
-
     def __init__(self, model: ScoreTransformerWrapper) -> None:
-        """
-        Store the decoder model to export.
-        """
         super().__init__()
         self.model = model
 
@@ -45,9 +38,6 @@ class DecoderWrapper(torch.nn.Module):
         torch.Tensor,
         tuple[torch.Tensor, ...],
     ]:
-        """
-        Run one cached decoder step for ONNX tracing.
-        """
         (
             out_rhythms,
             out_pitchs,

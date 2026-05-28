@@ -10,15 +10,6 @@ from training.transformer.training_vocabulary import VocabularyStats, check_toke
 
 
 def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
-    """
-    Convert Humdrum ``**kern`` text into a flat HOMR token sequence.
-
-    Args:
-        lines: Raw lines from a ``.krn`` file.
-
-    Returns:
-        Encoded symbols merged across staffs and cleaned for training.
-    """
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
     merged = merge_upper_and_lower_staff(
         [_convert_single_staff(staff_no, staff) for staff_no, staff in enumerate(reversed(staffs))]
@@ -98,9 +89,6 @@ def _merge_multiple_voices_on_the_same_staff(
 
 
 def _remove_redundant_key_changes(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
-    """
-    Remove immediately repeated key-signature symbols.
-    """
     last_symbol = EncodedSymbol("")
     result = []
     for symbol in symbols:
@@ -130,22 +118,12 @@ def _fix_final_repeat_start(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]
 
 
 def _convert_single_staff(staff_no: int, lines: list[str]) -> list[EncodedSymbolWithPos]:
-    """
-    Convert one staff's Humdrum lines into positioned symbols.
-    """
     converter = HumdrumKernConverter()
     return converter.convert_humdrum_kern(staff_no, lines)
 
 
 class HumdrumKernConverter:
-    """
-    Converter for one Humdrum ``**kern`` staff.
-    """
-
     def __init__(self) -> None:
-        """
-        Initialize sets of Humdrum suffix markers ignored by the visual tokenizer.
-        """
         # Grandstaff definitions: https://link.springer.com/article/10.1007/s10032-023-00432-z#Tab1
         self.ignore_beams = ("L", "J", "K", "k")
         self.ignore_alteration_displays = ("x", "X", "i", "I", "j", "Z", "y", "Y")
@@ -155,15 +133,9 @@ class HumdrumKernConverter:
         self.angled_brackets = ("<", ">")
 
     def _accidental_to_lift(self, accidental: str) -> str:
-        """
-        Convert a kern accidental marker to a HOMR lift token.
-        """
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
 
-    def _articulation_from_suffix(self, suffix: str) -> tuple[str, str]:
-        """
-        Convert supported kern note suffix markers to articulation tokens.
-        """
+    def _articulation_from_suffix(self, suffix: str) -> str:
         for symbol in self.ignore_beams:
             suffix = suffix.replace(symbol, "")
         for symbol in self.ignore_alteration_displays:
@@ -192,16 +164,10 @@ class HumdrumKernConverter:
             return str.join("_", articulations), empty
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
-        """
-        Parse a kern clef control token.
-        """
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
         return EncodedSymbol(clef_name, empty, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
-        """
-        Parse a kern key-signature control token.
-        """
         mapping = {
             "*k[b-e-a-d-g-c-f-]": -7,
             "*k[b-e-a-d-g-c-]": -6,
@@ -223,17 +189,11 @@ class HumdrumKernConverter:
         return EncodedSymbol(f"keySignature_{circle}")
 
     def parse_time_signature(self, ts: str) -> EncodedSymbol:
-        """
-        Parse a kern meter control token.
-        """
         ts_val = ts.split(maxsplit=1)[0].replace("*M", "")
         parts = ts_val.split("/")
         return EncodedSymbol(f"timeSignature/{parts[1]}")
 
     def parse_duration(self, dur: str, is_rest: bool = False, is_grace: bool = False) -> str:
-        """
-        Convert a kern duration fragment to a HOMR rhythm token.
-        """
         if not dur:
             raise ValueError("Missing duration " + dur)
         has_dot = dur.endswith(".")
@@ -243,17 +203,11 @@ class HumdrumKernConverter:
         return f"{base}_{dur_val}{grace}{'.' if has_dot else ''}"
 
     def kern_note_to_pitch(self, kern_note: str) -> str:
-        """
-        Convert a kern note spelling to HOMR pitch/octave notation.
-        """
         letter = kern_note[0].upper()
         count = len(kern_note)
         return f"{letter}{3 + count}" if kern_note[0].islower() else f"{letter}{4 - count}"
 
     def parse_note_or_rest(self, token: str) -> EncodedSymbol:
-        """
-        Parse one kern note or rest token.
-        """
         match = re.match(r"(\d*\.*)([a-grA-GR]+)(--|-|n|##|#)?([^#]*)", token)
         if not match:
             raise Exception(f"Invalid note {token}")
@@ -273,9 +227,6 @@ class HumdrumKernConverter:
         return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
-        """
-        Parse a kern barline token into one or more HOMR barline symbols.
-        """
         symbol = line.split(" ", maxsplit=1)[0]
         mapping = {
             "=:|!|:": ["repeatEndStart"],
@@ -291,9 +242,6 @@ class HumdrumKernConverter:
         return [EncodedSymbol(s) for s in mapping[symbol]]
 
     def _get_default_clef(self, staff_no: int) -> EncodedSymbol:
-        """
-        Return the default clef for a Grandstaff staff number.
-        """
         if staff_no == 0:
             return EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")
         return EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower")
@@ -319,16 +267,6 @@ class HumdrumKernConverter:
     def convert_humdrum_kern(
         self, staff_no: int, lines: list[str]
     ) -> list[EncodedSymbolWithPos]:  # noqa: C901
-        """
-        Convert one staff's kern lines into positioned encoded symbols.
-
-        Args:
-            staff_no: Staff index used to choose the default clef.
-            lines: Humdrum lines for the staff.
-
-        Returns:
-            Encoded symbols annotated with merge positions.
-        """
         result: list[EncodedSymbolWithPos] = []
 
         clef = EncodedSymbolWithPos(-10, self._get_default_clef(staff_no))

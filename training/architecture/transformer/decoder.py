@@ -27,15 +27,6 @@ class ScoreTransformerWrapper(nn.Module):
         attn_layers: Any,
         l2norm_embed: bool = False,
     ) -> None:
-        """
-        Build token embeddings, attention layers and output heads.
-
-        Args:
-            config: Transformer configuration defining branch vocabulary sizes and
-                sequence length.
-            attn_layers: x-transformers attention stack used by the decoder.
-            l2norm_embed: Whether token and positional embeddings are L2-normalized.
-        """
         super().__init__()
         if not isinstance(attn_layers, AttentionLayers):
             raise ValueError("attention layers must be an instance of AttentionLayers")
@@ -75,9 +66,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.init_()
 
     def init_(self) -> None:
-        """
-        Initialize decoder embedding weights.
-        """
         if self.l2norm_embed:
             nn.init.normal_(self.lift_emb.emb.weight, std=1e-5)
             nn.init.normal_(self.pitch_emb.emb.weight, std=1e-5)
@@ -105,25 +93,6 @@ class ScoreTransformerWrapper(nn.Module):
         return_center_of_attention: bool = False,
         **kwargs: torch.Tensor,
     ) -> Any:
-        """
-        Run the multi-branch decoder with optional cached autoregressive state.
-
-        Args:
-            rhythms: Rhythm input token ids.
-            pitchs: Pitch input token ids.
-            lifts: Lift input token ids.
-            articulations: Articulation input token ids.
-            context: Optional encoder context for cross-attention.
-            cache_len: Current cache length for positional offset handling.
-            mask: Optional decoder attention mask.
-            return_center_of_attention: Whether to estimate the attended image
-                position from cross-attention weights.
-            **kwargs: Optional cache and attention-layer arguments.
-
-        Returns:
-            Branch logits, decoder hidden states, optional attention center and
-            optional updated cache tensors.
-        """
         cache = kwargs.pop("cache", None)
         if cache is None:
             x = (
@@ -261,21 +230,7 @@ class ScoreTransformerWrapper(nn.Module):
 
 
 class ScoreDecoder(nn.Module):
-    """
-    Training and generation wrapper around the multi-branch score transformer.
-
-    The decoder predicts rhythm, pitch, lift, position and articulation branches,
-    combines their losses and provides greedy autoregressive decoding for inference.
-    """
-
     def __init__(self, transformer: ScoreTransformerWrapper, config: Config):
-        """
-        Initialize loss settings, inverse vocabularies and note-consistency masks.
-
-        Args:
-            transformer: Underlying multi-branch transformer wrapper.
-            config: Model and vocabulary configuration.
-        """
         super().__init__()
         self.pad_value = (config.pad_token,)
         self.ignore_index = config.pad_token
@@ -306,18 +261,6 @@ class ScoreDecoder(nn.Module):
         nonote_tokens: torch.Tensor,
         **kwargs: Any,
     ) -> list[EncodedSymbol]:
-        """
-        Greedily decode symbols from encoder context using key/value caching.
-
-        Args:
-            start_tokens: Initial rhythm token, normally BOS.
-            nonote_tokens: Placeholder token used for non-rhythm branches at the
-                first step.
-            **kwargs: Must include encoder ``context`` and may include a mask.
-
-        Returns:
-            Decoded encoded symbols, stopping at EOS or ``max_seq_len``.
-        """
         was_training = self.net.training
         num_dims = len(start_tokens.shape)
 
@@ -414,23 +357,6 @@ class ScoreDecoder(nn.Module):
         sampling_prob: float = 1.0,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """
-        Compute supervised decoder losses for one training batch.
-
-        Args:
-            rhythms: Rhythm label ids including BOS/EOS/PAD.
-            pitchs: Pitch label ids aligned with ``rhythms``.
-            lifts: Lift label ids aligned with ``rhythms``.
-            articulations: Articulation label ids aligned with ``rhythms``.
-            positions: Staff-position label ids aligned with ``rhythms``.
-            mask: Boolean mask marking non-padding positions.
-            sampling_prob: Probability of keeping gold previous tokens during
-                scheduled sampling.
-            **kwargs: Additional arguments forwarded to the transformer wrapper.
-
-        Returns:
-            Dictionary with total loss, per-branch losses and branch logits.
-        """
         liftsi = lifts[:, :-1]
         liftso = lifts[:, 1:]
         articulationsi = articulations[:, :-1]
@@ -540,21 +466,6 @@ class ScoreDecoder(nn.Module):
         mask: torch.Tensor,
         gamma: int = 10,
     ) -> torch.Tensor:
-        """
-        Penalize disagreement about whether each branch describes a note-like item.
-
-        Args:
-            rhythmsp: Rhythm branch logits.
-            pitchsp: Pitch branch logits.
-            liftsp: Lift branch logits.
-            positionsp: Position branch logits.
-            articulationsp: Articulation branch logits.
-            mask: Boolean mask for valid sequence positions.
-            gamma: Scaling factor for the consistency penalty.
-
-        Returns:
-            Masked consistency loss tensor.
-        """
         positionsp_soft = torch.softmax(positionsp, dim=2)
         positionsp_note = torch.sum(positionsp_soft[:, :, 1:], dim=2) * mask
 
@@ -593,18 +504,6 @@ class ScoreDecoder(nn.Module):
         label_smoothing: float = 0.0,
         weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """
-        Compute branch cross entropy with the configured padding ignore index.
-
-        Args:
-            logits: Branch logits with shape ``B x T x V``.
-            target: Target token ids with shape ``B x T``.
-            label_smoothing: Optional label-smoothing factor.
-            weights: Optional class weights.
-
-        Returns:
-            Mean cross-entropy loss for the branch.
-        """
         return F.cross_entropy(
             logits.transpose(1, 2),
             target,
@@ -619,17 +518,6 @@ def init_cache(
     cache_len: int,
     device: torch.device,
 ) -> tuple[list[torch.Tensor], list[str], list[str], dict[str, dict[int, str]], int]:
-    """
-    Create empty decoder cache tensors and ONNX cache metadata.
-
-    Args:
-        cache_len: Initial cached sequence length.
-        device: Device on which cache tensors should be allocated.
-
-    Returns:
-        Cache tensors, ONNX input names, ONNX output names, dynamic-axis metadata
-        and the cache length.
-    """
     cache = []
     input_names = []
     output_names = []
@@ -643,15 +531,6 @@ def init_cache(
 
 
 def get_decoder(config: Config) -> ScoreDecoder:
-    """
-    Build the configured score decoder.
-
-    Args:
-        config: Transformer configuration.
-
-    Returns:
-        ``ScoreDecoder`` instance.
-    """
     return ScoreDecoder(
         get_score_wrapper(config),
         config=config,
@@ -659,17 +538,6 @@ def get_decoder(config: Config) -> ScoreDecoder:
 
 
 def get_score_wrapper(config: Config, attn_flash: bool = True) -> ScoreTransformerWrapper:
-    """
-    Build the transformer wrapper used inside the score decoder.
-
-    Args:
-        config: Transformer configuration.
-        attn_flash: Whether x-transformers should use flash attention when
-            available.
-
-    Returns:
-        Multi-branch score transformer wrapper.
-    """
     return ScoreTransformerWrapper(
         config=config,
         attn_layers=CustomDecoder(
@@ -683,16 +551,6 @@ def get_score_wrapper(config: Config, attn_flash: bool = True) -> ScoreTransform
 
 
 def detokenize(tokens: torch.Tensor, vocab: Any) -> list[str]:
-    """
-    Convert token ids back to vocabulary strings.
-
-    Args:
-        tokens: Tensor of token ids.
-        vocab: Mapping from ids to token strings.
-
-    Returns:
-        Token strings with sequence-control tokens removed.
-    """
     toks = [vocab[tok.item()] for tok in tokens]
     toks = [t for t in toks if t not in ("[BOS]", "[EOS]", "[PAD]")]
     return toks

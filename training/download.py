@@ -10,12 +10,6 @@ dataset_root = os.path.join(git_root, "datasets")
 
 
 def download_cvs_musicma() -> str:
-    """
-    Ensure the CVC-MUSCIMA staff-removal dataset is available locally.
-
-    Returns:
-        Local dataset directory path.
-    """
     dataset_path = os.path.join(dataset_root, "CvcMuscima-Distortions")
     if os.path.exists(dataset_path):
         return dataset_path
@@ -32,12 +26,6 @@ def download_cvs_musicma() -> str:
 
 
 def download_deep_scores() -> str:
-    """
-    Ensure the DeepScoresV2 dense segmentation dataset is available locally.
-
-    Returns:
-        Local dataset directory path.
-    """
     dataset_path = os.path.join(dataset_root, "ds2_dense")
     if os.path.exists(dataset_path):
         return dataset_path

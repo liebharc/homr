@@ -38,9 +38,6 @@ import albumentations as A  # noqa
 
 
 def process_image(path: str, patch_size: int) -> list[tuple[str, int, int]]:
-    """
-    Build fixed-size patch coordinates for one segmentation training image.
-    """
     image = cv2.imread(path)
     if image is None:
         return []  # Skip unreadable files
@@ -52,14 +49,7 @@ def process_image(path: str, patch_size: int) -> list[tuple[str, int, int]]:
 
 
 class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
-    """
-    Base patch dataset for segmentation image/mask pairs.
-    """
-
     def __init__(self, images: list[str], augmentation: Any | None = None) -> None:
-        """
-        Precompute patch ids for all images and store optional augmentation.
-        """
         self.patch_size = 320
         self.ids = []
         self.last_path = ""
@@ -74,9 +64,6 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
         self.augmentation: Any | None = augmentation
 
     def __getitem__(self, i: int) -> tuple[NDArray, NDArray]:
-        """
-        Load, cache, crop and augment one segmentation patch.
-        """
         # Read the image
         path, y, x = self.ids[i]
         if path == self.last_path and self.last_image is not None and self.last_mask is not None:
@@ -137,39 +124,21 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
 
     @abstractmethod
     def _build_label(self, image: NDArray, mask: str) -> NDArray:
-        """
-        Build the segmentation label image for one source image.
-        """
         pass
 
     def _prepare_image(self, image: NDArray) -> NDArray:
-        """
-        Apply dataset-specific image preprocessing before patch extraction.
-        """
         return image
 
     def __len__(self) -> int:
-        """
-        Return the number of available patches.
-        """
         return len(self.ids)
 
 
 class D2DenseDataset(SegmentationBaseDataset):
-    """
-    DeepScoresV2 dense segmentation dataset adapter.
-    """
 
     def _get_mask(self, image_name: str) -> str:
-        """
-        Return the DeepScores mask path for an image path.
-        """
         return image_name.replace(".png", "_seg.png").replace("/images/", "/segmentation/")
 
     def _build_label(self, image: NDArray, path: str) -> NDArray:
-        """
-        Remap DeepScores dense labels into HOMR segmentation channels.
-        """
         mask = np.array(Image.open(self._get_mask(path)))
         mask = reconstruct_lines_between_staffs(image, mask)
         # Create a blank mask to remap the class values
@@ -191,26 +160,14 @@ class D2DenseDataset(SegmentationBaseDataset):
 
 
 class CvcMuscimaDataset(SegmentationBaseDataset):
-    """
-    CVC-MUSCIMA segmentation dataset adapter.
-    """
 
     def _get_staff_mask(self, image_name: str) -> str:
-        """
-        Return the staff-line mask path for a CVC-MUSCIMA image.
-        """
         return image_name.replace("/image/", "/gt/")
 
     def _get_symbol_mask(self, image_name: str) -> str:
-        """
-        Return the symbol mask path for a CVC-MUSCIMA image.
-        """
         return image_name.replace("/image/", "/symbol/")
 
     def _build_label(self, image: NDArray, path: str) -> NDArray:
-        """
-        Combine staff and symbol masks into one segmentation label image.
-        """
         mask = np.array(Image.open(self._get_staff_mask(path))).astype(np.uint8)
         mask = make_lines_stronger(mask, (3, 3))
         symbol = np.array(Image.open(self._get_symbol_mask(path))).astype(np.uint8)
@@ -218,17 +175,11 @@ class CvcMuscimaDataset(SegmentationBaseDataset):
         return mask
 
     def _prepare_image(self, image: NDArray) -> NDArray:
-        """
-        Invert CVC-MUSCIMA image colors before training.
-        """
         # Invert colors
         return 255 - image
 
 
 def create_horizontal_gray_gradient(width: int, height: int) -> NDArray:
-    """
-    Create a horizontal grayscale RGB gradient.
-    """
     # Create a gradient from 0 to 255 horizontally
     gradient = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
     # Convert to 3-channel grayscale image
@@ -236,27 +187,17 @@ def create_horizontal_gray_gradient(width: int, height: int) -> NDArray:
 
 
 def create_vertical_gray_gradient(width: int, height: int) -> NDArray:
-    """
-    Create a vertical grayscale RGB gradient.
-    """
     gradient = np.tile(np.linspace(0, 255, height, dtype=np.uint8), (width, 1)).T
     return cv2.merge([gradient, gradient, gradient])
 
 
 def blend_with_gradient(image: NDArray, gradient: NDArray, alpha: float = 0.3) -> NDArray:
-    """
-    Blend an image with a resized gray gradient.
-    """
     gradient_resized = cv2.resize(gradient, (image.shape[1], image.shape[0]))
     blended = cv2.addWeighted(image, 1 - alpha, gradient_resized, alpha, 0)
     return blended
 
 
 class AddGrayGradient(A.ImageOnlyTransform):
-    """
-    Albumentations transform that overlays a gray gradient on an image.
-    """
-
     def __init__(
         self,
         alpha: float = 0.3,
@@ -264,17 +205,11 @@ class AddGrayGradient(A.ImageOnlyTransform):
         always_apply: bool = False,
         p: float = 0.5,
     ) -> None:
-        """
-        Configure gradient strength and direction.
-        """
         super().__init__(always_apply, p)
         self.alpha = alpha
         self.direction = direction
 
     def apply(self, image: NDArray, **params: Any) -> NDArray:
-        """
-        Apply the configured gradient overlay to one image.
-        """
         h, w = image.shape[:2]
         if self.direction == "horizontal":
             gradient = create_horizontal_gray_gradient(w, h)
@@ -285,9 +220,6 @@ class AddGrayGradient(A.ImageOnlyTransform):
 
 # training set images augmentation
 def get_training_augmentation() -> Any:
-    """
-    Build the augmentation pipeline for segmentation training patches.
-    """
     train_transform = [
         # Multi-directional gradients with stronger effects (like your example image)
         AddGrayGradient(alpha=0.7, direction="vertical", p=0.5),
@@ -351,9 +283,6 @@ def get_training_augmentation() -> Any:
 def random_split(
     feat_files: list[str], train_val_split: float = 0.1
 ) -> tuple[list[str], list[str]]:
-    """
-    Shuffle file paths and split them into train and validation lists.
-    """
     random.shuffle(feat_files)
     split_idx = round(train_val_split * len(feat_files))
     train_files = feat_files[split_idx:]
@@ -362,9 +291,6 @@ def random_split(
 
 
 def visualize_dataset(dataset: SegmentationBaseDataset) -> None:
-    """
-    Write a few random image/mask patches to disk for inspection.
-    """
     for i in range(10):
         index = random.randint(0, len(dataset))
         image, mask = dataset[index]
@@ -375,9 +301,6 @@ def visualize_dataset(dataset: SegmentationBaseDataset) -> None:
 
 
 def train_segnet(visualize: bool = False) -> None:
-    """
-    Train the segmentation network on the DeepScoresV2 dense dataset.
-    """
 
     script_location = os.path.dirname(os.path.realpath(__file__))
     git_root = Path(script_location).parent.parent.absolute()
