@@ -464,7 +464,7 @@ def _process_attributes(part: TokensPart, attribute: mxl.XMLAttributes) -> None:
                 raise ValueError("Octave change isn't supported")
             clef_number = int(clef.attributes.get("number", "0")) - 1
             clefs_tokens.append(
-                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty), clef_number)
+                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
             )
         part.append_clefs(clefs_tokens)
     keys = attribute.get_children_of_type(mxl.XMLKey)
@@ -621,18 +621,18 @@ def _process_note(part: TokensPart, note: mxl.XMLNote) -> None:
                 is_chord,
                 duration,
                 invisible,
-                EncodedSymbol("rest_1", empty, empty, empty, slur=empty),
+                EncodedSymbol("rest_1", empty, empty, empty, empty),
             )
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
-            sym = EncodedSymbol(rhythm, empty, empty, art, slur=slur)
+            sym = EncodedSymbol(rhythm, empty, empty, art, slur)
             part.append_rest(staff, is_chord, duration, invisible, sym)
     pitch = note.get_children_of_type(mxl.XMLPitch)
     if len(pitch) > 0:
         pitch_name = _pitch_name(pitch[0])
         lift = _lift_from_pitch_or_accidental(pitch[0], note)
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
-        sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur=slur)
+        sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur)
 
         part.append_note(staff, is_chord, max(duration, 1), invisible, sym)
 
@@ -710,7 +710,7 @@ def _process_multi_rests(part: TokensPart, measure_style: mxl.XMLMeasureStyle) -
         return
     rest = rests[0]
     rest_duration = min(rest.value_, 10)
-    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, "upper", empty))
+    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, empty, "upper"))
 
 
 def _music_part_to_tokens(part: mxl.XMLPart) -> list[Measure]:

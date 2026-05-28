@@ -198,15 +198,11 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
                 continue
             parts = entry.strip().split()
             if len(parts) == 6:
-                rhythm, pitch, lift, articulation, position, slur = parts
-            elif len(parts) == 5:
-                rhythm, pitch, lift, articulation, position = parts
-                articulation, slur = split_legacy_articulation(articulation)
+                rhythm, pitch, lift, articulation, slur, position = parts
             else:
-                rhythm, pitch, lift, articulation = parts
+                rhythm, pitch, lift, articulation, slur = parts
                 position = "upper"
-                articulation, slur = split_legacy_articulation(articulation)
-            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, position, slur)
+            symbol = EncodedSymbol(rhythm, pitch, lift, articulation, slur, position)
             is_first = i == 0
             if not is_first:
                 result.append(EncodedSymbol("chord"))

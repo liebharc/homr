@@ -177,8 +177,8 @@ class Vocabulary:
         self.lift = build_lift()
         self.articulation = build_articulation()
         self.pitch = build_pitch()
-        self.position = build_position()
         self.slur = build_slur()
+        self.position = build_position()
 
 
 class SymbolDuration:
@@ -269,16 +269,16 @@ class EncodedSymbol:
         pitch: str = nonote,
         lift: str = nonote,
         articulation: str = nonote,
-        position: str = nonote,
         slur: str = nonote,
+        position: str = nonote,
         coordinates: tuple[float, float] | None = None,
     ) -> None:
         self.rhythm = rhythm
         self.pitch = pitch
         self.lift = lift
         self.articulation = articulation
-        self.position = position
         self.slur = slur
+        self.position = position
 
         # These coordinates are derived from transformer attention and are inherently imprecise,
         # since the model is optimized for predictive accuracy rather than spatial localization.
@@ -410,7 +410,7 @@ class EncodedSymbol:
 
     def __str__(self) -> str:
         return str.join(
-            " ", (self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur)
+            " ", (self.rhythm, self.pitch, self.lift, self.articulation, self.slur, self.position)
         )
 
     def __repr__(self) -> str:
@@ -423,15 +423,15 @@ class EncodedSymbol:
                 and self.pitch == __value.pitch
                 and self.lift == __value.lift
                 and self.articulation == __value.articulation
-                and self.position == __value.position
                 and self.slur == __value.slur
+                and self.position == __value.position
             )
         else:
             return False
 
     def __hash__(self) -> int:
         return hash(
-            (self.rhythm, self.pitch, self.lift, self.articulation, self.position, self.slur)
+            (self.rhythm, self.pitch, self.lift, self.articulation, self.slur, self.position)
         )
 
     def __lt__(self, other: object) -> bool:
@@ -631,34 +631,4 @@ def sort_token_chords(
 
 
 if __name__ == "__main__":
-    import json
-
-    from homr.simple_logging import eprint
-
-    vocab = Vocabulary()
-
-    eprint("Rhythm=", json.dumps(vocab.rhythm, indent=2))
-    eprint("Lift=", json.dumps(vocab.lift, indent=2))
-    eprint("Articulation=", json.dumps(vocab.articulation, indent=2))
-    eprint("Pitch=", json.dumps(vocab.pitch, indent=2))
-    eprint("Positions=", json.dumps(vocab.position, indent=2))
-    eprint("Slurs=", json.dumps(vocab.slur, indent=2))
-
-    valid_combinations = []
-
-    for r, li, a, p, pos, sl in itertools.product(
-        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.position, vocab.slur
-    ):
-        symbol = EncodedSymbol(r, li, a, p, pos, sl)
-        is_valid = symbol.is_valid()
-        if not is_valid:
-            continue
-        valid_combinations.append(symbol)
-
-    eprint(
-        "Number of combinations",
-        len(valid_combinations),
-        "- some examples:",
-    )
-    for symbol in random.sample(valid_combinations, 10):
-        eprint(symbol)
+    print(EncodedSymbol("note_4", "F3", empty, empty, empty, "upper"))

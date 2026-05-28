@@ -218,11 +218,11 @@ class MeasureCutter:
         self.voice = voice
         self.number_of_staffs = _count_staffs(voice)
         if self.number_of_staffs == 1:
-            self.clefs = [EncodedSymbol("clef_G2", empty, empty, empty, "upper")]
+            self.clefs = [EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")]
         else:
             self.clefs = [
-                EncodedSymbol("clef_G2", empty, empty, empty, "upper"),
-                EncodedSymbol("clef_F4", empty, empty, empty, "lower"),
+                EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper"),
+                EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower"),
             ]
         self.key = EncodedSymbol("keySignature_0")
         self.time = EncodedSymbol("timeSignature/4")
@@ -554,7 +554,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     with open(lieder_train_index, "w") as f:
         file_number = 0
         skipped_files = 0
-        with multiprocessing.Pool(processes=4, maxtasksperchild=2) as p:
+        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
             for result in p.imap_unordered(
                 (
                     _convert_file_only_token

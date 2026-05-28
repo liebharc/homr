@@ -76,7 +76,7 @@ class PrimusConverter:
         rhythm_key = PrimusConverter.parse_duration(duration, is_grace_note)
         rhythm_val = "note_" + rhythm_key
 
-        return EncodedSymbol(rhythm_val, base_pitch, lift, articulation)
+        return EncodedSymbol(rhythm_val, base_pitch, lift, articulation, empty)
 
     @staticmethod
     def parse_rest(symbol: str) -> EncodedSymbol:
@@ -87,7 +87,7 @@ class PrimusConverter:
         duration, articulation = PrimusConverter.get_articulations(duration)
         rhythm_key = PrimusConverter.parse_duration(duration)
         rhythm_val = "rest_" + rhythm_key
-        return EncodedSymbol(rhythm_val, empty, empty, articulation)
+        return EncodedSymbol(rhythm_val, empty, empty, articulation, empty)
 
     @staticmethod
     def parse_multirest(symbol: str) -> EncodedSymbol:
@@ -98,15 +98,15 @@ class PrimusConverter:
         num = min(int(measures), 10)
         if num == 1:
             # Return a whole rest instead
-            return EncodedSymbol("rest_0", empty, empty, empty)
-        return EncodedSymbol(f"rest_{num}m", empty, empty, empty)
+            return EncodedSymbol("rest_0", empty, empty, empty, empty)
+        return EncodedSymbol(f"rest_{num}m", empty, empty, empty, empty)
 
     @staticmethod
     def parse_clef(symbol: str) -> EncodedSymbol:
         """
         Parse a PrIMuS clef token.
         """
-        return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty)
+        return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty, empty)
 
     @staticmethod
     def parse_key_signature(symbol: str) -> EncodedSymbol:
