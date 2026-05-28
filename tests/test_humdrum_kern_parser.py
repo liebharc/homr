@@ -153,45 +153,45 @@ repeatEnd . . . ."""
 """
         tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_2 . . . .
-timeSignature/4 . . . .
-note_12 G5 _ _ upper&note_4 E3 _ _ lower
-note_12 F5 # _ upper
-note_12 E5 _ _ upper
-note_4 E5 _ _ upper&rest_8 _ _ _ lower
-note_8 B3 _ _ lower
-rest_4 _ _ _ upper&note_8 G3 _ _ lower
-note_8 E3 _ _ lower
-barline . . . .
-rest_4 _ _ _ upper&note_4 E2 _ _ lower
-note_4 E5 _ _ upper&rest_4 _ _ _ lower
-note_4 E5 _ _ upper&note_4 G4 _ _ lower
-barline . . . .
-note_12 E5 _ _ upper&note_4 F4 # _ lower
-note_12 F5 # _ upper
-note_12 C5 # _ upper
-note_4 D5 _ _ upper&note_4 F4 # _ lower
-note_4 D5 _ _ upper&note_4 F4 # _ lower
-barline . . . .
-note_12 D5 _ _ upper&note_4 E4 _ _ lower
-note_12 C5 # _ upper
-note_12 D5 _ _ upper
-note_12 E5 _ _ upper&note_4 E4 _ _ lower
-note_12 F5 # _ upper
-note_12 G5 _ _ upper
-note_12 G5 _ _ upper&note_4 A3 _ _ lower
-note_12 F5 # _ upper
-note_12 E5 _ _ upper
-barline . . . .
-note_12 F5 # _ upper&note_4 D3 _ _ lower
-note_12 E5 _ _ upper
-note_12 D5 _ _ upper
-note_4 D5 _ _ upper&rest_8 _ _ _ lower
-note_8 A3 _ _ lower
-rest_4 _ _ _ upper&note_8 F3 # _ lower
-note_8 D3 _ _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_2 . . . . .
+timeSignature/4 . . . . .
+note_12 G5 _ _ _ upper&note_4 E3 _ _ _ lower
+note_12 F5 # _ _ upper
+note_12 E5 _ _ _ upper
+note_4 E5 _ _ _ upper&rest_8 _ _ _ _ lower
+note_8 B3 _ _ _ lower
+rest_4 _ _ _ _ upper&note_8 G3 _ _ _ lower
+note_8 E3 _ _ _ lower
+barline . . . . .
+rest_4 _ _ _ _ upper&note_4 E2 _ _ _ lower
+note_4 E5 _ _ _ upper&rest_4 _ _ _ _ lower
+note_4 E5 _ _ _ upper&note_4 G4 _ _ _ lower
+barline . . . . .
+note_12 E5 _ _ _ upper&note_4 F4 # _ _ lower
+note_12 F5 # _ _ upper
+note_12 C5 # _ _ upper
+note_4 D5 _ _ _ upper&note_4 F4 # _ _ lower
+note_4 D5 _ _ _ upper&note_4 F4 # _ _ lower
+barline . . . . .
+note_12 D5 _ _ _ upper&note_4 E4 _ _ _ lower
+note_12 C5 # _ _ upper
+note_12 D5 _ _ _ upper
+note_12 E5 _ _ _ upper&note_4 E4 _ _ _ lower
+note_12 F5 # _ _ upper
+note_12 G5 _ _ _ upper
+note_12 G5 _ _ _ upper&note_4 A3 _ _ _ lower
+note_12 F5 # _ _ upper
+note_12 E5 _ _ _ upper
+barline . . . . .
+note_12 F5 # _ _ upper&note_4 D3 _ _ _ lower
+note_12 E5 _ _ _ upper
+note_12 D5 _ _ _ upper
+note_4 D5 _ _ _ upper&rest_8 _ _ _ _ lower
+note_8 A3 _ _ _ lower
+rest_4 _ _ _ _ upper&note_8 F3 # _ _ lower
+note_8 D3 _ _ _ lower
+barline . . . . ."""
 
         self.maxDiff = None
         self.assertEqual(tokens, expected)
