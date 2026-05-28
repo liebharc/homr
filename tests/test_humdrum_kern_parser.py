@@ -33,20 +33,20 @@ class TestHumdrumKern(unittest.TestCase):
 """
         tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_7 . . . .
-timeSignature/4 . . . .
-note_32 D5 # _ upper&note_8 B3 # _ lower&note_8 B2 # _ lower
-note_32 C5 # _ upper
-note_16 B4 # _ upper
-note_32 C5 # _ upper&note_8 A3 # _ lower&note_8 A2 # _ lower
-note_32 B4 # _ upper
-note_16 A4 # _ upper
-note_8 C5 # _ upper&note_8 A4 # _ upper&note_8 E3 # _ lower&note_8 E2 # _ lower
-note_8 B4 # _ upper&note_8 G4 ## _ upper&note_8 E3 # _ lower&note_8 E2 # _ lower
-barline . . . .
-note_2 A4 # _ upper&note_2 A2 # _ lower
-repeatEnd . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_7 . . . . .
+timeSignature/4 . . . . .
+note_32 D5 # _ _ upper&note_8 B3 # _ _ lower&note_8 B2 # _ _ lower
+note_32 C5 # _ _ upper
+note_16 B4 # _ _ upper
+note_32 C5 # _ _ upper&note_8 A3 # _ _ lower&note_8 A2 # _ _ lower
+note_32 B4 # _ _ upper
+note_16 A4 # _ _ upper
+note_8 C5 # _ _ upper&note_8 A4 # _ _ upper&note_8 E3 # _ _ lower&note_8 E2 # _ _ lower
+note_8 B4 # _ _ upper&note_8 G4 ## _ _ upper&note_8 E3 # _ _ lower&note_8 E2 # _ _ lower
+barline . . . . .
+note_2 A4 # _ _ upper&note_2 A2 # _ _ lower
+repeatEnd . . . . ."""
 
         self.maxDiff = None
         self.assertEqual(tokens, expected)
