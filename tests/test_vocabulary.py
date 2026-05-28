@@ -174,21 +174,21 @@ barline . . . . ."""
 
     def test_only_keep_lower_staff_if_there_is_a_clef(self) -> None:
         tokens = [
-            EncodedSymbol("clef_G2", "_", "_", "_", "upper"),
-            EncodedSymbol("keySignature_1", ".", ".", ".", "."),
-            EncodedSymbol("note_8", "F4", "#", "slurStart", "upper"),
-            EncodedSymbol("note_8", "E4", "_", "slurStop", "upper"),
-            EncodedSymbol("note_24", "E4", "_", "slurStart", "upper"),
-            EncodedSymbol("note_24", "F4", "#", "_", "lower"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_","upper"),
+            EncodedSymbol("keySignature_1", ".", ".", ".", ".", "."),
+            EncodedSymbol("note_8", "F4", "#", "_", "slurStart", "upper"),
+            EncodedSymbol("note_8", "E4", "_", "_", "slurStop", "upper"),
+            EncodedSymbol("note_24", "E4", "_", "_", "slurStart", "upper"),
+            EncodedSymbol("note_24", "F4", "#", "_", "_", "lower"),
         ]
         result = remove_duplicated_symbols(tokens)
         expected = [
-            EncodedSymbol("clef_G2", "_", "_", "_", "upper"),
-            EncodedSymbol("keySignature_1", ".", ".", ".", "."),
-            EncodedSymbol("note_8", "F4", "#", "slurStart", "upper"),
-            EncodedSymbol("note_8", "E4", "_", "slurStop", "upper"),
-            EncodedSymbol("note_24", "E4", "_", "slurStart", "upper"),
-            EncodedSymbol("note_24", "F4", "#", "_", "upper"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("keySignature_1", ".", ".", ".", ".", "."),
+            EncodedSymbol("note_8", "F4", "#", "_", "slurStart", "upper"),
+            EncodedSymbol("note_8", "E4", "_", "_", "slurStop", "upper"),
+            EncodedSymbol("note_24", "E4", "_", "_", "slurStart", "upper"),
+            EncodedSymbol("note_24", "F4", "#", "_", "_", "upper"),
         ]
 
         self.assertEqual(token_lines_to_str(result), token_lines_to_str(expected))
