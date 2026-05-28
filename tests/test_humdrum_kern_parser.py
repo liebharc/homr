@@ -443,33 +443,33 @@ barline . . . ."""
 """
         tokens = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
 
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_3 . . . .
-timeSignature/8 . . . .
-note_4. E4 _ _ upper&note_4. E2 _ _ lower
-barline . . . .
-note_4G E5 _ _ upper
-note_4. E5 _ slurStart upper&rest_16 _ _ _ lower
-note_16 E4 _ _ lower
-note_16 A4 _ _ lower
-note_16 G4 # _ lower
-note_16 F4 # _ lower
-note_16 E4 _ _ lower
-barline . . . .
-note_4. E5 _ _ upper&note_16 D4 _ _ lower
-note_16 C4 # _ lower
-note_16 B3 _ _ lower
-note_16 A3 _ _ lower
-note_16 G3 # _ lower
-note_16 F3 # _ lower
-barline . . . .
-note_4. E5 _ _ upper&note_16 E3 _ _ lower
-note_16 E3 _ _ lower
-note_16 A3 _ _ lower
-note_16 G3 # _ lower
-note_16 F3 # _ lower
-note_16 E3 _ _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_3 . . . . .
+timeSignature/8 . . . . .
+note_4. E4 _ _ _ upper&note_4. E2 _ _ _ lower
+barline . . . . .
+note_4G E5 _ _ _ upper
+note_4. E5 _ _ slurStart upper&rest_16 _ _ _ _ lower
+note_16 E4 _ _ _ lower
+note_16 A4 _ _ _ lower
+note_16 G4 # _ _ lower
+note_16 F4 # _ _ lower
+note_16 E4 _ _ _ lower
+barline . . . . .
+note_4. E5 _ _ _ upper&note_16 D4 _ _ _ lower
+note_16 C4 # _ _ lower
+note_16 B3 _ _ _ lower
+note_16 A3 _ _ _ lower
+note_16 G3 # _ _ lower
+note_16 F3 # _ _ lower
+barline . . . . .
+note_4. E5 _ _ _ upper&note_16 E3 _ _ _ lower
+note_16 E3 _ _ _ lower
+note_16 A3 _ _ _ lower
+note_16 G3 # _ _ lower
+note_16 F3 # _ _ lower
+note_16 E3 _ _ _ lower
+barline . . . . ."""
 
         self.maxDiff = None
         self.assertEqual(tokens, expected)
