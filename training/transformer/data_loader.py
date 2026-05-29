@@ -17,6 +17,7 @@ from training.transformer.image_utils import (
 )
 from training.transformer.training_vocabulary import (
     DecoderBranches,
+    max_ledger_lines,
     read_tokens,
     to_decoder_branches,
 )
@@ -26,6 +27,8 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = os.path.join(script_location, "..", "..")
 
 label_names = ["rhythms", "positions", "lifts", "pitchs", "articulations"]
+
+MAX_ALLOWED_LEDGER_LINES = 5
 
 
 class DataLoader:
@@ -94,20 +97,21 @@ class DataLoader:
 
 
 def _filter_valid_samples(samples: list[str]) -> list[str]:
-    # Skip index contains token files which have a large number of ledger lines
-    # which we don't want to include in training
-    with open(os.path.join(script_location, "skip_index.txt")) as f:
-        skip_files = {line.strip() for line in f.readlines()}
+    # Filter out samples whose notes require more than the allowed number of ledger lines.
+    # MuseScore in these cases might decide to change the clef and then we get a mismatch
+    # between what is visible on the image and the ground truth
     valid_samples: list[str] = []
     filter_count = 0
     for entry in samples:
         image, token_file = entry.strip().split(",")
-        if token_file in skip_files:
+        tokens = read_tokens(token_file)
+        if max_ledger_lines(tokens) > MAX_ALLOWED_LEDGER_LINES:
             filter_count += 1
             continue
         valid_samples.append(entry)
+
     if filter_count > 0:
-        eprint(f"Filtered out {filter_count} samples based on skip_index.txt")
+        eprint(f"Filtered out {filter_count} samples with too many ledger lines")
     return valid_samples
 
 

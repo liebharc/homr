@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 
 import torch
@@ -7,11 +8,36 @@ from homr.transformer.configs import default_config
 from homr.transformer.vocabulary import (
     EncodedSymbol,
     Vocabulary,
+    empty,
     has_rhythm_symbol_a_position,
+    nonote,
     sort_token_chords,
 )
 
 vocab = Vocabulary()
+
+NOTE_TO_DIATONIC = {
+    "C": 0,
+    "D": 1,
+    "E": 2,
+    "F": 3,
+    "G": 4,
+    "A": 5,
+    "B": 6,
+}
+
+CLEF_ANCHORS = {
+    "clef_G1": "D5",
+    "clef_G2": "B4",
+    "clef_F3": "F3",
+    "clef_F4": "D3",
+    "clef_F5": "B2",
+    "clef_C1": "G4",
+    "clef_C2": "E4",
+    "clef_C3": "C4",
+    "clef_C4": "A3",
+    "clef_C5": "F3",
+}
 
 
 def check_token_line(line: EncodedSymbol) -> None:
@@ -86,6 +112,58 @@ def token_lines_to_str(symbols: list[EncodedSymbol]) -> str:
 
     chord_strings = [_chord_to_str(c) for c in chords]
     return str.join("\n", chord_strings)
+
+
+def _pitch_to_diatonic(pitch: str) -> int | None:
+    match = re.match(r"^([A-G])[#bN]*([0-9])$", pitch)
+    if not match:
+        return None
+    note, octave = match.groups()
+    return int(octave) * 7 + NOTE_TO_DIATONIC[note]
+
+
+def _clef_anchor(clef: str) -> int | None:
+    if clef not in CLEF_ANCHORS:
+        return None
+    return _pitch_to_diatonic(CLEF_ANCHORS[clef])
+
+
+def max_ledger_lines(tokens: list[EncodedSymbol]) -> int:
+    anchors = {
+        "upper": _clef_anchor("clef_G2"),
+        "lower": _clef_anchor("clef_F4"),
+    }
+    max_ledger_lines = 0
+    for symbol in tokens:
+        if symbol.rhythm.startswith("clef"):
+            anchor = _clef_anchor(symbol.rhythm)
+            if anchor is None:
+                continue
+            if symbol.position in anchors:
+                anchors[symbol.position] = anchor
+            else:
+                anchors["upper"] = anchor
+                anchors["lower"] = anchor
+            continue
+
+        if not symbol.rhythm.startswith("note"):
+            continue
+
+        if symbol.pitch in (nonote, empty):
+            continue
+
+        absolute_val = _pitch_to_diatonic(symbol.pitch)
+        if absolute_val is None:
+            continue
+
+        anchor = anchors.get(symbol.position, anchors["upper"])
+        if anchor is None:
+            raise ValueError("Failed to get anchor")
+        offset = absolute_val - anchor
+        ledger_lines = max(0, (abs(offset) - 4 + 1) // 2)
+        max_ledger_lines = max(max_ledger_lines, ledger_lines)
+
+    return max_ledger_lines
 
 
 def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
