@@ -59,6 +59,24 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 367
+
+Commit: 575b4737bca815d3a7b37169269fc548d7e945b9, which after a rebase is 0b865c41e56a1e58bf531ada27ad80ea1f5ab716
+Day: 29 May 2026  
+Transformer Smoke Test: SER 6%
+System Level: 5.6 diffs, SER: 4.7%
+
+Fixed an error in the accuracy calculation during training: https://github.com/liebharc/homr/pull/84
+
+## Run 366
+
+Commit: ac68c5e38711de6abaa6064eaf2773aa49352d01
+Day: 29 May 2026  
+Transformer Smoke Test: SER 6%
+System Level: 5.8 diffs, SER: 4.7%
+
+Using a newer MuseScore version for the Lieder dataset: https://github.com/liebharc/homr/pull/75
+
 ## Run 334
 
 Commit: 6d996c3d118c1e183f8412832383168e52630ce8
