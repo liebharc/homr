@@ -77,7 +77,25 @@ System Level: 5.8 diffs, SER: 4.7%
 
 Using a newer MuseScore version for the Lieder dataset: https://github.com/liebharc/homr/pull/75
 
-## Run 334
+## Run 368 - discarded
+
+Commit: aad3b0899cee5b931aae3dd4345d371a8634669c
+Day: 24 May 2026  
+Transformer Smoke Test: SER 5%
+System Level: 12.3 diffs, SER: 16.2%
+
+Agnostic data format, with less complexity when it comes to pitch and accidentals.
+
+## Run 367 - discarded
+
+Commit: 39ff998262112d75b425cdd99c43ab61441a3f4e
+Day: 22 May 2026  
+Transformer Smoke Test: SER 7%
+System Level: 7.0 diffs, SER: 5.2%
+
+Updated MuseScore version used to convert the Lieder dataset and switched to sinusoidal positional embedding.
+
+## Run 334 - discarded
 
 Commit: 6d996c3d118c1e183f8412832383168e52630ce8
 Day: 17 Feb 2026  
@@ -86,7 +104,7 @@ System Level: 10.2 diffs, SER: 13.6%
 
 convnextv2_base, https://github.com/liebharc/homr/pull/59
 
-## Run 333
+## Run 333 - discarded
 
 Commit: bb0ced2ff0cacdbd8ee33db4533a04c9e77f0ca8
 Day: 17 Feb 2026  
