@@ -185,7 +185,15 @@ def get_decoder(config: Config) -> ScoreDecoder:
                 config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
             )
             fp16 = True
-            use_gpu = True
+            # Sometimes Ort falls automatically back to the CPU EP
+            # if so we get an error due to the device selection in init_cache()
+            if "CUDAExecutionProvider" in onnx_transformer.get_providers():
+                use_gpu = True
+            else:
+                eprint(
+                    "Onnxruntime is not using GPU and therefore falling back to CPU. This is slow."
+                )
+
         except Exception as ex:
             eprint(ex)
             eprint("Going on without GPU support")

@@ -260,8 +260,9 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     doc = minidom.parse(svg_file)  # noqa: S318
     try:
         svg_element = doc.getElementsByTagName("svg")[0]
-        width = float(svg_element.getAttribute("width").replace("px", ""))
-        height = float(svg_element.getAttribute("height").replace("px", ""))
+        viewbox = svg_element.getAttribute("viewBox").split()
+        width = float(viewbox[2])
+        height = float(viewbox[3])
         lines = doc.getElementsByTagName("polyline")
         staff_lines: list[SvgRectangle] = []
         bar_lines: list[SvgRectangle] = []

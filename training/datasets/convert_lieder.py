@@ -124,15 +124,7 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
     jobs: list[dict[str, str]] = []
 
     # List of files where MuseScore seems to hang up
-    files_with_known_issues = [
-        "lc6264558",
-        "lc5712131",
-        "lc5995407",
-        "lc5712146",
-        "lc6001354",
-        "lc6248307",
-        "lc5935864",
-    ]
+    files_with_known_issues = ["sq8940236"]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
     for target_format in formats:
@@ -170,16 +162,49 @@ def _create_musicxml_and_svg_files() -> None:
         eprint("All musicxml were already created, going on with the next step")
         return
 
-    with open("job.json", "w") as f:
-        json.dump(all_jobs, f)
+    eprint("Starting with", len(all_jobs), "jobs")
 
-    eprint("Starting with", len(all_jobs), "jobs, with the first being", all_jobs[0])
+    BATCH_SIZE = 50
+    failed_files: list[str] = []
 
-    if os.system(MuseScore + " --force -j job.json") != 0:  # noqa: S605
-        eprint("Error running MuseScore")
+    batches = [all_jobs[i : i + BATCH_SIZE] for i in range(0, len(all_jobs), BATCH_SIZE)]
+
+    for batch_idx, batch in enumerate(batches):
+        eprint(f"Processing batch {batch_idx + 1}/{len(batches)} ({len(batch)} jobs)")
+
+        with open("job.json", "w") as f:
+            json.dump(batch, f)
+
+        if os.system(MuseScore + " --force -j job.json") == 0:  # noqa: S605
+            os.remove("job.json")
+            continue
+
+        env = os.environ.copy()
+        # No need to run GUI, so we can use offscreen backend
+        env["QT_QUICK_BACKEND"] = "software"
+        env["QT_QPA_PLATFORM"] = "offscreen"
+
+        # Batch failed - retry each job individually
+        eprint(f"Batch {batch_idx + 1} failed, retrying individually")
         os.remove("job.json")
-        sys.exit(1)
-    os.remove("job.json")
+
+        for job in batch:
+            with open("job.json", "w") as f:
+                json.dump([job], f)
+
+            if os.system(MuseScore + " --force -j job.json") != 0:  # noqa: S605
+                eprint("Failed:", job["in"])
+                failed_files.append(job["in"])
+
+            if os.path.exists("job.json"):
+                os.remove("job.json")
+
+    if failed_files:
+        eprint(f"\nMuseScore export finished with {len(failed_files)} failed file(s):")
+        for path in failed_files:
+            eprint(" ", path)
+    else:
+        eprint("MuseScore export completed with no failures.")
 
 
 def write_text_to_file(text: str, path: str) -> None:
@@ -462,10 +487,21 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(musescore_path):
         eprint("Downloading MuseScore from https://musescore.org/")
         download_file(
-            "https://cdn.jsdelivr.net/musescore/v4.2.1/MuseScore-4.2.1.240230938-x86_64.AppImage",
+            "https://github.com/musescore/MuseScore/releases/download/v4.6.5/MuseScore-Studio-4.6.5.253511702-x86_64.AppImage",
             musescore_path,
         )
-        os.chmod(musescore_path, stat.S_IXUSR)
+
+        perms = (
+            stat.S_IRUSR
+            | stat.S_IWUSR
+            | stat.S_IXUSR
+            | stat.S_IRGRP
+            | stat.S_IXGRP
+            | stat.S_IROTH
+            | stat.S_IXOTH
+        )
+
+        os.chmod(musescore_path, perms)  # chmod 755
 
     if not os.path.exists(lieder):
         eprint("Downloading Lieder from https://github.com/OpenScore/Lieder")

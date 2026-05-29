@@ -1,4 +1,4 @@
-# Run e.g. with docker build -t homr . && docker run --rm -p 8080:8000 homr
+# Run e.g. with docker build -t homr . && docker run --gpus all --rm -p 8080:8000 homr
 # And then send images: curl -X POST -F "file=@tabi.jpg" http://localhost:8080/process --output tabi.musicxml
 
 FROM python:3.11
@@ -11,9 +11,9 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 RUN git clone https://github.com/liebharc/homr .
 
-RUN /root/.local/bin/poetry install --without dev
+RUN /root/.local/bin/poetry install --only main,gpu
 
-RUN /root/.local/bin/poetry run pip install --no-cache-dir fastapi uvicorn python-multipart
+RUN /root/.local/bin/poetry run pip install --no-cache-dir fastapi uvicorn python-multipart "onnxruntime-gpu[cuda,cudnn]==1.24.1"
 
 # Pre-download models
 RUN /root/.local/bin/poetry run python homr/main.py --init

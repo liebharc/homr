@@ -17,13 +17,16 @@ Prerequisites:
 - Linux
 - CUDA
 - rsvg-convert, e.g. via `sudo apt install librsvg2-bin`
+- libfuse, e.g. via `sudo apt install libfuse2t64` on Ubuntu24 or `sudo apt install libfuse2` on Ubuntu22/20
+- libjack, e.g. via `sudo apt install libjack-jackd2-0`
 
 Download the datasets and convert them to the format required for training:
 
 - `training/datasets/convert_primus.py`
 - `training/datasets/convert_grandstaff.py`
 - `training/datasets/convert_lieder.py`  
-  This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
+  - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
+  - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
 Some checks:
 
@@ -32,6 +35,7 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
+You can check the log and see number of training files to be 197k: `Total number of training files to choose from 197032`
 This takes around 2–4 days.
 
 ## Results
@@ -55,7 +59,43 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
-## Run 334
+## Run 367
+
+Commit: 575b4737bca815d3a7b37169269fc548d7e945b9, which after a rebase is 0b865c41e56a1e58bf531ada27ad80ea1f5ab716
+Day: 29 May 2026  
+Transformer Smoke Test: SER 6%
+System Level: 5.6 diffs, SER: 4.7%
+
+Fixed an error in the accuracy calculation during training: https://github.com/liebharc/homr/pull/84
+
+## Run 366
+
+Commit: ac68c5e38711de6abaa6064eaf2773aa49352d01
+Day: 29 May 2026  
+Transformer Smoke Test: SER 6%
+System Level: 5.8 diffs, SER: 4.7%
+
+Using a newer MuseScore version for the Lieder dataset: https://github.com/liebharc/homr/pull/75
+
+## Run 368 - discarded
+
+Commit: aad3b0899cee5b931aae3dd4345d371a8634669c
+Day: 24 May 2026  
+Transformer Smoke Test: SER 5%
+System Level: 12.3 diffs, SER: 16.2%
+
+Agnostic data format, with less complexity when it comes to pitch and accidentals.
+
+## Run 367 - discarded
+
+Commit: 39ff998262112d75b425cdd99c43ab61441a3f4e
+Day: 22 May 2026  
+Transformer Smoke Test: SER 7%
+System Level: 7.0 diffs, SER: 5.2%
+
+Updated MuseScore version used to convert the Lieder dataset and switched to sinusoidal positional embedding.
+
+## Run 334 - discarded
 
 Commit: 6d996c3d118c1e183f8412832383168e52630ce8
 Day: 17 Feb 2026  
@@ -64,7 +104,7 @@ System Level: 10.2 diffs, SER: 13.6%
 
 convnextv2_base, https://github.com/liebharc/homr/pull/59
 
-## Run 333
+## Run 333 - discarded
 
 Commit: bb0ced2ff0cacdbd8ee33db4533a04c9e77f0ca8
 Day: 17 Feb 2026  

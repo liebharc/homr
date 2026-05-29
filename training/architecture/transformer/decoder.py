@@ -245,7 +245,9 @@ class ScoreDecoder(nn.Module):
     def __init__(self, transformer: ScoreTransformerWrapper, config: Config):
         super().__init__()
         self.pad_value = (config.pad_token,)
-        self.ignore_index = config.pad_token
+        # NOTE: nonote_token and pad_token currently share the same id (0).
+        # So we cannot use token id as ignore_index, otherwise "nonote" labels are ignored.
+        self.ignore_index = -100
         self.config = config
         self.net = transformer
         self.max_seq_len = config.max_seq_len
@@ -393,6 +395,7 @@ class ScoreDecoder(nn.Module):
 
         if mask.shape[1] == rhythms.shape[1]:
             mask = mask[:, :-1]
+        mask = mask.bool()
 
         # Scheduled Sampling: Two-pass approach
         if self.training and sampling_prob < 1.0:
@@ -465,6 +468,11 @@ class ScoreDecoder(nn.Module):
         loss_consist = beta * self.calConsistencyLoss(
             rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, mask
         )
+        rhythmso = self._mask_padding_tokens(rhythmso, mask)
+        pitchso = self._mask_padding_tokens(pitchso, mask)
+        liftso = self._mask_padding_tokens(liftso, mask)
+        articulationso = self._mask_padding_tokens(articulationso, mask)
+        positionso = self._mask_padding_tokens(positionso, mask)
         loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso, label_smoothing=0.1)
         loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
         loss_lift = alpha * self.cross_entropy(liftsp, liftso)
@@ -548,6 +556,9 @@ class ScoreDecoder(nn.Module):
             ignore_index=self.ignore_index,
             label_smoothing=label_smoothing,
         )
+
+    def _mask_padding_tokens(self, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        return target.masked_fill(~mask, self.ignore_index)
 
 
 def init_cache(

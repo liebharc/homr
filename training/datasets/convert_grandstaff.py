@@ -120,6 +120,9 @@ def _convert_tokens_and_image(path: Path) -> tuple[Path, str]:
 
 
 def _filter_out_known_bad_ones(path: Path) -> bool:
+    if path.name.startswith("._"):
+        return False
+
     # These images contain to meaningful data or have
     # artifacts like large black areas
     bad_files = {

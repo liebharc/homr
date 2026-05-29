@@ -6,13 +6,22 @@ processed using tools such as [musescore](https://musescore.com/).
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/liebharc/homr/blob/main/colab.ipynb)
 
+You might also want to check out [Andromr](https://github.com/aicelen/Andromr), an Android app for optical music recognition using homr.
+
 ## Prerequisites
 
 - Python 3.11
 - Poetry
 - Optional: NVidia GPU with CUDA 12.1
 
-## Getting started
+## Getting started (uv)
+
+The easiest way to get started is using `uvx` (`uv` must be installed). Note that is does not make use of the GPU.
+- `uvx homr <img>`
+- The resulting MusicXML file will be saved in the same directory as the input image
+- To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
+
+## Getting started (poetry)
 
 - Clone the repository
 - Install dependencies for:
