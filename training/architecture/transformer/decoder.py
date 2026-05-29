@@ -189,6 +189,7 @@ class ScoreTransformerWrapper(nn.Module):
                 out_pitchs,
                 out_lifts,
                 out_positions,
+                out_articulations,
                 out_slurs,
                 x,
                 attention,
@@ -472,6 +473,7 @@ class ScoreDecoder(nn.Module):
         pitchso = self._mask_padding_tokens(pitchso, mask)
         liftso = self._mask_padding_tokens(liftso, mask)
         articulationso = self._mask_padding_tokens(articulationso, mask)
+        slurso = self._mask_padding_tokens(slurso, mask)
         positionso = self._mask_padding_tokens(positionso, mask)
         loss_rhythm = alpha * self.cross_entropy(rhythmsp, rhythmso, label_smoothing=0.1)
         loss_pitch = alpha * self.cross_entropy(pitchsp, pitchso)
@@ -492,7 +494,7 @@ class ScoreDecoder(nn.Module):
             "loss_articulations": loss_articulations,
             "loss_slurs": loss_slurs,
             "loss": loss,
-            "logits": (rhythmsp, pitchsp, liftsp, positionsp, articulationsp),
+            "logits": (rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp),
         }
 
     def calConsistencyLoss(
