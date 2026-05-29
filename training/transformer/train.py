@@ -158,7 +158,7 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 6 if fp32 else 18
+    batch_size = 8 # 8gb vram
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -167,7 +167,7 @@ def train_transformer(
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
-        gradient_accumulation_steps=4,
+        gradient_accumulation_steps=8,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size // 2,
         num_train_epochs=number_of_epochs,

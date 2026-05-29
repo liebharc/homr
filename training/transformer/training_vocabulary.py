@@ -174,7 +174,7 @@ class DecoderBranches:
         lifts: torch.Tensor,
         articulations: torch.Tensor,
         positions: torch.Tensor,
-        slur: torch.Tensor,
+        slurs: torch.Tensor,
         mask: torch.Tensor,
     ) -> None:
         self.rhythms = rhythms
@@ -182,7 +182,7 @@ class DecoderBranches:
         self.lifts = lifts
         self.articulations = articulations
         self.positions = positions
-        self.slur = slur
+        self.slurs = slurs
         self.mask = mask
 
 
