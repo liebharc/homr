@@ -229,8 +229,13 @@ def read_token_lines(lines: list[str]) -> list[EncodedSymbol]:
             parts = entry.strip().split()
             if len(parts) == 6:
                 rhythm, pitch, lift, articulation, slur, position = parts
-            else:
+            elif len(parts) == 5:
                 rhythm, pitch, lift, articulation, slur = parts
+                position = "upper"
+            else:
+                # Needed for validation; those are just placeholder values
+                rhythm, pitch, lift, articulation = parts
+                slur = "."
                 position = "upper"
             symbol = EncodedSymbol(rhythm, pitch, lift, articulation, slur, position)
             is_first = i == 0
