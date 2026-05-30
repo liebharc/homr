@@ -608,6 +608,7 @@ def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
     """
     Normalize measure-ending barlines and adjacent repeat symbols.
     """
+
     def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
         return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
 

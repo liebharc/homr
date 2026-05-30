@@ -131,10 +131,11 @@ class PrimusConverter:
         else:
             return EncodedSymbol(symbol)
 
+
 def change_tieSlur(tokens: list[EncodedSymbol]) -> list[EncodedSymbol]:
     result = []
     for i in range(len(tokens) - 2):
-        if tokens[i+1] == EncodedSymbol("tieSlur"):
+        if tokens[i + 1] == EncodedSymbol("tieSlur"):
             index_next = find_next_note(tokens, i)
             if index_next:
                 tokens[index_next].slur = "slurStop"
@@ -153,13 +154,15 @@ def change_tieSlur(tokens: list[EncodedSymbol]) -> list[EncodedSymbol]:
     result.append(tokens[-1])
     return result
 
+
 def find_next_note(tokens: list[EncodedSymbol], idx: int) -> int:
     """
     Find next note (after index), we dont want to append a slur to a barline
     """
-    for i in range(idx+2, len(tokens)):
+    for i in range(idx + 2, len(tokens)):
         if tokens[i].rhythm.startswith("note"):
             return i
+
 
 def find_last_note(tokens: list[EncodedSymbol], idx: int) -> int:
     """
@@ -176,12 +179,23 @@ def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     if tokens[-1].rhythm != "barline":
         tokens.append(EncodedSymbol("barline"))
     for symbol in tokens:
-        if has_rhythm_symbol_a_position(symbol.rhythm): # Where is lower parsed for the position?
+        if has_rhythm_symbol_a_position(symbol.rhythm):  # Primus only has single staff positions
             symbol.position = "upper"
     tokens = change_tieSlur(tokens)
     return tokens
 
 
 if __name__ == "__main__":
-    a = convert_primus_semantic_to_tokens("clef-G2 keySignature-DM timeSignature-2/4       note-F#4_sixteenth      note-F#4_eighth.        note-F#4_sixteenth      note-E4_eighth. barline note-F#4_eighth.        note-E4_sixteenth   note-E4_sixteenth        note-B4_eighth. barline note-A4_sixteenth       note-F#4_eighth.        note-F#4_eighth.        note-D4_sixteenth       barline note-E4_eighth. note-D4_sixteenth   note-E4_sixteenth        note-F#4_sixteenth      rest-sixteenth")
-    print(a)
+    import glob
+    import os
+
+    from homr.simple_logging import eprint
+
+    stats = VocabularyStats()
+    for file in glob.glob(os.path.join("datasets", "Corpus", "**", "**.semantic"), recursive=True):
+        with open(file, encoding="utf-8", errors="ignore") as f:
+            first_line = f.readline().strip()
+            tokens = convert_primus_semantic_to_tokens(first_line)
+            check_token_lines(tokens)
+            stats.add_lines(tokens)
+    eprint("Stats", stats)

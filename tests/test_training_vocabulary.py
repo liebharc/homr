@@ -22,7 +22,9 @@ class TestTrainingVocabulary(unittest.TestCase):
             EncodedSymbol("chord"),
             EncodedSymbol("note_8", "E5", position="lower"),
             EncodedSymbol("chord"),
-            EncodedSymbol("note_16", "E4", articulation="tenuto", slur="slurStart", position="upper"),
+            EncodedSymbol(
+                "note_16", "E4", articulation="tenuto", slur="slurStart", position="upper"
+            ),
             EncodedSymbol("chord"),
             EncodedSymbol("note_32", "D4", slur="slurStart_slurStop", position="upper"),
         ]

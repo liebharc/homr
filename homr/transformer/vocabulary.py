@@ -335,7 +335,10 @@ class EncodedSymbol:
 
     def is_valid(self) -> bool:
         has_position = has_rhythm_symbol_a_position(self.rhythm)
-        is_note = [s != nonote for s in [self.lift, self.articulation, self.pitch, self.slur, self.position]]
+        is_note = [
+            s != nonote
+            for s in [self.lift, self.articulation, self.pitch, self.slur, self.position]
+        ]
         return all(item == has_position for item in is_note)
 
     def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
@@ -634,4 +637,34 @@ def sort_token_chords(
 
 
 if __name__ == "__main__":
-    print(EncodedSymbol("note_4", "F3", empty, empty, empty, "upper"))
+    import json
+
+    from homr.simple_logging import eprint
+
+    vocab = Vocabulary()
+
+    eprint("Rhythm=", json.dumps(vocab.rhythm, indent=2))
+    eprint("Lift=", json.dumps(vocab.lift, indent=2))
+    eprint("Articulation=", json.dumps(vocab.articulation, indent=2))
+    eprint("Pitch=", json.dumps(vocab.pitch, indent=2))
+    eprint("Slurs=", json.dumps(vocab.slur, indent=2))
+    eprint("Positions=", json.dumps(vocab.position, indent=2))
+
+    valid_combinations = []
+
+    for r, li, a, p, sl, pos in itertools.product(
+        vocab.rhythm, vocab.lift, vocab.articulation, vocab.pitch, vocab.slur, vocab.position
+    ):
+        symbol = EncodedSymbol(r, li, a, p, sl, pos)
+        is_valid = symbol.is_valid()
+        if not is_valid:
+            continue
+        valid_combinations.append(symbol)
+
+    eprint(
+        "Number of combinations",
+        len(valid_combinations),
+        "- some examples:",
+    )
+    for symbol in random.sample(valid_combinations, 10):
+        eprint(symbol)

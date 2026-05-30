@@ -71,7 +71,6 @@ def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
     return 1000000 + position
 
 
-
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     sorted_chord = sorted(chord, key=_symbol_to_sortable)
     upper_slurs = set()
@@ -95,15 +94,15 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
                 upper_slurs.add(slur)
 
         annotation_resorted.append(symbol_stripped)
-    
+
     def _remove_item_helper(s: set, input_item: str):
         if len(s) > 1:
             s.discard(input_item)
         return s
 
     upper_artics = _remove_item_helper(upper_artics, ".")
-    lower_artics =  _remove_item_helper(lower_artics, ".")
-    upper_slurs = _remove_item_helper(upper_slurs,".")
+    lower_artics = _remove_item_helper(lower_artics, ".")
+    upper_slurs = _remove_item_helper(upper_slurs, ".")
     lower_slurs = _remove_item_helper(lower_slurs, ".")
 
     if len(upper_slurs) > 0:

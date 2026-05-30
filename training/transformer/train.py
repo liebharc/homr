@@ -158,7 +158,7 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 8 # 8gb vram
+    batch_size = 8  # 8gb vram
 
     train_args = TrainingArguments(
         checkpoint_folder,

@@ -155,7 +155,7 @@ class HumdrumKernConverter:
                 articulations.append(mapping[char])
             elif char in {"]", "["}:
                 slurs.append(mapping[char])
-        
+
         if slurs and articulations:
             return str.join("_", articulations), str.join("_", slurs)
         elif slurs:

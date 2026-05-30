@@ -10,10 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-script_location = os.path.dirname(os.path.realpath(__file__))
-git_root = Path(script_location).parent.parent.absolute()
-sys.path.insert(0, str(git_root))
-
 import cv2
 import numpy as np
 from PIL import Image
@@ -33,6 +29,8 @@ from training.transformer.training_vocabulary import (
     token_lines_to_str,
 )
 
+script_location = os.path.dirname(os.path.realpath(__file__))
+git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 lieder = os.path.join(dataset_root, "Lieder-main")
 quartets = os.path.join(dataset_root, "StringQuartets-main")

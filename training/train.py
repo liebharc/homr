@@ -16,7 +16,7 @@ if model_type == "segnet":
     dataset = download.download_deep_scores()
     train.train_segnet()
 elif model_type == "transformer":
-    transformer.train_transformer()
+    transformer.train_transformer(resume="checkpoint-16368")
 else:
     eprint("Unknown model: " + model_type)
     sys.exit(1)

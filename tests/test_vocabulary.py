@@ -174,7 +174,7 @@ barline . . . . ."""
 
     def test_only_keep_lower_staff_if_there_is_a_clef(self) -> None:
         tokens = [
-            EncodedSymbol("clef_G2", "_", "_", "_", "_","upper"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
             EncodedSymbol("keySignature_1", ".", ".", ".", ".", "."),
             EncodedSymbol("note_8", "F4", "#", "_", "slurStart", "upper"),
             EncodedSymbol("note_8", "E4", "_", "_", "slurStop", "upper"),

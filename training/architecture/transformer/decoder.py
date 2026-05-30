@@ -451,16 +451,18 @@ class ScoreDecoder(nn.Module):
                 positionsi[:, 1:] = (1 - mix_mask) * positionsi[:, 1:] + mix_mask * pos_sample
 
         # Second pass (or standard pass) with (possibly mixed) inputs
-        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, x, _attention, _cache = self.net(
-            rhythms=rhythmsi,
-            pitchs=pitchsi,
-            lifts=liftsi,
-            articulations=articulationsi,
-            slurs=slursi,
-            mask=mask,
-            cache=None,
-            return_center_of_attention=False,
-            **kwargs,
+        rhythmsp, pitchsp, liftsp, positionsp, articulationsp, slursp, x, _attention, _cache = (
+            self.net(
+                rhythms=rhythmsi,
+                pitchs=pitchsi,
+                lifts=liftsi,
+                articulations=articulationsi,
+                slurs=slursi,
+                mask=mask,
+                cache=None,
+                return_center_of_attention=False,
+                **kwargs,
+            )
         )  # this calls ScoreTransformerWrapper.forward
 
         # From the TR OMR paper equation 2, we use however different values for alpha and beta
@@ -482,7 +484,13 @@ class ScoreDecoder(nn.Module):
         loss_slurs = alpha * self.cross_entropy(slursp, slurso)
         loss_position = alpha * self.cross_entropy(positionsp, positionso)
         loss = (
-            loss_rhythm + loss_pitch + loss_lift + loss_articulations + loss_slurs + loss_position + loss_consist
+            loss_rhythm
+            + loss_pitch
+            + loss_lift
+            + loss_articulations
+            + loss_slurs
+            + loss_position
+            + loss_consist
         )
 
         return {
