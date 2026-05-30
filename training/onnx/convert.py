@@ -26,10 +26,12 @@ class DecoderWrapper(torch.nn.Module):
         pitchs: torch.Tensor,
         lifts: torch.Tensor,
         articulations: torch.Tensor,
+        slurs: torch.Tensor,
         context: torch.Tensor,
         cache_len: torch.Tensor,
         *cache: torch.Tensor,
     ) -> tuple[
+        torch.Tensor,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
@@ -44,6 +46,7 @@ class DecoderWrapper(torch.nn.Module):
             out_lifts,
             out_positions,
             out_articulations,
+            out_slurs,
             _x,
             attention,
             *cache,
@@ -52,6 +55,7 @@ class DecoderWrapper(torch.nn.Module):
             pitchs=pitchs,
             lifts=lifts,
             articulations=articulations,
+            slurs=slurs,
             context=context,
             cache_len=cache_len,
             mask=None,
@@ -64,6 +68,7 @@ class DecoderWrapper(torch.nn.Module):
             out_lifts,
             out_positions,
             out_articulations,
+            out_slurs,
             attention,
             *cache,
         )
@@ -147,6 +152,7 @@ def convert_decoder(overwrite: bool) -> str | None:
     pitchs = torch.randint(0, config.num_pitch_tokens, (1, 1)).long()
     lifts = torch.randint(0, config.num_lift_tokens, (1, 1)).long()
     articulations = torch.randint(0, config.num_articulation_tokens, (1, 1)).long()
+    slurs = torch.randint(0, config.num_slur_tokens, (1, 1)).long()
     cache_len = torch.tensor([cache_length]).long()
     cache = kv_cache
     context = torch.randn((1, 1280, config.encoder_dim)).float()
@@ -155,12 +161,13 @@ def convert_decoder(overwrite: bool) -> str | None:
 
     torch.onnx.export(
         wrapped_model,
-        (rhythms, pitchs, lifts, articulations, context, cache_len, *cache),
+        (rhythms, pitchs, lifts, articulations, slurs, context, cache_len, *cache),
         path_out,
         input_names=[
             "rhythms",
             "pitchs",
             "lifts",
+            "slurs",
             "articulations",
             "context",
             "cache_len",
@@ -172,6 +179,7 @@ def convert_decoder(overwrite: bool) -> str | None:
             "out_lifts",
             "out_positions",
             "out_articulations",
+            "out_slurs",
             "attention",
             *kv_output_names,
         ],
@@ -179,6 +187,7 @@ def convert_decoder(overwrite: bool) -> str | None:
         opset_version=18,
         do_constant_folding=True,
         export_params=True,
+        dynamo=False,
     )
     return path_out
 
