@@ -381,8 +381,11 @@ if __name__ == "__main__":
             index_file.close()
             files.extend([line.strip().split(",")[1] for line in index_lines])
     else:
-        files = glob.glob(os.path.join("datasets", "**", "**.tokens"), recursive=True)
-
+        exclude = "validation"
+        files = [
+            f for f in glob.glob(os.path.join("datasets", "**", "*.tokens"), recursive=True)
+            if exclude not in f.split(os.sep)
+        ]
     for file in files:
         try:
             tokens = read_tokens(file)
