@@ -1,0 +1,16 @@
+# Configuration Parameters for Robustness Audit
+metadata:
+  project_name: "adversarial-homr"
+  target_hardware: "NVIDIA GeForce RTX 3070 Laptop GPU"
+
+spectral_noise:
+  alpha_grid: [1.0, 2.0]        # 1.0 = Pink Noise, 2.0 = Brown Noise
+  epsilon_phys_grid: [0.0, 0.05, 0.10, 0.15, 0.20, 0.25]
+  stabilization_factor: 1e-6
+
+square_attack:
+  epsilon_math_grid: [0.01, 0.02, 0.05, 0.10, 0.20]
+  epsilon_math_extended_grid: [0.30, 0.40, 0.50]
+  max_iterations: 1000
+  p_init: 0.1                 # Initial side length ratio of the square patch
+  sample_budget: 100          # Number of source instances to evaluate

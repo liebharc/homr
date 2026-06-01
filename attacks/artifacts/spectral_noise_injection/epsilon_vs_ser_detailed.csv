@@ -1,7 +1,0 @@
-epsilon,predicted,reference,distance,ref_len,ser
-0.0,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p0000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,86,214,0.40186915887850466
-0.1,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p1000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,86,214,0.40186915887850466
-0.2,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p2000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,87,214,0.40654205607476634
-0.3,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p3000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,89,214,0.4158878504672897
-0.4,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p4000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,104,214,0.48598130841121495
-0.5,attacks\artifacts\spectral_noise_injection\poisoned_images\eps_0p5000\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX-1.musicxml,dataset\mxl\mxl\1\4\Qmb51KyRrjKZX8QnCdGLV66zco7CEa7dsV3HksuJY36qHX.mxl,152,214,0.7102803738317757

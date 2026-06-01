@@ -60,5 +60,12 @@ _build/
 # Local dataset and generated artifacts
 dataset/mxl/
 dataset/images/
+dataset/*cache*/
 dataset/PDMX.csv
+models/onnx/
 attacks/artifacts/
+
+# Per-run cache-heavy artifacts
+results/runs/*/*cache*/
+results/runs/*/candidate_images/
+results/runs/*/paired_images/
