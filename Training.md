@@ -57,14 +57,19 @@ This validation provides a **more representative indication of overall system pe
 
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
-## Run 381
+Implementation: `rate_validation_result.py`
+
+## Run 381 - discarded
 
 Commit: 6ced21726443ed037608f8610ff4e7dac445649a
 Day: 1 Jun 2026
 Transformer Smoke Test: SER 6%
 System Level: 5.6 diffs, SER: 3.1%
 
-FPN Style fusion, https://github.com/liebharc/homr/pull/85
+FPN Style fusion, https://github.com/liebharc/homr/pull/85 . The run is on good as e.g. #367 and #331, but the model is more complex and a manual review of the results indicate a less robust pitch detection.
+
+A possible way forward would be to not mix fused features, but instead concat stage 2 and stage 3. That however
+increases the encoder_dim and decoder_dim from 512 to 1152 (768 + 384) which makes training and inference much more expensive.
 
 ## Run 367
 
