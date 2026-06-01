@@ -24,7 +24,7 @@ Download the datasets and convert them to the format required for training:
 
 - `training/datasets/convert_primus.py`
 - `training/datasets/convert_grandstaff.py`
-- `training/datasets/convert_lieder.py`  
+- `training/datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
@@ -57,7 +57,14 @@ This validation provides a **more representative indication of overall system pe
 
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
-Implementation: `rate_validation_result.py`
+## Run 381
+
+Commit: 6ced21726443ed037608f8610ff4e7dac445649a
+Day: 1 Jun 2026
+Transformer Smoke Test: SER 6%
+System Level: 5.6 diffs, SER: 3.1%
+
+FPN Style fusion, https://github.com/liebharc/homr/pull/85
 
 ## Run 367
 
