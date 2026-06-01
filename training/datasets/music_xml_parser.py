@@ -164,32 +164,35 @@ class TokensMeasure:
             return "upper"
         return "lower"
 
-    def _fill_in_arpeggiate(self, symbols: list[EncodedSymbolWithPos]) -> None:
+    def _fill_in_arpeggiate(self, symbols_with_pos: list[EncodedSymbolWithPos]) -> None:
         """
         In the Lieder dataset we find that an arpeggiate always is rendered
         as it would affect all notes in a chord, even if the MusicXML doesn't
         reflect that.
         """
         arpegiatted_positions = set()
-        for symbol in symbols:
-            if "arpeggiate" in symbol.symbol.articulation:
-                arpegiatted_positions.add(symbol.position)
+        for entry in symbols_with_pos:
+            pos, sym = entry.position, entry.symbol
+            if "arpeggiate" in sym.articulation:
+                # `pos` is the position in the measure, `sym.position` is the upper/lower staff.
+                arpegiatted_positions.add((pos, sym.position))
 
-        for symbol in symbols:
+        for entry in symbols_with_pos:
+            pos, sym = entry.position, entry.symbol
             if (
-                symbol.position in arpegiatted_positions
-                and "arpeggiate" not in symbol.symbol.articulation
-                and symbol.symbol.rhythm.startswith(("note", "rest"))
-                and not symbol.symbol.rhythm.startswith("note_0")
-                and not symbol.symbol.rhythm.startswith("rest_0")
+                (pos, sym.position) in arpegiatted_positions
+                and "arpeggiate" not in sym.articulation
+                and sym.rhythm.startswith(("note", "rest"))
+                and not sym.rhythm.startswith("note_0")
+                and not sym.rhythm.startswith("rest_0")
             ):
-                art = symbol.symbol.articulation
+                art = sym.articulation
                 art_parts = []
                 if art != empty:
                     art_parts = art.split("_")
                 art_parts.append("arpeggiate")
                 art = str.join("_", sorted(art_parts))
-                symbol.symbol.articulation = art
+                sym.articulation = art
 
     def complete_measure(self) -> Measure:  # noqa: C901
         self._fill_in_arpeggiate(self.symbols)
@@ -228,13 +231,10 @@ class TupletState:
     def get_tuplet_factor(self, note: mxl.XMLNote, position: int) -> float:
         notations = note.get_children_of_type(mxl.XMLNotations)
         was_started = self.started or self.last_stop_position == position
-        if len(notations) > 0:
-            tuplets = notations[0].get_children_of_type(mxl.XMLTuplet)
-            print_object = notations[0].attributes.get("print-object", None)
-            for t in tuplets:
+        for notation in notations:
+            for t in notation.get_children_of_type(mxl.XMLTuplet):
                 t_type = t.attributes.get("type", None)
-                show_number = t.attributes.get("show-number", None)
-                if t_type == "start" and show_number != "none" and print_object != "no":
+                if t_type == "start":
                     self.started = True
                 if t_type == "stop":
                     self.started = False
@@ -408,47 +408,47 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
     if not notations:
         return empty
     articulations = []
-    # pick the first articulation we support if multiple present
-    for child in notations[0].get_children():
-        print_object = child.attributes.get("print-object", None)
-        invisible = print_object == "no"
-        if isinstance(child, mxl.XMLArticulations) and not invisible:
-            for a in child.get_children():
-                if isinstance(child, mxl.XMLTremolo) and not invisible:
-                    tremolo_type = str(child.attributes.get("type", ""))
-                    part.tremolo = tremolo_type == "start"
-                else:
-                    name = a.__class__.__name__[
-                        3:
-                    ]  # strip XML prefix, e.g., XMLStaccato -> Staccato
-                    name = name[0].lower() + name[1:]
-                    if name in ARTIC_MAPPING:
-                        if ARTIC_MAPPING[name]:
-                            articulations.append(ARTIC_MAPPING[name])
+    for notation in notations:
+        for child in notation.get_children():
+            print_object = child.attributes.get("print-object", None)
+            invisible = print_object == "no"
+            if isinstance(child, mxl.XMLArticulations) and not invisible:
+                for a in child.get_children():
+                    if isinstance(child, mxl.XMLTremolo) and not invisible:
+                        tremolo_type = str(child.attributes.get("type", ""))
+                        part.tremolo = tremolo_type == "start"
                     else:
-                        articulations.append(name)
-        if isinstance(child, mxl.XMLFermata) and not invisible:
-            articulations.append("fermata")
-        if isinstance(child, mxl.XMLOrnaments) and not invisible:
-            for o in child.get_children():
-                nm = o.__class__.__name__[3:]
-                nm = nm[0].lower() + nm[1:]
-                if nm in ARTIC_MAPPING:
-                    if ARTIC_MAPPING[nm]:
-                        articulations.append(ARTIC_MAPPING[nm])
-                else:
-                    articulations.append(nm)
-        if isinstance(child, mxl.XMLTuplet):
-            # Tuplets are handled by TupletState
-            pass
-        if isinstance(child, mxl.XMLArpeggiate):
-            articulations.append("arpeggiate")
-        if isinstance(child, mxl.XMLTied):
-            tie_type = str(child.attributes.get("type", ""))
-            articulations.append("slur" + tie_type.capitalize())
-        if isinstance(child, mxl.XMLSlur):
-            slur_type = str(child.attributes.get("type", ""))
-            articulations.append("slur" + slur_type.capitalize())
+                        name = a.__class__.__name__[
+                            3:
+                        ]  # strip XML prefix, e.g., XMLStaccato -> Staccato
+                        name = name[0].lower() + name[1:]
+                        if name in ARTIC_MAPPING:
+                            if ARTIC_MAPPING[name]:
+                                articulations.append(ARTIC_MAPPING[name])
+                        else:
+                            articulations.append(name)
+            if isinstance(child, mxl.XMLFermata) and not invisible:
+                articulations.append("fermata")
+            if isinstance(child, mxl.XMLOrnaments) and not invisible:
+                for o in child.get_children():
+                    nm = o.__class__.__name__[3:]
+                    nm = nm[0].lower() + nm[1:]
+                    if nm in ARTIC_MAPPING:
+                        if ARTIC_MAPPING[nm]:
+                            articulations.append(ARTIC_MAPPING[nm])
+                    else:
+                        articulations.append(nm)
+            if isinstance(child, mxl.XMLTuplet):
+                # Tuplets are handled by TupletState
+                pass
+            if isinstance(child, mxl.XMLArpeggiate):
+                articulations.append("arpeggiate")
+            if isinstance(child, mxl.XMLTied):
+                tie_type = str(child.attributes.get("type", ""))
+                articulations.append("slur" + tie_type.capitalize())
+            if isinstance(child, mxl.XMLSlur):
+                slur_type = str(child.attributes.get("type", ""))
+                articulations.append("slur" + slur_type.capitalize())
 
     if part.tremolo:
         articulations.append("tremolo")

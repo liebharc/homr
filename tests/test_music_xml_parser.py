@@ -452,6 +452,64 @@ note_4 A4 _ slurStop upper&note_4 F4 # _ upper&note_4 B3 _ _ lower&note_4 D3 # _
 barline . . . ."""
         self.assertEqual(token_str, expected)
 
+    def test_arpeggiate(self) -> None:
+        """Arpeggio on one staff shouldn't be propagated to the other
+        one that starts on the same beat. It still should be filled in across
+        the chord notes on its own staff."""
+        self.maxDiff = None
+        # Upper-staff chord (no arpeggio) and lower-staff chord (arpeggio on
+        # one note only) sharing beat 0. like lc6810938.musicxml.
+        example = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff>
+      </note>
+      <backup><duration>16</duration></backup>
+      <note>
+        <pitch><step>G</step><octave>2</octave></pitch>
+        <duration>16</duration><voice>5</voice><type>whole</type><staff>2</staff>
+        <notations><arpeggiate number="1"/></notations>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>D</step><octave>3</octave></pitch>
+        <duration>16</duration><voice>5</voice><type>whole</type><staff>2</staff>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>B</step><octave>3</octave></pitch>
+        <duration>16</duration><voice>5</voice><type>whole</type><staff>2</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+        tokens = music_xml_string_to_tokens(example)
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        token_str = token_lines_to_str(flat_list)
+        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
+keySignature_0 . . . .
+timeSignature/4 . . . .
+note_1 D5 _ _ upper&note_1 D4 _ _ upper&note_1 B3 _ arpeggiate lower&note_1 D3 _ _ lower&note_1 G2 _ _ lower
+barline . . . ."""
+        self.assertEqual(token_str, expected)
+
     def _norm_expected(self, expected: str) -> str:
         norm = expected.replace("\n", "")
         norm = re.sub(r",\s+", ",", norm)
