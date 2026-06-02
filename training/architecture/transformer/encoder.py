@@ -19,24 +19,32 @@ def _get_sinusoid_encoding(n_position: int, d_hid: int) -> torch.Tensor:
     return sinusoid_table.unsqueeze(0)
 
 
+def _make_output_conv(channels: int) -> nn.Sequential:
+    """Standard FPN smoothing conv: 3×3 + GroupNorm + GELU."""
+    return nn.Sequential(
+        nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+        nn.GroupNorm(32, channels),
+        nn.GELU(),
+    )
+
+
 class ConvNeXtEncoder(nn.Module):
     """
-    ConvNeXt encoder with standard FPN-style top-down fusion of stage1 + stage2.
+    ConvNeXt encoder with 3-stage FPN fusion (indices [1, 2, 3]).
 
     ConvNeXt-Tiny channel/stride map (timm feature_info indices):
       [0]  96ch  stride  4
       [1] 192ch  stride  8  ← feat1 (fine spatial detail)
-      [2] 384ch  stride 16  ← feat2 (semantic context)
-      [3] 768ch  stride 32
+      [2] 384ch  stride 16  ← feat2 (mid-range structure)
+      [3] 768ch  stride 32  ← feat3 (global context: clefs, key sigs, bar structure)
 
-    Fusion (indices=[1, 2]) produces stride-8 output → 32×160 tokens for 256×1280 input.
+    Two cascaded FPN merges, top-down:
+      feat3 (stride 32) → lateral → upsample → add into feat2
+      feat2 (stride 16) → lateral → upsample → add into feat1  (carries feat3 signal)
+      feat1 (stride  8) → lateral → final output at stride 8
 
-    Standard FPN steps:
-      1. lateral 1×1 conv  — project each scale to fpn_channels (192, the finer width)
-      2. F.interpolate(size=, nearest)  — upsample feat2 to feat1 spatial size
-      3. element-wise addition  — inject top-down semantic context
-      4. 3×3 conv + GroupNorm + GELU  — smooth aliasing from upsampling
-      5. 1×1 conv  — project fpn_channels → encoder_dim
+    Output: (B, 32×160, encoder_dim) for 256×1280 input.
+    Transformer token count: 5120 — same as [1,2] fusion, no extra cost.
     """
 
     def __init__(self, config: Config) -> None:
@@ -51,26 +59,25 @@ class ConvNeXtEncoder(nn.Module):
             drop_path_rate=0.1,
         )
 
-        # convnext_tiny: feat1 = 192ch stride 8, feat2 = 384ch stride 16
+        # convnext_tiny confirmed channel sizes:
         stage1_chs: int = int(self.model.feature_info[1]["num_chs"])  # type: ignore  → 192
         stage2_chs: int = int(self.model.feature_info[2]["num_chs"])  # type: ignore  → 384
-        fpn_channels: int = stage1_chs  # 192 — use finer scale width as common FPN width
+        stage3_chs: int = int(self.model.feature_info[3]["num_chs"])  # type: ignore  → 768
+        fpn_channels: int = stage1_chs  # 192 — common FPN width throughout all levels
 
-        # Step 1: lateral 1×1 convs — align both scales to fpn_channels
-        # stage1 is already 192ch but we still apply 1×1 for consistent learned projection
+        # Lateral 1×1 convs — project each scale to fpn_channels
+        # stage1 already 192ch but explicit projection keeps all levels symmetric
         self.lateral_stage1 = nn.Conv2d(stage1_chs, fpn_channels, kernel_size=1, bias=False)
         self.lateral_stage2 = nn.Conv2d(stage2_chs, fpn_channels, kernel_size=1, bias=False)
+        self.lateral_stage3 = nn.Conv2d(stage3_chs, fpn_channels, kernel_size=1, bias=False)
 
-        # Step 4: 3×3 smoothing conv — reduces aliasing artifacts after addition
-        self.output_conv = nn.Sequential(
-            nn.Conv2d(fpn_channels, fpn_channels, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(32, fpn_channels),
-            nn.GELU(),
-        )
+        # Smoothing convs — one per merge point (after each addition)
+        # output_conv_2: applied after merging feat3 into feat2 (stride 16)
+        # output_conv_1: applied after merging fused-feat2 into feat1 (stride 8, final)
+        self.output_conv_2 = _make_output_conv(fpn_channels)
+        self.output_conv_1 = _make_output_conv(fpn_channels)
 
-        # Step 5: 1×1 projection — expand fpn_channels (192) → encoder_dim (512 or 768)
-        # Equivalent to a per-token linear layer; no hidden layer needed here since
-        # the transformer encoder that follows handles all channel mixing.
+        # Final 1×1 projection: fpn_channels (192) → encoder_dim (512 or 768)
         self.proj = nn.Conv2d(fpn_channels, config.encoder_dim, kernel_size=1, bias=False)
 
         # Stride-8 output: 256//8=32 height patches, 1280//8=160 width patches
@@ -96,29 +103,32 @@ class ConvNeXtEncoder(nn.Module):
             p.requires_grad = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _, stages = self.model.forward_intermediates(x, indices=[1, 2])  # type: ignore
-        feat1 = stages[0]  # (B, 192, H/8,  W/8)  — stride-8, fine spatial detail
-        feat2 = stages[1]  # (B, 384, H/16, W/16) — stride-16, semantic context
+        _, stages = self.model.forward_intermediates(x, indices=[1, 2, 3])  # type: ignore
+        feat1 = stages[0]  # (B, 192, H/8,  W/8)
+        feat2 = stages[1]  # (B, 384, H/16, W/16)
+        feat3 = stages[2]  # (B, 768, H/32, W/32)
 
-        # Step 1: lateral projections → common channel width (192)
+        # Step 1: lateral projections — all scales → 192ch
         lat1 = self.lateral_stage1(feat1)
         lat2 = self.lateral_stage2(feat2)
+        lat3 = self.lateral_stage3(feat3)
 
-        # Step 2: upsample stride-16 → stride-8 using exact target size (robust to odd dims)
-        top_down = F.interpolate(lat2, size=lat1.shape[-2:], mode="nearest")
+        # Step 2: top-down merge — feat3 into feat2 (stride 32 → 16)
+        # lat3 carries global context (clefs, key signatures, bar-level structure)
+        top_down_2 = F.interpolate(lat3, size=lat2.shape[-2:], mode="nearest")
+        fused2 = self.output_conv_2(lat2 + top_down_2)  # (B, 192, H/16, W/16)
 
-        # Step 3: element-wise addition — merge semantic context into fine spatial features
-        fused = lat1 + top_down
+        # Step 3: top-down merge — fused feat2 into feat1 (stride 16 → 8)
+        # fused2 already carries feat3 signal, so feat3 context reaches stride-8 tokens
+        top_down_1 = F.interpolate(fused2, size=lat1.shape[-2:], mode="nearest")
+        fused1 = self.output_conv_1(lat1 + top_down_1)  # (B, 192, H/8, W/8)
 
-        # Step 4: smooth aliasing from upsampling + addition
-        fused = self.output_conv(fused)  # (B, 192, H/8, W/8)
-
-        # Step 5: project to encoder_dim via 1×1 conv (= per-token linear, no hidden layer)
-        fused = self.proj(fused)  # (B, encoder_dim, H/8, W/8)
+        # Step 4: project to encoder_dim
+        fused = self.proj(fused1)  # (B, encoder_dim, H/8, W/8)
 
         b, _c, h, w = fused.shape
 
-        # Positional embeddings — factorized H×W → separate h_dim + w_dim embeddings
+        # Factorized positional embeddings — separate h_dim + w_dim vectors per axis
         pos_h = self.pos_embed_h[:, :h, :].unsqueeze(2).expand(-1, -1, w, -1)
         pos_w = self.pos_embed_w[:, :w, :].unsqueeze(1).expand(-1, h, -1, -1)
         pos_embed = torch.cat([pos_h, pos_w], dim=-1)
