@@ -1,0 +1,41 @@
+{
+  "statistics_note": "These statistics compare curves on normalized severity. They are descriptive unless the underlying runs used the same source-image subset and a sample-level paired test is performed.",
+  "mean_delta_ser": {
+    "metric": "mean_delta_ser",
+    "auc_Track A spectral (mean over α)": 0.13982624926707504,
+    "auc_Track B square": 0.5641758493860475,
+    "available": true,
+    "track_a": "Track A spectral (mean over α)",
+    "track_b": "Track B square",
+    "severity_min": 0.0,
+    "severity_max": 1.0,
+    "n_grid": 101,
+    "mean_track_b_minus_track_a": 0.43230724492912226,
+    "median_track_b_minus_track_a": 0.0874009636934053,
+    "max_abs_track_b_minus_track_a": 2.4568515360911753,
+    "auc_track_a": 0.1398297896880901,
+    "auc_track_b": 0.5641758493860475,
+    "auc_track_b_minus_track_a": 0.42434605969795736,
+    "sign_flip_p_value_descriptive": 9.999000099990002e-05,
+    "note": "This is a descriptive curve-level sign-flip diagnostic over interpolated severity points. For formal sample-level inference, use paired image-level rows from the same image subset."
+  },
+  "mean_delta_cer": {
+    "metric": "mean_delta_cer",
+    "auc_Track A spectral (mean over α)": 0.10054916330202282,
+    "auc_Track B square": 0.4599643164692254,
+    "available": true,
+    "track_a": "Track A spectral (mean over α)",
+    "track_b": "Track B square",
+    "severity_min": 0.0,
+    "severity_max": 1.0,
+    "n_grid": 101,
+    "mean_track_b_minus_track_a": 0.3655858710796038,
+    "median_track_b_minus_track_a": 0.09645170716194532,
+    "max_abs_track_b_minus_track_a": 1.9652333111560372,
+    "auc_track_a": 0.1005487532346058,
+    "auc_track_b": 0.4599643164692253,
+    "auc_track_b_minus_track_a": 0.35941556323461954,
+    "sign_flip_p_value_descriptive": 9.999000099990002e-05,
+    "note": "This is a descriptive curve-level sign-flip diagnostic over interpolated severity points. For formal sample-level inference, use paired image-level rows from the same image subset."
+  }
+}

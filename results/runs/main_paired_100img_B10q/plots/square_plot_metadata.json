@@ -1,0 +1,73 @@
+{
+  "source_json": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_B_main_paired_100img_B10q_metrics.json",
+  "metadata": {
+    "run_start": "2026-06-01T18:52:55",
+    "run_end": "2026-06-02T04:51:53",
+    "run_elapsed_sec": 35938.40583189999,
+    "run_elapsed": "9h 58m 58.4s",
+    "track": "B",
+    "benchmark_mode": "cached_prepared_staff_tromr_onnx",
+    "experiment": "square_attack",
+    "execution_order": "staff_major_clean_once_epsilon_inner",
+    "target_source": "clean_onnx_prediction",
+    "cache_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\cached_prepared_staffs_view",
+    "n_staff_files_discovered": 670,
+    "n_images_approximated_from_score_dirs": 100,
+    "n_jobs_total": 3350,
+    "n_jobs_ok": 3350,
+    "n_jobs_error": 0,
+    "resumed_records_count": 1139,
+    "epsilons": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4
+    ],
+    "epsilon_math_grid": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4
+    ],
+    "n_max": 10,
+    "p_init": 0.8,
+    "p_final": 0.05,
+    "max_staffs": null,
+    "timing_jsonl": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_B_main_paired_100img_B10q_timing.jsonl",
+    "checkpoint_jsonl": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_B_main_paired_100img_B10q_timing.jsonl",
+    "resume": true,
+    "plot": false,
+    "plots_dir": "results/plots",
+    "metric_notes": [
+      "Raw SER/CER are normalized Levenshtein edit distances and may exceed 1.0 due to insertions.",
+      "Capped SER/CER are min(raw_metric, 1.0) and are included only for bounded visual comparison.",
+      "Delta SER/CER are adversarial minus clean baseline and are the preferred cross-track comparison metrics."
+    ],
+    "notes": [
+      "Track B attacks cached HOMR-prepared staff images directly.",
+      "This runner does not intentionally rerun full-page HOMR layout inside the attack loop.",
+      "clean_onnx_prediction target source is self-consistency scoring, not final MusicXML ground truth scoring.",
+      "Checkpoint key is (staff_path, epsilon, n_max, target_source).",
+      "jobs/staff_level_results are staff-epsilon jobs; image_level_results aggregate staff jobs by score/image stem."
+    ]
+  },
+  "plot_set": "core",
+  "n_rows": 5,
+  "epsilons": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.4
+  ],
+  "outputs": {
+    "table": "square_results_table.csv",
+    "mean_delta_ser": "square_delta_ser_vs_epsilon.html",
+    "mean_delta_cer": "square_delta_cer_vs_epsilon.html",
+    "success_rate": "square_success_vs_epsilon.html",
+    "mean_job_elapsed_sec": "square_runtime_vs_epsilon.html"
+  },
+  "metric_note": "Core plots use delta SER/CER: perturbed/adversarial error minus clean baseline error. Raw and capped metrics remain in CSV tables and are plotted only with --plot-set full."
+}

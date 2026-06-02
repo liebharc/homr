@@ -1,0 +1,117 @@
+{
+  "source_json": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_A_main_paired_100img_B10q_metrics.json",
+  "metadata": {
+    "run_start": "2026-06-02T15:50:16",
+    "run_end": "2026-06-02T19:31:49",
+    "run_elapsed_sec": 13293.1267961,
+    "run_elapsed": "3h 41m 33.1s",
+    "track": "A",
+    "benchmark_mode": "full_page_multiscale_spectral_noise_onnx_self_consistency",
+    "experiment": "spectral_noise_degradation",
+    "execution_order": "image_major_clean_once_alpha_noise_once_epsilon_inner",
+    "stage": "A2_SELF_CONSISTENCY",
+    "onnx_mode": true,
+    "target_source": "clean_onnx_prediction",
+    "target_source_warning": "clean_onnx_prediction measures degradation drift relative to clean ONNX output; it is not final MusicXML ground-truth accuracy.",
+    "images_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\paired_images",
+    "model_dir": "models\\onnx",
+    "segnet_model": "models\\onnx\\segnet.onnx",
+    "n_images_requested": 100,
+    "n_clean_targets_ok": 36,
+    "n_clean_targets_error": 0,
+    "n_jobs_total": 2400,
+    "n_jobs_ok": 2399,
+    "n_jobs_error": 1,
+    "resumed_records_count": 1565,
+    "spectral_alpha_grid": [
+      0.0,
+      1.0,
+      2.0
+    ],
+    "epsilon_phys_grid": [
+      0.0,
+      0.01,
+      0.02,
+      0.04,
+      0.08,
+      0.16,
+      0.32,
+      0.4
+    ],
+    "noise_model": "alpha_conditioned_multiscale_fourier_endpoint",
+    "noise_model_notes": [
+      "Each image-alpha pair samples white, pink, and brown Fourier components with alpha-conditioned Dirichlet weights.",
+      "The same sampled noise field is reused across all epsilon values for that image-alpha pair.",
+      "The mixed field is normalized before endpoint interpolation, so epsilon_phys is the single global severity parameter.",
+      "Negative field values move pixels toward black; positive values move pixels toward white."
+    ],
+    "providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "segnet_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "timing_jsonl": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_A_main_paired_100img_B10q_timing.jsonl",
+    "checkpoint_jsonl": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_100img_B10q\\logs\\TRACK_A_main_paired_100img_B10q_timing.jsonl",
+    "resume": true,
+    "plot": false,
+    "plots_dir": "results\\plots",
+    "plot_script": null,
+    "plot_set": "core",
+    "metric_notes": [
+      "Raw SER/CER are normalized Levenshtein edit distances and may exceed 1.0 due to insertions.",
+      "Capped SER/CER are min(raw_metric, 1.0) and are included only for bounded visual comparison.",
+      "For clean_onnx_prediction target_source, clean_* metrics are self-consistency baselines and are exactly 0 by construction.",
+      "Track A jobs are image-alpha-epsilon evaluations; Track B jobs are staff-epsilon attacks."
+    ],
+    "notes": [
+      "Track A injects spectral noise into full-page images.",
+      "SegNet and TrOMR neural inference are ONNX Runtime calls.",
+      "HOMR Python is used for deterministic layout, geometry, dewarping, and prepare_staff_image only.",
+      "epsilon=0 jobs reuse clean predictions and skip redundant noisy layout."
+    ]
+  },
+  "plot_set": "core",
+  "n_rows": 24,
+  "epsilons": [
+    0.0,
+    0.01,
+    0.02,
+    0.04,
+    0.08,
+    0.16,
+    0.32,
+    0.4,
+    0.0,
+    0.01,
+    0.02,
+    0.04,
+    0.08,
+    0.16,
+    0.32,
+    0.4,
+    0.0,
+    0.01,
+    0.02,
+    0.04,
+    0.08,
+    0.16,
+    0.32,
+    0.4
+  ],
+  "outputs": {
+    "table": "spectral_results_table.csv",
+    "staff_table": "spectral_staff_results_table.csv",
+    "image_table": "spectral_image_results_table.csv",
+    "jobs_table": "spectral_jobs_table.csv",
+    "errors_table": "spectral_errors_table.csv",
+    "mean_delta_ser": "spectral_delta_ser_vs_epsilon.html",
+    "mean_delta_cer": "spectral_delta_cer_vs_epsilon.html",
+    "layout_success_rate": "spectral_layout_success_vs_epsilon.html",
+    "elapsed_seconds": "spectral_runtime_vs_epsilon.html"
+  },
+  "metric_note": "Core plots use delta SER/CER: noisy error minus clean baseline error. Raw and capped metrics remain in CSV tables and are plotted only with --plot-set full.",
+  "target_note": "If target_source is clean_onnx_prediction, Track A measures degradation drift relative to the clean ONNX output, not final MusicXML ground-truth accuracy."
+}

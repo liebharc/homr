@@ -1,0 +1,41 @@
+{
+  "run_id": "main_paired_20img_B50q",
+  "updated": "2026-06-02T19:31:58",
+  "repo_root": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr",
+  "shared_cache_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\dataset\\cached_prepared_staffs",
+  "n_images": 20,
+  "n_max_b": "50",
+  "eps_a": [
+    "0.0",
+    "0.01",
+    "0.02",
+    "0.04",
+    "0.08",
+    "0.16",
+    "0.32",
+    "0.40"
+  ],
+  "alpha_a": [
+    "0",
+    "1",
+    "2"
+  ],
+  "eps_b": [
+    "0.0",
+    "0.10",
+    "0.20",
+    "0.30",
+    "0.40"
+  ],
+  "p_init_b": "0.8",
+  "p_final_b": "0.05",
+  "target_source": "clean_onnx_prediction",
+  "plot_set": "core",
+  "run_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_20img_B50q",
+  "final_images_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_20img_B50q\\paired_images",
+  "cache_view_dir": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_20img_B50q\\cached_prepared_staffs_view",
+  "image_subset_path": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_20img_B50q\\image_subset.txt",
+  "staff_list_path": "D:\\Users\\theda\\Documents\\dev\\Projects\\Uni\\Semester 4\\Artificial Intelligence\\adversarial-homr\\results\\runs\\main_paired_20img_B50q\\cached_staffs.txt",
+  "staff_count": 154,
+  "nested_subset_policy": "first_n_images_from_shared_benchmark_pool"
+}
