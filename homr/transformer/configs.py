@@ -87,7 +87,7 @@ class Config:
         self.vocab = Vocabulary()
         self.filepaths = FilePaths()
         self.channels = 1
-        self.patch_size = 8
+        self.patch_size = 16
         self.max_height = 256
         self.max_width = 1280
         self.max_seq_len = 608
