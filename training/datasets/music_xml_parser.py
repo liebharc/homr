@@ -231,10 +231,13 @@ class TupletState:
     def get_tuplet_factor(self, note: mxl.XMLNote, position: int) -> float:
         notations = note.get_children_of_type(mxl.XMLNotations)
         was_started = self.started or self.last_stop_position == position
-        for notation in notations:
-            for t in notation.get_children_of_type(mxl.XMLTuplet):
+        if len(notations) > 0:
+            tuplets = notations[0].get_children_of_type(mxl.XMLTuplet)
+            print_object = notations[0].attributes.get("print-object", None)
+            for t in tuplets:
                 t_type = t.attributes.get("type", None)
-                if t_type == "start":
+                show_number = t.attributes.get("show-number", None)
+                if t_type == "start" and show_number != "none" and print_object != "no":
                     self.started = True
                 if t_type == "stop":
                     self.started = False
@@ -408,47 +411,47 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
     if not notations:
         return empty
     articulations = []
-    for notation in notations:
-        for child in notation.get_children():
-            print_object = child.attributes.get("print-object", None)
-            invisible = print_object == "no"
-            if isinstance(child, mxl.XMLArticulations) and not invisible:
-                for a in child.get_children():
-                    if isinstance(child, mxl.XMLTremolo) and not invisible:
-                        tremolo_type = str(child.attributes.get("type", ""))
-                        part.tremolo = tremolo_type == "start"
+    # pick the first articulation we support if multiple present
+    for child in notations[0].get_children():
+        print_object = child.attributes.get("print-object", None)
+        invisible = print_object == "no"
+        if isinstance(child, mxl.XMLArticulations) and not invisible:
+            for a in child.get_children():
+                if isinstance(child, mxl.XMLTremolo) and not invisible:
+                    tremolo_type = str(child.attributes.get("type", ""))
+                    part.tremolo = tremolo_type == "start"
+                else:
+                    name = a.__class__.__name__[
+                        3:
+                    ]  # strip XML prefix, e.g., XMLStaccato -> Staccato
+                    name = name[0].lower() + name[1:]
+                    if name in ARTIC_MAPPING:
+                        if ARTIC_MAPPING[name]:
+                            articulations.append(ARTIC_MAPPING[name])
                     else:
-                        name = a.__class__.__name__[
-                            3:
-                        ]  # strip XML prefix, e.g., XMLStaccato -> Staccato
-                        name = name[0].lower() + name[1:]
-                        if name in ARTIC_MAPPING:
-                            if ARTIC_MAPPING[name]:
-                                articulations.append(ARTIC_MAPPING[name])
-                        else:
-                            articulations.append(name)
-            if isinstance(child, mxl.XMLFermata) and not invisible:
-                articulations.append("fermata")
-            if isinstance(child, mxl.XMLOrnaments) and not invisible:
-                for o in child.get_children():
-                    nm = o.__class__.__name__[3:]
-                    nm = nm[0].lower() + nm[1:]
-                    if nm in ARTIC_MAPPING:
-                        if ARTIC_MAPPING[nm]:
-                            articulations.append(ARTIC_MAPPING[nm])
-                    else:
-                        articulations.append(nm)
-            if isinstance(child, mxl.XMLTuplet):
-                # Tuplets are handled by TupletState
-                pass
-            if isinstance(child, mxl.XMLArpeggiate):
-                articulations.append("arpeggiate")
-            if isinstance(child, mxl.XMLTied):
-                tie_type = str(child.attributes.get("type", ""))
-                articulations.append("slur" + tie_type.capitalize())
-            if isinstance(child, mxl.XMLSlur):
-                slur_type = str(child.attributes.get("type", ""))
-                articulations.append("slur" + slur_type.capitalize())
+                        articulations.append(name)
+        if isinstance(child, mxl.XMLFermata) and not invisible:
+            articulations.append("fermata")
+        if isinstance(child, mxl.XMLOrnaments) and not invisible:
+            for o in child.get_children():
+                nm = o.__class__.__name__[3:]
+                nm = nm[0].lower() + nm[1:]
+                if nm in ARTIC_MAPPING:
+                    if ARTIC_MAPPING[nm]:
+                        articulations.append(ARTIC_MAPPING[nm])
+                else:
+                    articulations.append(nm)
+        if isinstance(child, mxl.XMLTuplet):
+            # Tuplets are handled by TupletState
+            pass
+        if isinstance(child, mxl.XMLArpeggiate):
+            articulations.append("arpeggiate")
+        if isinstance(child, mxl.XMLTied):
+            tie_type = str(child.attributes.get("type", ""))
+            articulations.append("slur" + tie_type.capitalize())
+        if isinstance(child, mxl.XMLSlur):
+            slur_type = str(child.attributes.get("type", ""))
+            articulations.append("slur" + slur_type.capitalize())
 
     if part.tremolo:
         articulations.append("tremolo")
