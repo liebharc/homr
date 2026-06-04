@@ -2,6 +2,7 @@ import json
 import multiprocessing
 import os
 import platform
+import re
 import shutil
 import stat
 import subprocess
@@ -119,8 +120,9 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
 def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]:
     jobs: list[dict[str, str]] = []
 
-    # List of files where MuseScore seems to hang up
-    files_with_known_issues = ["sq8940236"]
+    # sq8940236: MuseScore seems to hang up
+    # lc5001945: nested tuplet, not good for training
+    files_with_known_issues = ["sq8940236", "lc5001945"]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
     for target_format in formats:
@@ -139,6 +141,55 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
     return jobs
 
 
+"""
+In mscx file, tuplet can be set invisible via the following ways:
+1. <Tuplet( id="...")>
+     <visible>0</visible>
+   </Tuplet>
+    this is equal to <notations print-object="no"> in musicXML
+2. <numberType>2</numberType>
+    this is equal to <tuplet show-number="none" ...> in musicXML
+3. <bracketType>2</bracketType>
+    this is equal to <tuplet bracket="no" ...> in musicXML
+4. numberType & bracketType can be set globally via <tupletNumberType> & <tupletBracketType>
+
+recommend reading lc5033057 from Lieder to better understand the rules about tuplet visibility.
+"""
+
+
+def _make_tuplet_visible(mscx_file: str) -> None:
+    with open(mscx_file, encoding="utf-8") as f:
+        content = f.read()
+
+    # match: <visible>0</visible> or <numberType>2</numberType>
+    # or <bracketType>2</bracketType>
+    strip_re = re.compile(
+        r"[ \t]*<(?:visible>0|numberType>2|bracketType>2)"
+        r"</(?:visible|numberType|bracketType)>[ \t]*\r?\n"
+    )
+
+    def strip_hidden(match: "re.Match[str]") -> str:
+        return strip_re.sub("", match.group(0))
+
+    # match within <Tuplet> ... </Tuplet>
+    new_content = re.sub(
+        r"<Tuplet(?:\s[^>]*)?>.*?</Tuplet>", strip_hidden, content, flags=re.DOTALL
+    )
+
+    # match globally: <tupletNumberType>2</tupletNumberType>
+    # or <tupletBracketType>2</tupletBracketType>
+    new_content = re.sub(
+        r"[ \t]*<(?:tupletNumberType|tupletBracketType)>2"
+        r"</(?:tupletNumberType|tupletBracketType)>[ \t]*\r?\n",
+        "",
+        new_content,
+    )
+
+    if new_content != content:
+        with open(mscx_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+
 def _create_musicxml_and_svg_files() -> None:
     dest = os.path.join(lieder, "flat")
     os.makedirs(dest, exist_ok=True)
@@ -151,6 +202,7 @@ def _create_musicxml_and_svg_files() -> None:
     all_jobs = []
 
     for file in mscx_files:
+        _make_tuplet_visible(str(file))
         jobs = create_formats(str(file), ["musicxml", "svg"])
         all_jobs.extend(jobs)
 
