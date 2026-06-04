@@ -410,6 +410,8 @@ def _collect_articulation(note: mxl.XMLNote, part: TokensPart, staff: int) -> st
     notations = note.get_children_of_type(mxl.XMLNotations)
     if not notations:
         return empty
+    if notations[0].attributes.get("print-object", None) == "no":
+        return empty
     articulations = []
     # pick the first articulation we support if multiple present
     for child in notations[0].get_children():
