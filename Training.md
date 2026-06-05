@@ -66,6 +66,8 @@ Day: 5 Jun 2026
 Transformer Smoke Test: SER avg: 6%
 System Level: 6.4 diffs, SER: 5.2%
 
+Fusing 1&2
+
 ## Run 385 - discarded
 
 Commit: 620d4591bcd716b722c894bc5546dc8f5d5e3a1c
@@ -73,12 +75,16 @@ Day: 5 Jun 2026
 Transformer Smoke Test: SER avg: 7%
 System Level: 6.5 diffs, SER: 4.9%
 
+Fusing 1&2&3
+
 ## Run 386 - discarded
 
 Commit: c1c0e3b126f2e2971c565197ce10bd752ad02687
 Day: 5 Jun 2026
 Transformer Smoke Test: SER avg: 6%
 System Level: 8.4 diffs, SER: 5.5%
+
+Fusing 2&3
 
 ## Run 381 - discarded
 
