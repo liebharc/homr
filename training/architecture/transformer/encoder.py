@@ -2,7 +2,6 @@ from typing import Any
 
 import timm
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from homr.transformer.configs import Config
@@ -20,29 +19,10 @@ def _get_sinusoid_encoding(n_position: int, d_hid: int) -> torch.Tensor:
 
 
 class ConvNeXtEncoder(nn.Module):
-    """
-    ConvNeXt encoder with standard FPN-style top-down fusion of stage2 + stage3.
-
-    ConvNeXt-Tiny channel/stride map (timm feature_info indices):
-      [0]  96ch  stride  4
-      [1] 192ch  stride  8
-      [2] 384ch  stride 16  ← feat2 (fine scale, output resolution)
-      [3] 768ch  stride 32  ← feat3 (global context: clefs, key sigs, bar structure)
-
-    Single FPN merge (indices=[2, 3]), output at stride 16.
-    Token count: 16×80 = 1280 for 256×1280 input — same as the original encoder.
-
-    Standard FPN steps:
-      1. lateral 1×1 conv  — project each scale to fpn_channels (384, the finer width)
-      2. F.interpolate(size=, nearest)  — upsample feat3 to feat2 spatial size
-      3. element-wise addition  — inject global context into spatial features
-      4. 3×3 conv + GroupNorm + GELU  — smooth aliasing from upsampling
-      5. 1×1 conv  — project fpn_channels (384) → encoder_dim (512 or 768)
-    """
-
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config):
         super().__init__()
 
+        # Use configurable pretrained flag
         self.model = timm.create_model(
             "convnext_tiny",
             pretrained=True,
@@ -52,29 +32,21 @@ class ConvNeXtEncoder(nn.Module):
             drop_path_rate=0.1,
         )
 
-        # convnext_tiny confirmed channel sizes:
-        stage2_chs: int = int(self.model.feature_info[2]["num_chs"])  # type: ignore  → 384
-        stage3_chs: int = int(self.model.feature_info[3]["num_chs"])  # type: ignore  → 768
-        fpn_channels: int = stage2_chs  # 384 — use finer scale width as common FPN width
+        self.encoder_dim = config.encoder_dim
 
-        # Step 1: lateral 1×1 convs — project both scales to fpn_channels
-        self.lateral_stage2 = nn.Conv2d(stage2_chs, fpn_channels, kernel_size=1, bias=False)
-        self.lateral_stage3 = nn.Conv2d(stage3_chs, fpn_channels, kernel_size=1, bias=False)
+        # Extract features up to stage 2 (stride 16)
+        self.feature_info = self.model.feature_info[2]  # type: ignore
+        in_features = int(self.feature_info["num_chs"])  # type: ignore
+        self.proj = nn.Linear(in_features, config.encoder_dim)
 
-        # Step 4: 3×3 smoothing conv — reduces aliasing after addition
-        self.output_conv = nn.Sequential(
-            nn.Conv2d(fpn_channels, fpn_channels, kernel_size=3, padding=1, bias=False),
-            nn.GroupNorm(32, fpn_channels),
-            nn.GELU(),
-        )
+        # Instead of learning pos_embed for each of 1280 positions,
+        # we learn separate embeddings for 80 horizontal + 16 vertical positions
+        # Memory: (1280 * D) vs (80 * D + 16 * D) = ~14x less parameters
+        num_patches_h = config.max_height // 16  # 256 / 16 = 16 (vertical/pitch)
+        num_patches_w = config.max_width // 16  # 1280 / 16 = 80 (horizontal/time)
 
-        # Step 5: 1×1 projection — fpn_channels (384) → encoder_dim (512 or 768)
-        self.proj = nn.Conv2d(fpn_channels, config.encoder_dim, kernel_size=1, bias=False)
-
-        # Stride-16 output: 256//16=16 height patches, 1280//16=80 width patches
-        num_patches_h = config.max_height // 16  # 16 (vertical / pitch)
-        num_patches_w = config.max_width // 16   # 80 (horizontal / time)
-
+        # Split encoder_dim between height and width embeddings
+        # Give slightly more capacity to vertical (pitch) dimension
         self.h_dim = config.encoder_h_dim
         self.w_dim = config.encoder_dim - self.h_dim
 
@@ -86,44 +58,48 @@ class ConvNeXtEncoder(nn.Module):
         )
 
     def freeze_backbone(self) -> None:
-        for p in self.model.parameters():
-            p.requires_grad = False
+        """Freeze only the ConvNeXt backbone parameters."""
+        for param in self.model.parameters():
+            param.requires_grad = False
 
     def unfreeze_backbone(self) -> None:
-        for p in self.model.parameters():
-            p.requires_grad = True
+        """Unfreeze the ConvNeXt backbone parameters."""
+        for param in self.model.parameters():
+            param.requires_grad = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _, stages = self.model.forward_intermediates(x, indices=[2, 3])  # type: ignore
-        feat2 = stages[0]  # (B, 384, H/16, W/16) — stride-16, fine spatial detail
-        feat3 = stages[1]  # (B, 768, H/32, W/32) — stride-32, global context
+        _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
+        features = requested_stages[0]  # Get stage 2 (stride 16)
 
-        # Step 1: lateral projections → 384ch
-        lat2 = self.lateral_stage2(feat2)
-        lat3 = self.lateral_stage3(feat3)
+        # features shape: (B, C, H, W) = (B, 384, 16, 80)
+        b, c, h, w = features.shape
+        # Rearrange to (B, H, W, C)
+        features = features.permute(0, 2, 3, 1)
 
-        # Step 2: upsample stride-32 → stride-16 using exact target size
-        top_down = F.interpolate(lat3, size=lat2.shape[-2:], mode="nearest")
+        # Project to encoder_dim
+        features = self.proj(features)  # (B, H, W, D)
 
-        # Step 3: element-wise addition — merge global context into spatial features
-        fused = lat2 + top_down
+        # Add factorized positional embeddings
+        # self.pos_embed_h is (1, 80, h_dim) -> (1, 80, 1, h_dim)
+        # self.pos_embed_w is (1, 16, w_dim) -> (1, 1, 16, w_dim)
+        # Why this works:
+        # Each position gets a full embedding by combining a vertical and horizontal vector.
+        # Vertical embeddings are learned once and reused across all columns,
+        # so the model efficiently learns how pitch relates to row position.
+        # Horizontal embeddings handle time separately.
+        # This factorization focuses capacity where it matters and reduces
+        # parameters while preserving positional information.
+        pos_h = self.pos_embed_h.unsqueeze(2).expand(-1, -1, w, -1)
+        pos_w = self.pos_embed_w.unsqueeze(1).expand(-1, h, -1, -1)
 
-        # Step 4: smooth aliasing from upsampling + addition
-        fused = self.output_conv(fused)  # (B, 384, H/16, W/16)
-
-        # Step 5: project to encoder_dim
-        fused = self.proj(fused)  # (B, encoder_dim, H/16, W/16)
-
-        b, _c, h, w = fused.shape
-
-        # Factorized positional embeddings
-        pos_h = self.pos_embed_h[:, :h, :].unsqueeze(2).expand(-1, -1, w, -1)
-        pos_w = self.pos_embed_w[:, :w, :].unsqueeze(1).expand(-1, h, -1, -1)
+        # Concatenate dimension: (1, 80, 16, D)
         pos_embed = torch.cat([pos_h, pos_w], dim=-1)
+        features = features + pos_embed
 
-        # (B, C, H, W) → (B, H, W, C) → add pos → (B, H*W, encoder_dim)
-        fused = fused.permute(0, 2, 3, 1) + pos_embed
-        return fused.reshape(b, h * w, -1)
+        # Flatten to sequence: (B, H, W, D) -> (B, H*W, D)
+        features = features.reshape(b, h * w, -1)
+
+        return features
 
 
 def get_encoder(config: Config) -> Any:
