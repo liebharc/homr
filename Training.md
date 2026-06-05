@@ -59,6 +59,27 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 384 - discarded
+
+Commit: 0fee4303aeb8bb21a10fd0d7b457485a6d22fa0d
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 6%
+System Level: 6.4 diffs, SER: 5.2%
+
+## Run 385 - discarded
+
+Commit: 620d4591bcd716b722c894bc5546dc8f5d5e3a1c
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 7%
+System Level: 6.5 diffs, SER: 4.9%
+
+## Run 386 - discarded
+
+Commit: c1c0e3b126f2e2971c565197ce10bd752ad02687
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 6%
+System Level: 8.4 diffs, SER: 5.5%
+
 ## Run 381 - discarded
 
 Commit: 6ced21726443ed037608f8610ff4e7dac445649a
