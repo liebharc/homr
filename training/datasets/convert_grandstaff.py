@@ -141,6 +141,40 @@ def _filter_out_known_bad_ones(path: Path) -> bool:
     normalized = path.as_posix()
     return normalized not in bad_files
 
+def remove_problematic_files(result: str) -> bool:
+    # The model was too eager to predict slurStart. The grandstaff dataset contains around
+    # 12% more slurStart than slurStop (38k vs 34k). Therefore we remove all files from
+    # the index that have more slurStart than slurStop.
+    # Skips around 4100 files in adition to already skipped files
+    if result == "":
+        return False
+    
+    img_path, token_path = result.split(",")
+
+    if not img_path and not token_path:
+        return False
+    
+    slur_starts = 0
+    slur_stops = 0
+
+    for line in Path(token_path).read_text(errors="ignore").splitlines():
+        for entry in line.split("&"):
+            parts = entry.strip().split()
+            if len(parts) < 5:
+                print("Error")
+                continue
+
+            slur = parts[4]
+
+            if "slurStart" in slur:
+                slur_starts += 1
+            if "slurStop" in slur:
+                slur_stops += 1
+
+    if slur_starts == slur_stops:
+        return True
+    else:
+        return False
 
 def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
     if not os.path.exists(grandstaff_root):
@@ -171,7 +205,7 @@ def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
                 ),
                 krn_files,
             ):
-                if result != "":
+                if result != "" and remove_problematic_files(result):
                     f.write(result + "\n")
                     file_number += 1
                     if file_number % 1000 == 0:
