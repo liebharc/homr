@@ -503,11 +503,11 @@ barline . . . . ."""
         tokens = music_xml_string_to_tokens(example)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         token_str = token_lines_to_str(flat_list)
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_0 . . . .
-timeSignature/4 . . . .
-note_1 D5 _ _ upper&note_1 D4 _ _ upper&note_1 B3 _ arpeggiate lower&note_1 D3 _ _ lower&note_1 G2 _ _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_1 D5 _ _ _ upper&note_1 D4 _ _ _ upper&note_1 B3 _ arpeggiate _ lower&note_1 D3 _ _ _ lower&note_1 G2 _ _ _ lower
+barline . . . . ."""
         self.assertEqual(token_str, expected)
 
     def _norm_expected(self, expected: str) -> str:
