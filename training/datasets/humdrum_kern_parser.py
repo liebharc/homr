@@ -135,7 +135,7 @@ class HumdrumKernConverter:
     def _accidental_to_lift(self, accidental: str) -> str:
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
 
-    def _articulation_from_suffix(self, suffix: str) -> str:
+    def _articulation_from_suffix(self, suffix: str) -> tuple[str, str]:
         for symbol in self.ignore_beams:
             suffix = suffix.replace(symbol, "")
         for symbol in self.ignore_alteration_displays:
@@ -162,6 +162,10 @@ class HumdrumKernConverter:
             return empty, str.join("_", slurs)
         elif articulations:
             return str.join("_", articulations), empty
+        else:
+            # For ruff, this case should be excluded with
+            # return empty, empty in line 148
+            return empty, empty
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")

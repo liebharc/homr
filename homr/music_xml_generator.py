@@ -567,6 +567,7 @@ def build_articulations(
             parent.add_child(child)
         notation.add_child(parent)
 
+
 def build_slurs(note: mxl.XMLNote, slurs: str, slur_number: int) -> None:
     notations = note.get_children_of_type(mxl.XMLNotations)
     if notations:
@@ -575,7 +576,7 @@ def build_slurs(note: mxl.XMLNote, slurs: str, slur_number: int) -> None:
         notation = mxl.XMLNotations()
         note.add_child(notation)
 
-    if slurs == "" or slurs == "_":
+    if slurs in {"_", ""}:
         pass
     elif slurs == nonote:
         eprint("WARNING note without valid articulation", slurs)

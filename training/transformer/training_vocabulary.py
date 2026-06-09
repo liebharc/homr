@@ -95,7 +95,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
 
         annotation_resorted.append(symbol_stripped)
 
-    def _remove_item_helper(s: set, input_item: str):
+    def _remove_item_helper(s: set, input_item: str) -> set[str]:
         if len(s) > 1:
             s.discard(input_item)
         return s
@@ -383,7 +383,8 @@ if __name__ == "__main__":
     else:
         exclude = "validation"
         files = [
-            f for f in glob.glob(os.path.join("datasets", "**", "*.tokens"), recursive=True)
+            f
+            for f in glob.glob(os.path.join("datasets", "**", "*.tokens"), recursive=True)
             if exclude not in f.split(os.sep)
         ]
     for file in files:

@@ -154,7 +154,6 @@ XMLStaff(value: 2),
 XMLNotations()])])])])"""
         self.assertEqual(self._norm_expected(expected), actual)
 
-
     def test_begin_chord_with_standalone_rests(self) -> None:
         """
         If the lower position consists of a standalone rest then start the

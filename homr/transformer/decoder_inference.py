@@ -76,7 +76,7 @@ class ScoreDecoder:
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
-            x_slurs  = out_slurs[:, -1:]
+            x_slurs = out_slurs[:, -1:]
 
             # after the first step we don't pass the full context into the decoder
             # x_transformers uses [:, :0] to split the context

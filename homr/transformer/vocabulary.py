@@ -160,7 +160,7 @@ def build_articulation() -> dict[str, int]:
     return build_dict(articulation)
 
 
-def build_slur():
+def build_slur() -> dict[str, int]:
     slur = [nonote, empty]
     slur.extend(["slurStart_slurStop", "slurStart", "slurStop"])
     return build_dict(slur)

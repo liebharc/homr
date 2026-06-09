@@ -334,7 +334,7 @@ def _split_file_into_staffs(
             width = int(width * scale)
             height = int(height * scale)
 
-            staff_image = image[y : y + height, x : x + width]
+            staff_image = image[y : y + height, x : x + width]  # type: ignore
             cv2.imwrite(staff_image_file_name, staff_image)
         elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
             raise ValueError(f"File {staff_image_file_name} not found")

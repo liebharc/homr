@@ -1,3 +1,5 @@
+# ruff: noqa: E501
+
 import unittest
 
 from training.datasets.humdrum_kern_parser import convert_kern_to_tokens

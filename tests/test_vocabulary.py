@@ -1,3 +1,5 @@
+# ruff: noqa: E501
+
 import unittest
 from fractions import Fraction
 

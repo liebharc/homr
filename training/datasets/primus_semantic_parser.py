@@ -155,22 +155,24 @@ def change_tieSlur(tokens: list[EncodedSymbol]) -> list[EncodedSymbol]:
     return result
 
 
-def find_next_note(tokens: list[EncodedSymbol], idx: int) -> int:
+def find_next_note(tokens: list[EncodedSymbol], idx: int) -> None | int:
     """
     Find next note (after index), we dont want to append a slur to a barline
     """
     for i in range(idx + 2, len(tokens)):
         if tokens[i].rhythm.startswith("note"):
             return i
+    return None
 
 
-def find_last_note(tokens: list[EncodedSymbol], idx: int) -> int:
+def find_last_note(tokens: list[EncodedSymbol], idx: int) -> None | int:
     """
     Find last note (before index), we dont want to append a slur to a barline
     """
     for i in range(idx, 0, -1):
         if tokens[i].rhythm.startswith("note"):
             return i
+    return None
 
 
 def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
