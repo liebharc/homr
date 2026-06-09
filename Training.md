@@ -35,8 +35,13 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
-You can check the log and see number of training files to be 197k: `Total number of training files to choose from 197032`
+You can check the log and see number of training files to be 193k: `Total number of training files to choose from 197032`
 This takes around 2–4 days.
+
+Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:
+- 8GB VRAM: 8
+- 16GB VRAM: 18 (default)
+- 24GB VRAM: 32
 
 ## Results
 
@@ -58,6 +63,23 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+## Run 411 - discarded at epoch 10
+
+Commit: 2d2d02ed7a40fa41dd8622366eeda1344e5e3340
+Day: 9 June 2026
+Transformer Smoke Test: SER avg: 11%
+
+Removed problematic files from grandstaff containing more slurStart than slurStop (https://github.com/liebharc/homr/pull/86)
+
+## Run 411 - discarded at epoch 12
+
+Commit: 2d2d02ed7a40fa41dd8622366eeda1344e5e3340
+Day: 30 May 2026
+Transformer Smoke Test: SER avg: 9%
+
+Split articulations&slurs into two branches.
+This resulted in the model being too eager to predict slurStart (https://github.com/liebharc/homr/pull/86)
 
 ## Run 384 - discarded
 
