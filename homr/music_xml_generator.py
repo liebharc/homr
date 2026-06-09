@@ -8,7 +8,13 @@ import numpy as np
 
 from homr import constants
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
+from homr.transformer.vocabulary import (
+    EncodedSymbol,
+    SymbolDuration,
+    empty,
+    nonote,
+    sort_token_chords,
+)
 
 
 class ConversionState:
@@ -786,23 +792,81 @@ def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolChord]:
     return [SymbolChord(s) for s in sort_token_chords(voice)]
 
 
-def add_tuplet_start_stop(groups: list[SymbolChord]) -> list[SymbolChord]:
-    has_tuplet_mark = False
-    for group in groups:
-        is_tuplet = False
+class TupletParser:
+    @staticmethod
+    def parse(groups: list[SymbolChord]) -> list[SymbolChord]:
+        # First split staff into measures/bars.This is because
+        # if tuplet in some measure cannot be completed
+        # (e.g. the tuplet ends early or a different tuplet appears),
+        # we can skip that measure and continue with the next one.
+        for measure_groups in TupletParser.split_into_measures(groups):
+            saved_marks = [group.tuplet_mark for group in measure_groups]
+            if TupletParser.add_tuplets(measure_groups):
+                continue
+            # tuplet parsing failed for this measure, restore the original marks
+            for group, mark in zip(measure_groups, saved_marks, strict=True):
+                group.tuplet_mark = mark
+        return groups
+
+    @staticmethod
+    def get_tuplet_duration(group: SymbolChord) -> SymbolDuration | None:
         for symbol in group.symbols:
             if symbol.rhythm.startswith(("note", "rest")):
                 duration = symbol.get_duration()
-                is_tuplet = is_tuplet or duration.normal_notes != duration.actual_notes
+                if duration.normal_notes != duration.actual_notes:
+                    return duration
+        return None
 
-        if is_tuplet != has_tuplet_mark:
-            if has_tuplet_mark:
-                group.tuplet_mark = "stop"
-            else:
-                group.tuplet_mark = "start"
-            has_tuplet_mark = is_tuplet
+    @staticmethod
+    def split_into_measures(groups: list[SymbolChord]) -> list[list[SymbolChord]]:
+        measures: list[list[SymbolChord]] = []
+        current_measure: list[SymbolChord] = []
+        for group in groups:
+            current_measure.append(group)
+            if group.is_barline():
+                measures.append(current_measure)
+                current_measure = []
+        if current_measure:
+            measures.append(current_measure)
+        return measures
 
-    return groups
+    @staticmethod
+    def add_tuplets(groups: list[SymbolChord]) -> bool:
+        cursor = 0
+        while cursor < len(groups):
+            duration = TupletParser.get_tuplet_duration(groups[cursor])
+
+            # tuplet not found, skip
+            if duration is None:
+                cursor += 1
+                continue
+
+            start = cursor
+            tuplet_format = (duration.actual_notes, duration.normal_notes)
+            tuplet_size = duration.actual_notes
+
+            # this loop tries to find a complete tuplet
+            while cursor - start < tuplet_size:
+                # first comes 3 sanity checks
+                if cursor >= len(groups):
+                    return False
+                current_duration = TupletParser.get_tuplet_duration(groups[cursor])
+                if current_duration is None:
+                    return False
+                current_format = (current_duration.actual_notes, current_duration.normal_notes)
+                if current_format != tuplet_format:
+                    return False
+                # then we are confident the note is within tuplet
+                cursor += 1
+
+            groups[start].tuplet_mark = "start"
+            groups[cursor - 1].tuplet_mark = "stop"
+
+        return True
+
+
+def add_tuplet_start_stop(groups: list[SymbolChord]) -> list[SymbolChord]:
+    return TupletParser.parse(groups)
 
 
 def build_divisions(division: int) -> mxl.XMLDivisions:

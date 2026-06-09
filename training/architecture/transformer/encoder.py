@@ -2,10 +2,20 @@ from typing import Any
 
 import timm
 import torch
-from timm.layers import trunc_normal_  # type: ignore
 from torch import nn
 
 from homr.transformer.configs import Config
+
+
+def _get_sinusoid_encoding(n_position: int, d_hid: int) -> torch.Tensor:
+    position = torch.arange(n_position, dtype=torch.float).unsqueeze(1)
+    div_term = torch.exp(
+        torch.arange(0, d_hid, 2, dtype=torch.float) * -(torch.log(torch.tensor(10000.0)) / d_hid)
+    )
+    sinusoid_table = torch.zeros(n_position, d_hid)
+    sinusoid_table[:, 0::2] = torch.sin(position * div_term[: (d_hid + 1) // 2])
+    sinusoid_table[:, 1::2] = torch.cos(position * div_term[: d_hid // 2])
+    return sinusoid_table.unsqueeze(0)
 
 
 class ConvNeXtEncoder(nn.Module):
@@ -40,11 +50,12 @@ class ConvNeXtEncoder(nn.Module):
         self.h_dim = config.encoder_h_dim
         self.w_dim = config.encoder_dim - self.h_dim
 
-        self.pos_embed_h = nn.Parameter(torch.zeros(1, num_patches_h, self.h_dim))
-        self.pos_embed_w = nn.Parameter(torch.zeros(1, num_patches_w, self.w_dim))
-
-        trunc_normal_(self.pos_embed_h, std=0.02)
-        trunc_normal_(self.pos_embed_w, std=0.02)
+        self.pos_embed_h = nn.Parameter(
+            _get_sinusoid_encoding(num_patches_h, self.h_dim), requires_grad=True
+        )
+        self.pos_embed_w = nn.Parameter(
+            _get_sinusoid_encoding(num_patches_w, self.w_dim), requires_grad=True
+        )
 
     def freeze_backbone(self) -> None:
         """Freeze only the ConvNeXt backbone parameters."""

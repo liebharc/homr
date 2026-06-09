@@ -24,7 +24,7 @@ Download the datasets and convert them to the format required for training:
 
 - `training/datasets/convert_primus.py`
 - `training/datasets/convert_grandstaff.py`
-- `training/datasets/convert_lieder.py`  
+- `training/datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
@@ -58,6 +58,45 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+## Run 384 - discarded
+
+Commit: 0fee4303aeb8bb21a10fd0d7b457485a6d22fa0d
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 6%
+System Level: 6.4 diffs, SER: 5.2%
+
+Fusing 1&2
+
+## Run 385 - discarded
+
+Commit: 620d4591bcd716b722c894bc5546dc8f5d5e3a1c
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 7%
+System Level: 6.5 diffs, SER: 4.9%
+
+Fusing 1&2&3
+
+## Run 386 - discarded
+
+Commit: c1c0e3b126f2e2971c565197ce10bd752ad02687
+Day: 5 Jun 2026
+Transformer Smoke Test: SER avg: 6%
+System Level: 8.4 diffs, SER: 5.5%
+
+Fusing 2&3
+
+## Run 381 - discarded
+
+Commit: 6ced21726443ed037608f8610ff4e7dac445649a
+Day: 1 Jun 2026
+Transformer Smoke Test: SER 6%
+System Level: 5.6 diffs, SER: 3.1%
+
+FPN Style fusion, https://github.com/liebharc/homr/pull/85 . The run is on good as e.g. #367 and #331, but the model is more complex and a manual review of the results indicate a less robust pitch detection.
+
+A possible way forward would be to not mix fused features, but instead concat stage 2 and stage 3. That however
+increases the encoder_dim and decoder_dim from 512 to 1152 (768 + 384) which makes training and inference much more expensive.
 
 ## Run 367
 
