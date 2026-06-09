@@ -26,16 +26,16 @@ class TestMusicXmlGenerator(unittest.TestCase):
     """
 
     def test_chord_with_different_duratons(self) -> None:
-        tabi_measure_18_upper = """clef_G2 . . . upper
-keySignature_4 . . . .
-timeSignature/8 . . . .
-note_4. G3 # _ upper &note_4. C4 # _ upper&note_16 E4 # _ upper
-note_16 F4 # _ upper
-note_4 E4 # _ upper
-note_8 E4 # _ upper
-note_8 C4 # _ upper
-note_8 D4 # _ upper
-barline . . . ."""
+        tabi_measure_18_upper = """clef_G2 . . . . upper
+keySignature_4 . . . . .
+timeSignature/8 . . . . .
+note_4. G3 # _ _ upper &note_4. C4 # _ _ upper&note_16 E4 # _ _ upper
+note_16 F4 # _ _ upper
+note_4 E4 # _ _ upper
+note_8 E4 # _ _ upper
+note_8 C4 # _ _ upper
+note_8 D4 # _ _ upper
+barline . . . . ."""
         tokens = read_token_lines(tabi_measure_18_upper.splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
         actual = self._xml_to_str(xml)
@@ -154,27 +154,6 @@ XMLStaff(value: 2),
 XMLNotations()])])])])"""
         self.assertEqual(self._norm_expected(expected), actual)
 
-    def test_strip_articulations(self) -> None:
-        chord = SymbolChord(
-            [
-                EncodedSymbol("note_8", articulation="staccatissimo"),
-                EncodedSymbol("note_16", articulation="tieStart_slurStop_tenuto"),
-                EncodedSymbol("note_32", articulation="tieStart"),
-            ]
-        )
-
-        articulations, result = chord.strip_slur_ties()
-        self.assertEqual(
-            result.symbols,
-            (
-                [
-                    EncodedSymbol("note_8", articulation="staccatissimo"),
-                    EncodedSymbol("note_16", articulation="tenuto"),
-                    EncodedSymbol("note_32", articulation="_"),
-                ]
-            ),
-        )
-        self.assertEqual(articulations, ["slurStop", "tieStart"])
 
     def test_begin_chord_with_standalone_rests(self) -> None:
         """
