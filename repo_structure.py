@@ -10,10 +10,21 @@ explicitly and includes all folders. Large data folders are noted in
 REPO_NAME = "adversarial-homr"
 
 OMITTED_PATHS = [
+    # Large/generated dataset areas: keep the folder node, but do not enumerate
+    # individual files or nested folders.
+    "dataset",
     "dataset/images",
-    "dataset/cached_crops",
     "dataset/mxl",
     "dataset/reference_mxl",
+    "dataset/cached_crops",
+    "dataset/cached_prepared_staffs",
+
+    # Batch-generated augmented page images can be huge. The wildcard means:
+    # distillation/batches/<any batch name>/augmented_pages
+    "distillation/batches/*/augmented_pages",
+    "distillation/batches/*/rendered_images",
+    "distillation/batches/*/prepared_staffs",
+
     "results/figures",
     "results/logs",
     "results/plots",
@@ -89,17 +100,11 @@ REPO_STRUCTURE = {
             "type": "dir",
             "name": "dataset",
             "path": "dataset",
-            "meta": {"description": "Dataset helpers, converters and small dataset files; raw data files (images, mxl) are stored here."},
-            "children": [
-                {"type": "file", "name": "cache_staff_crops.py", "path": "dataset/cache_staff_crops.py", "meta": {"description": "Script to create and cache staff crop images from dataset."}},
-                {"type": "file", "name": "PDMX.csv", "path": "dataset/PDMX.csv", "meta": {"description": "Small dataset CSV with metadata."}},
-                {"type": "file", "name": "render_poisoned_musicxml.py", "path": "dataset/render_poisoned_musicxml.py", "meta": {"description": "Utility to render adversarially-poisoned MusicXML to images."}},
-                {"type": "file", "name": "render_to_images.py", "path": "dataset/render_to_images.py", "meta": {"description": "Script to render MusicXML/mxl files to image datasets."}},
-                {"type": "dir", "name": "cached_crops", "path": "dataset/cached_crops", "meta": {"description": "Cached image crops.", "omit_listing": True}, "children": []},
-                {"type": "dir", "name": "images", "path": "dataset/images", "meta": {"description": "Raw dataset images.", "omit_listing": True}, "children": []},
-                {"type": "dir", "name": "mxl", "path": "dataset/mxl", "meta": {"description": "Raw MusicXML (.mxl) files.", "omit_listing": True}, "children": []},
-                {"type": "dir", "name": "reference_mxl", "path": "dataset/reference_mxl", "meta": {"description": "Reference MusicXML files.", "omit_listing": True}, "children": []},
-            ],
+            "meta": {
+                "description": "Dataset directory. Individual files and nested folders are intentionally omitted because this area can contain large/raw/generated data.",
+                "omit_listing": True,
+            },
+            "children": [],
         },
 
         {

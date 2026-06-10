@@ -1,0 +1,390 @@
+{
+  "encoded_outputs": [
+    {
+      "encoded_manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.train.encoded.jsonl",
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.train.jsonl"
+    },
+    {
+      "encoded_manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.val.encoded.jsonl",
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.val.jsonl"
+    },
+    {
+      "encoded_manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.test.encoded.jsonl",
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.test.jsonl"
+    }
+  ],
+  "homr_vocabulary": {
+    "encoding": "homr_factorized",
+    "page_newline_note": "HOMR page assembly uses EncodedSymbol('newline') outside the transformer Vocabulary; it is represented as page structure metadata, not a custom vocabulary ID.",
+    "sizes": {
+      "articulation": 144,
+      "lift": 7,
+      "pitch": 72,
+      "position": 3,
+      "rhythm": 260
+    },
+    "source": "homr.transformer.vocabulary.Vocabulary",
+    "special": {
+      "empty": "_",
+      "nonote": ".",
+      "page_newline": "newline",
+      "rhythm_bos": "BOS",
+      "rhythm_eos": "EOS",
+      "rhythm_pad": "PAD"
+    },
+    "special_ids": {
+      "articulation_nonote": 0,
+      "lift_nonote": 0,
+      "page_newline": null,
+      "pitch_nonote": 0,
+      "position_nonote": 0,
+      "rhythm_bos": 1,
+      "rhythm_eos": 2,
+      "rhythm_pad": 0
+    }
+  },
+  "manifests": [
+    {
+      "encoded_rows": 59,
+      "invalid_symbol_count": 0,
+      "invalid_symbol_examples": [],
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.train.jsonl",
+      "max_staff_len_with_bos_eos": 186,
+      "max_staff_len_without_bos_eos": 184,
+      "page_newline_separators": 286,
+      "rows": 59,
+      "staffs": 345,
+      "symbols_with_bos_eos": 12466,
+      "symbols_without_bos_eos": 11776,
+      "token_source_counts": {
+        "target_staff_token_sequences": 59
+      },
+      "top_rhythms": [
+        [
+          "note_8",
+          4743
+        ],
+        [
+          "chord",
+          1822
+        ],
+        [
+          "note_16",
+          1199
+        ],
+        [
+          "barline",
+          1028
+        ],
+        [
+          "rest_8",
+          705
+        ],
+        [
+          "note_4",
+          446
+        ],
+        [
+          "clef_G2",
+          265
+        ],
+        [
+          "note_4.",
+          232
+        ],
+        [
+          "rest_4",
+          185
+        ],
+        [
+          "rest_16",
+          179
+        ],
+        [
+          "clef_F4",
+          120
+        ],
+        [
+          "note_2.",
+          100
+        ],
+        [
+          "rest_1",
+          92
+        ],
+        [
+          "keySignature_2",
+          85
+        ],
+        [
+          "keySignature_0",
+          69
+        ],
+        [
+          "keySignature_3",
+          54
+        ],
+        [
+          "keySignature_4",
+          48
+        ],
+        [
+          "keySignature_1",
+          39
+        ],
+        [
+          "note_8.",
+          39
+        ],
+        [
+          "note_2",
+          30
+        ],
+        [
+          "keySignature_-2",
+          30
+        ],
+        [
+          "note_1.",
+          29
+        ],
+        [
+          "rest_2",
+          27
+        ],
+        [
+          "note_1",
+          27
+        ],
+        [
+          "repeatEndStart",
+          25
+        ]
+      ],
+      "unique_rhythms": 41
+    },
+    {
+      "encoded_rows": 7,
+      "invalid_symbol_count": 0,
+      "invalid_symbol_examples": [],
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.val.jsonl",
+      "max_staff_len_with_bos_eos": 46,
+      "max_staff_len_without_bos_eos": 44,
+      "page_newline_separators": 24,
+      "rows": 7,
+      "staffs": 31,
+      "symbols_with_bos_eos": 855,
+      "symbols_without_bos_eos": 793,
+      "token_source_counts": {
+        "target_staff_token_sequences": 7
+      },
+      "top_rhythms": [
+        [
+          "note_8",
+          321
+        ],
+        [
+          "note_16",
+          107
+        ],
+        [
+          "barline",
+          99
+        ],
+        [
+          "note_8.",
+          76
+        ],
+        [
+          "note_4",
+          55
+        ],
+        [
+          "clef_G2",
+          31
+        ],
+        [
+          "note_4.",
+          25
+        ],
+        [
+          "rest_8",
+          15
+        ],
+        [
+          "keySignature_1",
+          14
+        ],
+        [
+          "keySignature_2",
+          13
+        ],
+        [
+          "note_12",
+          9
+        ],
+        [
+          "repeatEnd",
+          6
+        ],
+        [
+          "timeSignature/8",
+          5
+        ],
+        [
+          "keySignature_3",
+          4
+        ],
+        [
+          "doublebarline",
+          3
+        ],
+        [
+          "timeSignature/4",
+          2
+        ],
+        [
+          "repeatEndStart",
+          2
+        ],
+        [
+          "repeatStart",
+          2
+        ],
+        [
+          "note_32",
+          2
+        ],
+        [
+          "bolddoublebarline",
+          2
+        ]
+      ],
+      "unique_rhythms": 20
+    },
+    {
+      "encoded_rows": 8,
+      "invalid_symbol_count": 0,
+      "invalid_symbol_examples": [],
+      "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.test.jsonl",
+      "max_staff_len_with_bos_eos": 186,
+      "max_staff_len_without_bos_eos": 184,
+      "page_newline_separators": 28,
+      "rows": 8,
+      "staffs": 36,
+      "symbols_with_bos_eos": 2210,
+      "symbols_without_bos_eos": 2138,
+      "token_source_counts": {
+        "target_staff_token_sequences": 8
+      },
+      "top_rhythms": [
+        [
+          "note_8",
+          754
+        ],
+        [
+          "chord",
+          618
+        ],
+        [
+          "note_4",
+          313
+        ],
+        [
+          "barline",
+          132
+        ],
+        [
+          "note_2",
+          48
+        ],
+        [
+          "note_16",
+          46
+        ],
+        [
+          "note_4.",
+          42
+        ],
+        [
+          "clef_G2",
+          34
+        ],
+        [
+          "keySignature_2",
+          23
+        ],
+        [
+          "rest_4",
+          23
+        ],
+        [
+          "clef_F4",
+          20
+        ],
+        [
+          "note_2.",
+          18
+        ],
+        [
+          "timeSignature/4",
+          10
+        ],
+        [
+          "rest_8",
+          10
+        ],
+        [
+          "repeatEnd",
+          8
+        ],
+        [
+          "note_8.",
+          8
+        ],
+        [
+          "timeSignature/8",
+          6
+        ],
+        [
+          "keySignature_4",
+          5
+        ],
+        [
+          "rest_2",
+          4
+        ],
+        [
+          "bolddoublebarline",
+          4
+        ],
+        [
+          "keySignature_-1",
+          3
+        ],
+        [
+          "keySignature_1",
+          3
+        ],
+        [
+          "keySignature_-3",
+          2
+        ],
+        [
+          "note_1",
+          2
+        ],
+        [
+          "timeSignature/16",
+          1
+        ]
+      ],
+      "unique_rhythms": 26
+    }
+  ],
+  "page_target_representation": "ordered_staff_sequences_with_homr_newline_postprocess_metadata",
+  "schema": "homr_factorized_page_target_encoding_summary_v1",
+  "status": "ok",
+  "token_source": "staff",
+  "total_invalid_symbol_count": 0
+}

@@ -1,0 +1,100 @@
+{
+  "encoded_outputs": [
+    {
+      "encoded_manifest": "distillation\\batches\\batch_tiny_test\\training_manifest.train.encoded.jsonl",
+      "manifest": "distillation\\batches\\batch_tiny_test\\training_manifest.train.jsonl"
+    }
+  ],
+  "homr_vocabulary": {
+    "encoding": "homr_factorized",
+    "page_newline_note": "HOMR page assembly uses EncodedSymbol('newline') outside the transformer Vocabulary; it is represented as page structure metadata, not a custom vocabulary ID.",
+    "sizes": {
+      "articulation": 144,
+      "lift": 7,
+      "pitch": 72,
+      "position": 3,
+      "rhythm": 260
+    },
+    "source": "homr.transformer.vocabulary.Vocabulary",
+    "special": {
+      "empty": "_",
+      "nonote": ".",
+      "page_newline": "newline",
+      "rhythm_bos": "BOS",
+      "rhythm_eos": "EOS",
+      "rhythm_pad": "PAD"
+    },
+    "special_ids": {
+      "articulation_nonote": 0,
+      "lift_nonote": 0,
+      "page_newline": null,
+      "pitch_nonote": 0,
+      "position_nonote": 0,
+      "rhythm_bos": 1,
+      "rhythm_eos": 2,
+      "rhythm_pad": 0
+    }
+  },
+  "manifests": [
+    {
+      "encoded_rows": 1,
+      "invalid_symbol_count": 0,
+      "invalid_symbol_examples": [],
+      "manifest": "distillation\\batches\\batch_tiny_test\\training_manifest.train.jsonl",
+      "max_staff_len_with_bos_eos": 42,
+      "max_staff_len_without_bos_eos": 40,
+      "page_newline_separators": 3,
+      "rows": 1,
+      "staffs": 4,
+      "symbols_with_bos_eos": 131,
+      "symbols_without_bos_eos": 123,
+      "token_source_counts": {
+        "target_staff_token_sequences": 1
+      },
+      "top_rhythms": [
+        [
+          "note_16",
+          44
+        ],
+        [
+          "note_8.",
+          37
+        ],
+        [
+          "note_8",
+          19
+        ],
+        [
+          "barline",
+          12
+        ],
+        [
+          "clef_G2",
+          4
+        ],
+        [
+          "keySignature_3",
+          4
+        ],
+        [
+          "timeSignature/4",
+          1
+        ],
+        [
+          "repeatEnd",
+          1
+        ],
+        [
+          "doublebarline",
+          1
+        ]
+      ],
+      "unique_rhythms": 9
+    }
+  ],
+  "page_target_representation": "ordered_staff_sequences_with_homr_newline_postprocess_metadata",
+  "schema": "homr_factorized_page_target_encoding_summary_v1",
+  "status": "ok",
+  "token_source": "staff",
+  "total_invalid_symbol_count": 0
+}

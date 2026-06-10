@@ -1,0 +1,53 @@
+{
+  "created_at": "2026-06-07T00:03:51",
+  "dry_run": false,
+  "event": "split_manifest",
+  "manifest": "distillation/batches/batch_000000_smoke/training_manifest.jsonl",
+  "no_score_id_leakage": true,
+  "outputs": {
+    "assignments": "distillation/batches/batch_000000_smoke/splits/split_assignments.jsonl",
+    "summary": "distillation/batches/batch_000000_smoke/splits/split_summary.json",
+    "test": "distillation/batches/batch_000000_smoke/splits/test_manifest.jsonl",
+    "train": "distillation/batches/batch_000000_smoke/splits/train_manifest.jsonl",
+    "val": "distillation/batches/batch_000000_smoke/splits/val_manifest.jsonl"
+  },
+  "ratios": {
+    "test": 0.1,
+    "train": 0.8,
+    "val": 0.1
+  },
+  "seed": "0",
+  "split_dir": "distillation/batches/batch_000000_smoke/splits",
+  "splits": {
+    "test": {
+      "groups": 2,
+      "max_row_tokens": 291,
+      "min_row_tokens": 48,
+      "output_path": "distillation/batches/batch_000000_smoke/splits/test_manifest.jsonl",
+      "rows": 13,
+      "split": "test",
+      "target_tokens": 2593
+    },
+    "train": {
+      "groups": 20,
+      "max_row_tokens": 678,
+      "min_row_tokens": 28,
+      "output_path": "distillation/batches/batch_000000_smoke/splits/train_manifest.jsonl",
+      "rows": 52,
+      "split": "train",
+      "target_tokens": 9722
+    },
+    "val": {
+      "groups": 3,
+      "max_row_tokens": 652,
+      "min_row_tokens": 22,
+      "output_path": "distillation/batches/batch_000000_smoke/splits/val_manifest.jsonl",
+      "rows": 9,
+      "split": "val",
+      "target_tokens": 2730
+    }
+  },
+  "total_groups": 25,
+  "total_rows": 74,
+  "total_target_tokens": 15045
+}

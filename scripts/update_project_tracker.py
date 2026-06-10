@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import ast
 import datetime as _dt
+import fnmatch
 import hashlib
 import json
 import os
@@ -60,6 +61,25 @@ COMMON_ALWAYS_IGNORE = {
     ".env",
     ".ipynb_checkpoints",
 }
+
+# These directories can contain many large/raw/generated files.
+# They are always represented as omitted paths in the generated inventory/index,
+# even if PROJECT_TRACKER.yaml forgets to include them under ignored_deep_scan.
+DEFAULT_IGNORED_DEEP_SCAN = [
+    "dataset",
+    "dataset/images",
+    "dataset/mxl",
+    "dataset/reference_mxl",
+    "dataset/cached_crops",
+    "dataset/cached_prepared_staffs",
+    "distillation/batches/*/augmented_pages",
+    "distillation/batches/*/rendered_images",
+    "distillation/batches/*/prepared_staffs",
+    "distillation/batches/*/teacher_outputs_stale_backup",
+    "results/runs/*/cached_prepared_staffs_view",
+    "results/runs/*/paired_images",
+
+]
 
 FORBIDDEN_IMPORT_MODULES = {
     "homr.segmentation.inference_segnet",
@@ -380,6 +400,25 @@ def path_is_under(path: str, parent: str) -> bool:
     return path == parent or path.startswith(parent + "/")
 
 
+def path_matches_ignored_pattern(path: str, ignored_pattern: str) -> bool:
+    """
+    Return True when path is the ignored path itself or below it.
+
+    Supports plain prefix ignores such as:
+        dataset/cached_crops
+
+    and wildcard batch ignores such as:
+        distillation/batches/*/rendered_images
+    """
+    norm = normalize_rel_path(path)
+    pattern = normalize_rel_path(ignored_pattern)
+
+    if "*" not in pattern and "?" not in pattern and "[" not in pattern:
+        return path_is_under(norm, pattern)
+
+    return fnmatch.fnmatchcase(norm, pattern) or fnmatch.fnmatchcase(norm, pattern + "/*")
+
+
 def is_ignored_path(path: str, ignored: list[str]) -> bool:
     norm = normalize_rel_path(path)
     parts = norm.split("/")
@@ -388,11 +427,24 @@ def is_ignored_path(path: str, ignored: list[str]) -> bool:
         return True
 
     for ignored_path in ignored:
-        ignored_norm = normalize_rel_path(ignored_path)
-        if path_is_under(norm, ignored_norm):
+        if path_matches_ignored_pattern(norm, ignored_path):
             return True
 
     return False
+
+
+def merge_ignored_paths(tracker_ignored_paths: list[str]) -> list[str]:
+    """Merge tracker-provided ignores with hardcoded safety ignores, preserving order."""
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    for path in [*tracker_ignored_paths, *DEFAULT_IGNORED_DEEP_SCAN]:
+        norm = normalize_rel_path(path)
+        if norm and norm not in seen:
+            merged.append(norm)
+            seen.add(norm)
+
+    return merged
 
 
 def file_sha256(path: Path) -> str:
@@ -815,9 +867,30 @@ def scan_repository(
     }
 
     for ignored in ignored_paths:
-        path = REPO_ROOT / ignored
+        ignored_norm = normalize_rel_path(ignored)
+
+        # Plain paths can be summarized directly. Wildcard ignores are expanded
+        # so distillation/batches/*/{augmented_pages,rendered_images,prepared_staffs}
+        # appears in omitted_paths for each concrete batch directory that exists.
+        if any(char in ignored_norm for char in "*?["):
+            matches = sorted(REPO_ROOT.glob(ignored_norm))
+            if not matches:
+                inventory["omitted_paths"][ignored_norm] = {
+                    "path": ignored_norm,
+                    "exists": False,
+                    "kind": "ignored_glob",
+                    "file_count": 0,
+                    "dir_count": 0,
+                    "total_size_bytes": 0,
+                    "sample_files": [],
+                }
+            for path in matches:
+                inventory["omitted_paths"][relpath(path)] = summarize_ignored_path(path)
+            continue
+
+        path = REPO_ROOT / ignored_norm
         if path.exists():
-            inventory["omitted_paths"][normalize_rel_path(ignored)] = summarize_ignored_path(path)
+            inventory["omitted_paths"][ignored_norm] = summarize_ignored_path(path)
 
     for root, dirs, files in os.walk(REPO_ROOT):
         root_path = Path(root)
@@ -1188,7 +1261,7 @@ def write_folder_index(inventory: dict[str, Any]) -> None:
 
 def run_scan() -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
     tracker_text = load_tracker_text()
-    ignored_paths = extract_nested_list(tracker_text, "ignored_deep_scan")
+    ignored_paths = merge_ignored_paths(extract_nested_list(tracker_text, "ignored_deep_scan"))
     benchmark_scan_paths = extract_nested_list(tracker_text, "benchmark_scan_paths")
     expected_files = parse_expected_files(tracker_text)
     folder_manifest = parse_folder_manifest(tracker_text)

@@ -57,7 +57,7 @@ docs/PROJECT_TRACKER.yaml
 /runs
 /training/architecture/transformer/*/
 *.tokens
- 
+
 # Local dataset and generated artifacts
 dataset/mxl/
 dataset/images/
@@ -65,8 +65,17 @@ dataset/*cache*/
 dataset/PDMX.csv
 models/onnx/
 attacks/artifacts/
+dataset/reference_mxl/
+dataset/cached_crops/
+dataset/cached_prepared_staffs/
+distillation/batches/*/augmented_pages/
+distillation/batches/*/rendered_images/
+distillation/batches/*/prepared_staffs/
+distillation/batches/*/teacher_outputs/
+distillation/batches/*/teacher_outputs_stale_backup/
 
 # Per-run cache-heavy artifacts
 results/runs/*/*cache*/
 results/runs/*/candidate_images/
+results/runs/*/cached_prepared_staffs_view/
 results/runs/*/paired_images/

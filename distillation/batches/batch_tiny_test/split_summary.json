@@ -1,0 +1,51 @@
+{
+  "leakage_check": "passed",
+  "manifest": "distillation\\batches\\batch_tiny_test\\training_manifest.jsonl",
+  "out_dir": "distillation\\batches\\batch_tiny_test",
+  "outputs": {
+    "summary": "distillation\\batches\\batch_tiny_test\\split_summary.json",
+    "test": "distillation\\batches\\batch_tiny_test\\training_manifest.test.jsonl",
+    "train": "distillation\\batches\\batch_tiny_test\\training_manifest.train.jsonl",
+    "val": "distillation\\batches\\batch_tiny_test\\training_manifest.val.jsonl"
+  },
+  "ratios": {
+    "test": 0.0,
+    "train": 1.0,
+    "val": 0.0
+  },
+  "rows_total": 1,
+  "score_field": "score_id",
+  "score_groups_total": 1,
+  "seed": 1337,
+  "splits": {
+    "test": {
+      "largest_score_page_counts": [],
+      "rows": 0,
+      "score_ids": [],
+      "scores": 0,
+      "target_tokens": 0
+    },
+    "train": {
+      "largest_score_page_counts": [
+        {
+          "pages": 1,
+          "score_id": "Qma113RUUvApyeCqFzReRGQgzyoTbvx5sgm91MGkokDcMW"
+        }
+      ],
+      "rows": 1,
+      "score_ids": [
+        "Qma113RUUvApyeCqFzReRGQgzyoTbvx5sgm91MGkokDcMW"
+      ],
+      "scores": 1,
+      "target_tokens": 123
+    },
+    "val": {
+      "largest_score_page_counts": [],
+      "rows": 0,
+      "score_ids": [],
+      "scores": 0,
+      "target_tokens": 0
+    }
+  },
+  "status": "ok"
+}

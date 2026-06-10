@@ -1,0 +1,172 @@
+{
+  "leakage_check": "passed",
+  "manifest": "distillation\\batches\\batch_000000_smoke\\training_manifest.jsonl",
+  "out_dir": "distillation\\batches\\batch_000000_smoke",
+  "outputs": {
+    "summary": "distillation\\batches\\batch_000000_smoke\\split_summary.json",
+    "test": "distillation\\batches\\batch_000000_smoke\\training_manifest.test.jsonl",
+    "train": "distillation\\batches\\batch_000000_smoke\\training_manifest.train.jsonl",
+    "val": "distillation\\batches\\batch_000000_smoke\\training_manifest.val.jsonl"
+  },
+  "ratios": {
+    "test": 0.1,
+    "train": 0.8,
+    "val": 0.1
+  },
+  "rows_total": 74,
+  "score_field": "score_id",
+  "score_groups_total": 25,
+  "seconds": 0.033428192138671875,
+  "seed": 1337,
+  "splits": {
+    "test": {
+      "largest_score_page_counts": [
+        {
+          "pages": 2,
+          "score_id": "Qma12KU4Fg5LZM1x16FPw6MoD6VPEpb8thh5gebXdpVeBG"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma13bRbAmT1dLCK8WA7pXXwdA4xymx3EiVBbM7Z1gSSQS"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma13oyiprQcQzkQFUJxMu3FuYgCmobv9NAPkU46PThtQj"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma14PR5HpAiyDnLLZw1sffaKKKbnUxSnZQogSqpsJ47iR"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma16i11g52cEhTd5WyZHxS7NUkHubVdfeXWvihhKDhGzw"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma17FdmRU6Nt5hBb2WhH1Me4id8uTghMZQ4SSNso7sgvF"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma185DyjdowLPSCwk5aomq8YgyB2JX8R5fsLvNznsXjkt"
+        }
+      ],
+      "rows": 8,
+      "score_ids": [
+        "Qma12KU4Fg5LZM1x16FPw6MoD6VPEpb8thh5gebXdpVeBG",
+        "Qma13bRbAmT1dLCK8WA7pXXwdA4xymx3EiVBbM7Z1gSSQS",
+        "Qma13oyiprQcQzkQFUJxMu3FuYgCmobv9NAPkU46PThtQj",
+        "Qma14PR5HpAiyDnLLZw1sffaKKKbnUxSnZQogSqpsJ47iR",
+        "Qma16i11g52cEhTd5WyZHxS7NUkHubVdfeXWvihhKDhGzw",
+        "Qma17FdmRU6Nt5hBb2WhH1Me4id8uTghMZQ4SSNso7sgvF",
+        "Qma185DyjdowLPSCwk5aomq8YgyB2JX8R5fsLvNznsXjkt"
+      ],
+      "scores": 7,
+      "target_tokens": 2138
+    },
+    "train": {
+      "largest_score_page_counts": [
+        {
+          "pages": 21,
+          "score_id": "Qma11MhFz64u8wRiW1cTZ5VJ4zTQWbYbVHDnMGafAFoaN6"
+        },
+        {
+          "pages": 12,
+          "score_id": "Qma17QDkQeaFVTi6vAj46MqWbztfC5fHn4m64fatBoNNvW"
+        },
+        {
+          "pages": 11,
+          "score_id": "Qma17geh2s3cKLnKXZ4hKyFwbywK8p95KVYj7ArRVK4Aaa"
+        },
+        {
+          "pages": 7,
+          "score_id": "Qma18FVED5wsWh2EpqKca5b56XeVHMcv6ioSU1TkVFrgXy"
+        },
+        {
+          "pages": 2,
+          "score_id": "Qma18LeJ3x711sjQHXgiUBhjDU9AXKE876cX5TF7pTaXK3"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma13rPn9tttLYoCsL6EZXdHrne85oshZxjE6f9tcwCtvE"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma14K944E4HpeNEwdzYLC2LeFoD5fqFRydNPnDyMu7ZTQ"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma16rpDcQY5b8rTCjNp87Ui3sHcnstEw9DP9wJi59gDtL"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma17Sag2PVzqp754LnR5qhyC9ieQVf6w58bfeENqEUwAA"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma189UYLUEvHAmVMQ4urbX1etTTJjgF1T22h8fdPBXcJm"
+        }
+      ],
+      "rows": 59,
+      "score_ids": [
+        "Qma11MhFz64u8wRiW1cTZ5VJ4zTQWbYbVHDnMGafAFoaN6",
+        "Qma13rPn9tttLYoCsL6EZXdHrne85oshZxjE6f9tcwCtvE",
+        "Qma14K944E4HpeNEwdzYLC2LeFoD5fqFRydNPnDyMu7ZTQ",
+        "Qma16rpDcQY5b8rTCjNp87Ui3sHcnstEw9DP9wJi59gDtL",
+        "Qma17QDkQeaFVTi6vAj46MqWbztfC5fHn4m64fatBoNNvW",
+        "Qma17Sag2PVzqp754LnR5qhyC9ieQVf6w58bfeENqEUwAA",
+        "Qma17geh2s3cKLnKXZ4hKyFwbywK8p95KVYj7ArRVK4Aaa",
+        "Qma189UYLUEvHAmVMQ4urbX1etTTJjgF1T22h8fdPBXcJm",
+        "Qma18FVED5wsWh2EpqKca5b56XeVHMcv6ioSU1TkVFrgXy",
+        "Qma18LeJ3x711sjQHXgiUBhjDU9AXKE876cX5TF7pTaXK3",
+        "Qma18e5yU2jPXAu18BCk7GPAk2p5fYU3YkHZC4zsByuvUZ"
+      ],
+      "scores": 11,
+      "target_tokens": 11776
+    },
+    "val": {
+      "largest_score_page_counts": [
+        {
+          "pages": 1,
+          "score_id": "Qma113RUUvApyeCqFzReRGQgzyoTbvx5sgm91MGkokDcMW"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma121uvpimjL2W9QxnyBBkUVZ5gKYssr3CMVNXmyVCzUQ"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma1629Vcz9oFPVmpwJGdF6aS9ogjwfQ6tUVnLNoS9vC8b"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma16m4NnR8aoBehPen8dQhNuMD5BUoc5uhdkbuyewMn3Z"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma16X3TVKs8LLtZ3LfC4oQSCgRisHBXgZnepmpEPTrdw9"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma17fwqWqDvUMKb8D7V6R76tf4b4N3XPU6Y8PshAGaK9a"
+        },
+        {
+          "pages": 1,
+          "score_id": "Qma17XP3ssfN6a8mSRM7bVvrvw5kba2v9A8gDcckkvgdjq"
+        }
+      ],
+      "rows": 7,
+      "score_ids": [
+        "Qma113RUUvApyeCqFzReRGQgzyoTbvx5sgm91MGkokDcMW",
+        "Qma121uvpimjL2W9QxnyBBkUVZ5gKYssr3CMVNXmyVCzUQ",
+        "Qma1629Vcz9oFPVmpwJGdF6aS9ogjwfQ6tUVnLNoS9vC8b",
+        "Qma16X3TVKs8LLtZ3LfC4oQSCgRisHBXgZnepmpEPTrdw9",
+        "Qma16m4NnR8aoBehPen8dQhNuMD5BUoc5uhdkbuyewMn3Z",
+        "Qma17XP3ssfN6a8mSRM7bVvrvw5kba2v9A8gDcckkvgdjq",
+        "Qma17fwqWqDvUMKb8D7V6R76tf4b4N3XPU6Y8PshAGaK9a"
+      ],
+      "scores": 7,
+      "target_tokens": 793
+    }
+  },
+  "status": "ok"
+}
