@@ -31,6 +31,7 @@ from homr.model import InputPredictions, MultiStaff
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
+from homr.onnx_providers import coreml_available, coreml_encoder_enabled, cuda_available
 from homr.resize import resize_image
 from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
 from homr.segmentation.inference_segnet import extract
@@ -76,14 +77,14 @@ def get_predictions(
     preprocessed: NDArray,
     img_path: str,
     enable_cache: bool,
-    use_gpu_inference: bool,
+    segnet_use_gpu: bool,
 ) -> InputPredictions:
     result = extract(
         preprocessed,
         img_path,
         step_size=320,
         use_cache=enable_cache,
-        use_gpu_inference=use_gpu_inference,
+        use_gpu_inference=segnet_use_gpu,
     )
     original_image = cv2.resize(original, (result.staff.shape[1], result.staff.shape[0]))
     preprocessed_image = cv2.resize(preprocessed, (result.staff.shape[1], result.staff.shape[0]))
@@ -103,7 +104,7 @@ def replace_extension(path: str, new_extension: str) -> str:
 
 
 def load_and_preprocess_predictions(
-    image_path: str, enable_debug: bool, enable_cache: bool, use_gpu_inference: bool
+    image_path: str, enable_debug: bool, enable_cache: bool, segnet_use_gpu: bool
 ) -> tuple[InputPredictions, Debug]:
     image = cv2.imread(image_path)
     if image is None:
@@ -113,7 +114,7 @@ def load_and_preprocess_predictions(
     image = autocrop(image)
     image = resize_image(image)
     preprocessed = color_adjust.apply_clahe(image)
-    predictions = get_predictions(image, preprocessed, image_path, enable_cache, use_gpu_inference)
+    predictions = get_predictions(image, preprocessed, image_path, enable_cache, segnet_use_gpu)
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
 
@@ -157,7 +158,11 @@ class ProcessingConfig:
     write_staff_positions: bool
     read_staff_positions: bool
     selected_staff: int
-    use_gpu_inference: bool
+    # The transformer (encoder/decoder) only benefits from CUDA: its fp16 "GPU"
+    # models are slower than the fp32 ones when they end up on the CPU EP, and
+    # the CoreML EP cannot run the decoder. Segnet additionally supports CoreML.
+    transformer_use_gpu: bool
+    segnet_use_gpu: bool
 
 
 def process_image(
@@ -185,7 +190,7 @@ def process_image(
         debug_cleanup = debug
 
         transformer_config = Config()
-        transformer_config.use_gpu_inference = config.use_gpu_inference
+        transformer_config.use_gpu_inference = config.transformer_use_gpu
 
         result_staffs = parse_staffs(
             debug,
@@ -224,7 +229,7 @@ def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
 ) -> tuple[list[MultiStaff], NDArray, Debug, Future[str]]:
     predictions, debug = load_and_preprocess_predictions(
-        image_path, config.enable_debug, config.enable_cache, config.use_gpu_inference
+        image_path, config.enable_debug, config.enable_cache, config.segnet_use_gpu
     )
     symbols = predict_symbols(debug, predictions)
 
@@ -302,22 +307,26 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     return sorted(without_teasers)
 
 
-def download_weights(use_gpu_inference: bool) -> None:
+def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool) -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
-    if use_gpu_inference:
-        models = [
-            segnet_path_onnx_fp16,
-            default_config.filepaths.encoder_path_fp16,
-            default_config.filepaths.decoder_path_fp16,
-        ]
-        missing_models = [model for model in models if not os.path.exists(model)]
+    models = [segnet_path_onnx_fp16 if segnet_use_gpu else segnet_path_onnx]
+    if transformer_use_gpu:
+        models.extend(
+            [
+                default_config.filepaths.encoder_path_fp16,
+                default_config.filepaths.decoder_path_fp16,
+            ]
+        )
     else:
-        models = [
-            segnet_path_onnx,
-            default_config.filepaths.encoder_path,
-            default_config.filepaths.decoder_path,
-        ]
-        missing_models = [model for model in models if not os.path.exists(model)]
+        models.extend(
+            [
+                default_config.filepaths.encoder_path,
+                default_config.filepaths.decoder_path,
+            ]
+        )
+    if coreml_encoder_enabled():
+        models.append(default_config.filepaths.encoder_path_fp16)
+    missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:
         return
@@ -388,13 +397,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    has_gpu_support = "CUDAExecutionProvider" in ort.get_available_providers()
+    force_gpu = args.gpu == GpuSupport.FORCE
+    auto_gpu = args.gpu == GpuSupport.AUTO
 
-    use_gpu_inference = (
-        args.gpu == GpuSupport.AUTO and has_gpu_support
-    ) or args.gpu == GpuSupport.FORCE
+    # CUDA speeds up the whole pipeline. CoreML only helps segnet: the fp16
+    # models the GPU path uses are slower on the CPU EP than the fp32 ones,
+    # and the CoreML EP cannot run the decoder (see Segnet for details).
+    transformer_use_gpu = force_gpu or (auto_gpu and cuda_available())
+    segnet_use_gpu = force_gpu or (auto_gpu and (cuda_available() or coreml_available()))
 
-    download_weights(use_gpu_inference)
+    download_weights(segnet_use_gpu, transformer_use_gpu)
     if args.init:
         download_ocr_weights()
         eprint("Init finished")
@@ -406,7 +418,8 @@ def main() -> None:
         args.write_staff_positions,
         args.read_staff_positions,
         -1,
-        use_gpu_inference,
+        transformer_use_gpu,
+        segnet_use_gpu,
     )
 
     xml_generator_args = XmlGeneratorArguments(

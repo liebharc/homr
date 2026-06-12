@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 
+from homr.onnx_providers import gpu_providers
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import EncodedSymbol
@@ -181,15 +182,19 @@ def get_decoder(config: Config) -> ScoreDecoder:
     use_gpu = False
     if config.use_gpu_inference:
         try:
+            providers, device = gpu_providers()
             onnx_transformer = ort.InferenceSession(
-                config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
+                config.filepaths.decoder_path_fp16, providers=providers
             )
             fp16 = True
             # Sometimes Ort falls automatically back to the CPU EP
-            # if so we get an error due to the device selection in init_cache()
-            if "CUDAExecutionProvider" in onnx_transformer.get_providers():
+            # if so we get an error due to the device selection in init_cache().
+            # CoreML binds IO on the CPU (device == "cpu") even when the GPU/ANE runs the
+            # compute, so we only flip use_gpu on when CUDA device memory is in play.
+            active = onnx_transformer.get_providers()
+            if device == "cuda" and "CUDAExecutionProvider" in active:
                 use_gpu = True
-            else:
+            elif device == "cuda":
                 eprint(
                     "Onnxruntime is not using GPU and therefore falling back to CPU. This is slow."
                 )
