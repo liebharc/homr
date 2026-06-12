@@ -43,6 +43,12 @@ Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:
 - 16GB VRAM: 18 (default)
 - 24GB VRAM: 32
 
+Distributed Training:
+
+- Distributed training supports single-machine, multi-GPU setups. Using 4 GPUs as an example, run: `CUDA_VISIBLE_DEVICES=0,1,2,3 poetry run torchrun --standalone --nnodes=1 --nproc_per_node=4 training/train.py transformer`
+- Dataset generation and model loading/saving are handled by rank0.
+- It is recommended to use 2 or 4 GPUs to keep training consistent with single-GPU training. For other GPU counts, you need to manually adjust the `gradient_accumulation_steps` parameter. Multi-node, multi-GPU training is theoretically supported, but has not been tested in practice.
+
 ## Results
 
 The `homr` pipeline is a two-step system consisting of **staff detection (segnet)** followed by **music transcription (TrOmr transformer)**.  
