@@ -440,7 +440,7 @@ class MultiStaff(DebugDrawable):
 
         symbol_min_y = symbol.center[1] - symbol.size[1] / 2
         symbol_max_y = symbol.center[1] + symbol.size[1] / 2
-        y_overlap = min(symbol_max_y, lower_staff.max_y) - max(symbol_min_y, upper_staff.min_y)
+        y_overlap = abs(min(symbol_max_y, lower_staff.max_y) - max(symbol_min_y, upper_staff.min_y))
 
         if (
             x_distance < x_distance_threshold
