@@ -151,13 +151,13 @@ class TestMusicXmlParser(unittest.TestCase):
         tokens = music_xml_string_to_tokens(example)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         token_str = token_lines_to_str(flat_list)
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_1 . . . .
-timeSignature/4 . . . .
-note_1 G4 _ slurStart_slurStop upper&note_1 A3 # _ upper&rest_2 _ _ _ upper&note_4 G3 _ slurStop lower
-rest_4 _ _ _ lower
-note_2 E4 _ slurStart upper&note_2 C2 _ _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . .
+note_1 G4 _ _ slurStart_slurStop upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper&note_4 G3 _ _ slurStop lower
+rest_4 _ _ _ _ lower
+note_2 E4 _ _ slurStart upper&note_2 C2 _ _ _ lower
+barline . . . . ."""
         self.assertEqual(token_str, expected)
 
     def test_tuplet_end_in_chord(self) -> None:
@@ -441,15 +441,15 @@ barline . . . ."""
         tokens = music_xml_string_to_tokens(example)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         token_str = token_lines_to_str(flat_list)
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_1 . . . .
-timeSignature/4 . . . .
-note_12 B5 _ slurStart_slurStop upper&note_12 G5 _ _ upper&note_4 B1 _ _ lower
-note_12 G5 _ staccato upper&note_12 D5 # _ upper
-note_12 D5 # staccato upper&note_12 B4 _ _ upper
-note_2 B4 _ slurStart_slurStop upper&note_4 G4 _ _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-note_4 A4 _ slurStop upper&note_4 F4 # _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . .
+note_12 B5 _ _ slurStart_slurStop upper&note_12 G5 _ _ _ upper&note_4 B1 _ _ _ lower
+note_12 G5 _ staccato _ upper&note_12 D5 # _ _ upper
+note_12 D5 # staccato _ upper&note_12 B4 _ _ _ upper
+note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+note_4 A4 _ _ slurStop upper&note_4 F4 # _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+barline . . . . ."""
         self.assertEqual(token_str, expected)
 
     def test_arpeggiate(self) -> None:
@@ -503,11 +503,11 @@ barline . . . ."""
         tokens = music_xml_string_to_tokens(example)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         token_str = token_lines_to_str(flat_list)
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_0 . . . .
-timeSignature/4 . . . .
-note_1 D5 _ _ upper&note_1 D4 _ _ upper&note_1 B3 _ arpeggiate lower&note_1 D3 _ _ lower&note_1 G2 _ _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_1 D5 _ _ _ upper&note_1 D4 _ _ _ upper&note_1 B3 _ arpeggiate _ lower&note_1 D3 _ _ _ lower&note_1 G2 _ _ _ lower
+barline . . . . ."""
         self.assertEqual(token_str, expected)
 
     def _norm_expected(self, expected: str) -> str:

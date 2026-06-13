@@ -135,7 +135,7 @@ class HumdrumKernConverter:
     def _accidental_to_lift(self, accidental: str) -> str:
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
 
-    def _articulation_from_suffix(self, suffix: str) -> str:
+    def _articulation_from_suffix(self, suffix: str) -> tuple[str, str]:
         for symbol in self.ignore_beams:
             suffix = suffix.replace(symbol, "")
         for symbol in self.ignore_alteration_displays:
@@ -145,17 +145,31 @@ class HumdrumKernConverter:
         suffix = suffix.replace(self.ignore_tie_continue, "")
 
         if not suffix:
-            return empty
+            return empty, empty
 
         mapping = {":": "arpeggiate", "[": "slurStart", "]": "slurStop"}
         articulations = []
+        slurs = []
         for char in suffix:
-            articulations.append(mapping[char])
-        return str.join("_", articulations)
+            if char == ":":
+                articulations.append(mapping[char])
+            elif char in {"]", "["}:
+                slurs.append(mapping[char])
+
+        if slurs and articulations:
+            return str.join("_", articulations), str.join("_", slurs)
+        elif slurs:
+            return empty, str.join("_", slurs)
+        elif articulations:
+            return str.join("_", articulations), empty
+        else:
+            # For ruff, this case should be excluded with
+            # return empty, empty in line 148
+            return empty, empty
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
-        return EncodedSymbol(clef_name, empty, empty, empty)
+        return EncodedSymbol(clef_name, empty, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
         mapping = {
@@ -209,12 +223,12 @@ class HumdrumKernConverter:
 
         rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
         if is_rest:
-            return EncodedSymbol(rhythm_key, empty, empty, empty)
+            return EncodedSymbol(rhythm_key, empty, empty, empty, empty)
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
-        articulation_val = self._articulation_from_suffix(suffix)
-        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val)
+        articulation_val, slur_val = self._articulation_from_suffix(suffix)
+        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur_val)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
         symbol = line.split(" ", maxsplit=1)[0]
@@ -233,8 +247,8 @@ class HumdrumKernConverter:
 
     def _get_default_clef(self, staff_no: int) -> EncodedSymbol:
         if staff_no == 0:
-            return EncodedSymbol("clef_G2", empty, empty, empty, "upper")
-        return EncodedSymbol("clef_F4", empty, empty, empty, "lower")
+            return EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")
+        return EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower")
 
     def _add_line_numbers(self, lines: list[str]) -> list[tuple[int, str]]:
         """

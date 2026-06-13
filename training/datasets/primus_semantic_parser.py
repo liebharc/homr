@@ -62,7 +62,7 @@ class PrimusConverter:
         rhythm_key = PrimusConverter.parse_duration(duration, is_grace_note)
         rhythm_val = "note_" + rhythm_key
 
-        return EncodedSymbol(rhythm_val, base_pitch, lift, articulation)
+        return EncodedSymbol(rhythm_val, base_pitch, lift, articulation, empty)
 
     @staticmethod
     def parse_rest(symbol: str) -> EncodedSymbol:
@@ -70,7 +70,7 @@ class PrimusConverter:
         duration, articulation = PrimusConverter.get_articulations(duration)
         rhythm_key = PrimusConverter.parse_duration(duration)
         rhythm_val = "rest_" + rhythm_key
-        return EncodedSymbol(rhythm_val, empty, empty, articulation)
+        return EncodedSymbol(rhythm_val, empty, empty, articulation, empty)
 
     @staticmethod
     def parse_multirest(symbol: str) -> EncodedSymbol:
@@ -78,12 +78,12 @@ class PrimusConverter:
         num = min(int(measures), 10)
         if num == 1:
             # Return a whole rest instead
-            return EncodedSymbol("rest_0", empty, empty, empty)
-        return EncodedSymbol(f"rest_{num}m", empty, empty, empty)
+            return EncodedSymbol("rest_0", empty, empty, empty, empty)
+        return EncodedSymbol(f"rest_{num}m", empty, empty, empty, empty)
 
     @staticmethod
     def parse_clef(symbol: str) -> EncodedSymbol:
-        return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty)
+        return EncodedSymbol(symbol.replace("-", "_"), empty, empty, empty, empty)
 
     @staticmethod
     def parse_key_signature(symbol: str) -> EncodedSymbol:
@@ -132,14 +132,58 @@ class PrimusConverter:
             return EncodedSymbol(symbol)
 
 
+def change_tieSlur(tokens: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    result = []
+    for i in range(len(tokens) - 2):
+        if tokens[i + 1] == EncodedSymbol("tieSlur"):
+            index_next = find_next_note(tokens, i)
+            if index_next:
+                tokens[index_next].slur = "slurStop"
+
+            index_last = find_last_note(tokens, i)
+            if index_last:
+                if tokens[index_last].slur == "slurStop":
+                    tokens[index_last].slur = "slurStart_slurStop"
+                else:
+                    tokens[index_last].slur = "slurStart"
+
+        if tokens[i] != EncodedSymbol("tieSlur"):
+            result.append(tokens[i])
+
+    result.append(tokens[-2])
+    result.append(tokens[-1])
+    return result
+
+
+def find_next_note(tokens: list[EncodedSymbol], idx: int) -> None | int:
+    """
+    Find next note (after index), we dont want to append a slur to a barline
+    """
+    for i in range(idx + 2, len(tokens)):
+        if tokens[i].rhythm.startswith("note"):
+            return i
+    return None
+
+
+def find_last_note(tokens: list[EncodedSymbol], idx: int) -> None | int:
+    """
+    Find last note (before index), we dont want to append a slur to a barline
+    """
+    for i in range(idx, 0, -1):
+        if tokens[i].rhythm.startswith("note"):
+            return i
+    return None
+
+
 def convert_primus_semantic_to_tokens(semantic: str) -> list[EncodedSymbol]:
     symbols = re.split("\\s+", semantic.strip())
     tokens = [PrimusConverter.convert_symbol(sym) for sym in symbols]
     if tokens[-1].rhythm != "barline":
         tokens.append(EncodedSymbol("barline"))
     for symbol in tokens:
-        if has_rhythm_symbol_a_position(symbol.rhythm):
+        if has_rhythm_symbol_a_position(symbol.rhythm):  # Primus only has single staff positions
             symbol.position = "upper"
+    tokens = change_tieSlur(tokens)
     return tokens
 
 

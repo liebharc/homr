@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import json
 import multiprocessing
 import os
@@ -265,11 +267,11 @@ class MeasureCutter:
         self.voice = voice
         self.number_of_staffs = _count_staffs(voice)
         if self.number_of_staffs == 1:
-            self.clefs = [EncodedSymbol("clef_G2", empty, empty, empty, "upper")]
+            self.clefs = [EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")]
         else:
             self.clefs = [
-                EncodedSymbol("clef_G2", empty, empty, empty, "upper"),
-                EncodedSymbol("clef_F4", empty, empty, empty, "lower"),
+                EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper"),
+                EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower"),
             ]
         self.key = EncodedSymbol("keySignature_0")
         self.time = EncodedSymbol("timeSignature/4")
@@ -345,6 +347,7 @@ def _split_file_into_staffs(
 ) -> list[str]:
     result: list[str] = []
     png_file = svg_file.filename.replace(".svg", ".png")
+    image = None
     if not just_token_files:
         target_width = 1400
         scale = target_width / svg_file.width
@@ -383,7 +386,7 @@ def _split_file_into_staffs(
             width = int(width * scale)
             height = int(height * scale)
 
-            staff_image = image[y : y + height, x : x + width]
+            staff_image = image[y : y + height, x : x + width]  # type: ignore
             cv2.imwrite(staff_image_file_name, staff_image)
         elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
             raise ValueError(f"File {staff_image_file_name} not found")
@@ -406,6 +409,9 @@ def _split_file_into_staffs(
                 + "\n"
             )
         current_voice = (current_voice + 1) % number_of_voices
+
+    if image is not None:
+        del image
 
     return result
 
@@ -572,7 +578,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     with open(lieder_train_index, "w") as f:
         file_number = 0
         skipped_files = 0
-        with multiprocessing.Pool() as p:
+        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
             for result in p.imap_unordered(
                 (
                     _convert_file_only_token

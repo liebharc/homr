@@ -1,3 +1,5 @@
+# ruff: noqa: E501
+
 import unittest
 from fractions import Fraction
 
@@ -75,26 +77,26 @@ class TestVocabulary(unittest.TestCase):
         )
 
     def test_remove_duplicates_in_chord(self) -> None:
-        tokens_str = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_1 . . . .
-timeSignature/4 . . . .
-note_12 B5 _ tieStop upper&note_12 G5 _ slurStart_tieStop upper&note_12 B5 _ tieStop upper
-note_12 G5 _ _ upper&note_12 D5 # staccato upper
-note_12 D5 # _ upper&note_12 B4 _ staccato upper&note_24 D5 # _ upper
-note_2 B4 _ slurStart_slurStop upper&note_4 G4 _ _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-note_4 A4 _ _ upper&note_4 F4 # slurStop upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-barline . . . ."""
+        tokens_str = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . .
+note_12 B5 _ _ slurStop upper&note_12 G5 _ _ slurStart_slurStop upper&note_12 B5 _ _ slurStop upper
+note_12 G5 _ _ _ upper&note_12 D5 # staccato _ upper
+note_12 D5 # _ _ upper&note_12 B4 _ staccato _ upper&note_24 D5 # _ _ upper
+note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+note_4 A4 _ _ _ upper&note_4 F4 # slurStop _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+barline . . . . ."""
         tokens = read_token_lines(tokens_str.splitlines())
         result = remove_duplicated_symbols(tokens)
-        expected = """clef_G2 _ _ _ upper&clef_F4 _ _ _ lower
-keySignature_1 . . . .
-timeSignature/4 . . . .
-note_12 B5 _ slurStart_tieStop upper&note_12 G5 _ _ upper
-note_12 G5 _ staccato upper&note_12 D5 # _ upper
-note_12 D5 # staccato upper&note_12 B4 _ _ upper
-note_2 B4 _ slurStart_slurStop upper&note_4 G4 _ _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-note_4 A4 _ slurStop upper&note_4 F4 # _ upper&note_4 B3 _ _ lower&note_4 D3 # _ lower
-barline . . . ."""
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . .
+note_12 B5 _ _ slurStart_slurStop upper&note_12 G5 _ _ _ upper
+note_12 G5 _ staccato _ upper&note_12 D5 # _ _ upper
+note_12 D5 # staccato _ upper&note_12 B4 _ _ _ upper
+note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+note_4 A4 _ slurStop _ upper&note_4 F4 # _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+barline . . . . ."""
 
         self.maxDiff = None
         self.assertEqual(token_lines_to_str(result), expected)
@@ -174,21 +176,21 @@ barline . . . ."""
 
     def test_only_keep_lower_staff_if_there_is_a_clef(self) -> None:
         tokens = [
-            EncodedSymbol("clef_G2", "_", "_", "_", "upper"),
-            EncodedSymbol("keySignature_1", ".", ".", ".", "."),
-            EncodedSymbol("note_8", "F4", "#", "slurStart", "upper"),
-            EncodedSymbol("note_8", "E4", "_", "slurStop", "upper"),
-            EncodedSymbol("note_24", "E4", "_", "slurStart", "upper"),
-            EncodedSymbol("note_24", "F4", "#", "_", "lower"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("keySignature_1", ".", ".", ".", ".", "."),
+            EncodedSymbol("note_8", "F4", "#", "_", "slurStart", "upper"),
+            EncodedSymbol("note_8", "E4", "_", "_", "slurStop", "upper"),
+            EncodedSymbol("note_24", "E4", "_", "_", "slurStart", "upper"),
+            EncodedSymbol("note_24", "F4", "#", "_", "_", "lower"),
         ]
         result = remove_duplicated_symbols(tokens)
         expected = [
-            EncodedSymbol("clef_G2", "_", "_", "_", "upper"),
-            EncodedSymbol("keySignature_1", ".", ".", ".", "."),
-            EncodedSymbol("note_8", "F4", "#", "slurStart", "upper"),
-            EncodedSymbol("note_8", "E4", "_", "slurStop", "upper"),
-            EncodedSymbol("note_24", "E4", "_", "slurStart", "upper"),
-            EncodedSymbol("note_24", "F4", "#", "_", "upper"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("keySignature_1", ".", ".", ".", ".", "."),
+            EncodedSymbol("note_8", "F4", "#", "_", "slurStart", "upper"),
+            EncodedSymbol("note_8", "E4", "_", "_", "slurStop", "upper"),
+            EncodedSymbol("note_24", "E4", "_", "_", "slurStart", "upper"),
+            EncodedSymbol("note_24", "F4", "#", "_", "_", "upper"),
         ]
 
         self.assertEqual(token_lines_to_str(result), token_lines_to_str(expected))

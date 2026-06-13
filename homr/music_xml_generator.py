@@ -88,20 +88,6 @@ class SymbolChord:
             chords = (chords[1], chords[0])
         return [chord for chord in chords if len(chord.symbols) > 0]
 
-    def strip_slur_ties(self) -> tuple[list[str], "SymbolChord"]:
-        slurs_ties = set()
-
-        result = []
-        for symbol in self.symbols:
-            stripped, result_symbol = symbol.strip_articulations(
-                ["slurStart", "slurStop", "tieStart", "tieStop"]
-            )
-            result.append(result_symbol)
-            for articulation in stripped:
-                slurs_ties.add(articulation)
-
-        return sorted(slurs_ties), SymbolChord(result, tuplet_mark=self.tuplet_mark)
-
 
 class XmlGeneratorArguments:
     def __init__(
@@ -588,6 +574,31 @@ def build_articulations(
         notation.add_child(parent)
 
 
+def build_slurs(note: mxl.XMLNote, slurs: str, slur_number: int) -> None:
+    notations = note.get_children_of_type(mxl.XMLNotations)
+    if notations:
+        notation = notations[0]
+    else:
+        notation = mxl.XMLNotations()
+        note.add_child(notation)
+
+    if slurs in {"_", ""}:
+        pass
+    elif slurs == nonote:
+        eprint("WARNING note without valid articulation", slurs)
+    elif slurs == "slurStart":
+        notation.add_child(mxl.XMLSlur(type="start", number=slur_number))
+    elif slurs == "slurStop":
+        notation.add_child(mxl.XMLSlur(type="stop", number=slur_number))
+    elif slurs == "slurStart_slurStop":
+        # It is important to first add the stop and than the start
+        # otherwise the slur starts and directly stops
+        notation.add_child(mxl.XMLSlur(type="stop", number=slur_number))
+        notation.add_child(mxl.XMLSlur(type="start", number=slur_number))
+    else:
+        raise ValueError("Unsupported slur " + slurs)
+
+
 def build_note_or_rest(
     model_note: EncodedSymbol,
     rhythmic_layer: int,
@@ -634,6 +645,7 @@ def build_note_or_rest(
         note.add_child(mxl.XMLDuration(value_=state.beats))
 
     staff_num = get_staff(model_note)
+    slur_number = staff_num
     note.add_child(mxl.XMLStaff(value_=staff_num))
     note.add_child(mxl.XMLVoice(value_=str(get_xml_voice(staff_num, rhythmic_layer))))
     for _ in range(model_duration.dots):
@@ -644,8 +656,10 @@ def build_note_or_rest(
         time_modification.add_child(mxl.XMLNormalNotes(value_=model_duration.normal_notes))
         note.add_child(time_modification)
         build_articulations(note, model_note.articulation, tuplet_mark, state)
+        build_slurs(note, model_note.slur, slur_number)
     else:
         build_articulations(note, model_note.articulation, "", state)
+        build_slurs(note, model_note.slur, slur_number)
 
     return note
 
@@ -667,7 +681,6 @@ def build_multi_measure_rest(
 def build_note_chord(
     note_chord: SymbolChord, state: ConversionState, chord_duration: Fraction
 ) -> list[mxl.XMLElement]:
-    _slurs_ties, note_chord = note_chord.strip_slur_ties()
     by_duration = _group_notes(note_chord.symbols)
     result: list[mxl.XMLElement] = []
     final_duration = Fraction(0)
