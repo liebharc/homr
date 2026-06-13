@@ -31,7 +31,7 @@ from homr.model import InputPredictions, MultiStaff
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
-from homr.onnx_providers import coreml_available, coreml_encoder_enabled, cuda_available
+from homr.onnx_providers import coreml_available, cuda_available
 from homr.resize import resize_image
 from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
 from homr.segmentation.inference_segnet import extract
@@ -163,6 +163,9 @@ class ProcessingConfig:
     # the CoreML EP cannot run the decoder. Segnet additionally supports CoreML.
     transformer_use_gpu: bool
     segnet_use_gpu: bool
+    # Opt-in (--coreml-encoder): run the encoder on the Apple GPU via CoreML.
+    # Only helps across many images (slow one-time MLProgram compile).
+    coreml_encoder: bool
 
 
 def process_image(
@@ -191,6 +194,7 @@ def process_image(
 
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.transformer_use_gpu
+        transformer_config.use_coreml_encoder = config.coreml_encoder
 
         result_staffs = parse_staffs(
             debug,
@@ -307,25 +311,24 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     return sorted(without_teasers)
 
 
-def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool) -> None:
+def download_weights(
+    segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_encoder: bool
+) -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
     models = [segnet_path_onnx_fp16 if segnet_use_gpu else segnet_path_onnx]
     if transformer_use_gpu:
-        models.extend(
-            [
-                default_config.filepaths.encoder_path_fp16,
-                default_config.filepaths.decoder_path_fp16,
-            ]
-        )
-    else:
-        models.extend(
-            [
-                default_config.filepaths.encoder_path,
-                default_config.filepaths.decoder_path,
-            ]
-        )
-    if coreml_encoder_enabled():
+        # CUDA runs the whole transformer on the fp16 models.
         models.append(default_config.filepaths.encoder_path_fp16)
+        models.append(default_config.filepaths.decoder_path_fp16)
+    else:
+        # On the CPU EP the fp32 models are faster, and the CoreML EP cannot run
+        # the decoder, so the decoder always uses fp32. The CoreML encoder, when
+        # enabled, uses the fp16 encoder instead of the fp32 one.
+        if coreml_encoder:
+            models.append(default_config.filepaths.encoder_path_fp16)
+        else:
+            models.append(default_config.filepaths.encoder_path)
+        models.append(default_config.filepaths.decoder_path)
     missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:
@@ -394,6 +397,13 @@ def main() -> None:
         default=GpuSupport.AUTO,
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--coreml-encoder",
+        action="store_true",
+        help="On Apple Silicon, run the transformer encoder on the GPU via "
+        + "CoreML. Compiling the model takes 26-60 s at startup, so this only "
+        + "pays off when processing many images. Has no effect with CUDA.",
+    )
 
     args = parser.parse_args()
 
@@ -405,8 +415,11 @@ def main() -> None:
     # and the CoreML EP cannot run the decoder (see Segnet for details).
     transformer_use_gpu = force_gpu or (auto_gpu and cuda_available())
     segnet_use_gpu = force_gpu or (auto_gpu and (cuda_available() or coreml_available()))
+    # The CoreML encoder is a separate opt-in and only applies when the
+    # transformer isn't already on CUDA.
+    coreml_encoder = args.coreml_encoder and not transformer_use_gpu and coreml_available()
 
-    download_weights(segnet_use_gpu, transformer_use_gpu)
+    download_weights(segnet_use_gpu, transformer_use_gpu, coreml_encoder)
     if args.init:
         download_ocr_weights()
         eprint("Init finished")
@@ -420,6 +433,7 @@ def main() -> None:
         -1,
         transformer_use_gpu,
         segnet_use_gpu,
+        coreml_encoder,
     )
 
     xml_generator_args = XmlGeneratorArguments(

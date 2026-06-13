@@ -118,6 +118,11 @@ class Config:
         self.articulation_vocab = self.vocab.articulation
         self.position_vocab = self.vocab.position
         self.use_gpu_inference = True
+        # Opt-in: run the encoder on the Apple GPU via CoreML (MLProgram). Off
+        # by default because compiling the MLProgram costs 26-60 s at session
+        # creation, so it only pays off across many images. Set via the
+        # --coreml-encoder CLI flag.
+        self.use_coreml_encoder = False
 
         # Scheduled Sampling parameters
         self.scheduled_sampling_start_prob = 1.0

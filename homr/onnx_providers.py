@@ -67,16 +67,6 @@ def coreml_mlprogram_providers(model_path: str, compute_units: str = "ALL") -> l
     return [("CoreMLExecutionProvider", options)]
 
 
-def coreml_encoder_enabled() -> bool:
-    """Opt-in switch to run the transformer encoder on CoreML (MLProgram).
-
-    The encoder runs ~4.8x faster per forward on the Apple GPU, but compiling
-    the MLProgram takes 26-60 s at session creation, so it only pays off for
-    long batch runs. Off by default.
-    """
-    return os.environ.get("HOMR_COREML_ENCODER", "") not in ("", "0")
-
-
 def cuda_available() -> bool:
     return "CUDAExecutionProvider" in ort.get_available_providers()
 

@@ -1,10 +1,8 @@
 import numpy as np
 import onnxruntime as ort
-from onnxruntime import OrtValue
 
 from homr.onnx_providers import (
     coreml_available,
-    coreml_encoder_enabled,
     coreml_mlprogram_providers,
     gpu_providers,
 )
@@ -33,7 +31,7 @@ class Encoder:
                 self.encoder = ort.InferenceSession(config.filepaths.encoder_path_fp16)
                 self.fp16 = True
 
-        elif coreml_encoder_enabled() and coreml_available():
+        elif config.use_coreml_encoder and coreml_available():
             try:
                 # CPUAndGPU skips the (slow) ANE specialization: it halves the
                 # session creation time vs "ALL" and inference is even slightly
@@ -63,7 +61,7 @@ class Encoder:
         self.input_name = self.encoder.get_inputs()[0].name
         self.output_name = self.encoder.get_outputs()[0].name
 
-    def generate(self, x: NDArray) -> list[OrtValue]:
+    def generate(self, x: NDArray) -> NDArray:
         if self.fp16:
             self.io_binding.bind_cpu_input("input", x.astype(np.float16))
         else:
