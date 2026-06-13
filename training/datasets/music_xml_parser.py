@@ -691,6 +691,14 @@ def _remove_dynamics_attribute_from_nodes_recursive(node: ET.Element) -> None:
         "credit",
     }
     for child in list(node):
+        if child.tag == "direction":
+            for directionType in [n for n in list(child) if n.tag == "direction-type"]:
+                has_octave_shift = (
+                    len([n for n in list(directionType) if n.tag == "octave-shift"]) > 0
+                )
+                if has_octave_shift:
+                    raise ValueError("Octave shift isn't supported")
+
         if child.tag in filtered_tags:
             node.remove(child)
         else:
