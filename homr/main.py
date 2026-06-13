@@ -311,9 +311,7 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     return sorted(without_teasers)
 
 
-def download_weights(
-    segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_encoder: bool
-) -> None:
+def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_encoder: bool) -> None:
     base_url = "https://github.com/liebharc/homr/releases/download/onnx_checkpoints/"
     models = [segnet_path_onnx_fp16 if segnet_use_gpu else segnet_path_onnx]
     if transformer_use_gpu:
