@@ -77,9 +77,18 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 396
+
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
+Day: 12 June 2026
+Transformer Smoke Test: 7%
+System Level: Total: 6.7 diffs, SER: 5.2%
+
+Final training run for #86 (https://github.com/liebharc/homr/pull/86), up to date with all changes on main branch
+
 ## Run 396 - discarded at epoch 9
 
-Commit: -
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
 Day: 11 June 2026
 Transformer Smoke Test: -
 
@@ -87,7 +96,7 @@ Reintroduced tie vocabulary and stopped adding all slurs&ties on the first note 
 
 ## Run 396 - discarded at epoch 10
 
-Commit: -
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
 Day: 9 June 2026
 Transformer Smoke Test: SER avg: 11%
 
@@ -95,7 +104,7 @@ Removed problematic files from grandstaff containing more slurStart than slurSto
 
 ## Run 396 - discarded at epoch 12
 
-Commit: -
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
 Day: 30 May 2026
 Transformer Smoke Test: SER avg: 9%
 
