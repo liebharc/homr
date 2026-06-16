@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import onnxruntime as ort
 
+from homr.onnx_providers import gpu_providers
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.vocabulary import EncodedSymbol
@@ -30,6 +31,7 @@ class ScoreDecoder:
         self.inv_pitch_vocab = {v: k for k, v in config.pitch_vocab.items()}
         self.inv_lift_vocab = {v: k for k, v in config.lift_vocab.items()}
         self.inv_articulation_vocab = {v: k for k, v in config.articulation_vocab.items()}
+        self.inv_slur_vocab = {v: k for k, v in config.slur_vocab.items()}
         self.inv_position_vocab = {v: k for k, v in config.position_vocab.items()}
 
         self.fp16 = fp16
@@ -41,6 +43,7 @@ class ScoreDecoder:
             "out_lifts",
             "out_positions",
             "out_articulations",
+            "out_slurs",
             "attention",
         ]
 
@@ -61,6 +64,7 @@ class ScoreDecoder:
         out_pitch = nonote_tokens
         out_lift = nonote_tokens
         out_articulations = nonote_tokens
+        out_slurs = nonote_tokens
         cache, kv_input_names, kv_output_names = self.init_cache()
         output_names = self.output_names + kv_output_names
         context = kwargs["context"]
@@ -73,6 +77,7 @@ class ScoreDecoder:
             x_pitch = out_pitch[:, -1:]
             x_rhythm = out_rhythm[:, -1:]
             x_articulations = out_articulations[:, -1:]
+            x_slurs = out_slurs[:, -1:]
 
             # after the first step we don't pass the full context into the decoder
             # x_transformers uses [:, :0] to split the context
@@ -84,6 +89,7 @@ class ScoreDecoder:
             self.io_binding.bind_cpu_input("pitchs", x_pitch)
             self.io_binding.bind_cpu_input("lifts", x_lift)
             self.io_binding.bind_cpu_input("articulations", x_articulations)
+            self.io_binding.bind_cpu_input("slurs", x_slurs)
             self.io_binding.bind_cpu_input("context", context)
             self.io_binding.bind_cpu_input("cache_len", np.array([step], dtype=np.int64))
             for name, cache_val in zip(kv_input_names, cache, strict=True):
@@ -98,7 +104,7 @@ class ScoreDecoder:
 
             # Get outputs
             outputs = self.io_binding.get_outputs()
-            cache = outputs[6:]
+            cache = outputs[7:]
 
             # Greedy decoding: pick the highest logit directly for each output
             rhythmsp = outputs[0].numpy()
@@ -106,18 +112,21 @@ class ScoreDecoder:
             liftsp = outputs[2].numpy()
             positionsp = outputs[3].numpy()
             articulationsp = outputs[4].numpy()
-            attention = outputs[5].numpy()
+            slursp = outputs[5].numpy()
+            attention = outputs[6].numpy()
 
             rhythm_sample = np.array([[rhythmsp[:, -1, :].argmax()]])
             pitch_sample = np.array([[pitchsp[:, -1, :].argmax()]])
             lift_sample = np.array([[liftsp[:, -1, :].argmax()]])
             articulation_sample = np.array([[articulationsp[:, -1, :].argmax()]])
+            slur_sample = np.array([[slursp[:, -1, :].argmax()]])
             position_sample = np.array([[positionsp[:, -1, :].argmax()]])
 
             lift_token = detokenize(lift_sample, self.inv_lift_vocab)
             pitch_token = detokenize(pitch_sample, self.inv_pitch_vocab)
             rhythm_token = detokenize(rhythm_sample, self.inv_rhythm_vocab)
             articulation_token = detokenize(articulation_sample, self.inv_articulation_vocab)
+            slur_token = detokenize(slur_sample, self.inv_slur_vocab)
             position_token = detokenize(position_sample, self.inv_position_vocab)
 
             if rhythm_sample[0][0] == self.eos_token:
@@ -128,6 +137,7 @@ class ScoreDecoder:
                 pitch=pitch_token[0],
                 lift=lift_token[0],
                 articulation=articulation_token[0],
+                slur=slur_token[0],
                 position=position_token[0],
                 coordinates=attention,
             )
@@ -137,6 +147,7 @@ class ScoreDecoder:
             out_pitch = np.concatenate((out_pitch, pitch_sample), axis=-1)
             out_rhythm = np.concatenate((out_rhythm, rhythm_sample), axis=-1)
             out_articulations = np.concatenate((out_articulations, articulation_sample), axis=-1)
+            out_slurs = np.concatenate((out_slurs, slur_sample), axis=-1)
 
         return symbols
 
@@ -181,15 +192,19 @@ def get_decoder(config: Config) -> ScoreDecoder:
     use_gpu = False
     if config.use_gpu_inference:
         try:
+            providers, device = gpu_providers()
             onnx_transformer = ort.InferenceSession(
-                config.filepaths.decoder_path_fp16, providers=["CUDAExecutionProvider"]
+                config.filepaths.decoder_path_fp16, providers=providers
             )
             fp16 = True
             # Sometimes Ort falls automatically back to the CPU EP
-            # if so we get an error due to the device selection in init_cache()
-            if "CUDAExecutionProvider" in onnx_transformer.get_providers():
+            # if so we get an error due to the device selection in init_cache().
+            # CoreML binds IO on the CPU (device == "cpu") even when the GPU/ANE runs the
+            # compute, so we only flip use_gpu on when CUDA device memory is in play.
+            active = onnx_transformer.get_providers()
+            if device == "cuda" and "CUDAExecutionProvider" in active:
                 use_gpu = True
-            else:
+            elif device == "cuda":
                 eprint(
                     "Onnxruntime is not using GPU and therefore falling back to CPU. This is slow."
                 )

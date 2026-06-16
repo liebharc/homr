@@ -35,14 +35,26 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
-You can check the log and see number of training files to be 197k: `Total number of training files to choose from 197032`
+You can check the log and see number of training files to be 190k: `Total number of training files to choose from 190722`
 This takes around 2–4 days.
+
+Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:
+
+- 8GB VRAM: 8
+- 16GB VRAM: 18 (default)
+- 24GB VRAM: 32
 
 Distributed Training:
 
 - Distributed training supports single-machine, multi-GPU setups. Using 4 GPUs as an example, run: `CUDA_VISIBLE_DEVICES=0,1,2,3 poetry run torchrun --standalone --nnodes=1 --nproc_per_node=4 training/train.py transformer`
 - Dataset generation and model loading/saving are handled by rank0.
 - It is recommended to use 2 or 4 GPUs to keep training consistent with single-GPU training. For other GPU counts, you need to manually adjust the `gradient_accumulation_steps` parameter. Multi-node, multi-GPU training is theoretically supported, but has not been tested in practice.
+
+Cloud Training:
+
+- Homr can be trained on community clouds like vast.ai since the dataset is opensource and only 12GB big (can be uploaded to google drive for free)
+- As homr only uses bf16 training and doesn't use newer features like FP8, the RTX 3090 seems to provide the best value
+- Homr's data loading requires a good CPU: try to get something similar to an i5-11400
 
 ## Results
 
@@ -64,6 +76,40 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+## Run 396
+
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
+Day: 12 June 2026
+Transformer Smoke Test: 7%
+System Level: Total: 6.7 diffs, SER: 5.2%
+
+Final training run for #86 (https://github.com/liebharc/homr/pull/86), up to date with all changes on main branch
+
+## Run 396 - discarded at epoch 9
+
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
+Day: 11 June 2026
+Transformer Smoke Test: -
+
+Reintroduced tie vocabulary and stopped adding all slurs&ties on the first note of a chord. The model performed significantly worse on slurs&ties than the runs before. This run was part of #86 (https://github.com/liebharc/homr/pull/86), code can be found (https://github.com/aicelen/homr/tree/feature/improve-slurs-ties).
+
+## Run 396 - discarded at epoch 10
+
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
+Day: 9 June 2026
+Transformer Smoke Test: SER avg: 11%
+
+Removed problematic files from grandstaff containing more slurStart than slurStop (https://github.com/liebharc/homr/pull/86)
+
+## Run 396 - discarded at epoch 12
+
+Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
+Day: 30 May 2026
+Transformer Smoke Test: SER avg: 9%
+
+Split articulations&slurs into two branches.
+This resulted in the model being too eager to predict slurStart (https://github.com/liebharc/homr/pull/86)
 
 ## Run 384 - discarded
 

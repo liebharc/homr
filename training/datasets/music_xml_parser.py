@@ -397,7 +397,7 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
                 raise ValueError("Octave change isn't supported")
             clef_number = int(clef.get("number", "1")) - 1
             clefs_tokens.append(
-                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty), clef_number)
+                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
             )
         part.append_clefs(clefs_tokens)
     keys = _children(attribute, "key")
@@ -438,14 +438,15 @@ def _rhythm_token(base: str, number: int, dots: int, is_grace: bool) -> str:
     return f"{base}_{number}{grace}{dot_str}"
 
 
-def _collect_articulation(note: ET.Element, part: TokensPart, staff: int) -> str:
+def _collect_articulation(note: ET.Element, part: TokensPart, staff: int) -> tuple[str, str]:
     notations_list = _children(note, "notations")
     if not notations_list:
-        return empty
+        return empty, empty
     notations = notations_list[0]
     if notations.get("print-object", None) == "no":
-        return empty
+        return empty, empty
     articulations = []
+    slurs = []
     # pick the first articulation we support if multiple present
     for child in list(notations):
         print_object = child.get("print-object", None)
@@ -481,18 +482,25 @@ def _collect_articulation(note: ET.Element, part: TokensPart, staff: int) -> str
             articulations.append("arpeggiate")
         if child.tag == "tied":
             tie_type = str(child.get("type", ""))
-            articulations.append("slur" + tie_type.capitalize())
+            slurs.append("slur" + tie_type.capitalize())
         if child.tag == "slur":
             slur_type = str(child.get("type", ""))
-            articulations.append("slur" + slur_type.capitalize())
+            slurs.append("slur" + slur_type.capitalize())
 
     if part.tremolo:
         articulations.append("tremolo")
 
     articulations = list(set(articulations))
+    if len(articulations) == 0 and len(slurs) == 0:
+        return empty, empty
+
     if len(articulations) == 0:
-        return empty
-    return str.join("_", sorted(articulations))
+        return empty, str.join("_", sorted(slurs))
+
+    if len(slurs) == 0:
+        return str.join("_", sorted(articulations)), empty
+
+    return str.join("_", sorted(articulations)), str.join("_", sorted(slurs))
 
 
 def _process_note(part: TokensPart, note: ET.Element) -> None:
@@ -525,22 +533,26 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
     dur_nodes = _children(note, "type")
     duration_type = _text(dur_nodes[0]) if dur_nodes else "eighth"
     base_duration = round(DURATION_NUMBER[duration_type] * triplet_factor)
-    art = _collect_articulation(note, part, staff)
+    art, slur = _collect_articulation(note, part, staff)
     if len(rest) > 0:
         if rest[0] is not None and rest[0].get("measure", None):
             part.append_rest(
-                staff, is_chord, duration, invisible, EncodedSymbol("rest_1", empty, empty, empty)
+                staff,
+                is_chord,
+                duration,
+                invisible,
+                EncodedSymbol("rest_1", empty, empty, empty, empty),
             )
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
-            sym = EncodedSymbol(rhythm, empty, empty, art)
+            sym = EncodedSymbol(rhythm, empty, empty, art, slur)
             part.append_rest(staff, is_chord, duration, invisible, sym)
     pitch = _children(note, "pitch")
     if len(pitch) > 0:
         pitch_name = _pitch_name(pitch[0])
         lift = _lift_from_pitch_or_accidental(pitch[0], note)
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
-        sym = EncodedSymbol(rhythm, pitch_name, lift, art)
+        sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur)
 
         part.append_note(staff, is_chord, max(duration, 1), invisible, sym)
 
@@ -610,7 +622,7 @@ def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
         return
     rest = rests[0]
     rest_duration = min(_int_text(rest), 10)
-    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, "upper"))
+    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, empty, "upper"))
 
 
 def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
@@ -636,6 +648,10 @@ def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
 
 
 def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
+    """
+    Normalize measure-ending barlines and adjacent repeat symbols.
+    """
+
     def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
         return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
 

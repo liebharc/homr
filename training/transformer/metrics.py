@@ -17,6 +17,7 @@ LOSS_COMPONENTS = [
     "loss_consist",
     "loss_position",
     "loss_articulations",
+    "loss_slurs",
 ]
 
 
@@ -110,7 +111,7 @@ class HomrTrainer(Trainer):
         outputs: dict[str, Any],
         inputs: dict[str, torch.Tensor],
     ) -> None:
-        rhythm, pitch, lift, position, articulations = outputs["logits"]
+        rhythm, pitch, lift, position, articulations, slurs = outputs["logits"]
         # Pull binary mask from inputs and align with y_out (shift by 1)
         eval_mask = inputs["mask"][:, 1:]
 
@@ -125,6 +126,7 @@ class HomrTrainer(Trainer):
             ("lift", lift, inputs["lifts"]),
             ("position", position, inputs["positions"]),
             ("articulations", articulations, inputs["articulations"]),
+            ("slurs", slurs, inputs["slurs"]),
         ]
 
         for name, logits, input_labels in branches:

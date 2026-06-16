@@ -133,7 +133,7 @@ def maintain_accidentals_during_measure(
     The PrIMuS datset doesn't maintain accidentals. Possibly
     because it uses a different rule for accidentals as in music
     there is no aggreement on this matter. However homr and the
-    other datasets maintain accidentals until the endo f the measure,
+    other datasets maintain accidentals until the end of the measure,
     so we adjust the PrIMus ground truth to match this.
 
     Example: datasets/Corpus/000135772-1_2_1/000135772-1_2_1-pre.jpg
