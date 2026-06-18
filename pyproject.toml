@@ -48,6 +48,9 @@ onnxconverter-common="^1.16.0"
 albumentations = "^2.0.8"
 tensorboard = "^2.20.0"
 onnxscript = "^0.6.2"
+music21 = "^10.3.0"
+musicdiff = "^5.2"
+datasets = "^5.0.0"
 
 [tool.poetry.group.docs]
 [tool.poetry.group.docs.dependencies]
@@ -141,6 +144,10 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "training.architecture.transformer.custom_x_transformer"
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "validation.*"
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 log_cli = true

@@ -20,6 +20,60 @@ def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
     return merged
 
 
+def convert_kern_to_parts(lines: list[str]) -> list[list[EncodedSymbol]]:
+    """Return one token list per spine group for part-by-part NED comparison.
+
+    Two-spine grand-staff scores are reversed so treble comes first, matching
+    how _split_grand_staff orders MusicXML parts (staff 1 = treble first).
+    All other spine counts preserve the original spine order, which music21
+    also preserves in its XML output.
+
+    Handles concatenated multi-document kern (multiple **kern...*- sections, as
+    produced by datasets that store one kern document per staff system) by
+    parsing each document separately and extending the corresponding parts.
+    """
+    docs = _split_kern_documents(lines)
+    if len(docs) == 1:
+        return _parse_kern_document(docs[0])
+
+    all_parts = [_parse_kern_document(doc) for doc in docs]
+    n_parts = max(len(p) for p in all_parts)
+    merged: list[list[EncodedSymbol]] = [[] for _ in range(n_parts)]
+    for doc_parts in all_parts:
+        for i, part in enumerate(doc_parts):
+            merged[i].extend(part)
+    return merged
+
+
+def _split_kern_documents(lines: list[str]) -> list[list[str]]:
+    """Split a (possibly concatenated) kern text into individual documents."""
+    docs: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        current.append(line)
+        stripped = line.strip()
+        if stripped and all(tok.strip() == "*-" for tok in stripped.split("\t")):
+            docs.append(current)
+            current = []
+    if current:
+        docs.append(current)
+    return docs or [lines]
+
+
+def _parse_kern_document(lines: list[str]) -> list[list[EncodedSymbol]]:
+    staffs = _merge_multiple_voices_on_the_same_staff(lines)
+    ordered = list(reversed(staffs)) if len(staffs) == 2 else staffs
+    result = []
+    for staff_no, staff in enumerate(ordered):
+        single = _convert_single_staff(staff_no, staff)
+        part = merge_upper_and_lower_staff([single])
+        part = _remove_redundant_key_changes(part)
+        part = _fix_final_repeat_start(part)
+        part = strip_naturals(part)
+        result.append(part)
+    return result
+
+
 def _merge_multiple_voices_on_the_same_staff(
     lines: list[str],
 ) -> list[list[str]]:
@@ -147,14 +201,32 @@ class HumdrumKernConverter:
         if not suffix:
             return empty, empty
 
-        mapping = {":": "arpeggiate", "[": "slurStart", "]": "slurStop"}
+        slur_mapping = {
+            "[": "slurStart",
+            "]": "slurStop",
+            "(": "slurStart",
+            ")": "slurStop",
+        }
+        articulation_mapping = {
+            ":": "arpeggiate",
+            "'": "staccato",
+            "`": "staccatissimo",
+            "t": "trill",
+            "T": "trill",
+            "m": "mordent",
+            "M": "trill",  # invertedMordent maps to trill in our XML parser
+            "S": "turn",
+            "$": "turn",
+            "^": "accent",
+            ";": "fermata",
+        }
         articulations = []
         slurs = []
         for char in suffix:
-            if char == ":":
-                articulations.append(mapping[char])
-            elif char in {"]", "["}:
-                slurs.append(mapping[char])
+            if char in slur_mapping:
+                slurs.append(slur_mapping[char])
+            elif char in articulation_mapping:
+                articulations.append(articulation_mapping[char])
 
         if slurs and articulations:
             return str.join("_", articulations), str.join("_", slurs)
@@ -169,6 +241,8 @@ class HumdrumKernConverter:
 
     def parse_clef(self, clef: str) -> EncodedSymbol:
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
+        defaults = {"clef_F": "clef_F4", "clef_G": "clef_G2", "clef_C": "clef_C3"}
+        clef_name = defaults.get(clef_name, clef_name)
         return EncodedSymbol(clef_name, empty, empty, empty, empty)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
@@ -188,6 +262,7 @@ class HumdrumKernConverter:
             "*k[f#c#g#d#a#]": 5,
             "*k[f#c#g#d#a#e#]": 6,
             "*k[f#c#g#d#a#e#b#]": 7,
+            "*kcancel": 0,
         }
         circle = mapping[key_signature.split(maxsplit=1)[0]]
         return EncodedSymbol(f"keySignature_{circle}")
@@ -211,17 +286,30 @@ class HumdrumKernConverter:
         count = len(kern_note)
         return f"{letter}{3 + count}" if kern_note[0].islower() else f"{letter}{4 - count}"
 
-    def parse_note_or_rest(self, token: str) -> EncodedSymbol:
-        match = re.match(r"(\d*\.*)([a-grA-GR]+)(--|-|n|##|#)?([^#]*)", token)
+    _DUR_RE = re.compile(r"[()[\]<>&/\\^~yYxXiIjZN]*(\d+\.?)")
+
+    def _extract_dur(self, token: str) -> str | None:
+        """Return the raw duration string from a kern token, or None if absent."""
+        m = self._DUR_RE.match(token)
+        return m.group(1) if m else None
+
+    def parse_note_or_rest(self, token: str, default_dur: str = "4") -> EncodedSymbol:
+        # Prefix: slur/tie/accent/stem/roll/alteration markers before the duration.
+        # Between duration and pitch: grace note q, sforzando ^^, tuplet % ratios, etc.
+        # Non-capturing group for "between" keeps group indices identical to before.
+        match = re.match(
+            r"[()[\]<>&/\\^~yYxXiIjZN]*(\d*\.*)(?:[^a-grA-GR#]*)([a-grA-GR]+)(--|-|n|##|#)?([^#]*)",
+            token,
+        )
         if not match:
             raise Exception(f"Invalid note {token}")
 
         dur, pitch, accidental, suffix = match[1], match[2], match[3], match[4]
         is_rest = pitch == "r"
-        is_grace = "q" in suffix
+        is_grace = "q" in token
         suffix = suffix.replace("q", "")
 
-        rhythm_key = self.parse_duration(dur or "4", is_rest=is_rest, is_grace=is_grace)
+        rhythm_key = self.parse_duration(dur or default_dur, is_rest=is_rest, is_grace=is_grace)
         if is_rest:
             return EncodedSymbol(rhythm_key, empty, empty, empty, empty)
 
@@ -306,9 +394,19 @@ class HumdrumKernConverter:
                     result.append(timeSignature)
                     initial_signature_was_added = True
                 symbols = line.split()
+                chord_dur = "4"
+                first = True
                 for token in symbols:
-                    if token != nonote:
-                        result.append(EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token)))
+                    if token == nonote:
+                        continue
+                    if first:
+                        extracted = self._extract_dur(token)
+                        if extracted:
+                            chord_dur = extracted
+                        first = False
+                    result.append(
+                        EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token, chord_dur))
+                    )
 
         return result
 

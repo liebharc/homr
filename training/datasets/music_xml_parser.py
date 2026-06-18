@@ -294,12 +294,32 @@ class TupletState:
         self.last_stop_position = -1
 
 
+def _measure_rest_rhythm(duration: int, divisions: int) -> str:
+    if divisions <= 0:
+        return "rest_1"
+    quarters = duration / divisions
+    lookup = [
+        (4.0, "rest_1"),
+        (3.0, "rest_2."),
+        (2.0, "rest_2"),
+        (1.5, "rest_4."),
+        (1.0, "rest_4"),
+        (0.75, "rest_8."),
+        (0.5, "rest_8"),
+    ]
+    for q, token in lookup:
+        if abs(quarters - q) < 0.01:
+            return token
+    return "rest_1"
+
+
 class TokensPart:
     def __init__(self) -> None:
         self.current_measure: TokensMeasure | None = None
         self.measures: list[Measure] = []
         self.tuplets = TupletState()
         self.tremolo = False
+        self.divisions: int = 1
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         current_measure = self.current_measure
@@ -386,6 +406,9 @@ def _count_dots(note: ET.Element) -> int:
 
 
 def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
+    divs = _children(attribute, "divisions")
+    if len(divs) > 0:
+        part.divisions = _int_text(divs[0], 1) or 1
     clefs = _children(attribute, "clef")
     if len(clefs) > 0:
         clefs_tokens: list[tuple[EncodedSymbol, int]] = []
@@ -401,10 +424,10 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
             )
         part.append_clefs(clefs_tokens)
     keys = _children(attribute, "key")
+    times = _children(attribute, "time")
     if len(keys) > 0:
         fifths = _text(_child(keys[0], "fifths"), "0")
         part.append_symbol(EncodedSymbol(f"keySignature_{int(fifths)}"))
-    times = _children(attribute, "time")
     if len(times) > 0:
         beat_type = _text(_child(times[0], "beat-type"))
         part.append_symbol(EncodedSymbol(f"timeSignature/{beat_type}"))
@@ -536,12 +559,13 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
     art, slur = _collect_articulation(note, part, staff)
     if len(rest) > 0:
         if rest[0] is not None and rest[0].get("measure", None):
+            rhythm = _measure_rest_rhythm(duration, part.divisions)
             part.append_rest(
                 staff,
                 is_chord,
                 duration,
                 invisible,
-                EncodedSymbol("rest_1", empty, empty, empty, empty),
+                EncodedSymbol(rhythm, empty, empty, empty, empty),
             )
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
