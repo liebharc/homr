@@ -56,3 +56,8 @@ _build/
 /runs
 /training/architecture/transformer/*/
 *.tokens
+/*.db
+/*.db-*
+/*.org
+/*.html
+/temp

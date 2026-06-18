@@ -1,0 +1,137 @@
+"""
+PRAIG/SMB benchmark: measures OMR quality on the SMB dataset.
+
+Data source: PRAIG/SMB (gated HuggingFace dataset - see below for access instructions).
+Tool:        selectable via --tool (default: music21).
+Check:       ned_benchmark.run_benchmark
+
+Before running:
+  1. Request/accept access at https://huggingface.co/datasets/PRAIG/SMB
+  2. Run `huggingface-cli login` with a read-permission token.
+"""
+
+import argparse
+import tempfile
+from collections.abc import Iterator
+from pathlib import Path
+
+from validation.ned_benchmark import run_benchmark, update_ned_scores
+from validation.tools import TOOLS
+
+
+def iter_smb(split: str, image_dir: Path | None = None) -> Iterator[tuple[str, str, Path | None]]:
+    """Yield (sample_id, kern_text, image_path) for each page in PRAIG/SMB.
+
+    Passes the full page image to allow proper end-to-end OMR evaluation.
+    Ground truth priority: page.kern > top-level kern > concatenated region kern.
+    image_path is only set when image_dir is provided and the page has an image.
+    """
+    from datasets import load_dataset  # type: ignore  # noqa: PLC0415
+
+    ds = load_dataset("PRAIG/SMB")
+    for i, sample in enumerate(ds[split]):
+        kern = ""
+        page = sample.get("page", {})
+        if isinstance(page, dict):
+            kern = page.get("kern") or ""
+        if not kern:
+            kern = sample.get("kern") or ""
+        if not kern:
+            parts = [r.get("kern", "") for r in sample.get("regions", []) if r.get("kern")]
+            kern = "\n".join(parts)
+        if not kern:
+            continue
+
+        image_path: Path | None = None
+        if image_dir is not None:
+            img = sample.get("image")
+            if img is not None and hasattr(img, "save"):
+                candidate = image_dir / f"{i}.png"
+                img.save(candidate)
+                image_path = candidate
+
+        yield str(i), kern, image_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="OMR-NED benchmark for PRAIG/SMB.")
+    parser.add_argument("--split", type=str, default="test", help="Dataset split (default: test).")
+    parser.add_argument("--limit", type=int, default=None, help="Only process N samples.")
+    parser.add_argument("--verbose", action="store_true", help="Print traceback on failure.")
+    parser.add_argument("--output", type=str, default=None, help="Path to SQLite output file.")
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Recompute NED from stored kern/output data without re-running the tool.",
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_run",
+        action="store_true",
+        help="Skip samples already present in --output and append new results.",
+    )
+    parser.add_argument(
+        "--tool",
+        choices=list(TOOLS),
+        default="music21",
+        help="OMR tool to benchmark (default: music21).",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Samples per batch for tools that support batch_run (default: 10).",
+    )
+    parser.add_argument(
+        "--kern-parser",
+        choices=["native", "music21"],
+        default="native",
+        dest="kern_parser",
+        help=(
+            "Parser for the kern ground-truth side of NED comparison. "
+            "'native' (default) = built-in humdrum parser; 'music21' = music21-based parser."
+        ),
+    )
+    parser.add_argument(
+        "--xml-parser",
+        choices=["native", "music21", "musicdiff", "musicdiff_detailed"],
+        default="native",
+        dest="xml_parser",
+        help=(
+            "Parser/method for the NED comparison. "
+            "'native' (default) = built-in token pipeline; "
+            "'music21' = music21-based token pipeline; "
+            "'musicdiff' = musicdiff holistic OMR-NED (component NEDs not available)."
+            "'musicdiff_detailed' = musicdiff holistic OMR-NED."
+        ),
+    )
+    args = parser.parse_args()
+    output_db = args.output or f"smb_{args.tool}.db"
+
+    if args.update:
+        update_ned_scores(
+            output_db,
+            verbose=args.verbose,
+            kern_parser=args.kern_parser,
+            xml_parser=args.xml_parser,
+            limit=args.limit,
+        )
+        return
+
+    tool = TOOLS[args.tool]
+    with tempfile.TemporaryDirectory() as image_dir:
+        run_benchmark(
+            iter_smb(args.split, image_dir=Path(image_dir)),
+            tool,
+            limit=args.limit,
+            verbose=args.verbose,
+            output_db=output_db,
+            continue_run=args.continue_run,
+            batch_size=args.batch_size,
+            kern_parser=args.kern_parser,
+            xml_parser=args.xml_parser,
+        )
+
+
+if __name__ == "__main__":
+    main()
