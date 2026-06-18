@@ -470,25 +470,8 @@ def convert_xml_and_svg_file(
                 number_of_voices -= 1
 
         result: list[str] = []
-        if len(pages) != len(svg_files):
-            total_svg_measures = sum(svg.number_of_measures for svg in svg_files) / number_of_voices
-            total_xml_measures = sum(page.number_of_measures for page in pages)
-            if total_xml_measures == total_svg_measures:
-                # This happens if the layout required extra pages
-                pages = [
-                    MusicXmlPage([], svg.number_of_measures // number_of_voices)
-                    for svg in svg_files
-                ]
-            else:
-                eprint(
-                    file,
-                    "INFO: Number of pages in SVG files",
-                    len(svg_files),
-                    "does not match number of pages in XML",
-                    len(pages),
-                )
+        assert len(pages) == len(svg_files)  # noqa: S101
 
-                return []
         for i, page in enumerate(pages):
             svg_file = svg_files[i]
             number_of_measures_per_voice_svg = svg_file.number_of_measures / number_of_voices
