@@ -44,6 +44,21 @@ class SvgRectangle:
         return self.__str__()
 
 
+class BarLine(SvgRectangle):
+    # MuseScore draws a forward-repeat (heavy-light) with a thick polyline
+    # (stroke-width ~7.8) while ordinary barlines are thin (~2.5).
+    # So we use a threshold of 4.0
+    HEAVY_THRESHOLD = 4.0
+
+    def __init__(self, x: int, y: int, width: int, height: int, stroke_width: str) -> None:
+        super().__init__(x, y, width, height)
+        self.is_heavy = float(stroke_width) > self.HEAVY_THRESHOLD
+
+    @classmethod
+    def from_rectangle(cls, rect: SvgRectangle, stroke_width: str) -> "BarLine":
+        return cls(rect.x, rect.y, rect.width, rect.height, stroke_width)
+
+
 class SvgStaff(SvgRectangle):
     def __init__(self, x: int, y: int, width: int, height: int):
         super().__init__(x, y, width, height)
@@ -54,7 +69,13 @@ class SvgStaff(SvgRectangle):
         self.bar_line_x_positions.add(self.x + self.width)
         self.min_measure_width = 50
 
-    def add_bar_line(self, bar_line: SvgRectangle) -> None:
+    def add_bar_line(self, bar_line: BarLine, is_first: bool) -> None:
+        # a heavy barline (forward-repeat) sitting in the leading clef/key/time
+        # header should not be counted. see Lieder-main/flat/lc4985931-1.svg
+        header_region_ratio = 0.15
+        header_limit = self.x + self.width * header_region_ratio
+        if is_first and bar_line.is_heavy and bar_line.x < header_limit:
+            return
         already_present = any(
             abs(bar_line.x - x) < self.min_measure_width for x in self.bar_line_x_positions
         )
@@ -157,7 +178,11 @@ def get_position_from_multiple_svg_files(musicxml_file: str) -> list[SvgMusicFil
     sorted_by_id = sorted(svgs, key=lambda x: int(x.split("-")[-1].split(".")[0]))
     result: list[SvgMusicFile] = []
     for svg in sorted_by_id:
-        result.append(get_position_information_from_svg(svg))
+        music_file = get_position_information_from_svg(svg)
+        # Sometimes MuseScore renders music-less svg pages
+        # for example, Lieder-main/flat/lc6611874-4.svg has only trailing text/lyrics
+        if music_file.number_of_measures != 0:
+            result.append(music_file)
     return result
 
 
@@ -174,7 +199,7 @@ def _parse_paths(points: str) -> SvgRectangle:
 
 
 def _combine_staff_lines_and_bar_lines(
-    staff_lines: list[SvgRectangle], bar_lines: list[SvgRectangle]
+    staff_lines: list[SvgRectangle], bar_lines: list[BarLine]
 ) -> list[SvgStaff]:
     if len(staff_lines) % constants.number_of_lines_on_a_staff != 0:
         eprint("Warning: Staff lines are not a multiple of 5, but is ", len(staff_lines))
@@ -194,10 +219,14 @@ def _combine_staff_lines_and_bar_lines(
         merged_groups.append(merged_group)
     staffs = [SvgStaff(staff.x, staff.y, staff.width, staff.height) for staff in merged_groups]
 
-    for bar_line in bar_lines:
+    staff_processed: set[SvgStaff] = set()
+    # Process barlines from left to right
+    for bar_line in sorted(bar_lines, key=lambda b: b.x):
         for staff in staffs:
             if staff.intersects(bar_line):
-                staff.add_bar_line(bar_line)
+                is_first = staff not in staff_processed
+                staff_processed.add(staff)
+                staff.add_bar_line(bar_line, is_first=is_first)
 
     return staffs
 
@@ -265,14 +294,19 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
         height = float(viewbox[3])
         lines = doc.getElementsByTagName("polyline")
         staff_lines: list[SvgRectangle] = []
-        bar_lines: list[SvgRectangle] = []
+        bar_lines: list[BarLine] = []
         stems: list[SvgRectangle] = []
         for line in lines:
             class_name = line.getAttribute("class")
             if class_name == "StaffLines":
                 staff_lines.append(_parse_paths(line.getAttribute("points")))
             if class_name == "BarLine":
-                bar_lines.append(_parse_paths(line.getAttribute("points")))
+                bar_lines.append(
+                    BarLine.from_rectangle(
+                        _parse_paths(line.getAttribute("points")),
+                        line.getAttribute("stroke-width"),
+                    )
+                )
             if class_name == "Stem":
                 stems.append(_parse_paths(line.getAttribute("points")))
 
