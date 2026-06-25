@@ -23,8 +23,8 @@ import editdistance
 
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
-from training.datasets.humdrum_kern_parser import convert_kern_to_parts
-from training.datasets.music_xml_parser import music_xml_file_to_tokens
+from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
+from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
 
 
 @dataclass
@@ -171,7 +171,7 @@ def _split_grand_staff(xml_text: str) -> str:
 def _kern_parts(kern_text: str, kern_parser: str) -> list[list[EncodedSymbol]]:
     """Return per-part token lists using the selected kern parser."""
     if kern_parser == "music21":
-        from training.datasets.music21_kern_parser import (  # noqa: PLC0415
+        from training.omr_datasets.music21_kern_parser import (  # noqa: PLC0415
             convert_kern_to_parts_music21,
         )
 
@@ -182,7 +182,7 @@ def _kern_parts(kern_text: str, kern_parser: str) -> list[list[EncodedSymbol]]:
 def _xml_parts_from_text(xml_text: str, xml_parser: str) -> list[list[EncodedSymbol]]:
     """Return flat per-part token lists using the selected XML parser."""
     if xml_parser == "music21":
-        from training.datasets.music21_xml_parser import (  # noqa: PLC0415
+        from training.omr_datasets.music21_xml_parser import (  # noqa: PLC0415
             convert_xml_to_parts_music21,
         )
 

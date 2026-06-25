@@ -2,7 +2,7 @@
 
 import unittest
 
-from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
+from training.omr_datasets.humdrum_kern_parser import convert_kern_to_tokens
 from training.transformer.training_vocabulary import token_lines_to_str
 
 

@@ -1,7 +1,7 @@
 import difflib
 
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
-from training.datasets.music_xml_parser import music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
 from training.transformer.training_vocabulary import read_tokens, token_lines_to_str
 
 

@@ -8,7 +8,7 @@ from homr.transformer.vocabulary import (
     empty,
     has_rhythm_symbol_a_position,
 )
-from training.datasets.staff_merging import (
+from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
     merge_upper_and_lower_staff,
 )

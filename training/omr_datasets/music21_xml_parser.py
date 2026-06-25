@@ -11,7 +11,7 @@ import music21 as m21
 import music21.stream
 
 from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
-from training.datasets.music21_kern_parser import (
+from training.omr_datasets.music21_kern_parser import (
     _convert_m21_part,
     _convert_m21_staff_group,
     _fix_final_repeat_start,

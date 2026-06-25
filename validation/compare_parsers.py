@@ -93,7 +93,7 @@ def _iter_lieder(limit: int | None) -> Iterator[tuple[str, str]]:
     if not lieder_dir.exists():
         raise FileNotFoundError(
             f"Lieder dataset not found at {lieder_dir}. "
-            "Run python -m training.datasets.convert_lieder first."
+            "Run python -m training.omr_datasets.convert_lieder first."
         )
     files = sorted(lieder_dir.glob("*.musicxml"))
     for i, path in enumerate(files):

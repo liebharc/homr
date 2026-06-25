@@ -19,12 +19,12 @@ from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import EncodedSymbol, empty
-from training.datasets.musescore_svg import (
+from training.omr_datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
     get_position_from_multiple_svg_files,
 )
-from training.datasets.music_xml_parser import Measure, music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import Measure, music_xml_file_to_tokens
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,

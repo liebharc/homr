@@ -4,9 +4,9 @@ import os
 import sys
 import zipfile
 
-from training.datasets.convert_grandstaff import grandstaff_train_index
-from training.datasets.convert_lieder import lieder_train_index
-from training.datasets.convert_primus import primus_train_index
+from training.omr_datasets.convert_grandstaff import grandstaff_train_index
+from training.omr_datasets.convert_lieder import lieder_train_index
+from training.omr_datasets.convert_primus import primus_train_index
 
 # Setup paths
 script_location = os.path.dirname(os.path.realpath(__file__))

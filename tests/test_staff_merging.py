@@ -1,7 +1,7 @@
 import unittest
 
 from homr.transformer.vocabulary import EncodedSymbol, empty
-from training.datasets.staff_merging import create_chord_over_two_staffs
+from training.omr_datasets.staff_merging import create_chord_over_two_staffs
 
 
 class TestStaffMerging(unittest.TestCase):

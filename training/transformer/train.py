@@ -16,12 +16,15 @@ from transformers import (
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from training.architecture.transformer.tromr_arch import TrOMR, load_model
-from training.datasets.convert_grandstaff import (
+from training.omr_datasets.convert_grandstaff import (
     convert_grandstaff,
     grandstaff_train_index,
 )
-from training.datasets.convert_lieder import convert_lieder, lieder_train_index
-from training.datasets.convert_primus import convert_primus_dataset, primus_train_index
+from training.omr_datasets.convert_lieder import convert_lieder, lieder_train_index
+from training.omr_datasets.convert_primus import (
+    convert_primus_dataset,
+    primus_train_index,
+)
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.distribute import Distribute

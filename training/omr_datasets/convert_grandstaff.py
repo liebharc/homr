@@ -8,8 +8,8 @@ import numpy as np
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
-from training.datasets.humdrum_kern_parser import convert_kern_to_tokens
-from training.datasets.musescore_svg import SvgValidationError
+from training.omr_datasets.humdrum_kern_parser import convert_kern_to_tokens
+from training.omr_datasets.musescore_svg import SvgValidationError
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,

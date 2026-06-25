@@ -4,7 +4,7 @@ import re
 import unittest
 from typing import Any
 
-from training.datasets.music_xml_parser import music_xml_string_to_tokens
+from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import (
     token_lines_to_str,
 )

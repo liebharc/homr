@@ -2,7 +2,7 @@ import re
 
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
-from training.datasets.staff_merging import (
+from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
     merge_upper_and_lower_staff,
 )
