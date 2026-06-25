@@ -124,7 +124,9 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
 
     # sq8940236: MuseScore seems to hang up
     # lc5001945: nested tuplet, not good for training
-    files_with_known_issues = ["sq8940236", "lc5001945"]
+    # lc6209608, lc6236149: empty&invisible staff in the very first system
+    # lc6162644: irregular staff in the last svg page
+    files_with_known_issues = ["sq8940236", "lc5001945", "lc6162644", "lc6209608", "lc6236149"]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
     for target_format in formats:
@@ -192,6 +194,44 @@ def _make_tuplet_visible(mscx_file: str) -> None:
             f.write(new_content)
 
 
+def _make_staff_visible(mscx_file: str) -> None:
+    """
+    When rendering SVG, MuseScore can hide empty staff.
+    This will cause problem in SvgMusicFile.merge_voice_with_next_one(), because the merge procedure
+    assumes that all staffs are visible and deals with the staff one by one.
+
+    To avoid hiding empty staff, we need to change the following 3 settings:
+      * the global setting: <hideEmptyStaves>1</hideEmptyStaves>
+      * the per-staff setting: <hideWhenEmpty>1</hideWhenEmpty>
+      * <cutaway>1</cutaway>: this hides part of the staff, e.g. some empty measures.
+
+    Note: unfortunatelly, this does not cover every case.
+    lc6236149, lc6209608 still fails, so we just skip them.
+    """
+    with open(mscx_file, encoding="utf-8") as f:
+        content = f.read()
+
+    new_content = re.sub(
+        r"<hideEmptyStaves>1</hideEmptyStaves>",
+        "<hideEmptyStaves>0</hideEmptyStaves>",
+        content,
+    )
+    new_content = re.sub(
+        r"<hideWhenEmpty>1</hideWhenEmpty>",
+        "<hideWhenEmpty>0</hideWhenEmpty>",
+        new_content,
+    )
+    new_content = re.sub(
+        r"<cutaway>1</cutaway>",
+        "<cutaway>0</cutaway>",
+        new_content,
+    )
+
+    if new_content != content:
+        with open(mscx_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+
 def _create_musicxml_and_svg_files() -> None:
     dest = os.path.join(lieder, "flat")
     os.makedirs(dest, exist_ok=True)
@@ -205,6 +245,7 @@ def _create_musicxml_and_svg_files() -> None:
 
     for file in mscx_files:
         _make_tuplet_visible(str(file))
+        _make_staff_visible(str(file))
         jobs = create_formats(str(file), ["musicxml", "svg"])
         all_jobs.extend(jobs)
 
