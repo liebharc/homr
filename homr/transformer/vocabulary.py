@@ -360,6 +360,8 @@ class EncodedSymbol:
     def strip_articulations(
         self, to_be_removed: list[str], remove_all: bool = False
     ) -> tuple[list[str], "EncodedSymbol"]:
+        if self.articulation == nonote and not has_rhythm_symbol_a_position(self.rhythm):
+            return [], copy.copy(self)
         stripped = []
         remaining = []
         for articulation in self.articulation.split("_"):
@@ -380,6 +382,8 @@ class EncodedSymbol:
     def strip_slurs(
         self, to_be_removed: list[str], remove_all: bool = False
     ) -> tuple[list[str], "EncodedSymbol"]:
+        if self.slur == nonote and not has_rhythm_symbol_a_position(self.rhythm):
+            return [], copy.copy(self)
         stripped = []
         remaining = []
         for slur in self.slur.split("_"):
