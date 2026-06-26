@@ -320,56 +320,82 @@ class TokensPart:
         self.tuplets = TupletState()
         self.tremolo = False
         self.divisions: int = 1
+        # Clefs queued by an after-barline declaration in the previous measure,
+        # not yet eligible to be flushed into the current one.
+        self.queued_clefs: dict[int, EncodedSymbol] = {}
+        # Queued clefs that became active once the measure they target started;
+        # still cancellable by an explicit clef in that same measure.
+        self.pending_clefs: dict[int, EncodedSymbol] = {}
+
+    def _ensure_current_measure(self) -> TokensMeasure:
+        """
+        MusicXML may split a measure's attributes across several <attributes>
+        elements, e.g. one with only divisions/time followed by one with the
+        clef. So the clef isn't guaranteed to be the very first symbol.
+        """
+        if self.current_measure is None:
+            self.current_measure = TokensMeasure()
+        return self.current_measure
+
+    def _flush_pending_clefs(self) -> None:
+        if not self.pending_clefs:
+            return
+        current_measure = self._ensure_current_measure()
+        for staff, symbol in self.pending_clefs.items():
+            current_measure.append_symbol_to_staff(staff, symbol)
+        self.pending_clefs = {}
 
     def append_clefs(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
-        current_measure = self.current_measure
-        if current_measure is not None:
-            for staff, clef in enumerate(clefs):
-                if clef[1] >= 0:
-                    current_measure.append_symbol_to_staff(clef[1], clef[0])
-                else:
-                    current_measure.append_symbol_to_staff(staff, clef[0])
-        else:
-            measure = TokensMeasure()
-            for staff, clef in enumerate(clefs):
-                measure.append_symbol_to_staff(staff, clef[0])
-            self.current_measure = measure
+        resolved = [
+            (clef[1] if clef[1] >= 0 else index, clef[0]) for index, clef in enumerate(clefs)
+        ]
+        # An explicit clef for a staff in this measure overrides any clef
+        # that was queued for it via after-barline in the previous measure.
+        for staff, _ in resolved:
+            self.pending_clefs.pop(staff, None)
+        self._flush_pending_clefs()
+        current_measure = self._ensure_current_measure()
+        for staff, symbol in resolved:
+            current_measure.append_symbol_to_staff(staff, symbol)
+
+    def queue_clefs_for_next_measure(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
+        """
+        A <clef after-barline="yes"> is printed at the end of the current
+        measure but only takes effect at the start of the next one.
+        """
+        for index, clef in enumerate(clefs):
+            staff = clef[1] if clef[1] >= 0 else index
+            self.queued_clefs[staff] = clef[0]
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.append_symbol(symbol)
+        self._flush_pending_clefs()
+        self._ensure_current_measure().append_symbol(symbol)
 
     def mark_new_page(self) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.mark_new_page()
+        self._flush_pending_clefs()
+        self._ensure_current_measure().mark_new_page()
 
     def append_rest(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.append_rest(staff, is_chord, duration, invisible, symbol)
+        self._flush_pending_clefs()
+        self._ensure_current_measure().append_rest(staff, is_chord, duration, invisible, symbol)
 
     def append_note(
         self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
     ) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.append_note(staff, is_chord, duration, invisible, symbol)
+        self._flush_pending_clefs()
+        self._ensure_current_measure().append_note(staff, is_chord, duration, invisible, symbol)
 
     def append_position_change(self, duration: int) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-        self.current_measure.append_position_change(duration)
+        self._flush_pending_clefs()
+        self._ensure_current_measure().append_position_change(duration)
 
     def on_end_of_measure(self) -> None:
-        if self.current_measure is None:
-            raise ValueError("Expected to get clefs as first symbol")
-
-        self.measures.append(self.current_measure.complete_measure())
+        self.measures.append(self._ensure_current_measure().complete_measure())
         self.current_measure = TokensMeasure()
+        self.pending_clefs.update(self.queued_clefs)
+        self.queued_clefs = {}
         self.tuplets.on_end_of_measure()
 
     def get_measures(self) -> list[Measure]:
@@ -412,6 +438,7 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
     clefs = _children(attribute, "clef")
     if len(clefs) > 0:
         clefs_tokens: list[tuple[EncodedSymbol, int]] = []
+        deferred_clefs_tokens: list[tuple[EncodedSymbol, int]] = []
         for clef in clefs:
             sign = _text(_child(clef, "sign"))
             line = _text(_child(clef, "line"))
@@ -419,10 +446,15 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
             if has_octave_change:
                 raise ValueError("Octave change isn't supported")
             clef_number = int(clef.get("number", "1")) - 1
-            clefs_tokens.append(
-                (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
-            )
-        part.append_clefs(clefs_tokens)
+            token = (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
+            if clef.get("after-barline") == "yes":
+                deferred_clefs_tokens.append(token)
+            else:
+                clefs_tokens.append(token)
+        if clefs_tokens:
+            part.append_clefs(clefs_tokens)
+        if deferred_clefs_tokens:
+            part.queue_clefs_for_next_measure(deferred_clefs_tokens)
     keys = _children(attribute, "key")
     times = _children(attribute, "time")
     if len(keys) > 0:
