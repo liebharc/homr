@@ -77,6 +77,16 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 407 - at epoch 6
+
+Commit: fabab4b0f8480be20d13686edf5f91d913ab00fd
+Day: 26 June 2026
+Transformer Smoke Test: 17%
+System Level: 9.3 diffs, SER: 7.4%
+Polish scores with musicdiff: OMR-NED 46.4%
+
+Quick training run after updates to the dataset conversions. Results look okay for only 6 epochs.
+
 ## Run 396
 
 Commit: f6feedb42ff90087d898b0941a55d040fa6b2903
