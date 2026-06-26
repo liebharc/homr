@@ -35,8 +35,10 @@ pyclean = "^3.5.0"
 coverage = "^7.13.4"
 augly = "^1.0.0"
 editdistance = "^0.8.1"
+augraphy = "^8.2.6"
 transformers = {extras = ["torch"], version = "^4.53.2"}
 cairosvg = "^2.8.2"
+verovio = "^6.2.1"
 types-requests = "^2.32.4.20260107"
 segmentation-models-pytorch = "^0.5.0"
 pytorch-lightning = "^2.6.1"
@@ -49,6 +51,7 @@ albumentations = "^2.0.8"
 tensorboard = "^2.20.0"
 onnxscript = "^0.6.2"
 music21 = "^10.3.0"
+pyvips = "^3.1.1"
 musicdiff = "^5.2"
 datasets = "^5.0.0"
 
@@ -105,7 +108,9 @@ ignore = [
     "PLR0912",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
     "PLR0915",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
     "C901",  # the parsing & conversion logic tends to create large functions , if someone has an idea then open a PR please!
-    "PLR2004"  # 
+    "PLR2004",  #
+    "PLR0911",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
+
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]

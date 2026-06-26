@@ -21,6 +21,11 @@ from training.omr_datasets.convert_grandstaff import (
     grandstaff_train_index,
 )
 from training.omr_datasets.convert_lieder import convert_lieder, lieder_train_index
+from training.omr_datasets.convert_musetrainer import (
+    convert_musetrainer,
+    musetrainer_train_index,
+)
+from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
 from training.omr_datasets.convert_primus import (
     convert_primus_dataset,
     primus_train_index,
@@ -112,6 +117,12 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == lieder_train_index and not os.path.exists(lieder_train_index):
             convert_lieder()
+
+        if dataset == musetrainer_train_index and not os.path.exists(musetrainer_train_index):
+            convert_musetrainer()
+
+        if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
+            convert_pdmx()
     return selected_datasets
 
 
@@ -135,24 +146,17 @@ def train_transformer(
             shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
     dataset_index = [lieder_train_index, grandstaff_train_index, primus_train_index]
+    dataset_weights = [1.0, 1.0, 1.0]
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index)
     distribute.barrier()
 
-    if smoke_test:
-        number_of_files = -1
-        train_index = load_and_mix_training_sets(
-            dataset_index,
-            [1.0, 1.0, 1.0],
-            number_of_files,
-        )
-    else:
-        number_of_files = -1
-        train_index = load_and_mix_training_sets(
-            dataset_index,
-            [1.0, 1.0, 1.0],
-            number_of_files,
-        )
+    number_of_files = -1
+    train_index = load_and_mix_training_sets(
+        dataset_index,
+        dataset_weights,
+        number_of_files,
+    )
 
     config = Config()
     datasets = load_dataset(train_index, config, val_split=0.1)

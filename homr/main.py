@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+import xml.etree.ElementTree as ET
 from concurrent.futures import Future
 from dataclasses import dataclass
 from enum import Enum
@@ -209,7 +210,7 @@ def process_image(
 
         eprint("Writing XML", result_staffs)
         xml = generate_xml(xml_generator_args, result_staffs, title)
-        xml.write(xml_file)
+        ET.ElementTree(xml).write(xml_file, encoding="unicode", xml_declaration=True)
 
         eprint("Finished parsing " + str(len(result_staffs)) + " staves")
         teaser_file = replace_extension(image_path, "_teaser.png")
