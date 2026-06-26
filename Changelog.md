@@ -4,9 +4,18 @@ All notable changes to this project will be documented here.
 
 ## [0.7.0]
 
+### Added
+
+- **Improved grandstaff detection**.
+  Thanks to [@weixlu](https://github.com/weixlu)!
+
 ### Changed
 
 - Minimum Python version is now **Python 3.11**
+
+### Fixed
+
+- MusicXML export inconsistencies and compatibility issues. Thanks to [@fablau](https://github.com/fablau)!
 
 ## [0.6.2]
 
@@ -38,6 +47,10 @@ All notable changes to this project will be documented here.
 - **Faster inference and GPU support**.
   Big thanks again to [@aicelen](https://github.com/aicelen) for the contribution!
 - **Support for more symbols**
+
+### Changed
+
+- Grandstaff are now notated as single voice with two clefs in music xml
 
 ## [0.5.0]
 
