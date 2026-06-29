@@ -1,0 +1,215 @@
+{
+  "clean_checkpoint": "distillation/runs/clean_surrogate_a100/best_clean.pt",
+  "device": "cuda",
+  "epsilon_grid": [
+    0.0,
+    0.01,
+    0.02,
+    0.05,
+    0.1
+  ],
+  "pgd_alpha": 0.005,
+  "pgd_checkpoint": "distillation/runs/pgd_surrogate_a100/best_clean.pt",
+  "pgd_steps": 10,
+  "results": [
+    {
+      "clean": {
+        "branch_accuracy": {
+          "articulation": 0.6928910818713451,
+          "lift": 0.5789473684210527,
+          "pitch": 0.3305921052631579,
+          "position": 0.6800986842105263,
+          "rhythm": 0.47870979532163743
+        },
+        "branch_ser": {
+          "articulation": 0.27805190058479534,
+          "lift": 0.39437134502923976,
+          "pitch": 0.6626461988304093,
+          "position": 0.29413377192982454,
+          "rhythm": 0.5091374269005848
+        },
+        "mean_ser": 0.4276681286549708,
+        "overall_accuracy": 0.5522478070175438
+      },
+      "epsilon": 0.0,
+      "pgd": {
+        "branch_accuracy": {
+          "articulation": 0.6825657894736842,
+          "lift": 0.5884502923976608,
+          "pitch": 0.3291301169590643,
+          "position": 0.6701388888888888,
+          "rhythm": 0.4762426900584795
+        },
+        "branch_ser": {
+          "articulation": 0.26114766081871343,
+          "lift": 0.36988304093567254,
+          "pitch": 0.665296052631579,
+          "position": 0.30372807017543857,
+          "rhythm": 0.5052083333333334
+        },
+        "mean_ser": 0.42105263157894735,
+        "overall_accuracy": 0.5493055555555556
+      }
+    },
+    {
+      "clean": {
+        "branch_accuracy": {
+          "articulation": 0.6907894736842105,
+          "lift": 0.5645102339181286,
+          "pitch": 0.3223684210526316,
+          "position": 0.652046783625731,
+          "rhythm": 0.4110014619883041
+        },
+        "branch_ser": {
+          "articulation": 0.28728070175438597,
+          "lift": 0.40305190058479534,
+          "pitch": 0.6701388888888888,
+          "position": 0.3194444444444444,
+          "rhythm": 0.5657894736842105
+        },
+        "mean_ser": 0.44914108187134505,
+        "overall_accuracy": 0.5281432748538012
+      },
+      "epsilon": 0.01,
+      "pgd": {
+        "branch_accuracy": {
+          "articulation": 0.6808296783625731,
+          "lift": 0.5842470760233918,
+          "pitch": 0.3273940058479532,
+          "position": 0.6680372807017544,
+          "rhythm": 0.4727704678362573
+        },
+        "branch_ser": {
+          "articulation": 0.2619700292397661,
+          "lift": 0.37262426900584794,
+          "pitch": 0.6667580409356725,
+          "position": 0.30610380116959063,
+          "rhythm": 0.5096856725146199
+        },
+        "mean_ser": 0.4234283625730994,
+        "overall_accuracy": 0.5466557017543859
+      }
+    },
+    {
+      "clean": {
+        "branch_accuracy": {
+          "articulation": 0.6835709064327485,
+          "lift": 0.5148940058479532,
+          "pitch": 0.30802266081871343,
+          "position": 0.6089181286549707,
+          "rhythm": 0.3362573099415205
+        },
+        "branch_ser": {
+          "articulation": 0.30528143274853803,
+          "lift": 0.4649122807017544,
+          "pitch": 0.6803728070175439,
+          "position": 0.35663377192982454,
+          "rhythm": 0.6421783625730995
+        },
+        "mean_ser": 0.48987573099415205,
+        "overall_accuracy": 0.4903326023391813
+      },
+      "epsilon": 0.02,
+      "pgd": {
+        "branch_accuracy": {
+          "articulation": 0.678453947368421,
+          "lift": 0.5786732456140351,
+          "pitch": 0.32574926900584794,
+          "position": 0.663468567251462,
+          "rhythm": 0.46692251461988304
+        },
+        "branch_ser": {
+          "articulation": 0.2629751461988304,
+          "lift": 0.3771016081871345,
+          "pitch": 0.6682200292397661,
+          "position": 0.3092105263157895,
+          "rhythm": 0.513797514619883
+        },
+        "mean_ser": 0.4262609649122807,
+        "overall_accuracy": 0.5426535087719299
+      }
+    },
+    {
+      "clean": {
+        "branch_accuracy": {
+          "articulation": 0.6565241228070176,
+          "lift": 0.420687134502924,
+          "pitch": 0.26398026315789475,
+          "position": 0.5253106725146199,
+          "rhythm": 0.18795687134502925
+        },
+        "branch_ser": {
+          "articulation": 0.3325109649122807,
+          "lift": 0.5585709064327485,
+          "pitch": 0.7239583333333334,
+          "position": 0.4588815789473684,
+          "rhythm": 0.804093567251462
+        },
+        "mean_ser": 0.5756030701754385,
+        "overall_accuracy": 0.4108918128654971
+      },
+      "epsilon": 0.05,
+      "pgd": {
+        "branch_accuracy": {
+          "articulation": 0.6753472222222222,
+          "lift": 0.5666118421052632,
+          "pitch": 0.3242872807017544,
+          "position": 0.6529605263157895,
+          "rhythm": 0.44334795321637427
+        },
+        "branch_ser": {
+          "articulation": 0.2652595029239766,
+          "lift": 0.3850511695906433,
+          "pitch": 0.6703216374269005,
+          "position": 0.31624634502923976,
+          "rhythm": 0.5337171052631579
+        },
+        "mean_ser": 0.43411915204678364,
+        "overall_accuracy": 0.5325109649122807
+      }
+    },
+    {
+      "clean": {
+        "branch_accuracy": {
+          "articulation": 0.6460160818713451,
+          "lift": 0.42680921052631576,
+          "pitch": 0.24926900584795322,
+          "position": 0.5292397660818714,
+          "rhythm": 0.164656432748538
+        },
+        "branch_ser": {
+          "articulation": 0.3412828947368421,
+          "lift": 0.5521747076023392,
+          "pitch": 0.7342836257309941,
+          "position": 0.4559576023391813,
+          "rhythm": 0.8276681286549707
+        },
+        "mean_ser": 0.5822733918128655,
+        "overall_accuracy": 0.4031980994152047
+      },
+      "epsilon": 0.1,
+      "pgd": {
+        "branch_accuracy": {
+          "articulation": 0.6723318713450293,
+          "lift": 0.5569261695906432,
+          "pitch": 0.3230994152046784,
+          "position": 0.6477521929824561,
+          "rhythm": 0.4215095029239766
+        },
+        "branch_ser": {
+          "articulation": 0.26726973684210525,
+          "lift": 0.390625,
+          "pitch": 0.6715095029239766,
+          "position": 0.32108918128654973,
+          "rhythm": 0.5530884502923976
+        },
+        "mean_ser": 0.44071637426900584,
+        "overall_accuracy": 0.5243238304093567
+      }
+    }
+  ],
+  "schema": "homr_surrogate_pgd_comparison_v1",
+  "staff_loss_weight": 0.1,
+  "val_manifest": "distillation/batches/batch_a100_300/training_manifest.val.encoded.jsonl",
+  "val_rows": 57
+}
