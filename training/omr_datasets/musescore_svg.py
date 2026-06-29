@@ -1,5 +1,8 @@
+# flake8: noqa: S101, B011
+
 import glob
 import math
+import re
 from xml.dom import minidom
 
 from homr import constants
@@ -81,6 +84,9 @@ class SvgStaff(SvgRectangle):
         )
         if not already_present:
             self.bar_line_x_positions.add(bar_line.x)
+
+    def remove_bar_line(self, x: int) -> None:
+        self.bar_line_x_positions.discard(x)
 
     def merge_staff(self, other: "SvgStaff") -> "SvgStaff":
         if self.number_of_measures != other.number_of_measures:
@@ -186,6 +192,27 @@ def get_position_from_multiple_svg_files(musicxml_file: str) -> list[SvgMusicFil
     return result
 
 
+def _parse_note_position(note: minidom.Element) -> tuple[float, float]:
+    # collect note/rest:
+    # Older MuseScore: <path transform="matrix(a,b,c,d,e,f)"/> where (e, f) is the position.
+    # Newer MuseScore: <path class="Note" d="M<x>,<y> ..."/> where d is the position.
+    transform = note.getAttribute("transform")
+    if transform:
+        match = re.search(r"matrix\(([^)]*)\)", transform)
+        assert match, f"Could not parse note transform: {transform}"
+        values = [float(v) for v in match.group(1).split(",")]
+        return values[4], values[5]
+
+    class_name = note.getAttribute("class")
+    if class_name in ("Note", "Rest"):
+        points = note.getAttribute("d")
+        match = re.search(r"[Mm]\s*(-?[\d.]+)[\s,]+(-?[\d.]+)", points)
+        assert match, f"Could not parse note position: {points}"
+        return float(match.group(1)), float(match.group(2))
+
+    assert False, f"Unexpected element for note position: {class_name!r}"
+
+
 def _parse_paths(points: str) -> SvgRectangle:
     [start, end] = points.split()
     [x1, y1] = start.split(",")
@@ -285,6 +312,47 @@ def _extend_staffs_with_stems(staffs: list[SvgStaff], stems: list[SvgRectangle])
             best_staff.extend_y_range(stem.y + stem.height)
 
 
+def _staff_has_content_between(
+    staff: SvgStaff, notes: list[tuple[float, float]], start: float, end: float
+) -> bool:
+    # there're 2 hard-coded tolerances to fit some corner cases.
+    x_tolerance = 5.0
+    y_tolerance = 60.0
+    return any(
+        staff.x <= mx <= staff.x + staff.width
+        and (staff.y - y_tolerance) <= my <= (staff.y + staff.height + y_tolerance)
+        and (start - x_tolerance) <= mx < end
+        for mx, my in notes
+    )
+
+
+def _remove_empty_measures(
+    svg_file: str, staffs: list[SvgStaff], notes: list[tuple[float, float]]
+) -> None:
+    # split `staffs` into several systems.
+    # each system share the same barline x positions
+    systems: dict[tuple[int, ...], list[SvgStaff]] = {}
+    for staff in staffs:
+        key = tuple(sorted(staff.bar_line_x_positions))
+        systems.setdefault(key, []).append(staff)
+
+    for bar_line_x_positions, staffs_in_system in systems.items():
+        for i in range(len(bar_line_x_positions) - 1):
+            start = bar_line_x_positions[i]
+            end = bar_line_x_positions[i + 1]
+            has_content = any(
+                _staff_has_content_between(staff, notes, start, end) for staff in staffs_in_system
+            )
+            if has_content:
+                continue
+            # Typically we drop the barline at the end, but if
+            # this is the last measure, we drop barline at begin.
+            is_trailing = i + 1 == len(bar_line_x_positions) - 1
+            boundary = start if is_trailing else end
+            for staff in staffs_in_system:
+                staff.remove_bar_line(boundary)
+
+
 def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
     doc = minidom.parse(svg_file)  # noqa: S318
     try:
@@ -310,10 +378,18 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
             if class_name == "Stem":
                 stems.append(_parse_paths(line.getAttribute("points")))
 
+        notes: list[tuple[float, float]] = []
+        for path in doc.getElementsByTagName("path"):
+            class_name = path.getAttribute("class")
+            if class_name in ("Note", "Rest"):
+                notes.append(_parse_note_position(path))
+
         combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
 
         # Extend staffs using stem information
         _extend_staffs_with_stems(combined, stems)
+
+        _remove_empty_measures(svg_file, combined, notes)
 
         return SvgMusicFile(svg_file, width, height, combined)
     finally:
