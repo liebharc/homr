@@ -126,7 +126,18 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
     # lc5001945: nested tuplet, not good for training
     # lc6209608, lc6236149: empty&invisible staff in the very first system
     # lc6162644: irregular staff in the last svg page
-    files_with_known_issues = ["sq8940236", "lc5001945", "lc6162644", "lc6209608", "lc6236149"]
+    # lc6420897: page 9, measure 49 and 50 are hard to read
+    # lc6196804: lc6196804-3-4.tokens has a strange `arpeggiate_breathMark`,
+    # which will cause error in training, skip for now
+    files_with_known_issues = [
+        "sq8940236",
+        "lc5001945",
+        "lc6162644",
+        "lc6209608",
+        "lc6236149",
+        "lc6420897",
+        "lc6196804",
+    ]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
     for target_format in formats:
