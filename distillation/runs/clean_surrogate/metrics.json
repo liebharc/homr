@@ -1,0 +1,193 @@
+{
+  "best_loss": 9.079903761545816,
+  "device": "cuda",
+  "epochs": [
+    {
+      "train": {
+        "articulation_loss": 1.8330447607570224,
+        "epoch": 1,
+        "lift_loss": 1.3083231117990282,
+        "loss": 12.511776606241861,
+        "pitch_loss": 3.377969980239868,
+        "position_loss": 1.406047311094072,
+        "rhythm_loss": 4.374296373791164,
+        "rows": 9,
+        "seconds": 2.6734507083892822,
+        "split": "train",
+        "staff_count": 22,
+        "staff_count_loss": 1.780636813905504,
+        "staff_exists_loss": 0.34031858874691856,
+        "token_count": 1398
+      },
+      "val": {
+        "articulation_loss": 1.013730525970459,
+        "epoch": 1,
+        "lift_loss": 1.0908722678820293,
+        "loss": 10.996850649515787,
+        "pitch_loss": 3.3862964312235513,
+        "position_loss": 1.1029690504074097,
+        "rhythm_loss": 4.240192810694377,
+        "rows": 3,
+        "seconds": 0.14783525466918945,
+        "split": "val",
+        "staff_count": 6,
+        "staff_count_loss": 1.444690426190694,
+        "staff_exists_loss": 0.183203915754954,
+        "token_count": 412
+      }
+    },
+    {
+      "train": {
+        "articulation_loss": 0.8518385291099548,
+        "epoch": 2,
+        "lift_loss": 0.9678130282296075,
+        "loss": 8.518699169158936,
+        "pitch_loss": 2.6872334480285645,
+        "position_loss": 1.1832553148269653,
+        "rhythm_loss": 2.6878676811854043,
+        "rows": 9,
+        "seconds": 0.6566686630249023,
+        "split": "train",
+        "staff_count": 22,
+        "staff_count_loss": 1.3744278616375394,
+        "staff_exists_loss": 0.03248326014727354,
+        "token_count": 1398
+      },
+      "val": {
+        "articulation_loss": 0.9587734142939249,
+        "epoch": 2,
+        "lift_loss": 0.9716192086537679,
+        "loss": 9.98757553100586,
+        "pitch_loss": 3.0243011315663657,
+        "position_loss": 1.061411698659261,
+        "rhythm_loss": 3.8298254013061523,
+        "rows": 3,
+        "seconds": 0.1217961311340332,
+        "split": "val",
+        "staff_count": 6,
+        "staff_count_loss": 1.4062787691752117,
+        "staff_exists_loss": 0.010173704475164413,
+        "token_count": 412
+      }
+    },
+    {
+      "train": {
+        "articulation_loss": 0.7744370500246683,
+        "epoch": 3,
+        "lift_loss": 0.9395389888021681,
+        "loss": 7.818033589257134,
+        "pitch_loss": 2.524661315812005,
+        "position_loss": 1.0799647039837308,
+        "rhythm_loss": 2.374486459626092,
+        "rows": 9,
+        "seconds": 0.659127950668335,
+        "split": "train",
+        "staff_count": 22,
+        "staff_count_loss": 1.2405391931533813,
+        "staff_exists_loss": 0.008911904516733356,
+        "token_count": 1398
+      },
+      "val": {
+        "articulation_loss": 0.8474191625912985,
+        "epoch": 3,
+        "lift_loss": 0.9715272386868795,
+        "loss": 9.53414519627889,
+        "pitch_loss": 2.9930315017700195,
+        "position_loss": 0.9413031339645386,
+        "rhythm_loss": 3.656226396560669,
+        "rows": 3,
+        "seconds": 0.13025569915771484,
+        "split": "val",
+        "staff_count": 6,
+        "staff_count_loss": 1.2386493682861328,
+        "staff_exists_loss": 0.007733880231777827,
+        "token_count": 412
+      }
+    },
+    {
+      "train": {
+        "articulation_loss": 0.7722292674912347,
+        "epoch": 4,
+        "lift_loss": 0.9142180151409574,
+        "loss": 7.896609041425917,
+        "pitch_loss": 2.4193671809302435,
+        "position_loss": 1.305767125553555,
+        "rhythm_loss": 2.369629555278354,
+        "rows": 9,
+        "seconds": 0.6553986072540283,
+        "split": "train",
+        "staff_count": 22,
+        "staff_count_loss": 1.1430037683910794,
+        "staff_exists_loss": 0.010974536649882793,
+        "token_count": 1398
+      },
+      "val": {
+        "articulation_loss": 0.8114639321962992,
+        "epoch": 4,
+        "lift_loss": 0.9335731267929077,
+        "loss": 9.08977460861206,
+        "pitch_loss": 2.988509019215902,
+        "position_loss": 1.0739165544509888,
+        "rhythm_loss": 3.1690253416697183,
+        "rows": 3,
+        "seconds": 0.12384653091430664,
+        "split": "val",
+        "staff_count": 6,
+        "staff_count_loss": 1.1232380072275798,
+        "staff_exists_loss": 0.00962674462546905,
+        "token_count": 412
+      }
+    },
+    {
+      "train": {
+        "articulation_loss": 0.7141869531737434,
+        "epoch": 5,
+        "lift_loss": 0.8678750660684373,
+        "loss": 7.067311551835802,
+        "pitch_loss": 2.3050087690353394,
+        "position_loss": 1.0422626270188227,
+        "rhythm_loss": 2.032809336980184,
+        "rows": 9,
+        "seconds": 0.672013521194458,
+        "split": "train",
+        "staff_count": 22,
+        "staff_count_loss": 1.0420463416311476,
+        "staff_exists_loss": 0.009639712671438852,
+        "token_count": 1398
+      },
+      "val": {
+        "articulation_loss": 0.8910104036331177,
+        "epoch": 5,
+        "lift_loss": 0.9270454446474711,
+        "loss": 9.079903761545816,
+        "pitch_loss": 2.8858617146809897,
+        "position_loss": 1.0480235815048218,
+        "rhythm_loss": 3.2165291706720986,
+        "rows": 3,
+        "seconds": 0.12396979331970215,
+        "split": "val",
+        "staff_count": 6,
+        "staff_count_loss": 1.1082523067792256,
+        "staff_exists_loss": 0.006082982600977023,
+        "token_count": 412
+      }
+    }
+  ],
+  "epochs_requested": 5,
+  "max_seq_len": 217,
+  "max_staffs": 4,
+  "out_dir": "distillation/runs/clean_surrogate",
+  "schema": "homr_full_page_student_training_metrics_v1",
+  "status": "ok",
+  "train_manifest": "distillation/batches/batch_e2e_small/training_manifest.train.encoded.jsonl",
+  "train_rows": 9,
+  "val_manifest": "distillation/batches/batch_e2e_small/training_manifest.val.encoded.jsonl",
+  "val_rows": 3,
+  "vocab_sizes": {
+    "articulation": 116,
+    "lift": 6,
+    "pitch": 60,
+    "position": 3,
+    "rhythm": 201
+  }
+}

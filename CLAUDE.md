@@ -25,7 +25,7 @@ When a well-known library already solves the problem correctly - loss functions,
 
 ## Project Overview
 
-This project audits the robustness of HOMR (Hierarchical Optical Music Recognition) against adversarial attacks and natural image degradation. It operates in two tracks and is building a differentiable surrogate model for gradient-based attacks.
+This project audits the robustness of HOMR (Hierarchical Optical Music Recognition) against adversarial attacks and natural image degradation. It runs spectral-noise and black-box square-attack tracks, and builds a differentiable surrogate model that is hardened with PGD adversarial training (defense) and attacked with AutoAttack (evaluation) to study gradient-based robustness and transfer.
 
 Pipeline:
 
@@ -102,6 +102,9 @@ Zero-order black-box attack on cached prepared staff images (output of `prepare_
 
 The staff image cache lives at `dataset/cached_prepared_staffs/<score_id>/` as `staff_NNN.npy` (float32 [0,1], shape [256, 1280]) plus `metadata.json`. Generate via `dataset/cache_prepared_staffs.py` and stop before `parse_staff_tromr()`.
 
+Track C - Surrogate Adversarial Robustness (Defense: PGD, Attack: AutoAttack):
+AutoAttack (the standard APGD-CE / APGD-T / FAB / Square ensemble) is the designated white-box attack against the differentiable full-page surrogate. The defense is PGD adversarial training of that surrogate. The study trains a clean surrogate and a PGD-trained surrogate on identical data, then compares them across an L-inf epsilon grid using branch accuracy and SER. Defense implementation: `distillation/pgd_attack.py` plus `distillation/train_student.py --adv-train`. Attack and comparison: `distillation/evaluate_surrogate.py`. Adversarial examples that defeat the surrogate are intended to be replayed against the HOMR ONNX pipeline to measure transfer.
+
 ### attacks/src/ Modules
 
 | Module | Role |
@@ -126,7 +129,7 @@ CNN/ConvNeXt page encoder
   -> HOMR factorized heads (rhythm/pitch/lift/articulation/position)
 ```
 
-Current status: Phase 0 infrastructure baseline is complete with a temporary smoke model (`FullPageStudent` inline in `distillation/train_student.py`). The real `PageStaffARStudent` still needs to be implemented at `distillation/models/page_staff_ar_student.py`.
+Current status: Phase 0 infrastructure baseline is complete with a temporary smoke model (`FullPageStudent` inline in `distillation/train_student.py`). The real `PageStaffARStudent` still needs to be implemented at `distillation/models/page_staff_ar_student.py`. The `FullPageStudent` encoder ends with `AdaptiveAvgPool2d((4, 4))` and a `page_projection` linear so spatial layout survives into gradient-based attacks.
 
 Distillation pipeline, run in this order:
 
@@ -134,13 +137,23 @@ Distillation pipeline, run in this order:
 distillation/build_source_pool.py
 distillation/select_batch.py
 distillation/render_batch.py
+distillation/flatten_renders.py
 distillation/augment_pages.py
 distillation/run_onnx_teacher_batch.py
 distillation/build_training_manifest.py
 distillation/make_splits.py
 distillation/vocab.py
 distillation/train_student.py
+distillation/evaluate_surrogate.py
 ```
+
+`distillation/flatten_renders.py` composites transparent MuseScore 3 (`mscore3`) PNG renders onto a white background. SegNet expects black-on-white, so this step is required whenever rendering uses MuseScore 3 instead of MuseScore 4.
+
+Defense and attack:
+
+- `distillation/pgd_attack.py` - `pgd_attack()` runs L-inf PGD using `compute_loss` from `train_student`. It clamps to the model input domain `[-1, 1]` (the page loader normalizes to `[-1, 1]`), not `[0, 1]`.
+- `distillation/train_student.py --adv-train` - replaces each training batch with PGD adversarial examples before the forward pass. Flags: `--pgd-epsilon`, `--pgd-steps`, `--pgd-alpha`. Validation stays clean.
+- `distillation/evaluate_surrogate.py` - loads a clean and a PGD-trained checkpoint, sweeps an `--epsilon-grid`, and writes `results/surrogate_comparison/comparison.json` (schema `homr_surrogate_pgd_comparison_v1`). AutoAttack is the designated attack here; a PGD epsilon grid is the current built-in baseline.
 
 Manifest schema: `homr_factorized_page_training_manifest_v1`. Each row has `image_path`, `n_staffs`, and `homr_target_staffs` (list of staffs with `rhythm_ids`, `pitch_ids`, `lift_ids`, `articulation_ids`, `position_ids`, `mask`).
 

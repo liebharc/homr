@@ -1,0 +1,79 @@
+{
+  "attack": "AutoAttack",
+  "attack_target": "staff_count_head",
+  "attacks_to_run": [
+    "apgd-ce"
+  ],
+  "clean_checkpoint": "distillation/runs/clean_surrogate/best_clean.pt",
+  "device": "cuda",
+  "epsilon_grid": [
+    0.0,
+    0.03,
+    0.1
+  ],
+  "input_domain": "unit_interval_0_1",
+  "pgd_checkpoint": "distillation/runs/pgd_surrogate/best_clean.pt",
+  "results": [
+    {
+      "after_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5082524271844661,
+        "clean_token_accuracy": 0.46941747572815534,
+        "robust_count_accuracy": 0.6666666865348816,
+        "robust_mean_ser": 0.5082524271844661,
+        "robust_token_accuracy": 0.46941747572815534
+      },
+      "before_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5111650485436893,
+        "clean_token_accuracy": 0.46747572815533983,
+        "robust_count_accuracy": 0.6666666865348816,
+        "robust_mean_ser": 0.5111650485436893,
+        "robust_token_accuracy": 0.46747572815533983
+      },
+      "epsilon": 0.0
+    },
+    {
+      "after_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5082524271844661,
+        "clean_token_accuracy": 0.46941747572815534,
+        "robust_count_accuracy": 0.3333333432674408,
+        "robust_mean_ser": 0.5082524271844661,
+        "robust_token_accuracy": 0.46941747572815534
+      },
+      "before_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5111650485436893,
+        "clean_token_accuracy": 0.46747572815533983,
+        "robust_count_accuracy": 0.0,
+        "robust_mean_ser": 0.5121359223300971,
+        "robust_token_accuracy": 0.46601941747572817
+      },
+      "epsilon": 0.03
+    },
+    {
+      "after_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5082524271844661,
+        "clean_token_accuracy": 0.46941747572815534,
+        "robust_count_accuracy": 0.0,
+        "robust_mean_ser": 0.512621359223301,
+        "robust_token_accuracy": 0.4645631067961165
+      },
+      "before_defense": {
+        "clean_count_accuracy": 0.6666666865348816,
+        "clean_mean_ser": 0.5111650485436893,
+        "clean_token_accuracy": 0.46747572815533983,
+        "robust_count_accuracy": 0.0,
+        "robust_mean_ser": 0.5184466019417475,
+        "robust_token_accuracy": 0.45922330097087377
+      },
+      "epsilon": 0.1
+    }
+  ],
+  "schema": "homr_surrogate_autoattack_comparison_v1",
+  "val_manifest": "distillation/batches/batch_e2e_small/training_manifest.val.encoded.jsonl",
+  "val_rows": 3,
+  "version": "custom"
+}
