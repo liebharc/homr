@@ -141,6 +141,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.10)
     parser.add_argument("--staff-loss-weight", type=float, default=0.10)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument("--adv-train", action="store_true")
+    parser.add_argument("--pgd-epsilon", type=float, default=0.02)
+    parser.add_argument("--pgd-steps", type=int, default=10)
+    parser.add_argument("--pgd-alpha", type=float, default=0.005)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument(
         "--resume",
@@ -445,8 +449,9 @@ class FullPageStudent(nn.Module):
             nn.Conv2d(128, embed_dim, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(embed_dim),
             nn.GELU(),
-            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.AdaptiveAvgPool2d((4, 4)),
         )
+        self.page_projection = nn.Linear(embed_dim * 16, embed_dim)
         self.page_norm = nn.LayerNorm(embed_dim)
         self.staff_embedding = nn.Embedding(max_staffs, embed_dim)
         self.position_embedding = nn.Embedding(max_seq_len, embed_dim)
@@ -481,6 +486,7 @@ class FullPageStudent(nn.Module):
 
         batch_size = images.shape[0]
         page = self.encoder(images).flatten(1)
+        page = self.page_projection(page)
         page = self.page_norm(page)
 
         staff_ids = torch.arange(max_staffs, device=images.device)
@@ -571,6 +577,10 @@ def run_epoch(
     grad_clip: float,
     progress_every: int,
     quiet: bool,
+    adv_train: bool = False,
+    pgd_epsilon: float = 0.02,
+    pgd_steps: int = 10,
+    pgd_alpha: float = 0.005,
 ) -> EpochMetrics:
     training = optimizer is not None
     model.train(training)
@@ -612,6 +622,22 @@ def run_epoch(
             batch_rows = int(batch["images"].shape[0])
             max_staffs = int(batch["sequence_mask"].shape[1])
             max_seq_len = int(batch["sequence_mask"].shape[2])
+
+            if training and adv_train:
+                from distillation.pgd_attack import pgd_attack
+
+                batch["images"] = pgd_attack(
+                    model,
+                    batch["images"],
+                    batch["targets"],
+                    batch["sequence_mask"],
+                    batch["staff_exists"],
+                    batch["n_staffs"],
+                    epsilon=pgd_epsilon,
+                    steps=pgd_steps,
+                    alpha=pgd_alpha,
+                    staff_loss_weight=staff_loss_weight,
+                )
 
             outputs = model(batch["images"], max_staffs=max_staffs, max_seq_len=max_seq_len)
             loss, loss_parts = compute_loss(outputs, batch, staff_loss_weight=staff_loss_weight)
@@ -886,6 +912,10 @@ def main() -> int:
             grad_clip=args.grad_clip,
             progress_every=args.progress_every,
             quiet=args.quiet,
+            adv_train=args.adv_train,
+            pgd_epsilon=args.pgd_epsilon,
+            pgd_steps=args.pgd_steps,
+            pgd_alpha=args.pgd_alpha,
         )
         append_jsonl(log_path, asdict(train_metrics))
 
