@@ -188,6 +188,11 @@ def process_image(
                 debug, image, staff_position_files, config.selected_staff
             )
             title = ""
+            # parse_staffs() expects a grayscale image (cv2.findContours requires it),
+            # matching what the normal detect_staffs_in_image() path hands it
+            # (predictions.preprocessed). Apply the same CLAHE preprocessing here so the
+            # two code paths feed the symbol-recognition encoder consistent input.
+            image = color_adjust.apply_clahe(image)
         else:
             multi_staffs, image, debug, title_future = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
@@ -204,7 +209,8 @@ def process_image(
             config=transformer_config,
         )
 
-        title = title_future.result(60)
+        if not config.read_staff_positions:
+            title = title_future.result(60)
         eprint("Found title:", title)
 
         eprint("Writing XML", result_staffs)
