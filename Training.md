@@ -22,9 +22,9 @@ Prerequisites:
 
 Download the datasets and convert them to the format required for training:
 
-- `training/datasets/convert_primus.py`
-- `training/datasets/convert_grandstaff.py`
-- `training/datasets/convert_lieder.py`
+- `training/omr_datasets/convert_primus.py`
+- `training/omr_datasets/convert_grandstaff.py`
+- `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
