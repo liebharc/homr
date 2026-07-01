@@ -24,7 +24,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
           cache-dependency-path: |
-            setup.py
+            poetry.lock
 
       - name: Install poetry
         run: |
