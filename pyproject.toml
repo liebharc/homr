@@ -1,63 +1,72 @@
-[tool.poetry]
+[project]
 name = "homr"
-version = "0.1.0"
 description = "End-to-end Optical Music Recognition (OMR) system build on top of vision transformers."
-authors = ["Christian Liebhardt <christian.liebhardt@arcor.de>"]
+authors = [{name = "Christian Liebhardt", email = "christian.liebhardt@arcor.de"}]
 license = "AGPL-3.0"
 readme = "README.md"
 homepage = "https://github.com/liebharc/homr"
 documentation = "https://github.com/liebharc/homr"
+requires-python = "<3.16,>=3.11"
+dependencies = [
+  "numpy >= 2.4.2, < 3",
+  "opencv-python-headless >= 4.13.0.92, < 5",
+  "Pillow >= 12.1.1, < 13",
+  "types-Pillow >= 10.2.0.20240822, < 11",
+  "typing_extensions >= 4.15.0, < 5",
+  "musicxml == 1.4",
+  "rapidocr >= 3.7.0, < 4",
+  "onnxruntime >= 1.24.1, < 2",
+  "requests >= 2.32.5, < 3",
+]
+dynamic = ["version"]
 
-[tool.poetry.dependencies]
-python = "<3.16,>=3.11"
-numpy = "^2.4.2"
-opencv-python-headless = "^4.13.0.92"
-Pillow = "^12.1.1"
-types-Pillow = "^10.2.0.20240822"
-typing_extensions = "^4.15.0"
-musicxml = "1.4"
-rapidocr = "^3.7.0"
-onnxruntime="^1.24.1"
-requests="^2.32.5"
+[project.optional-dependencies]
+gpu = [
+  "onnxruntime-gpu >= 1.24.1, < 2",
+]
 
-[tool.poetry.group.gpu.dependencies]
-onnxruntime-gpu = "^1.24.1"
+[dependency-groups]
+dev = [
+  "pytest >= 9.0.2, < 10",
+  "mypy >= 1.19.1, < 2",
+  "black >= 26.1.0, < 27",
+  "ruff >= 0.15.1, < 0.16",
+  "isort >= 7.0.0, < 8",
+  "pyupgrade >= 3.21.2, < 4",
+  "pre-commit >= 4.5.1, < 5",
+  "pyclean >= 3.5.0, < 4",
+  "coverage >= 7.13.4, < 8",
+  "augly >= 1.0.0, < 2",
+  "editdistance >= 0.8.1, < 0.9",
+  "transformers[torch] >= 4.53.2, < 5",
+  "cairosvg >= 2.8.2, < 3",
+  "types-requests >= 2.32.4.20260107, < 3",
+  "segmentation-models-pytorch >= 0.5.0, < 0.6",
+  "pytorch-lightning >= 2.6.1, < 3",
+  "x-transformers >= 2.16.1, < 3",
+  "torch >= 2.7.1, < 3",
+  "onnx >= 1.20.1, < 2",
+  "onnx-simplifier >= 0.4.36, < 0.5",
+  "onnxconverter-common >= 1.16.0, < 2",
+  "albumentations >= 2.0.8, < 3",
+  "tensorboard >= 2.20.0, < 3",
+  "onnxscript >= 0.6.2, < 0.7",
+  "music21 >= 10.3.0, < 11",
+  "musicdiff >= 5.2, < 6",
+  "datasets >= 5.0.0, < 6",
+]
+docs = [
+  "sphinx == 7.3.7",
+  "furo == 2023.9.10",
+  "myst-parser == 2.0.0",
+  "myst-nb == 1.1.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^9.0.2"
-mypy = "^1.19.1"
-black = "^26.1.0"
-ruff = "^0.15.1"
-isort = "^7.0.0"
-pyupgrade = "^3.21.2"
-pre-commit = "^4.5.1"
-pyclean = "^3.5.0"
-coverage = "^7.13.4"
-augly = "^1.0.0"
-editdistance = "^0.8.1"
-transformers = {extras = ["torch"], version = "^4.53.2"}
-cairosvg = "^2.8.2"
-types-requests = "^2.32.4.20260107"
-segmentation-models-pytorch = "^0.5.0"
-pytorch-lightning = "^2.6.1"
-x-transformers = "^2.16.1"
-torch = "2.7.1"
-onnx="^1.20.1"
-onnx-simplifier="^0.4.36"
-onnxconverter-common="^1.16.0"
-albumentations = "^2.0.8"
-tensorboard = "^2.20.0"
-onnxscript = "^0.6.2"
-music21 = "^10.3.0"
-musicdiff = "^5.2"
-datasets = "^5.0.0"
+[tool.poetry]
+version = "0.0.0"
 
-[tool.poetry.group.docs]
-[tool.poetry.group.docs.dependencies]
-sphinx = "7.3.7"
-furo = "2023.9.10"
-myst-parser = "2.0.0"
-myst-nb = "1.1.0"
+[tool.poetry.requires-plugins]
+poetry-dynamic-versioning = { version = "*", extras = ["plugin"] }
 
 [tool.poetry-dynamic-versioning]
 enable = true
@@ -154,5 +163,5 @@ log_cli = true
 log_cli_level = 10
 testpaths = ["tests"]
 
-[tool.poetry.scripts]
+[project.scripts]
 homr = "homr.main:main"
