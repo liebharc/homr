@@ -268,7 +268,7 @@ def _convert_file_impl(path: Path) -> list[str]:
             cutter.key = key
             cutter.time = time_sym
 
-            tokens = cutter.extract_measures(len(window_measures))
+            tokens = cutter.extract_measures(len(window_measures), always_include_time=True)
 
             if calc_ratio_of_tuplets(tokens) <= 0.2 and contains_only_supported_clefs(tokens):
                 tokens = strip_naturals(tokens)
