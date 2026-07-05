@@ -232,6 +232,37 @@ def _make_staff_visible(mscx_file: str) -> None:
             f.write(new_content)
 
 
+def _reset_note_positions(mscx_file: str) -> None:
+    """
+    A manually-dragged notehead in MuseScore leaves a <pos x=".." y=".."/> override
+    as the first child of its <Note> element, which shifts where it renders without
+    touching its <pitch>. This is rare (~0.015% of notes dataset-wide) but when it
+    happens, the rendered position can silently disagree with the note's own pitch -
+    e.g. in lc4926375 a repeated E5 renders on the D5 line because of a y="0.5" (one
+    diatonic step) override, so the exported image shows a different note than the
+    label says.
+
+    <pos> is also used pervasively elsewhere in this format for unrelated, legitimate
+    purposes - slur/tie curve control points (nested under <Note><Tie><SlurSegment>),
+    augmentation-dot offsets (<Note><NoteDot>), staff text, tempo marks, stems - so
+    this only strips a <pos> that is directly the first thing inside <Note>, never one
+    nested deeper. MuseScore also serializes an empty element as either a self-closing
+    tag or a separate open/close pair depending on context, so both forms are matched.
+    """
+    with open(mscx_file, encoding="utf-8") as f:
+        content = f.read()
+
+    new_content = re.sub(
+        r"(<Note>\s*)<pos\b[^>]*(?:/>|>\s*</pos>)\s*",
+        r"\1",
+        content,
+    )
+
+    if new_content != content:
+        with open(mscx_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+
 def _create_musicxml_and_svg_files() -> None:
     dest = os.path.join(lieder, "flat")
     os.makedirs(dest, exist_ok=True)
@@ -246,6 +277,7 @@ def _create_musicxml_and_svg_files() -> None:
     for file in mscx_files:
         _make_tuplet_visible(str(file))
         _make_staff_visible(str(file))
+        _reset_note_positions(str(file))
         jobs = create_formats(str(file), ["musicxml", "svg"])
         all_jobs.extend(jobs)
 
