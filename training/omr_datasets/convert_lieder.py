@@ -1,5 +1,6 @@
 # ruff: noqa: E402
 
+import hashlib
 import json
 import multiprocessing
 import os
@@ -119,7 +120,9 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
                 shutil.copyfile(source, os.path.join(dest, file))
 
 
-def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]:
+def create_formats(
+    source_file: str, formats: list[str], style_file: str | None = None
+) -> list[dict[str, str]]:
     jobs: list[dict[str, str]] = []
 
     # sq8940236: MuseScore seems to hang up
@@ -141,8 +144,64 @@ def create_formats(source_file: str, formats: list[str]) -> list[dict[str, str]]
             "in": source_file,
             "out": out_name,
         }
+        if style_file is not None:
+            job["style"] = style_file
         jobs.append(job)
     return jobs
+
+
+# Every Lieder page is rendered by MuseScore with its default "Leland" engraving font,
+# so the model only ever sees one glyph vocabulary for noteheads/clefs/accidentals/etc.
+# MuseScore ships several other SMuFL-compliant engraving fonts (selectable in the app
+# under Format > Style > Score > Musical Symbols, backed by a swappable <musicalSymbolFont>
+# style setting); rotating through them per piece costs nothing at render time and gives
+# the model exposure to multiple glyph "handwritings" without needing a different dataset
+# or renderer. This only varies glyph shapes, not MuseScore's own layout/spacing engine -
+# so it doesn't substitute for training on genuinely different renderers (Primus,
+# grandstaff), just cheaply widens the glyph diversity within Lieder itself.
+_MUSIC_FONTS = ["Leland", "Bravura", "Petaluma", "MuseJazz", "Gonville"]
+_music_font_style_dir = os.path.join(dataset_root, "MuseScoreStyles")
+
+
+def _music_font_style_file(font: str) -> str:
+    return os.path.join(_music_font_style_dir, f"{font.replace(' ', '_')}.mss")
+
+
+def _ensure_music_font_style_files() -> None:
+    """
+    Writes one minimal .mss style file per font in _MUSIC_FONTS (skipping ones that
+    already exist), each just pointing MuseScore's musical-symbol and musical-text
+    fonts at a single named font pair - MuseScore fills in every other style default.
+    The "<Font> Text" naming for the paired text font mirrors the font-pair names
+    MuseScore itself uses for its bundled fonts.
+    """
+    os.makedirs(_music_font_style_dir, exist_ok=True)
+    for font in _MUSIC_FONTS:
+        path = _music_font_style_file(font)
+        if os.path.exists(path):
+            continue
+        content = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<museScore version="4.00">\n'
+            "  <Style>\n"
+            f"    <musicalSymbolFont>{font}</musicalSymbolFont>\n"
+            f"    <musicalTextFont>{font} Text</musicalTextFont>\n"
+            "  </Style>\n"
+            "</museScore>\n"
+        )
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+
+def _music_font_for_file(source_file: str) -> str:
+    """
+    Deterministic per-piece font choice (stable across reruns/partial recreates, so a
+    piece doesn't silently re-render with a different font the next time this is run)
+    based on a hash of the piece's own filename, not path or run order.
+    """
+    stem = os.path.basename(source_file).split(".")[0]
+    index = int(hashlib.sha256(stem.encode()).hexdigest(), 16) % len(_MUSIC_FONTS)
+    return _MUSIC_FONTS[index]
 
 
 """
@@ -272,13 +331,16 @@ def _create_musicxml_and_svg_files() -> None:
 
     MuseScore = os.path.join(dataset_root, "MuseScore")
 
+    _ensure_music_font_style_files()
+
     all_jobs = []
 
     for file in mscx_files:
         _make_tuplet_visible(str(file))
         _make_staff_visible(str(file))
         _reset_note_positions(str(file))
-        jobs = create_formats(str(file), ["musicxml", "svg"])
+        style_file = _music_font_style_file(_music_font_for_file(str(file)))
+        jobs = create_formats(str(file), ["musicxml", "svg"], style_file)
         all_jobs.extend(jobs)
 
     if len(all_jobs) == 0:
