@@ -22,9 +22,9 @@ Prerequisites:
 
 Download the datasets and convert them to the format required for training:
 
-- `training/datasets/convert_primus.py`
-- `training/datasets/convert_grandstaff.py`
-- `training/datasets/convert_lieder.py`
+- `training/omr_datasets/convert_primus.py`
+- `training/omr_datasets/convert_grandstaff.py`
+- `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
 
@@ -77,15 +77,14 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
-## Run 410 - at epoch 7
+## Run 414
 
-Commit: 23c9006d8f23b8f178b5c7ee64bb9cb430c4d7bc
-Day: 03 July 2026
-Transformer Smoke Test: 12%
-System Level: 10.6 diffs, SER: 6.4%
-Polish scores with musicdiff: OMR-NED 47.3%
+Commit: 79aec9b6b66de2281972c9d4f9c606f3f84c9cd1
+Day: 7 July 2026
+Transformer Smoke Test: 6%
+System Level: Total: 5.9 diffs, SER: 4.9%
 
-Quick training run after updating data augmentation.
+Clean the Lieder dataset to introduce more training data
 
 ## Run 407 - at epoch 6
 

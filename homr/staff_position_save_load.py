@@ -57,7 +57,8 @@ def load_staff_positions(
             if len(parts) % constants.number_of_lines_on_a_staff != 0:
                 continue  # Ignore invalid lines
 
-            _, norm_centerx, norm_centery, norm_width, norm_height = map(float, parts)
+            staff_class, norm_centerx, norm_centery, norm_width, norm_height = map(float, parts)
+            is_grandstaff = staff_class != 0
 
             width = norm_width * img_width
             height = norm_height * img_height
@@ -75,6 +76,7 @@ def load_staff_positions(
             if selected_staff >= 0 and line_index != selected_staff:
                 staff = dummy_staff_from_rect(bounding_box, image.shape)
                 if staff is not None:
+                    staff.is_grandstaff = is_grandstaff
                     staffs.append(MultiStaff([staff], []))
                 continue
 
@@ -83,6 +85,7 @@ def load_staff_positions(
                 staff = dummy_staff_from_rect(bounding_box, image.shape)
             min_staff_width = 10
             if staff is not None and staff.max_x - staff.min_x > min_staff_width:
+                staff.is_grandstaff = is_grandstaff
                 staffs.append(MultiStaff([staff], []))
         except Exception as e:
             eprint("Skipping staff due to error:", e)
