@@ -77,6 +77,16 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 414
+
+Commit: 79aec9b6b66de2281972c9d4f9c606f3f84c9cd1
+Day: 7 July 2026
+Transformer Smoke Test: 6%
+System Level: Total: 5.9 diffs, SER: 4.9%
+
+Clean the Lieder dataset to introduce more training data
+
+
 ## Run 407 - at epoch 6
 
 Commit: fabab4b0f8480be20d13686edf5f91d913ab00fd
