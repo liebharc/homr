@@ -128,8 +128,8 @@ class Config:
 
         # Scheduled Sampling parameters
         self.scheduled_sampling_start_prob = 1.0
-        self.scheduled_sampling_end_prob = 0.7
-        self.scheduled_sampling_decay_steps = 20000
+        self.scheduled_sampling_end_prob = 0.4
+        self.scheduled_sampling_decay_steps = 45000
 
     def to_dict(self) -> dict[str, Any]:
         return {
