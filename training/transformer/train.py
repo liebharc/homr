@@ -145,8 +145,14 @@ def train_transformer(
         if distribute.is_rank0():
             shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
-    dataset_index = [lieder_train_index, grandstaff_train_index, primus_train_index]
-    dataset_weights = [1.0, 1.0, 1.0]
+    dataset_index = [
+        lieder_train_index,
+        grandstaff_train_index,
+        primus_train_index,
+        pdmx_train_index,
+        musetrainer_train_index,
+    ]
+    dataset_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index)
     distribute.barrier()
