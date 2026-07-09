@@ -4,6 +4,7 @@ from typing import Iterable, SupportsIndex, TypeVar, overload
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
     has_rhythm_symbol_a_position,
@@ -462,6 +463,8 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
         part.append_symbol(EncodedSymbol(f"keySignature_{int(fifths)}"))
     if len(times) > 0:
         beat_type = _text(_child(times[0], "beat-type"))
+        if not beat_type.isdigit() or int(beat_type) not in VALID_TIME_SIGNATURE_DENOMINATORS:
+            raise ValueError(f"Unsupported time signature denominator: {beat_type}")
         part.append_symbol(EncodedSymbol(f"timeSignature/{beat_type}"))
 
     style = _children(attribute, "measure-style")
