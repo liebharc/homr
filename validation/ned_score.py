@@ -73,27 +73,17 @@ def _component_dist(a: list[EncodedSymbol], b: list[EncodedSymbol], field: str) 
     return editdistance.eval([getattr(s, field) for s in a], [getattr(s, field) for s in b])
 
 
-def _split_grand_staff(xml_text: str) -> str:
+def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
     """
-    Convert a single grand-staff <Part> into two separate <Part> elements.
-
-    Tools like homr output piano music as one <Part> with <staves>2</staves> and each
-    note tagged <staff>1</staff> or <staff>2</staff>.  music_xml_file_to_tokens treats
-    this as a single voice, so all notes land in xml_upper and xml_lower is empty,
-    inflating NED massively.  This function detects that pattern and splits the part
-    before tokenisation so the staves are compared independently.
+    Split a single <part> with <staves>2</staves> into two single-staff <part>
+    elements. Returns [part] unchanged if it isn't a 2-staff grand staff (this
+    also covers the (currently unseen) 3+-staff case: splitting would silently
+    drop any staff beyond the second, so we leave those parts alone rather
+    than guess).
     """
-    try:
-        root = ET.fromstring(xml_text)  # noqa: S314
-    except ET.ParseError:
-        return xml_text
-
-    parts = root.findall("part")
-    if len(parts) != 1:
-        return xml_text
-    staves_el = parts[0].find(".//staves")
-    if staves_el is None or int(staves_el.text or "1") < 2:
-        return xml_text
+    staves_el = part.find(".//staves")
+    if staves_el is None or int(staves_el.text or "1") != 2:
+        return [part]
 
     def _staff_num(el: ET.Element) -> int:
         s = el.find("staff")
@@ -101,7 +91,7 @@ def _split_grand_staff(xml_text: str) -> str:
 
     # Build two lists of measure elements, one per staff.
     split: list[list[ET.Element]] = [[], []]
-    for measure in parts[0].findall("measure"):
+    for measure in part.findall("measure"):
         for idx in range(2):
             split[idx].append(ET.Element("measure", measure.attrib))
 
@@ -149,21 +139,52 @@ def _split_grand_staff(xml_text: str) -> str:
             split[0][-1].append(child)
             split[1][-1].append(copy.deepcopy(child))
 
-    # Reconstruct the score with two parts.
-    new_root = ET.Element(root.tag, root.attrib)
-    for child in root:
-        if child.tag == "part-list":
-            pl = ET.SubElement(new_root, "part-list")
-            for pid in ("P1", "P2"):
-                sp = ET.SubElement(pl, "score-part", id=pid)
-                ET.SubElement(sp, "part-name").text = pid
-        elif child.tag != "part":
-            new_root.append(copy.deepcopy(child))
-
-    for idx, measures in enumerate(split):
-        p = ET.SubElement(new_root, "part", id=f"P{idx + 1}")
+    result = []
+    for measures in split:
+        p = ET.Element("part")
         for m in measures:
             p.append(m)
+        result.append(p)
+    return result
+
+
+def _split_grand_staff(xml_text: str) -> str:
+    """
+    Split every <part> that has <staves>2</staves> into two single-staff
+    <part> elements, in place, keeping the relative order of the other parts.
+
+    Tools like homr output a piano grand staff as one <Part> with
+    <staves>2</staves> and each note tagged <staff>1</staff> or
+    <staff>2</staff>. music_xml_file_to_tokens treats a part as a single
+    voice, so an unsplit grand staff dumps both staves into one token stream
+    -- inflating NED massively against a kern ground truth that has the
+    staves as separate spines. This isn't limited to piano-only scores (a
+    single <part> document): the same problem occurs whenever a grand staff
+    is combined with other parts, e.g. a solo voice plus piano accompaniment,
+    so we split every matching part rather than only a lone one.
+    """
+    try:
+        root = ET.fromstring(xml_text)  # noqa: S314
+    except ET.ParseError:
+        return xml_text
+
+    parts = root.findall("part")
+    final_parts = [split for part in parts for split in _split_grand_staff_part(part)]
+    if len(final_parts) == len(parts):
+        return xml_text  # nothing was split
+
+    new_root = ET.Element(root.tag, root.attrib)
+    for child in root:
+        if child.tag not in ("part-list", "part"):
+            new_root.append(copy.deepcopy(child))
+
+    part_list = ET.SubElement(new_root, "part-list")
+    for index, final_part in enumerate(final_parts):
+        part_id = f"P{index + 1}"
+        final_part.set("id", part_id)
+        score_part = ET.SubElement(part_list, "score-part", id=part_id)
+        ET.SubElement(score_part, "part-name").text = part_id
+        new_root.append(final_part)
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(new_root, encoding="unicode")
 

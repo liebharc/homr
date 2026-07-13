@@ -74,3 +74,24 @@ NOTEHEAD_SIZE_RATIO = 1.285714  # width/height
 
 grandstaff_x_distance_threshold_factor = 5
 grandstaff_y_overlap_threshold_factor = 0.5
+
+# A brace/bracket candidate blob can end up merged with unrelated ink that
+# happens to touch it during preprocessing (e.g. a neighboring staff's clef).
+# Such contamination is reliably thinner than the brace itself, so we keep
+# only the vertical range where the blob is at least this fraction as wide
+# as its own widest row, which recovers the true brace span regardless of
+# how much extra ink got attached to it.
+brace_core_width_ratio = 0.5
+
+# prepare_brace_dot_image's morphological dilation (homr/brace_dot_detection.py) uses a
+# 5px-wide kernel to bridge small gaps in brace/bracket ink into single blobs. A whole-system
+# bracket that crosses a staff line's own ink can occasionally break into two contours there:
+# the main bracket (correctly wide) plus a small, sparse leftover fragment too thin to fully
+# dilate back up to kernel width. That leftover is small enough to fit entirely within a
+# single staff pair's span, so it can still score well in _score_brace_with_staff_pair despite
+# being noise, not a real brace - this is an absolute pixel width tied to the kernel itself,
+# not to staff unit size, since it is about the morphology op, not the music engraving.
+# 5 (not 4): observed leftover fragments were 2-4px wide, while every genuine candidate
+# (barline connectors, real braces) observed across smb/polish-scores/testdata was >=5px -
+# exactly the dilation kernel's own width.
+min_width_for_brace_dot_candidate = 5
