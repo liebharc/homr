@@ -77,6 +77,19 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 426 - 27 epochs
+
+Commit: b6fd20809a8dcaf10dfd39a4ca4f64c6f056e644
+Day: 13 July 2026
+Transformer Smoke Test: 5%
+System Level: Total: 5.7 diffs, SER: 4.2%
+System Level after adding https://github.com/liebharc/homr/issues/110: Total: 5.5 diffs, SER: 4.1%
+Polish scores: OMR-NED 24.30%
+
+Training with lieder+grandstaff+primux+pdmx+musetrainer datasets.
+
+Note that https://github.com/liebharc/homr/issues/110 will from now on remain in the system level datset to avoid regressions.
+
 ## Run 414
 
 Commit: 79aec9b6b66de2281972c9d4f9c606f3f84c9cd1
@@ -85,7 +98,6 @@ Transformer Smoke Test: 6%
 System Level: Total: 5.9 diffs, SER: 4.9%
 
 Clean the Lieder dataset to introduce more training data
-
 
 ## Run 407 - at epoch 6
 

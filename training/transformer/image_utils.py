@@ -1,20 +1,118 @@
+import functools
+from pathlib import Path
+
 import albumentations as A
 import cv2
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from homr.staff_dewarping import warp_image_randomly
 from homr.type_definitions import NDArray
+from training.transformer.augraphy_augment import apply_augraphy
+
+_texture_config: dict = {"dir": None, "paths": None}
+
+
+def set_texture_dir(path: str) -> None:
+    """Configure a directory of paper texture images for background augmentation."""
+    _texture_config["dir"] = path
+    _texture_config["paths"] = None
+
+
+def _get_texture_paths() -> list[str]:
+    if _texture_config["paths"] is None:
+        d = _texture_config["dir"]
+        if d is None:
+            _texture_config["paths"] = []
+        else:
+            p = Path(d)
+            _texture_config["paths"] = (
+                [str(f) for f in p.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png")]
+                if p.is_dir()
+                else []
+            )
+    paths: list[str] = _texture_config["paths"]
+    return paths
+
+
+_font_cache: dict = {"paths": None}
+_FONT_KEYWORDS: frozenset[str] = frozenset(
+    {"times", "liberation", "freeserif", "palatino", "georgia", "garamond", "edwin"}
+)
+
+
+def _get_annotation_font_paths() -> list[str]:
+    if _font_cache["paths"] is not None:
+        paths: list[str] = _font_cache["paths"]
+        return paths
+    search_dirs = [
+        Path("/usr/share/fonts"),
+        Path("/usr/local/share/fonts"),
+        Path.home() / ".fonts",
+        Path.home() / ".local/share/fonts",
+    ]
+    found: list[str] = []
+    for d in search_dirs:
+        if not d.is_dir():
+            continue
+        for pattern in ("*.ttf", "*.otf"):
+            for f in d.rglob(pattern):
+                if any(kw in f.stem.lower() for kw in _FONT_KEYWORDS):
+                    found.append(str(f))
+    _font_cache["paths"] = found
+    return found
+
+
+def apply_text_injection(image: NDArray) -> NDArray:
+    """Inject random alphanumeric fragments to simulate score annotations."""
+    h, w = image.shape[:2]
+    pil_img = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)).convert("RGBA")
+    font_paths = _get_annotation_font_paths()
+    chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    n_fragments = int(np.random.randint(1, 4))
+    for _ in range(n_fragments):
+        if np.random.random() < 0.4:
+            text = str(int(np.random.randint(0, 101)))
+        else:
+            length = int(np.random.randint(1, 5))
+            indices = np.random.randint(0, len(chars), size=length)
+            text = "".join(chars[int(i)] for i in indices)
+
+        font_size = int(np.random.uniform(0.08, 0.14) * h)
+        font_size = max(8, min(font_size, 36))
+
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+        if font_paths:
+            try:
+                font = ImageFont.truetype(str(np.random.choice(font_paths)), font_size)
+            except Exception:
+                font = ImageFont.load_default(size=font_size)
+        else:
+            font = ImageFont.load_default(size=font_size)
+
+        bbox = font.getbbox(text)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        x = int(np.random.uniform(0, max(1, w - tw)))
+        y = int(np.random.uniform(0, max(1, h - th)))
+
+        gray_val = int(np.random.uniform(20, 80))
+        opacity = int(np.random.uniform(0.6, 0.9) * 255)
+
+        text_layer = Image.new("RGBA", pil_img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(text_layer)
+        draw.text((x, y), text, fill=(gray_val, gray_val, gray_val, opacity), font=font)
+        pil_img = Image.alpha_composite(pil_img, text_layer)
+
+    result_bgr: NDArray = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
+    return result_bgr
 
 
 def read_image_to_ndarray(path: str) -> NDArray:
     img: NDArray = cv2.imread(path, cv2.IMREAD_COLOR_BGR)  # type: ignore
     if img is None:
         raise ValueError("Failed to read image from " + path)
-
-    if len(img.shape) == 3 and img.shape[-1] == 4:
-        img = 255 - img[:, :, 3]
     return img
 
 
@@ -70,287 +168,110 @@ def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> 
     return out[..., 0] if squeeze else out
 
 
-def add_random_margins(
-    image: NDArray,
-    min_margin: int = 10,
-    max_margin: int = 100,
-    fill_white: bool = True,
-) -> NDArray:
-    """
-    Add random margins on all four sides of the image.
-
-    Args:
-        image: Input image (H, W) or (H, W, C)
-        min_margin: Minimum margin size in pixels
-        max_margin: Maximum margin size in pixels
-        fill_white: If True, use white (255) fill; otherwise use detected background
-
-    Returns:
-        Image with random margins added
-    """
-    top = np.random.randint(min_margin, max_margin + 1)
-    bottom = np.random.randint(min_margin, max_margin + 1)
-    left = np.random.randint(min_margin, max_margin + 1)
-    right = np.random.randint(min_margin, max_margin + 1)
-
-    if fill_white:
-        # Use pure white fill
-        if image.ndim == 2:
-            padded = np.pad(
-                image, ((top, bottom), (left, right)), mode="constant", constant_values=255
-            )
-        else:
-            padded = np.pad(
-                image, ((top, bottom), (left, right), (0, 0)), mode="constant", constant_values=255
-            )
-        return padded
-    else:
-        # Use existing add_margin with background detection
-        return add_margin(image, top, bottom, left, right)
-
-
-def apply_ink_fade(image: NDArray, p: float = 0.15) -> NDArray:
-    """
-    Apply gradient-based ink fading to simulate aged or faded ink.
-    This is more realistic than uniform brightness changes.
-
-    Args:
-        image: Input image
-        p: Probability of applying this augmentation
-
-    Returns:
-        Image with optional ink fade applied
-    """
-    if np.random.random() > p:
-        return image
-
-    h, w = image.shape[:2]
-
-    # Choose gradient type
-    gradient_type = np.random.choice(["linear", "radial", "noise"])
-
-    if gradient_type == "linear":
-        # Linear gradient in random direction
-        angle = np.random.uniform(0, 2 * np.pi)
-        x = np.arange(w)
-        y = np.arange(h)
-        xx, yy = np.meshgrid(x, y)
-        gradient = xx * np.cos(angle) + yy * np.sin(angle)
-        gradient = (gradient - gradient.min()) / (gradient.max() - gradient.min())
-    elif gradient_type == "radial":
-        # Radial gradient from random center
-        center_x = np.random.uniform(0, w)
-        center_y = np.random.uniform(0, h)
-        x = np.arange(w) - center_x
-        y = np.arange(h) - center_y
-        xx, yy = np.meshgrid(x, y)
-        gradient = np.sqrt(xx**2 + yy**2)
-        gradient = (gradient - gradient.min()) / (gradient.max() - gradient.min())
-    else:  # noise-based
-        # Smooth noise gradient
-        gradient = np.random.randn(h // 10, w // 10)
-        gradient = cv2.resize(gradient, (w, h), interpolation=cv2.INTER_LINEAR)
-        gradient = (gradient - gradient.min()) / (gradient.max() - gradient.min())
-
-    # Randomly flip gradient direction
-    if np.random.random() < 0.5:
-        gradient = 1 - gradient
-
-    # Apply subtle fade (max 30-40 brightness units to preserve legibility)
-    fade_strength = np.random.uniform(20, 40)
-    fade_mask = gradient * fade_strength
-
-    if image.ndim == 2:
-        faded = image.astype(np.float32) + fade_mask
-    else:
-        fade_mask = np.stack([fade_mask] * image.shape[2], axis=-1)
-        faded = image.astype(np.float32) + fade_mask
-
-    return np.clip(faded, 0, 255).astype(np.uint8)
-
-
-def apply_diverse_noise(image: NDArray, p: float = 0.5) -> NDArray:
-    """
-    Apply diverse noise patterns with varying shapes, sizes, and intensities.
-    This simulates real-world scanning artifacts and paper texture.
-
-    Args:
-        image: Input image
-        p: Probability of applying noise
-
-    Returns:
-        Image with diverse noise applied
-    """
-    if np.random.random() > p:
-        return image
-
-    result = image.copy().astype(np.float32)
-    h, w = image.shape[:2]
-
-    # Apply 1-3 different noise types
-    num_noise_types = np.random.randint(1, 4)
-
-    for _ in range(num_noise_types):
-        noise_type = np.random.choice(["patch", "gaussian", "salt_pepper"])
-
-        if noise_type == "patch":
-            # Patch-based noise with varying shapes and sizes
-            num_patches = np.random.randint(5, 20)
-            for _ in range(num_patches):
-                # Random patch size
-                patch_h = np.random.randint(5, 50)
-                patch_w = np.random.randint(5, 50)
-
-                # Random position
-                y = np.random.randint(0, max(1, h - patch_h))
-                x = np.random.randint(0, max(1, w - patch_w))
-
-                # Random noise variance
-                noise_std = np.random.uniform(5, 25)
-
-                # Create patch noise
-                patch_noise = np.random.normal(0, noise_std, (patch_h, patch_w))
-
-                # Random shape (rectangular or circular)
-                if np.random.random() < 0.3:
-                    # Circular mask
-                    cy, cx = patch_h // 2, patch_w // 2
-                    y_grid, x_grid = np.ogrid[:patch_h, :patch_w]
-                    mask = (y_grid - cy) ** 2 + (x_grid - cx) ** 2 <= (
-                        min(patch_h, patch_w) // 2
-                    ) ** 2
-                    patch_noise = patch_noise * mask
-
-                # Apply patch noise
-                if image.ndim == 2:
-                    result[y : y + patch_h, x : x + patch_w] += patch_noise
-                else:
-                    for c in range(image.shape[2]):
-                        result[y : y + patch_h, x : x + patch_w, c] += patch_noise
-
-        elif noise_type == "gaussian":
-            # Global Gaussian noise with random intensity
-            noise_std = np.random.uniform(3, 12)
-            if image.ndim == 2:
-                noise = np.random.normal(0, noise_std, (h, w))
-                result += noise
-            else:
-                for c in range(image.shape[2]):
-                    noise = np.random.normal(0, noise_std, (h, w))
-                    result[:, :, c] += noise
-
-        else:  # salt_pepper
-            # Salt and pepper noise
-            amount = np.random.uniform(0.001, 0.005)
-            num_salt = int(amount * h * w * 0.5)
-            num_pepper = int(amount * h * w * 0.5)
-
-            # Salt (white pixels)
-            coords_y = np.random.randint(0, h, num_salt)
-            coords_x = np.random.randint(0, w, num_salt)
-            if image.ndim == 2:
-                result[coords_y, coords_x] = 255
-            else:
-                result[coords_y, coords_x, :] = 255
-
-            # Pepper (black pixels)
-            coords_y = np.random.randint(0, h, num_pepper)
-            coords_x = np.random.randint(0, w, num_pepper)
-            if image.ndim == 2:
-                result[coords_y, coords_x] = 0
-            else:
-                result[coords_y, coords_x, :] = 0
-
-    return np.clip(result, 0, 255).astype(np.uint8)
-
-
 def apply_clahe(image: NDArray, p: float = 0.1) -> NDArray:
-    """
-    Apply Contrast Limited Adaptive Histogram Equalization (CLAHE) to amplify
-    existing noise and texture. This should be applied AFTER noise addition.
-
-    Args:
-        image: Input image
-        p: Probability of applying CLAHE (default 0.1 = 10% of images)
-
-    Returns:
-        Image with optional CLAHE applied
-    """
     if np.random.random() > p:
         return image
 
-    # Conservative CLAHE parameters to avoid artifacts
     clip_limit = np.random.uniform(2.0, 3.0)
-    tile_grid_size = (8, 8)
-
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
 
     if image.ndim == 2:
         return clahe.apply(image)
     else:
-        # Apply to each channel
         result = np.zeros_like(image)
         for c in range(image.shape[2]):
             result[:, :, c] = clahe.apply(image[:, :, c])
         return result
 
 
-def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
-    """
-    Apply data augmentation to an image.
+def apply_ink_color_shift(image: NDArray) -> NDArray:
+    """Lighten dark ink pixels by 0-40 luma units to simulate non-pure-black ink."""
+    shift = int(np.random.randint(0, 41))
+    if shift == 0:
+        return image
+    luma = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    dark = luma < 80
+    result = image.copy()
+    result[dark] = np.clip(result[dark].astype(np.int32) + shift, 0, 255).astype(np.uint8)
+    return result
 
-    Args:
-        image: Input image array
-        allow_occlusions: If True, applies occlusiv that may hide musical elements.
-    """
 
-    # Add white margins as the staff detection would create something similiar
-    image = add_random_margins(image, min_margin=0, max_margin=20, fill_white=True)
+def apply_background_augmentation(image: NDArray) -> NDArray:
+    """Paper texture blend, gradient shading, and per-channel color cast."""
+    h, w = image.shape[:2]
+    img_f = image.astype(np.float32)
 
-    image, background_value = _add_random_gray_tone(
-        image, contrast_reduction_p=0.2, min_contrast_range=(30, 70)
-    )
+    luma = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    ink_mask = (255.0 - luma.astype(np.float32)) / 255.0
+    if image.ndim == 3:
+        ink_mask = ink_mask[:, :, np.newaxis]
 
-    transforms_list = [
-        A.Rotate(
-            limit=2,
-            border_mode=cv2.BORDER_CONSTANT,
-            fill=(255, 255, 255),
-            p=0.3,
-        ),
-        A.Perspective(
-            scale=(0.005, 0.015),
-            fit_output=not allow_occlusions,
-            border_mode=cv2.BORDER_CONSTANT,
-            fill=(255, 255, 255),
-            p=0.6,
-        ),
-        A.OneOf(
+    # Paper texture blend (70% when available)
+    textures = _get_texture_paths()
+    if textures and np.random.random() < 0.70:
+        tex_path = str(np.random.choice(textures))
+        tex = cv2.imread(tex_path)
+        if tex is not None:
+            if tex.ndim == 2:
+                tex = cv2.cvtColor(tex, cv2.COLOR_GRAY2BGR)
+            th, tw = tex.shape[:2]
+            tiled = np.tile(tex, (-(-h // th), -(-w // tw), 1))[:h, :w].astype(np.float32)
+            img_f = img_f * ink_mask + tiled * (1.0 - ink_mask)
+
+    # Gradient shading: linear + radial, ±10 and ±6 luma units
+    xg, yg = _gradient_grids(h, w)
+    gx = float(np.random.uniform(-10, 10))
+    gy = float(np.random.uniform(-10, 10))
+    radial = float(np.random.uniform(-6, 6)) * np.exp(-(xg**2 + yg**2) / 0.5)
+    shading = (gx * xg + gy * yg + radial).astype(np.float32)
+    img_f += shading[:, :, np.newaxis] if image.ndim == 3 else shading
+
+    # Per-channel color cast (BGR order: B ±6, G ±3, R ±4)
+    if image.ndim == 3:
+        cast = np.array(
             [
-                A.Morphological(scale=(1, 1), operation="erosion", p=1.0),
-                A.Morphological(scale=(2, 3), operation="dilation", p=1.0),
+                float(np.random.uniform(-6.0, 6.0)),
+                float(np.random.uniform(-3.0, 3.0)),
+                float(np.random.uniform(-4.0, 4.0)),
             ],
-            p=0.2,
-        ),
-        A.OneOf(
-            [
-                A.RandomBrightnessContrast(
-                    brightness_limit=0.3,
-                    contrast_limit=(-0.3, -0.1),
-                    p=1.0,
-                ),
-                A.RandomToneCurve(scale=0.3, p=1.0),
-                A.MultiplicativeNoise(multiplier=(0.8, 1.0), per_channel=True, p=1.0),
-            ],
-            p=0.2,
-        ),
-        A.ColorJitter(
-            brightness=0.2,
-            contrast=0.2,
-            saturation=0.1,
-            hue=0.05,
-            p=0.5,
-        ),
+            dtype=np.float32,
+        )
+        img_f += cast[np.newaxis, np.newaxis, :]
+
+    return np.clip(img_f, 0, 255).astype(np.uint8)
+
+
+@functools.lru_cache(maxsize=16)
+def _gradient_grids(h: int, w: int) -> tuple[NDArray, NDArray]:
+    xs = np.linspace(-1.0, 1.0, w, dtype=np.float32)
+    ys = np.linspace(-1.0, 1.0, h, dtype=np.float32)
+    xg, yg = np.meshgrid(xs, ys)
+    return xg, yg
+
+
+_MIN_STAFF_CONTRAST = 60
+
+
+def _enforce_min_staff_contrast(image: NDArray, ink_mask: NDArray) -> NDArray:
+    """Darken ink pixels that became too bright relative to background after augmentation."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    bg_pixels = gray[~ink_mask] if (~ink_mask).any() else gray.ravel()
+    bg_level = int(np.percentile(bg_pixels, 75))
+    ceiling = bg_level - _MIN_STAFF_CONTRAST
+    if ceiling <= 0:
+        return image
+    too_light = ink_mask & (gray > ceiling)
+    if not too_light.any():
+        return image
+    result = image.copy()
+    result[too_light] = np.clip(result[too_light].astype(np.int32), 0, ceiling).astype(np.uint8)
+    return result
+
+
+def _make_geometric_transforms(allow_occlusions: bool) -> A.Compose:
+    transforms_list: list[A.BasicTransform] = [
+        A.Rotate(limit=2, border_mode=cv2.BORDER_CONSTANT, fill=255, p=0.5),
+        A.Perspective(scale=(0.005, 0.015), fill=255, p=0.3),
         A.OneOf(
             [
                 A.GaussianBlur(blur_limit=(3, 5), sigma_limit=(0.1, 0.5), p=1.0),
@@ -358,160 +279,51 @@ def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
             ],
             p=0.3,
         ),
-        A.OneOf(
-            [
-                A.GaussNoise(
-                    std_range=(0.02, 0.06),
-                    mean_range=(0.0, 0.0),
-                    per_channel=False,
-                    noise_scale_factor=0.25,
-                    p=1.0,
-                ),
-                A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.3), p=1.0),
-            ],
-            p=0.5,
-        ),
     ]
     if allow_occlusions:
-        transforms_list.extend(
-            [
-                A.RandomShadow(
-                    shadow_roi=(0, 0, 1, 1),
-                    num_shadows_limit=(1, 3),
-                    shadow_dimension=5,
-                    p=0.2,
-                ),
-                A.CoarseDropout(
-                    num_holes_range=(2, 8),
-                    hole_height_range=(10, 30),
-                    hole_width_range=(20, 60),
-                    fill=255,
-                    p=0.4,
-                ),
-                A.RandomFog(
-                    fog_coef_range=(0.1, 0.3),
-                    alpha_coef=0.1,
-                    p=0.2,
-                ),
-            ]
+        transforms_list.append(
+            A.CoarseDropout(
+                num_holes_range=(2, 8),
+                hole_height_range=(10, 30),
+                hole_width_range=(20, 60),
+                fill=255,
+                p=0.4,
+            ),
         )
-
-    transform = A.Compose(transforms_list)
-
-    transformed = transform(image=image)
-    augmented_image = transformed["image"]
-
-    augmented_image = apply_ink_fade(augmented_image, p=0.15)
-    augmented_image = apply_diverse_noise(augmented_image, p=0.5)
-    augmented_image = apply_clahe(augmented_image, p=0.1)
-
-    pil_image = Image.fromarray(augmented_image)
-    augmented_image = warp_image_randomly(pil_image)
-    augmented_array = np.array(augmented_image)
-
-    paper_texture = np.random.normal(loc=240, scale=8, size=augmented_array.shape).astype(np.uint8)
-    paper_alpha = 0.2
-    augmented_array = cv2.addWeighted(
-        augmented_array, 1 - paper_alpha, paper_texture, paper_alpha, 0
-    )
-
-    augmented_array = _apply_vignette(augmented_array)
-
-    augmented_array = add_random_margins(
-        augmented_array, min_margin=0, max_margin=20, fill_white=True
-    )
-
-    return augmented_array
+    return A.Compose(transforms_list)
 
 
-def _apply_vignette(image: NDArray) -> NDArray:
-    """Apply random asymmetric vignette effect to simulate scanner/camera artifacts."""
-    rows, cols = image.shape[:2]
-
-    # Randomized Gaussian parameters
-    sigma_x = np.random.uniform(cols / 4, cols)
-    sigma_y = np.random.uniform(rows / 4, rows)
-    center_x = np.random.uniform(0, cols)
-    center_y = np.random.uniform(0, rows)
-
-    # Generate coordinate grids
-    x = np.arange(cols) - center_x
-    y = np.arange(rows) - center_y
-    x_grid, y_grid = np.meshgrid(x, y)
-
-    # Optional rotation
-    theta = np.random.uniform(0, 2 * np.pi)
-    x_rot = x_grid * np.cos(theta) + y_grid * np.sin(theta)
-    y_rot = -x_grid * np.sin(theta) + y_grid * np.cos(theta)
-
-    # Create asymmetric Gaussian vignette
-    mask = np.exp(-0.5 * ((x_rot**2 / sigma_x**2) + (y_rot**2 / sigma_y**2)))
-    mask = mask / mask.max()
-
-    # Scale mask to subtle effect (0.9–1.0)
-    mask = 0.9 + 0.1 * mask
-
-    # Optional channel variation for color images
-    if len(image.shape) == 3 and image.shape[2] == 3:
-        mask = np.stack([mask * np.random.uniform(0.9, 1.0) for _ in range(3)], axis=-1)
-
-    return (image * mask).astype(np.uint8)
+_geometric_transforms: dict[bool, A.Compose] = {}
 
 
-def _add_random_gray_tone(
-    image_arr: NDArray, contrast_reduction_p: float, min_contrast_range: tuple[int, int] = (50, 70)
-) -> tuple[NDArray, int]:
-    """
-    Add a random gray background tone while ensuring minimum contrast is maintained.
-    This simulates different paper colors and scanning conditions.
-    """
-    if len(image_arr.shape) == 2:
-        gray = image_arr
-    else:
-        gray = cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
+    # Staff dewarping
+    image = np.array(warp_image_randomly(Image.fromarray(image)))
 
-    lightest_pixel_value = _find_lighest_non_white_pixel(gray)
+    # Geometric
+    if allow_occlusions not in _geometric_transforms:
+        _geometric_transforms[allow_occlusions] = _make_geometric_transforms(allow_occlusions)
+    image = _geometric_transforms[allow_occlusions](image=image)["image"]
 
-    # Occasionally use lower minimum contrast for more challenging cases
-    if np.random.random() < contrast_reduction_p:
-        minimum_contrast = np.random.randint(min_contrast_range[0], min_contrast_range[1])
-    else:
-        minimum_contrast = 70
+    # Capture ink locations after geometry, before brightness augmentation
+    _pre_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    ink_mask = _pre_gray < 128
 
-    pure_white = 255
-    if lightest_pixel_value >= pure_white - minimum_contrast:
-        return image_arr, pure_white
+    # Ink and background
+    image = apply_ink_color_shift(image)
+    image = apply_background_augmentation(image)
 
-    strongest_possible_gray = lightest_pixel_value + minimum_contrast
-    random_gray_value = np.random.randint(strongest_possible_gray, pure_white)
+    # Annotation injection
+    if np.random.random() < 0.35:
+        image = apply_text_injection(image)
 
-    if random_gray_value >= pure_white:
-        return image_arr, random_gray_value
+    # Document degradation
+    image = apply_augraphy(image)
 
-    # Create mask for background pixels
-    if len(image_arr.shape) == 3:
-        mask = np.all(image_arr > random_gray_value, axis=-1)
-    else:
-        mask = image_arr > random_gray_value
+    # Local contrast
+    image = apply_clahe(image, p=0.1)
 
-    # Add jitter to background for texture
-    jitter = np.random.randint(-5, 5, size=mask.shape)
-    gray_bg = np.clip(random_gray_value + jitter, 0, pure_white)
+    # Ensure staff lines remain visible despite brightness/degradation augmentation
+    image = _enforce_min_staff_contrast(image, ink_mask)
 
-    # Apply background
-    if len(image_arr.shape) == 3:
-        image_arr[mask] = np.stack([gray_bg[mask]] * 3, axis=-1)
-    else:
-        image_arr[mask] = gray_bg[mask]
-
-    return image_arr, random_gray_value
-
-
-def _find_lighest_non_white_pixel(gray: NDArray) -> int:
-    """Find the lightest pixel value that isn't pure white (background)."""
-    pure_white = 255
-    valid_pixels = gray[gray < pure_white]
-    if valid_pixels.size > 0:
-        return valid_pixels.max()
-    else:
-        return pure_white
+    return image

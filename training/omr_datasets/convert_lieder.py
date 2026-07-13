@@ -427,11 +427,18 @@ class MeasureCutter:
             return 1
         return 0
 
-    def extract_measures(self, count: int) -> list[EncodedSymbol]:
+    def extract_measures(
+        self, count: int, always_include_time: bool = False
+    ) -> list[EncodedSymbol]:
         clefs = self.clefs.copy()
         key = self.key
         time = self.time
-        has_time = False
+        # Lieder pages are crops of one continuously rendered score, so a courtesy time
+        # signature is only visible where the source XML actually redeclares it. pdmx and
+        # musetrainer windows are each re-rendered standalone (see generate_xml), and that
+        # renderer always draws a time signature on a fresh score - so those callers pass
+        # always_include_time=True to keep the label in sync with the image.
+        has_time = always_include_time
         result: list[EncodedSymbol] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
@@ -562,31 +569,32 @@ def _split_file_into_staffs(
     return result
 
 
+def _leading_clefs(measure: Measure) -> list[EncodedSymbol]:
+    # The clefs of a measure always precede its notes/rests, but other preamble symbols
+    # (e.g. repeatStart on the very first measure) can come before them, so scan rather
+    # than assume fixed indices.
+    clefs = []
+    for symbol in measure:
+        if symbol.rhythm.startswith(("note", "rest")):
+            break
+        if symbol.rhythm.startswith("clef"):
+            clefs.append(symbol)
+    return clefs
+
+
 def _count_staffs(voice: list[Measure]) -> int:
     if len(voice) == 0:
         return 0
-    first_measure = voice[0]
-    if len(first_measure) == 0:
+    clefs = _leading_clefs(voice[0])
+    if len(clefs) == 0:
         return 0
-    if len(first_measure) < 3:
-        return 0
-    third_symbol = first_measure[2]
-    if third_symbol.rhythm.startswith("clef"):
-        return 2
-    return 1
+    return 2 if len(clefs) >= 2 else 1
 
 
 def is_grandstaff(voice: list[Measure]) -> bool:
     if len(voice) == 0:
         return False
-    first_measure = voice[0]
-    if len(first_measure) < 3:
-        return False
-    return (
-        first_measure[0].rhythm.startswith("clef")
-        and first_measure[1].rhythm == "chord"
-        and first_measure[2].rhythm.startswith("clef")
-    )
+    return len(_leading_clefs(voice[0])) >= 2
 
 
 def get_svg_voice_count(voice: list[Measure]) -> int:

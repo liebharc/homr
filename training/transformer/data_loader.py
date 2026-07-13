@@ -6,7 +6,7 @@ import numpy as np
 
 from homr.simple_logging import eprint
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from homr.transformer.configs import Config
+from homr.transformer.configs import Config, default_config
 from homr.transformer.vocabulary import Vocabulary
 from training.transformer.image_utils import (
     distort_image,
@@ -61,7 +61,11 @@ class DataLoader:
         entry = self.corpus_list[idx]
         sample_filepath = os.path.join(git_root, entry["image"])
 
-        img = read_image_to_ndarray(sample_filepath)
+        try:
+            img = read_image_to_ndarray(sample_filepath)
+        except ValueError:
+            eprint(f"Warning: skipping corrupted image {sample_filepath}")
+            return self.__getitem__((idx + 1) % len(self))
 
         if self.is_validation:
             state = random.getstate()
@@ -103,9 +107,13 @@ def _filter_valid_samples(samples: list[str]) -> list[str]:
     # between what is visible on the image and the ground truth
     valid_samples: list[str] = []
     filter_count = 0
+    too_long_count = 0
     for entry in samples:
         image, token_file = entry.strip().split(",")
         tokens = read_tokens(token_file)
+        if len(tokens) > default_config.max_seq_len - 2:
+            too_long_count += 1
+            continue
         if max_ledger_lines(tokens) > MAX_ALLOWED_LEDGER_LINES:
             filter_count += 1
             continue
@@ -113,6 +121,8 @@ def _filter_valid_samples(samples: list[str]) -> list[str]:
 
     if filter_count > 0:
         eprint(f"Filtered out {filter_count} samples with too many ledger lines")
+    if too_long_count > 0:
+        eprint(f"Filtered out {too_long_count} samples with sequences longer than max_seq_len")
     return valid_samples
 
 
