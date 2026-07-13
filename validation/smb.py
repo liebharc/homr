@@ -1,3 +1,5 @@
+# flake8: noqa: S101
+
 """
 PRAIG/SMB benchmark: measures OMR quality on the SMB dataset.
 
@@ -12,50 +14,41 @@ Before running:
 
 import argparse
 import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 
 from validation.ned_benchmark import run_benchmark, update_ned_scores
 from validation.tools import TOOLS
 
 
-def iter_smb(split: str, image_dir: Path | None = None) -> Iterator[tuple[str, str, Path | None]]:
+def get_smb_samples(image_dir: Path) -> list[tuple[str, str, Path]]:
     """Yield (sample_id, kern_text, image_path) for each page in PRAIG/SMB.
 
     Passes the full page image to allow proper end-to-end OMR evaluation.
     Ground truth priority: page.kern > top-level kern > concatenated region kern.
     image_path is only set when image_dir is provided and the page has an image.
     """
-    from datasets import load_dataset  # type: ignore  # noqa: PLC0415
+    from datasets import Image, load_dataset  # type: ignore  # noqa: PLC0415
 
-    ds = load_dataset("PRAIG/SMB")
-    for i, sample in enumerate(ds[split]):
-        kern = ""
-        page = sample.get("page", {})
-        if isinstance(page, dict):
-            kern = page.get("kern") or ""
-        if not kern:
-            kern = sample.get("kern") or ""
-        if not kern:
-            parts = [r.get("kern", "") for r in sample.get("regions", []) if r.get("kern")]
-            kern = "\n".join(parts)
-        if not kern:
-            continue
+    ds = load_dataset("PRAIG/SMB")["test"]
+    ds = ds.cast_column("image", Image(decode=False))  # Don't decode on image colume.
+    result = []
+    for i, sample in enumerate(ds):
+        assert "kern" not in sample and isinstance(
+            sample["regions"], list
+        )  # not a global `kern` field, but a list of regions.
+        assert sample["image"]["bytes"]
 
-        image_path: Path | None = None
-        if image_dir is not None:
-            img = sample.get("image")
-            if img is not None and hasattr(img, "save"):
-                candidate = image_dir / f"{i}.png"
-                img.save(candidate)
-                image_path = candidate
+        parts = [r["kern"] for r in sample["regions"] if r["kern"]]
+        kern = "\n".join(parts)
+        image_path = image_dir / f"{i}.png"
+        image_path.write_bytes(sample["image"]["bytes"])
 
-        yield str(i), kern, image_path
+        result.append((str(i), kern, image_path))
+    return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="OMR-NED benchmark for PRAIG/SMB.")
-    parser.add_argument("--split", type=str, default="test", help="Dataset split (default: test).")
     parser.add_argument("--limit", type=int, default=None, help="Only process N samples.")
     parser.add_argument("--verbose", action="store_true", help="Print traceback on failure.")
     parser.add_argument("--output", type=str, default=None, help="Path to SQLite output file.")
@@ -121,7 +114,7 @@ def main() -> None:
     tool = TOOLS[args.tool]
     with tempfile.TemporaryDirectory() as image_dir:
         run_benchmark(
-            iter_smb(args.split, image_dir=Path(image_dir)),
+            get_smb_samples(image_dir=Path(image_dir)),
             tool,
             limit=args.limit,
             verbose=args.verbose,

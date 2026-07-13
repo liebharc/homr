@@ -41,7 +41,7 @@ import signal
 import statistics
 import sys
 import traceback
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from homr.transformer.vocabulary import EncodedSymbol
@@ -240,7 +240,7 @@ def update_ned_scores(
 
 
 def run_benchmark(
-    samples: Iterable[tuple[str, str, Path | None]],
+    samples: list[tuple[str, str, Path]],
     tool: Callable[[str, Path | None], str],
     limit: int | None = None,
     verbose: bool = False,
@@ -253,7 +253,7 @@ def run_benchmark(
     """
     Wire data source, tool, and check together.
 
-    samples:      iterable of (sample_id, kern_text, image_path) from any data source
+    samples:      list of (sample_id, kern_text, image_path) from any data source
     tool:         (kern_text, image_path) -> output_text (MusicXML or **kern)
     kern_parser:  "native" (default) or "music21" - kern ground-truth parser
     xml_parser:   "native" (default), "music21", "musicdiff", or "musicdiff_detailed"
@@ -280,15 +280,9 @@ def run_benchmark(
     results: list[NedResult] = []
     failures: list[tuple[str, str]] = []
 
-    # Collect from iterator (applying limit and skips) so we can optionally batch.
-    all_from_iter: list[tuple[str, str, Path | None]] = []
-    for count, triple in enumerate(samples):
-        if limit is not None and count >= limit:
-            break
-        all_from_iter.append(triple)
-
-    skipped = sum(1 for s, _, _ in all_from_iter if s in skip_ids)
-    active = [(s, k, i) for s, k, i in all_from_iter if s not in skip_ids]
+    samples = samples[:limit]
+    active = [s for s in samples if s[0] not in skip_ids]
+    skipped = len(samples) - len(active)
 
     if xml_parser in ("musicdiff", "musicdiff_detailed"):
         _musicdiff_register_once()
