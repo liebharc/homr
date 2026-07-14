@@ -25,9 +25,9 @@ The easiest way to get started is using `uvx` (`uv` must be installed). Note tha
 
 - Clone the repository
 - Install dependencies for:
-  - GPU (requires CUDA): `poetry install --only main,gpu`
-  - CPU: `poetry install --only main`
-  - Development: `poetry install`
+  - Inference: `poetry install --only main (--extras gpu)`
+  - Development: `poetry install (--extras gpu)`
+  - Note that `--extras gpu` should be added to use GPU, otherwise only CPU is used.
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 - To combine the MusicXML results from multiple images, you can use [relieur](https://github.com/papoteur-mga/relieur)
