@@ -131,7 +131,7 @@ The display uses `<` for deleted tokens (in reference, missing from output), `>`
 
 ## Benchmark results
 
-All results are mean OMR-NED in % over the samples where the tool produced output. Means are only comparable between tools when coverage is similar.
+All results are mean OMR-NED in % over the samples where the tool produced output. Means are only comparable between tools when coverage is similar. For performance on latest homr model, refer to `Training.md` for details.
 
 ## native parser
 

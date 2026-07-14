@@ -85,6 +85,7 @@ Transformer Smoke Test: 5%
 System Level: Total: 5.7 diffs, SER: 4.2%
 System Level after adding https://github.com/liebharc/homr/issues/110: Total: 5.5 diffs, SER: 4.1%
 Polish scores: OMR-NED 24.30%
+SMB scores: OMR-NED 22.06%
 
 Training with lieder+grandstaff+primux+pdmx+musetrainer datasets.
 
