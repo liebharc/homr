@@ -108,6 +108,7 @@ def main() -> None:
             kern_parser=args.kern_parser,
             xml_parser=args.xml_parser,
             limit=args.limit,
+            ignore_unreliable_articulation=True,
         )
         return
 
@@ -123,6 +124,7 @@ def main() -> None:
             batch_size=args.batch_size,
             kern_parser=args.kern_parser,
             xml_parser=args.xml_parser,
+            ignore_unreliable_articulation=True,
         )
 
 

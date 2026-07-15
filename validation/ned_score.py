@@ -18,14 +18,17 @@ import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import editdistance
 
 from homr.circle_of_fifths import strip_naturals
-from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
+from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
 from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
 from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+
+if TYPE_CHECKING:
+    import music21 as m21
 
 
 @dataclass
@@ -54,6 +57,98 @@ class TokenEvent(TypedDict):
     act_lift: str | None
     act_articulation: str | None
     act_slur: str | None
+
+
+# ---------------------------------------------------------------------------
+# Known ground-truth reliability exceptions (dataset-specific, opt-in only)
+# ---------------------------------------------------------------------------
+
+# btrkeks/polish-scores' kern transcriptions do not reliably encode SOME articulation
+# marks, even on pages where the source engraving has them on nearly every note.
+# Confirmed by an audit of all 112 samples (grep each kern for every articulation
+# character humdrum_kern_parser.py recognizes):
+#   staccato ('), staccatissimo (`), turn (S or $): ZERO occurrences in ALL 112 samples
+#   accent (^), arpeggiate (:), fermata (;), trill/mordent (t/T/m/M): present normally
+#     (e.g. accent: 377 occurrences across 96/112 samples) - these are NOT excluded
+# Concrete, independently-checkable proof for staccato specifically: sample 79
+# ("Gavotte", Jules Zarembski Op. 29) shows a staccato dot under/over nearly every
+# single note in both staves throughout the whole page - see
+# datasets/polish-scores/79.png - yet its kern transcription
+# (datasets/polish-scores/79.krn) contains zero staccato markers ('):
+#   python -c "print(open('datasets/polish-scores/79.krn').read().count(chr(39)))"   # -> 0
+# Scoring these specific marks against ground truth like this measures the dataset's own
+# transcription completeness, not tool accuracy - staccato hallucination was the single
+# largest confusion pair in the whole polish-scores benchmark (1521 occurrences) before
+# this exclusion existed. Accent, despite also being a large confusion pair, is NOT
+# included here: the audit shows it genuinely is encoded in 86% of samples, so its
+# hallucination rate is real signal about tool accuracy, not a ground-truth artifact.
+#
+# This is a btrkeks/polish-scores transcription artifact, not a property of the underlying
+# scores/edition: the alternative HuggingFace dataset PRAIG/polish-scores covers the same
+# scores and does reliably encode these marks. We still use btrkeks/polish-scores because
+# it ships plain **kern directly, while PRAIG/polish-scores uses **ekern and requires the
+# kernpy package to convert to **kern first - kernpy pins a antlr4-python3-runtime version
+# that hard-conflicts with omegaconf (a transitive dependency of rapidocr, used in homr's
+# live title-detection pipeline). So the transcription gap is accepted as the cost of
+# avoiding that dependency conflict, not because a cleaner-ground-truth dataset is
+# unavailable.
+#
+# This must stay opt-in: every scoring entry point below defaults
+# ignore_unreliable_articulation to False, and only validation/polish-scores.py ever
+# passes True. Other datasets (e.g. smb) have not been audited for the same problem and
+# must not silently inherit this exception just because they share this scoring code.
+
+# Only these specific components are unreliable in this dataset's ground truth (see
+# audit above) - NOT the whole articulation field, which also carries accent, arpeggiate,
+# fermata, trill, mordent etc. that ARE reliably encoded and must keep contributing to
+# the score.
+_UNRELIABLE_ARTICULATION_COMPONENTS = frozenset({"staccato", "staccatissimo", "turn"})
+
+
+def _without_unreliable_articulation(articulation: str) -> str:
+    """Removes only the unreliable components from a (possibly compound,
+    underscore-joined) articulation value, e.g. "accent_staccato" -> "accent" - accent
+    must survive since it is reliably encoded (see audit above), only the co-occurring
+    staccato mark is dropped. nonote (".") and empty ("_") pass through unchanged."""
+    if articulation in (nonote, empty):
+        return articulation
+    kept = [c for c in articulation.split("_") if c not in _UNRELIABLE_ARTICULATION_COMPONENTS]
+    return "_".join(kept) if kept else empty
+
+
+def _strip_articulation_from_parts(
+    parts: list[list[EncodedSymbol]],
+) -> list[list[EncodedSymbol]]:
+    """Native-path counterpart to _strip_articulation_from_score below: rewrites
+    articulation on a copy of every symbol so the unreliable components can never
+    contribute to the diff, without touching rhythm/pitch/lift/slur/position or any
+    other (reliable) articulation component."""
+    result = []
+    for part in parts:
+        new_part = []
+        for s in part:
+            cleared = copy.copy(s)
+            cleared.articulation = _without_unreliable_articulation(s.articulation)
+            new_part.append(cleared)
+        result.append(new_part)
+    return result
+
+
+def _strip_articulation_from_score(score: "m21.stream.Score") -> None:
+    """musicdiff-path counterpart to _strip_articulation_from_parts above: mutates the
+    music21 Score in place, removing only Staccato/Staccatissimo articulations and
+    Turn/InvertedTurn expressions - the same narrow set as the native path, leaving
+    accent, fermata, trill, mordent, etc. untouched."""
+    import music21.articulations as m21_articulations  # noqa: PLC0415
+    import music21.expressions as m21_expressions  # noqa: PLC0415
+
+    unreliable_articulations = (m21_articulations.Staccato, m21_articulations.Staccatissimo)
+    unreliable_expressions = (m21_expressions.Turn, m21_expressions.InvertedTurn)
+    for n in score.recurse().notes:
+        n.articulations = [
+            a for a in n.articulations if not isinstance(a, unreliable_articulations)
+        ]
+        n.expressions = [e for e in n.expressions if not isinstance(e, unreliable_expressions)]
 
 
 # ---------------------------------------------------------------------------
@@ -245,13 +340,23 @@ def _parse_output(
     raw_output: str,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
-    """Parse ground-truth kern and tool raw output into aligned per-part token lists."""
+    """Parse ground-truth kern and tool raw output into aligned per-part token lists.
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions"
+    above - opt-in only, set by callers benchmarking datasets with confirmed-unreliable
+    articulation ground truth.
+    """
     kern_raw = _kern_parts(kern_text, kern_parser)
     gt_parts = [
         _strip_position([t for chord in sort_token_chords(p) for t in chord]) for p in kern_raw
     ]
-    return gt_parts, _pred_parts(raw_output, kern_parser, xml_parser)
+    pred_parts = _pred_parts(raw_output, kern_parser, xml_parser)
+    if ignore_unreliable_articulation:
+        gt_parts = _strip_articulation_from_parts(gt_parts)
+        pred_parts = _strip_articulation_from_parts(pred_parts)
+    return gt_parts, pred_parts
 
 
 # Brute-force exact assignment is only used up to this many parts (8! = 40320
@@ -425,9 +530,16 @@ def _alignment_events(
     return events
 
 
-def compute_ned(kern_text: str, raw_output: str) -> NedResult:
-    """Compute OMR-NED between kern ground truth and tool output (MusicXML or **kern)."""
-    kern_parts, pred_parts = _parse_output(kern_text, raw_output)
+def compute_ned(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
+    """Compute OMR-NED between kern ground truth and tool output (MusicXML or **kern).
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
+    """
+    kern_parts, pred_parts = _parse_output(
+        kern_text, raw_output, ignore_unreliable_articulation=ignore_unreliable_articulation
+    )
     return _ned_from_parts(kern_parts, pred_parts)
 
 
@@ -464,7 +576,9 @@ def _musicdiff_register_once() -> None:
         )
 
 
-def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
+def _musicdiff_parse_scores(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> tuple:
     """Parse kern ground truth and tool output into music21 Score objects.
 
     For kern predictions, acceptSyntaxErrors=True lets converter21 repair malformed
@@ -472,6 +586,8 @@ def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
     Each repaired error is counted as an additional edit-distance unit via
     AnnScore.num_syntax_errors_fixed, so they are penalised without completely
     breaking the alignment.
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
     """
     import music21 as m21  # noqa: PLC0415
 
@@ -510,10 +626,15 @@ def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
     pred_score: m21.stream.Score = (
         pred_raw if isinstance(pred_raw, m21.stream.Score) else m21.stream.Score()
     )
+    if ignore_unreliable_articulation:
+        _strip_articulation_from_score(gt_score)
+        _strip_articulation_from_score(pred_score)
     return gt_score, pred_score
 
 
-def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
+def _musicdiff_ned_for_sample(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
     """Compute OMR-NED using musicdiff's full structural comparison (DetailLevel.Default).
 
     Component NEDs (rhythm, pitch, lift, articulation, slur) are not available in this
@@ -521,11 +642,14 @@ def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
     (OMR-ED + syntax_fixes) / (numsyms_gt + numsyms_pred).
 
     Call _musicdiff_register_once() before entering a batch loop.
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
     """
     from musicdiff.annotation import AnnScore  # noqa: PLC0415
     from musicdiff.comparison import Comparison  # noqa: PLC0415
 
-    gt_score, pred_score = _musicdiff_parse_scores(kern_text, raw_output)
+    gt_score, pred_score = _musicdiff_parse_scores(
+        kern_text, raw_output, ignore_unreliable_articulation
+    )
 
     ann_gt: AnnScore = AnnScore(gt_score)
     ann_pred: AnnScore = AnnScore(pred_score)
@@ -553,7 +677,9 @@ def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
     )
 
 
-def _musicdiff_detailed_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
+def _musicdiff_detailed_ned_for_sample(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
     """Compute OMR-NED with per-component breakdown using multiple musicdiff DetailLevel runs.
 
     Runs 5 separate comparisons to isolate component costs:
@@ -568,12 +694,17 @@ def _musicdiff_detailed_ned_for_sample(kern_text: str, raw_output: str) -> NedRe
 
     Slower than the plain 'musicdiff' mode due to the additional comparisons.
     Call _musicdiff_register_once() before entering a batch loop.
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above -
+    when set, articulation_ned above is computed from scores with no articulations left on
+    either side, so it will read as 0 (or NaN if artic_syms ends up 0), not a real measurement.
     """
     from musicdiff.annotation import AnnScore  # noqa: PLC0415
     from musicdiff.comparison import Comparison  # noqa: PLC0415
     from musicdiff.detaillevel import DetailLevel  # noqa: PLC0415
 
-    gt_score, pred_score = _musicdiff_parse_scores(kern_text, raw_output)
+    gt_score, pred_score = _musicdiff_parse_scores(
+        kern_text, raw_output, ignore_unreliable_articulation
+    )
 
     def _compare(dl: int) -> tuple[int, int, int, int]:
         """Return (ed, syntax_fixes, gt_size, pred_size) for one DetailLevel."""

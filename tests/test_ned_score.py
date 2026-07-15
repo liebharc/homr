@@ -2,7 +2,14 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from homr.transformer.vocabulary import EncodedSymbol
-from validation.ned_score import _align_parts, _ned_from_parts, _split_grand_staff
+from validation.ned_score import (
+    _align_parts,
+    _ned_from_parts,
+    _split_grand_staff,
+    _strip_articulation_from_parts,
+    _without_unreliable_articulation,
+    compute_ned,
+)
 
 
 def _sym(rhythm: str) -> EncodedSymbol:
@@ -129,3 +136,60 @@ class TestAlignParts(unittest.TestCase):
 
         self.assertEqual(0, result.distance)
         self.assertEqual(0.0, result.ned)
+
+
+class TestUnreliableArticulation(unittest.TestCase):
+    def test_removes_only_unreliable_components(self) -> None:
+        self.assertEqual(_without_unreliable_articulation("staccato"), "_")
+        self.assertEqual(_without_unreliable_articulation("staccatissimo"), "_")
+        self.assertEqual(_without_unreliable_articulation("turn"), "_")
+        self.assertEqual(_without_unreliable_articulation("staccatissimo_staccato"), "_")
+
+    def test_keeps_reliable_components_of_compound_values(self) -> None:
+        self.assertEqual(_without_unreliable_articulation("accent_staccato"), "accent")
+        self.assertEqual(_without_unreliable_articulation("fermata_turn"), "fermata")
+        self.assertEqual(
+            _without_unreliable_articulation("accent_staccato_tenuto"), "accent_tenuto"
+        )
+
+    def test_leaves_reliable_only_values_unchanged(self) -> None:
+        self.assertEqual(_without_unreliable_articulation("accent"), "accent")
+
+    def test_passes_through_nonote_and_empty(self) -> None:
+        self.assertEqual(_without_unreliable_articulation("."), ".")
+        self.assertEqual(_without_unreliable_articulation("_"), "_")
+
+    def test_strip_articulation_from_parts_clears_only_unreliable_symbols(self) -> None:
+        part = [
+            EncodedSymbol("note_4", "C5", articulation="staccato"),
+            EncodedSymbol("note_4", "D5", articulation="accent"),
+            EncodedSymbol("note_4", "E5", articulation="accent_staccato"),
+        ]
+
+        result = _strip_articulation_from_parts([part])
+
+        self.assertEqual(
+            [s.articulation for s in result[0]],
+            ["_", "accent", "accent"],
+        )
+        # Original symbols must not be mutated - only copies are edited.
+        self.assertEqual(part[0].articulation, "staccato")
+
+    def test_compute_ned_ignores_staccato_mismatch_when_flag_set(self) -> None:
+        kern = "**kern\n4c\n4d\n4e\n*-\n"
+        pred = "**kern\n4c'\n4d\n4e'\n*-\n"
+
+        without_flag = compute_ned(kern, pred)
+        with_flag = compute_ned(kern, pred, ignore_unreliable_articulation=True)
+
+        self.assertGreater(without_flag.articulation_ned, 0.0)
+        self.assertEqual(with_flag.articulation_ned, 0.0)
+        self.assertEqual(with_flag.ned, 0.0)
+
+    def test_compute_ned_still_scores_accent_mismatch_when_flag_set(self) -> None:
+        kern = "**kern\n4c\n4d^\n4e\n*-\n"
+        pred = "**kern\n4c\n4d\n4e\n*-\n"
+
+        with_flag = compute_ned(kern, pred, ignore_unreliable_articulation=True)
+
+        self.assertGreater(with_flag.articulation_ned, 0.0)
