@@ -338,8 +338,7 @@ def _ned_from_parts(
 
     def _cned(field: str) -> float:
         return (
-            sum(_component_dist(kern_parts[i], xml_parts[i], field) for i in range(n))
-            / denominator
+            sum(_component_dist(kern_parts[i], xml_parts[i], field) for i in range(n)) / denominator
         )
 
     return NedResult(

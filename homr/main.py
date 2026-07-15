@@ -195,9 +195,7 @@ def process_image(
             # two code paths feed the symbol-recognition encoder consistent input.
             image = color_adjust.apply_clahe(image)
         else:
-            multi_staffs, image, debug, title_future, _ = detect_staffs_in_image(
-                image_path, config
-            )
+            multi_staffs, image, debug, title_future, _ = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
 
         transformer_config = Config()

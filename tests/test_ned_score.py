@@ -8,6 +8,7 @@ from validation.ned_score import _align_parts, _ned_from_parts, _split_grand_sta
 def _sym(rhythm: str) -> EncodedSymbol:
     return EncodedSymbol(rhythm)
 
+
 _GRAND_STAFF_PART = """
   <part id="P1">
     <measure number="1">
