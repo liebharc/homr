@@ -12,6 +12,7 @@ import contextlib
 import copy
 import difflib
 import io
+import itertools
 import os
 import tempfile
 import xml.etree.ElementTree as ET
@@ -253,25 +254,93 @@ def _parse_output(
     return gt_parts, _pred_parts(raw_output, kern_parser, xml_parser)
 
 
+# Brute-force exact assignment is only used up to this many parts (8! = 40320
+# permutations, each a handful of editdistance.eval calls - a few tens of ms
+# at most). Real scores in these datasets top out around quartets (4 parts);
+# this is a generous margin above that, not a tuned/observed limit.
+_MAX_PARTS_FOR_EXACT_MATCHING = 8
+
+
+def _greedy_part_permutation(cost: list[list[int]]) -> list[int]:
+    """Fallback for _best_part_permutation when there are too many parts to brute-force:
+    repeatedly take the cheapest remaining (kern-index, xml-index) pair. Not guaranteed
+    optimal, but reasonable, and only reached for part counts not observed in practice.
+    """
+    n = len(cost)
+    remaining_rows = set(range(n))
+    remaining_cols = set(range(n))
+    perm = [-1] * n
+    pairs = sorted((cost[i][j], i, j) for i in range(n) for j in range(n))
+    for _, i, j in pairs:
+        if i in remaining_rows and j in remaining_cols:
+            perm[i] = j
+            remaining_rows.discard(i)
+            remaining_cols.discard(j)
+    return perm
+
+
+def _best_part_permutation(cost: list[list[int]]) -> list[int]:
+    """Returns perm such that pairing row i with column perm[i] minimizes total cost."""
+    n = len(cost)
+    if n <= 1:
+        return list(range(n))
+    if n > _MAX_PARTS_FOR_EXACT_MATCHING:
+        return _greedy_part_permutation(cost)
+    best_perm = list(range(n))
+    best_total = sum(cost[i][best_perm[i]] for i in range(n))
+    for perm in itertools.permutations(range(n)):
+        total = sum(cost[i][j] for i, j in enumerate(perm))
+        if total < best_total:
+            best_total = total
+            best_perm = list(perm)
+    return best_perm
+
+
+def _align_parts(
+    kern_parts: list[list[EncodedSymbol]],
+    xml_parts: list[list[EncodedSymbol]],
+) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
+    """
+    Reorders xml_parts (after padding both lists to equal length with empty parts as
+    needed) so that xml_parts[i] is the best content match for kern_parts[i], rather than
+    assuming the two already agree on part order.
+
+    Kern's spine order and a tool's part order do not always follow the same convention -
+    e.g. a kern file can encode a vocal-plus-piano piece as [bass, treble, treble], while
+    homr's split-grand-staff output (see _split_grand_staff) lists [vocal, piano-treble,
+    piano-bass] for the same piece - a near-exact reversal despite every part having a
+    real, correct match. Aligning purely by position would compare kern's bass against
+    homr's vocal part, wildly inflating both the aggregate NED and any per-part
+    diagnostics, even though the transcription itself may be perfectly fine. Matching by
+    minimum total edit distance (an assignment problem, solved exactly for the realistic
+    part counts in these datasets - see _best_part_permutation) finds the correct
+    correspondence regardless of what order either side happens to list parts in.
+    """
+    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_padded = [kern_parts[i] if i < len(kern_parts) else [] for i in range(n)]
+    xml_padded = [xml_parts[i] if i < len(xml_parts) else [] for i in range(n)]
+    cost = [[editdistance.eval(k, x) for x in xml_padded] for k in kern_padded]
+    perm = _best_part_permutation(cost)
+    return kern_padded, [xml_padded[j] for j in perm]
+
+
 def _ned_from_parts(
     kern_parts: list[list[EncodedSymbol]],
     xml_parts: list[list[EncodedSymbol]],
 ) -> NedResult:
-    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_parts, xml_parts = _align_parts(kern_parts, xml_parts)
+    n = len(kern_parts)
 
-    def _kp(i: int) -> list[EncodedSymbol]:
-        return kern_parts[i] if i < len(kern_parts) else []
-
-    def _xp(i: int) -> list[EncodedSymbol]:
-        return xml_parts[i] if i < len(xml_parts) else []
-
-    total_dist = sum(editdistance.eval(_kp(i), _xp(i)) for i in range(n))
+    total_dist = sum(editdistance.eval(kern_parts[i], xml_parts[i]) for i in range(n))
     kern_len = sum(len(k) for k in kern_parts)
     xml_len = sum(len(x) for x in xml_parts)
     denominator = max(kern_len + xml_len, 1)
 
     def _cned(field: str) -> float:
-        return sum(_component_dist(_kp(i), _xp(i), field) for i in range(n)) / denominator
+        return (
+            sum(_component_dist(kern_parts[i], xml_parts[i], field) for i in range(n))
+            / denominator
+        )
 
     return NedResult(
         ned=total_dist / denominator,
@@ -296,12 +365,11 @@ def _events_for_parts(
     kern_parts: list[list[EncodedSymbol]],
     xml_parts: list[list[EncodedSymbol]],
 ) -> list[TokenEvent]:
-    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_parts, xml_parts = _align_parts(kern_parts, xml_parts)
+    n = len(kern_parts)
     events: list[TokenEvent] = []
     for i in range(n):
-        k = kern_parts[i] if i < len(kern_parts) else []
-        x = xml_parts[i] if i < len(xml_parts) else []
-        events.extend(_alignment_events(k, x, _part_staff_name(i, n)))
+        events.extend(_alignment_events(kern_parts[i], xml_parts[i], _part_staff_name(i, n)))
     return events
 
 

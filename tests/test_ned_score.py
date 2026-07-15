@@ -1,7 +1,12 @@
 import unittest
 import xml.etree.ElementTree as ET
 
-from validation.ned_score import _split_grand_staff
+from homr.transformer.vocabulary import EncodedSymbol
+from validation.ned_score import _align_parts, _ned_from_parts, _split_grand_staff
+
+
+def _sym(rhythm: str) -> EncodedSymbol:
+    return EncodedSymbol(rhythm)
 
 _GRAND_STAFF_PART = """
   <part id="P1">
@@ -85,3 +90,41 @@ class TestSplitGrandStaff(unittest.TestCase):
 
     def test_invalid_xml_returns_input_unchanged(self) -> None:
         self.assertEqual("not xml", _split_grand_staff("not xml"))
+
+
+class TestAlignParts(unittest.TestCase):
+    def test_reorders_reversed_parts_by_content(self) -> None:
+        # kern lists [bass, treble] but the tool's split-grand-staff output
+        # lists [treble, bass] for the same piece - the exact reversal found
+        # in polish-scores samples like 43 and 52 (see memory).
+        bass = [_sym("note_4"), _sym("note_8"), _sym("note_4")]
+        treble = [_sym("note_8"), _sym("note_16"), _sym("note_16"), _sym("note_4")]
+        kern_parts = [bass, treble]
+        xml_parts = [treble, bass]
+
+        aligned_kern, aligned_xml = _align_parts(kern_parts, xml_parts)
+
+        self.assertEqual(aligned_kern, [bass, treble])
+        self.assertEqual(aligned_xml, [bass, treble])
+
+    def test_already_aligned_parts_are_unchanged(self) -> None:
+        part_a = [_sym("note_4"), _sym("note_8")]
+        part_b = [_sym("note_16"), _sym("note_4"), _sym("note_4")]
+
+        aligned_kern, aligned_xml = _align_parts([part_a, part_b], [part_a, part_b])
+
+        self.assertEqual(aligned_kern, [part_a, part_b])
+        self.assertEqual(aligned_xml, [part_a, part_b])
+
+    def test_ned_from_parts_ignores_part_order(self) -> None:
+        # Same content as test_reorders_reversed_parts_by_content: a perfect,
+        # zero-distance match once parts are correctly paired up. Before the
+        # fix, comparing positionally (kern's bass against the tool's treble)
+        # would have produced a large, spurious NED for identical content.
+        bass = [_sym("note_4"), _sym("note_8"), _sym("note_4")]
+        treble = [_sym("note_8"), _sym("note_16"), _sym("note_16"), _sym("note_4")]
+
+        result = _ned_from_parts([bass, treble], [treble, bass])
+
+        self.assertEqual(0, result.distance)
+        self.assertEqual(0.0, result.ned)
