@@ -1,3 +1,5 @@
+# flake8: noqa: S101
+
 """
 OMR tools: callables with signature (kern_text: str, image: Path | None) -> str.
 
@@ -14,7 +16,6 @@ To add a new tool: implement a callable with the signature above and add it to T
 
 import copy
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -22,6 +23,8 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from validation.ned_benchmark import Sample
 
 ToolFn = Callable[[str, "Path | None"], str]
 
@@ -210,48 +213,29 @@ class HomrTool:
 
     def batch_run(
         self,
-        samples: list[tuple[str, str, Path | None]],
-    ) -> list[tuple[str | None, str | None]]:
-        """
-        Process all samples in one homr invocation.
-
-        Returns a list of (output_xml, error_message) parallel to samples.
-        output_xml is None (and error_message set) when a sample failed.
-        """
-        results: list[tuple[str | None, str | None]] = []
-
+        samples: list[Sample],
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            stem_by_index: list[str | None] = []
 
-            for sample_id, _kern, image in samples:
-                if image is None:
-                    stem_by_index.append(None)
-                    continue
-                safe = re.sub(r"[^A-Za-z0-9_-]", "_", sample_id)
-                dst = tmp / (safe + image.suffix)
-                # Avoid name collisions by appending a counter when needed.
-                if dst.exists():
-                    dst = tmp / (safe + f"_{os.urandom(4).hex()}" + image.suffix)
-                shutil.copy(image, dst)
-                stem_by_index.append(dst.stem)
+            for sample in samples:
+                assert sample.image_path
+                dst = tmp / f"{sample.sample_id}{sample.image_path.suffix}"
+                dst.symlink_to(sample.image_path.resolve())
 
             try:
                 _run_homr_on_dir(tmp)
             except RuntimeError as e:
-                return [(None, str(e))] * len(samples)
+                for sample in samples:
+                    sample.set_failure(str(e))
+                return
 
-            for stem in stem_by_index:
-                if stem is None:
-                    results.append((None, "no image provided for this sample"))
-                    continue
-                xml_path = tmp / (stem + ".musicxml")
+            for sample in samples:
+                xml_path = tmp / f"{sample.sample_id}.musicxml"
                 if xml_path.exists():
-                    results.append((xml_path.read_text(encoding="utf-8"), None))
+                    sample.set_success(xml_path.read_text(encoding="utf-8"))
                 else:
-                    results.append((None, f"homr produced no .musicxml for {stem}"))
-
-        return results
+                    sample.set_failure(f"homr produced no .musicxml for {sample.sample_id}")
 
 
 def transcoda(kern_text: str, image: Path | None) -> str:
@@ -324,16 +308,17 @@ class SmtTool:
     def __call__(self, kern_text: str, image: Path | None) -> str:
         if image is None:
             raise ValueError("SMT requires an image; the dataset may not provide one.")
-        results = self.batch_run([("_", "", image)])
-        output, error = results[0]
+        samples = [Sample("_", "", image)]
+        self.batch_run(samples)
+        output, error = samples[0].raw_output, samples[0].error
         if error:
             raise RuntimeError(error)
         return output  # type: ignore[return-value]
 
     def batch_run(
         self,
-        samples: list[tuple[str, str, Path | None]],
-    ) -> list[tuple[str | None, str | None]]:
+        samples: list[Sample],
+    ) -> None:
         """
         Process all samples in one SMT invocation (model loaded once).
 
@@ -342,18 +327,9 @@ class SmtTool:
         """
         self._check_paths()
 
-        results: list[tuple[str | None, str | None]] = [
-            (None, "no image provided for this sample") for _ in samples
-        ]
-        valid: list[tuple[int, Path]] = [
-            (i, image) for i, (_, _, image) in enumerate(samples) if image is not None
-        ]
-        if not valid:
-            return results
-
         with tempfile.TemporaryDirectory() as tmpdir:
             paths_file = Path(tmpdir) / "paths.json"
-            paths_file.write_text(json.dumps([str(img) for _, img in valid]))
+            paths_file.write_text(json.dumps([str(sample.image_path) for sample in samples]))
 
             proc = subprocess.run(  # noqa: S603
                 [  # noqa: S607
@@ -372,18 +348,16 @@ class SmtTool:
             if proc.returncode != 0:
                 stderr = proc.stderr.decode("utf-8", errors="replace")
                 error = f"SMT exited with code {proc.returncode}\n{stderr[:1000]}"
-                for orig_idx, _ in valid:
-                    results[orig_idx] = (None, error)
-                return results
+                for sample in samples:
+                    sample.set_failure(error)
+                return
 
             batch_results: list[dict] = json.loads(proc.stdout.decode("utf-8"))
-            for (orig_idx, _), br in zip(valid, batch_results, strict=True):
+            for sample, br in zip(samples, batch_results, strict=True):
                 if br["ok"]:
-                    results[orig_idx] = (_ensure_kern_header(br["kern"]), None)
+                    sample.set_success(_ensure_kern_header(br["kern"]))
                 else:
-                    results[orig_idx] = (None, br["error"])
-
-        return results
+                    sample.set_failure(br["error"])
 
 
 def oemer(kern_text: str, image: Path | None) -> str:
