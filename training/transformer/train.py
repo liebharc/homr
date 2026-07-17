@@ -131,11 +131,11 @@ def train_transformer(
 ) -> None:
     distribute = Distribute()
 
-    number_of_epochs = 35
+    number_of_epochs = 30
     if smoke_test:
-        number_of_epochs = 10
+        number_of_epochs = 5
     elif fine_tune:
-        number_of_epochs = 15
+        number_of_epochs = 5
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
