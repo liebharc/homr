@@ -126,10 +126,13 @@ class Config:
         # --coreml-encoder CLI flag.
         self.use_coreml_encoder = False
 
-        # Scheduled Sampling parameters
-        self.scheduled_sampling_start_prob = 1.0
-        self.scheduled_sampling_end_prob = 0.4
-        self.scheduled_sampling_decay_steps = 45000
+        # History dropout: probability of corrupting a teacher-forced input token
+        # (replacing it with the pad token) so the decoder cannot shortcut on its
+        # own recent output history and must rely on the cross-attended image
+        # features instead. Ramps up from start to end over decay_steps.
+        self.history_dropout_start_prob = 0.0
+        self.history_dropout_end_prob = 0.15
+        self.history_dropout_decay_steps = 45000
 
     def to_dict(self) -> dict[str, Any]:
         return {

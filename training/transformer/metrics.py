@@ -53,17 +53,17 @@ class HomrTrainer(Trainer):
         num_items_in_batch: Tensor | int | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if model.training:
-            # Calculate sampling probability
+            # Calculate history dropout probability (ramps up from start to end)
             config = getattr(model, "config", None)
             if config:
-                start_p = config.scheduled_sampling_start_prob
-                end_p = config.scheduled_sampling_end_prob
-                decay = config.scheduled_sampling_decay_steps
+                start_p = config.history_dropout_start_prob
+                end_p = config.history_dropout_end_prob
+                decay = config.history_dropout_decay_steps
                 step = self.state.global_step
-                sampling_prob = max(end_p, start_p - (start_p - end_p) * (step / decay))
-                inputs["sampling_prob"] = sampling_prob
+                dropout_prob = min(end_p, start_p + (end_p - start_p) * (step / decay))
+                inputs["history_dropout_prob"] = dropout_prob
             else:
-                inputs["sampling_prob"] = 1.0
+                inputs["history_dropout_prob"] = 0.0
 
         outputs = model(**inputs)
         loss = outputs["loss"]
