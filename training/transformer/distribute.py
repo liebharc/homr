@@ -2,6 +2,7 @@
 # flake8: noqa: S101
 
 import os
+from datetime import timedelta
 
 import torch
 
@@ -20,7 +21,9 @@ class Distribute:
         local_rank = int(os.environ.get("LOCAL_RANK", "0"))
         torch.cuda.set_device(local_rank)
         self._device = torch.device(f"cuda:{local_rank}")
-        torch.distributed.init_process_group(backend="nccl", device_id=self._device)
+        torch.distributed.init_process_group(
+            backend="nccl", device_id=self._device, timeout=timedelta(hours=3)
+        )
         self.enabled = True
         self.rank = torch.distributed.get_rank()
         self.world_size = world_size
