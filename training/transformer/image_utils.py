@@ -12,6 +12,7 @@ from homr.type_definitions import NDArray
 from training.transformer.augraphy_augment import apply_augraphy
 
 _texture_config: dict = {"dir": None, "paths": None}
+cv2.setNumThreads(0)
 
 
 def set_texture_dir(path: str) -> None:
