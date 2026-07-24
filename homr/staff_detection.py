@@ -453,12 +453,6 @@ def find_staff_anchors(
                     if (line.max_x - line.min_x)
                     > constants.is_short_connected_line(estimated_unit_size)
                 ]
-            if len(connected_lines) == constants.number_of_lines_on_a_staff - 1:
-                extrapolated = _extrapolate_missing_staff_line(
-                    connected_lines, symbol, estimated_unit_size
-                )
-                if extrapolated is not None:
-                    connected_lines = extrapolated
             if not len(connected_lines) == constants.number_of_lines_on_a_staff:
                 continue
             if not are_lines_parallel(connected_lines, estimated_unit_size):
@@ -611,63 +605,6 @@ def filter_unusual_anchors(anchors: list[StaffAnchor]) -> list[StaffAnchor]:
             continue
         result.append(anchor)
     return result
-
-
-def _cluster_anchors_by_staff(anchors: list[StaffAnchor]) -> list[list[StaffAnchor]]:
-    """
-    Group anchors whose Y-ranges overlap - i.e. anchors found at different x-positions
-    (or via a clef vs. a bar line) for what is physically the same staff - into one
-    cluster per staff. Anchors are otherwise unordered/unrelated at this point, so this
-    is the only way to tell "these belong to the same staff" from "these are neighbors".
-    """
-    by_y = sorted(anchors, key=lambda a: a.min_y)
-    clusters: list[list[StaffAnchor]] = []
-    cluster_max_y = float("-inf")
-    for anchor in by_y:
-        if clusters and anchor.min_y <= cluster_max_y:
-            clusters[-1].append(anchor)
-        else:
-            clusters.append([anchor])
-        cluster_max_y = max(a.max_y for a in clusters[-1])
-    return clusters
-
-
-def cap_anchor_zones_to_neighbors(anchors: list[StaffAnchor]) -> None:
-    """
-    StaffAnchor.zone extends 5 unit-sizes past the anchor's own staff lines to catch
-    ledger-line notes above/below. In densely packed multi-staff systems (e.g. a choral
-    score with 3+ close staves per system) that extension can reach into a neighboring
-    staff only a few unit-sizes away, pulling its line fragments into this staff's
-    detection in find_raw_staffs_by_connecting_line_fragments and producing a
-    contaminated, oversized RawStaff. Cap every anchor's zone at the midpoint to the
-    nearest neighboring staff's own anchors, when that's closer than the default
-    ledger-line margin - capping has to apply per staff (a cluster of anchors at
-    different x-positions/symbols sharing one Y-range), not per individual anchor,
-    since only some of a staff's anchors would otherwise end up adjacent, in sorted
-    order, to the neighboring staff that should cap them.
-
-    Mutates the anchors' .zone in place.
-    """
-    clusters = _cluster_anchors_by_staff(anchors)
-    for i, cluster in enumerate(clusters):
-        cluster_min_y = min(a.min_y for a in cluster)
-        cluster_max_y = max(a.max_y for a in cluster)
-        start_cap = None
-        stop_cap = None
-        if i > 0:
-            previous_max_y = max(a.max_y for a in clusters[i - 1])
-            start_cap = int((previous_max_y + cluster_min_y) / 2)
-        if i < len(clusters) - 1:
-            following_min_y = min(a.min_y for a in clusters[i + 1])
-            stop_cap = int((cluster_max_y + following_min_y) / 2)
-        for anchor in cluster:
-            zone_start = anchor.zone.start
-            zone_stop = anchor.zone.stop
-            if start_cap is not None:
-                zone_start = max(zone_start, start_cap)
-            if stop_cap is not None:
-                zone_stop = min(zone_stop, stop_cap)
-            anchor.zone = range(zone_start, zone_stop)
 
 
 def init_zone(clef_anchors: list[StaffAnchor], image_shape: tuple[int, ...]) -> list[range]:
@@ -864,7 +801,6 @@ def detect_staff(
     )
 
     staff_anchors = filter_unusual_anchors(staff_anchors)
-    cap_anchor_zones_to_neighbors(staff_anchors)
     eprint("Found " + str(len(staff_anchors)) + " staff anchors")
     debug.write_bounding_boxes_alternating_colors("staff_anchors", staff_anchors)
 
