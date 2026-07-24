@@ -215,55 +215,6 @@ def _music_font_for_file(source_file: str) -> str:
     return _MUSIC_FONTS[index]
 
 
-"""
-In mscx file, tuplet can be set invisible via the following ways:
-1. <Tuplet( id="...")>
-     <visible>0</visible>
-   </Tuplet>
-    this is equal to <notations print-object="no"> in musicXML
-2. <numberType>2</numberType>
-    this is equal to <tuplet show-number="none" ...> in musicXML
-3. <bracketType>2</bracketType>
-    this is equal to <tuplet bracket="no" ...> in musicXML
-4. numberType & bracketType can be set globally via <tupletNumberType> & <tupletBracketType>
-
-recommend reading lc5033057 from Lieder to better understand the rules about tuplet visibility.
-"""
-
-
-def _make_tuplet_visible(mscx_file: str) -> None:
-    with open(mscx_file, encoding="utf-8") as f:
-        content = f.read()
-
-    # match: <visible>0</visible> or <numberType>2</numberType>
-    # or <bracketType>2</bracketType>
-    strip_re = re.compile(
-        r"[ \t]*<(?:visible>0|numberType>2|bracketType>2)"
-        r"</(?:visible|numberType|bracketType)>[ \t]*\r?\n"
-    )
-
-    def strip_hidden(match: "re.Match[str]") -> str:
-        return strip_re.sub("", match.group(0))
-
-    # match within <Tuplet> ... </Tuplet>
-    new_content = re.sub(
-        r"<Tuplet(?:\s[^>]*)?>.*?</Tuplet>", strip_hidden, content, flags=re.DOTALL
-    )
-
-    # match globally: <tupletNumberType>2</tupletNumberType>
-    # or <tupletBracketType>2</tupletBracketType>
-    new_content = re.sub(
-        r"[ \t]*<(?:tupletNumberType|tupletBracketType)>2"
-        r"</(?:tupletNumberType|tupletBracketType)>[ \t]*\r?\n",
-        "",
-        new_content,
-    )
-
-    if new_content != content:
-        with open(mscx_file, "w", encoding="utf-8") as f:
-            f.write(new_content)
-
-
 def _make_staff_visible(mscx_file: str) -> None:
     """
     When rendering SVG, MuseScore can hide empty staff.
@@ -347,7 +298,6 @@ def _create_musicxml_and_svg_files() -> None:
     all_jobs = []
 
     for file in mscx_files:
-        _make_tuplet_visible(str(file))
         _make_staff_visible(str(file))
         _reset_note_positions(str(file))
         style_file = _music_font_style_file(_music_font_for_file(str(file)))
