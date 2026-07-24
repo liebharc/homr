@@ -16,17 +16,11 @@ import argparse
 import tempfile
 from pathlib import Path
 
-from validation.ned_benchmark import run_benchmark, update_ned_scores
+from validation.ned_benchmark import Sample, run_benchmark, update_ned_scores
 from validation.tools import TOOLS
 
 
-def get_smb_samples(image_dir: Path) -> list[tuple[str, str, Path]]:
-    """Yield (sample_id, kern_text, image_path) for each page in PRAIG/SMB.
-
-    Passes the full page image to allow proper end-to-end OMR evaluation.
-    Ground truth priority: page.kern > top-level kern > concatenated region kern.
-    image_path is only set when image_dir is provided and the page has an image.
-    """
+def get_smb_samples(image_dir: Path) -> list[Sample]:
     from datasets import Image, load_dataset  # type: ignore  # noqa: PLC0415
 
     ds = load_dataset("PRAIG/SMB")["test"]
@@ -43,13 +37,14 @@ def get_smb_samples(image_dir: Path) -> list[tuple[str, str, Path]]:
         image_path = image_dir / f"{i}.png"
         image_path.write_bytes(sample["image"]["bytes"])
 
-        result.append((str(i), kern, image_path))
+        result.append(Sample(str(i), kern, image_path))
     return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="OMR-NED benchmark for PRAIG/SMB.")
     parser.add_argument("--limit", type=int, default=None, help="Only process N samples.")
+    parser.add_argument("--workers", type=int, default=1, help="Number of threads to use.")
     parser.add_argument("--verbose", action="store_true", help="Print traceback on failure.")
     parser.add_argument("--output", type=str, default=None, help="Path to SQLite output file.")
     parser.add_argument(
@@ -116,6 +111,7 @@ def main() -> None:
         run_benchmark(
             get_smb_samples(image_dir=Path(image_dir)),
             tool,
+            args.workers,
             limit=args.limit,
             verbose=args.verbose,
             output_db=output_db,

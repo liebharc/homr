@@ -1,3 +1,5 @@
+# flake8: noqa: S101
+
 import math
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -628,33 +630,42 @@ def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> N
     ET.SubElement(style, "multiple-rest").text = str(duration)
 
 
+def build_backup(duration: Fraction, state: ConversionState) -> ET.Element:
+    assert duration > Fraction(0), "Backup duration must be positive"
+    backup = ET.Element("backup")
+    ET.SubElement(backup, "duration").text = str(int(duration * state.division))
+    return backup
+
+
 def build_note_chord(
     note_chord: SymbolChord, state: ConversionState, chord_duration: Fraction
 ) -> list[ET.Element]:
     by_duration = _group_notes(note_chord.symbols)
     result: list[ET.Element] = []
-    final_duration = Fraction(0)
-    sorted_durations = sorted(by_duration)
-    for i, group_duration in enumerate(sorted_durations):
+    for i, (group_duration, group_notes) in enumerate(by_duration.items()):
+        notes = [n for n in group_notes if n.pitch not in (empty, nonote)]
+        rests = [n for n in group_notes if n.pitch in (empty, nonote)]
+
         is_first = True
-        for note_loop in by_duration[group_duration]:
-            result.append(
-                build_note_or_rest(note_loop, i, not is_first, state, note_chord.tuplet_mark)
-            )
+        for note in notes:
+            result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
             is_first = False
-        if i != len(sorted_durations) - 1 and group_duration > Fraction(0):
-            backup = ET.Element("backup")
-            ET.SubElement(backup, "duration").text = str(int(group_duration * state.division))
-            result.append(backup)
 
-        final_duration = group_duration
+        if rests:
+            assert group_duration > Fraction(0)
+            if notes:
+                # There are other notes, so to avoid rest being merged into chord, we emit a backup
+                result.append(build_backup(group_duration, state))
+            # Ideally we expect len(rests) == 1, but in dataset we see cases where
+            # there are multiple rests. So here we just take the first rest
+            result.append(build_note_or_rest(rests[0], i, False, state, note_chord.tuplet_mark))
 
-    if chord_duration < final_duration:
-        backup = ET.Element("backup")
-        ET.SubElement(backup, "duration").text = str(
-            int((final_duration - chord_duration) * state.division)
-        )
-        result.append(backup)
+        if i != len(by_duration) - 1 and group_duration > Fraction(0):
+            result.append(build_backup(group_duration, state))
+
+    if chord_duration < max(by_duration):
+        result.append(build_backup(max(by_duration) - chord_duration, state))
+
     return result
 
 
@@ -671,7 +682,7 @@ def _group_notes(notes: list[EncodedSymbol]) -> dict[Fraction, list[EncodedSymbo
         else:
             fraction = duration.fraction
         groups_by_duration[fraction].append(note)
-    return groups_by_duration
+    return dict(sorted(groups_by_duration.items()))
 
 
 def build_add_time_direction(args: XmlGeneratorArguments) -> ET.Element | None:

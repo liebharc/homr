@@ -1,3 +1,5 @@
+# flake8: noqa: T201
+
 """
 OMR-NED benchmark framework.
 
@@ -37,9 +39,12 @@ Example queries:
 
 import contextlib
 import os
+import queue
 import signal
 import statistics
 import sys
+import threading
+import time
 import traceback
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -249,9 +254,40 @@ def update_ned_scores(
         _print_stats("Pitch NED   ", [r.pitch_ned for r in results])
 
 
+class Sample:
+    def __init__(self, sample_id: str, kern_text: str, image_path: Path) -> None:
+        self.sample_id = sample_id
+        self.kern_text = kern_text
+        self.image_path = image_path
+
+    def set_success(self, raw_output: str) -> None:
+        self.raw_output = raw_output
+        self.error = ""
+
+    def set_failure(self, error: str) -> None:
+        self.raw_output = ""
+        self.error = error
+
+
+class SampleBatch:
+    def __init__(self, index: int, samples: list[Sample]) -> None:
+        self.index = index
+        self.samples = samples
+
+    def begin(self) -> None:
+        self.time = time.perf_counter()
+
+    def end(self) -> None:
+        self.time = time.perf_counter() - self.time
+        print(
+            f"\n--- Batch {self.index} ({len(self.samples)} samples) done in {self.time:.1f}s ---"
+        )
+
+
 def run_benchmark(
-    samples: list[tuple[str, str, Path]],
+    samples: list[Sample],
     tool: Callable[[str, Path | None], str],
+    num_workers: int,
     limit: int | None = None,
     verbose: bool = False,
     output_db: str | None = None,
@@ -294,7 +330,7 @@ def run_benchmark(
     failures: list[tuple[str, str]] = []
 
     samples = samples[:limit]
-    active = [s for s in samples if s[0] not in skip_ids]
+    active = [s for s in samples if s.sample_id not in skip_ids]
     skipped = len(samples) - len(active)
 
     if xml_parser in ("musicdiff", "musicdiff_detailed"):
@@ -302,29 +338,52 @@ def run_benchmark(
 
     if hasattr(tool, "batch_run") and active:
         # Batch mode: split into chunks so progress is visible after each batch.
-        chunks = [active[i : i + batch_size] for i in range(0, len(active), batch_size)]
-        n_chunks = len(chunks)
-        done = 0
-        for chunk_idx, chunk in enumerate(chunks, start=1):
-            print(  # noqa: T201
-                f"\n--- Batch {chunk_idx}/{n_chunks} "
-                f"({done + 1}–{done + len(chunk)} of {len(active)}) ---"
-            )
-            batch_results: list[tuple[str | None, str | None]] = tool.batch_run(chunk)
-            for (sample_id, kern_text, _image), (raw_output, error) in zip(
-                chunk, batch_results, strict=False
-            ):
-                if error is not None or raw_output is None:
+        pending: queue.Queue[SampleBatch] = queue.Queue()
+        completed: queue.Queue[SampleBatch] = queue.Queue()
+        for i in range(0, len(active), batch_size):
+            index_batch = i // batch_size + 1
+            samples_batch = active[i : i + batch_size]
+            pending.put(SampleBatch(index_batch, samples_batch))
+
+        num_batches = pending.qsize()
+        num_workers = min(num_workers, num_batches)
+
+        print(f"start {num_batches} batches with {num_workers} workers")
+
+        def _worker() -> None:
+            while True:
+                try:
+                    batch = pending.get_nowait()
+                except queue.Empty:
+                    return
+                batch.begin()
+                tool.batch_run(batch.samples)
+                batch.end()
+                completed.put(batch)
+
+        workers = [
+            threading.Thread(target=_worker, name=f"benchmark-worker-{i}")
+            for i in range(num_workers)
+        ]
+        start_time = time.perf_counter()
+        for w in workers:
+            w.start()
+
+        for _ in range(num_batches):
+            batch = completed.get()
+
+            for sample in batch.samples:
+                if sample.error:
                     _record_failure(
-                        sample_id, kern_text, error or "unknown error", failures, db, verbose
+                        sample.sample_id, sample.kern_text, sample.error, failures, db, verbose
                     )
                 else:
                     try:
                         with _sample_timeout():
                             _record_success(
-                                sample_id,
-                                kern_text,
-                                raw_output,
+                                sample.sample_id,
+                                sample.kern_text,
+                                sample.raw_output,
                                 results,
                                 db,
                                 kern_parser,
@@ -333,27 +392,30 @@ def run_benchmark(
                             )
                     except Exception as e:  # noqa: BLE001
                         _record_failure(
-                            sample_id,
-                            kern_text,
+                            sample.sample_id,
+                            sample.kern_text,
                             str(e),
                             failures,
                             db,
                             verbose,
                             e,
-                            actual_text=raw_output,
+                            actual_text=sample.raw_output,
                         )
-            done += len(chunk)
+
+        for w in workers:
+            w.join()
+
+        print(f"All batch done in {(time.perf_counter() - start_time):.1f}s, ")
     else:
         # Single-sample mode.
-        for sample_id, kern_text, image in active:
-            raw_output = None
+        for sample in active:
             try:
                 with _sample_timeout():
-                    raw_output = tool(kern_text, image)
+                    tool(sample.kern_text, sample.image_path)
                     _record_success(
-                        sample_id,
-                        kern_text,
-                        raw_output,
+                        sample.sample_id,
+                        sample.kern_text,
+                        sample.raw_output,
                         results,
                         db,
                         kern_parser,
@@ -362,14 +424,14 @@ def run_benchmark(
                     )
             except Exception as e:  # noqa: BLE001
                 _record_failure(
-                    sample_id,
-                    kern_text,
+                    sample.sample_id,
+                    sample.kern_text,
                     str(e),
                     failures,
                     db,
                     verbose,
                     e,
-                    actual_text=raw_output,
+                    actual_text=sample.raw_output,
                 )
 
     if db is not None:
