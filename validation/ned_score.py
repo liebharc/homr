@@ -12,19 +12,23 @@ import contextlib
 import copy
 import difflib
 import io
+import itertools
 import os
 import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import editdistance
 
 from homr.circle_of_fifths import strip_naturals
-from homr.transformer.vocabulary import EncodedSymbol, sort_token_chords
+from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
 from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
 from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+
+if TYPE_CHECKING:
+    import music21 as m21
 
 
 @dataclass
@@ -56,6 +60,98 @@ class TokenEvent(TypedDict):
 
 
 # ---------------------------------------------------------------------------
+# Known ground-truth reliability exceptions (dataset-specific, opt-in only)
+# ---------------------------------------------------------------------------
+
+# btrkeks/polish-scores' kern transcriptions do not reliably encode SOME articulation
+# marks, even on pages where the source engraving has them on nearly every note.
+# Confirmed by an audit of all 112 samples (grep each kern for every articulation
+# character humdrum_kern_parser.py recognizes):
+#   staccato ('), staccatissimo (`), turn (S or $): ZERO occurrences in ALL 112 samples
+#   accent (^), arpeggiate (:), fermata (;), trill/mordent (t/T/m/M): present normally
+#     (e.g. accent: 377 occurrences across 96/112 samples) - these are NOT excluded
+# Concrete, independently-checkable proof for staccato specifically: sample 79
+# ("Gavotte", Jules Zarembski Op. 29) shows a staccato dot under/over nearly every
+# single note in both staves throughout the whole page - see
+# datasets/polish-scores/79.png - yet its kern transcription
+# (datasets/polish-scores/79.krn) contains zero staccato markers ('):
+#   python -c "print(open('datasets/polish-scores/79.krn').read().count(chr(39)))"   # -> 0
+# Scoring these specific marks against ground truth like this measures the dataset's own
+# transcription completeness, not tool accuracy - staccato hallucination was the single
+# largest confusion pair in the whole polish-scores benchmark (1521 occurrences) before
+# this exclusion existed. Accent, despite also being a large confusion pair, is NOT
+# included here: the audit shows it genuinely is encoded in 86% of samples, so its
+# hallucination rate is real signal about tool accuracy, not a ground-truth artifact.
+#
+# This is a btrkeks/polish-scores transcription artifact, not a property of the underlying
+# scores/edition: the alternative HuggingFace dataset PRAIG/polish-scores covers the same
+# scores and does reliably encode these marks. We still use btrkeks/polish-scores because
+# it ships plain **kern directly, while PRAIG/polish-scores uses **ekern and requires the
+# kernpy package to convert to **kern first - kernpy pins a antlr4-python3-runtime version
+# that hard-conflicts with omegaconf (a transitive dependency of rapidocr, used in homr's
+# live title-detection pipeline). So the transcription gap is accepted as the cost of
+# avoiding that dependency conflict, not because a cleaner-ground-truth dataset is
+# unavailable.
+#
+# This must stay opt-in: every scoring entry point below defaults
+# ignore_unreliable_articulation to False, and only validation/polish-scores.py ever
+# passes True. Other datasets (e.g. smb) have not been audited for the same problem and
+# must not silently inherit this exception just because they share this scoring code.
+
+# Only these specific components are unreliable in this dataset's ground truth (see
+# audit above) - NOT the whole articulation field, which also carries accent, arpeggiate,
+# fermata, trill, mordent etc. that ARE reliably encoded and must keep contributing to
+# the score.
+_UNRELIABLE_ARTICULATION_COMPONENTS = frozenset({"staccato", "staccatissimo", "turn"})
+
+
+def _without_unreliable_articulation(articulation: str) -> str:
+    """Removes only the unreliable components from a (possibly compound,
+    underscore-joined) articulation value, e.g. "accent_staccato" -> "accent" - accent
+    must survive since it is reliably encoded (see audit above), only the co-occurring
+    staccato mark is dropped. nonote (".") and empty ("_") pass through unchanged."""
+    if articulation in (nonote, empty):
+        return articulation
+    kept = [c for c in articulation.split("_") if c not in _UNRELIABLE_ARTICULATION_COMPONENTS]
+    return "_".join(kept) if kept else empty
+
+
+def _strip_articulation_from_parts(
+    parts: list[list[EncodedSymbol]],
+) -> list[list[EncodedSymbol]]:
+    """Native-path counterpart to _strip_articulation_from_score below: rewrites
+    articulation on a copy of every symbol so the unreliable components can never
+    contribute to the diff, without touching rhythm/pitch/lift/slur/position or any
+    other (reliable) articulation component."""
+    result = []
+    for part in parts:
+        new_part = []
+        for s in part:
+            cleared = copy.copy(s)
+            cleared.articulation = _without_unreliable_articulation(s.articulation)
+            new_part.append(cleared)
+        result.append(new_part)
+    return result
+
+
+def _strip_articulation_from_score(score: "m21.stream.Score") -> None:
+    """musicdiff-path counterpart to _strip_articulation_from_parts above: mutates the
+    music21 Score in place, removing only Staccato/Staccatissimo articulations and
+    Turn/InvertedTurn expressions - the same narrow set as the native path, leaving
+    accent, fermata, trill, mordent, etc. untouched."""
+    import music21.articulations as m21_articulations  # noqa: PLC0415
+    import music21.expressions as m21_expressions  # noqa: PLC0415
+
+    unreliable_articulations = (m21_articulations.Staccato, m21_articulations.Staccatissimo)
+    unreliable_expressions = (m21_expressions.Turn, m21_expressions.InvertedTurn)
+    for n in score.recurse().notes:
+        n.articulations = [
+            a for a in n.articulations if not isinstance(a, unreliable_articulations)
+        ]
+        n.expressions = [e for e in n.expressions if not isinstance(e, unreliable_expressions)]
+
+
+# ---------------------------------------------------------------------------
 # Native token-based scoring
 # ---------------------------------------------------------------------------
 
@@ -73,27 +169,17 @@ def _component_dist(a: list[EncodedSymbol], b: list[EncodedSymbol], field: str) 
     return editdistance.eval([getattr(s, field) for s in a], [getattr(s, field) for s in b])
 
 
-def _split_grand_staff(xml_text: str) -> str:
+def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
     """
-    Convert a single grand-staff <Part> into two separate <Part> elements.
-
-    Tools like homr output piano music as one <Part> with <staves>2</staves> and each
-    note tagged <staff>1</staff> or <staff>2</staff>.  music_xml_file_to_tokens treats
-    this as a single voice, so all notes land in xml_upper and xml_lower is empty,
-    inflating NED massively.  This function detects that pattern and splits the part
-    before tokenisation so the staves are compared independently.
+    Split a single <part> with <staves>2</staves> into two single-staff <part>
+    elements. Returns [part] unchanged if it isn't a 2-staff grand staff (this
+    also covers the (currently unseen) 3+-staff case: splitting would silently
+    drop any staff beyond the second, so we leave those parts alone rather
+    than guess).
     """
-    try:
-        root = ET.fromstring(xml_text)  # noqa: S314
-    except ET.ParseError:
-        return xml_text
-
-    parts = root.findall("part")
-    if len(parts) != 1:
-        return xml_text
-    staves_el = parts[0].find(".//staves")
-    if staves_el is None or int(staves_el.text or "1") < 2:
-        return xml_text
+    staves_el = part.find(".//staves")
+    if staves_el is None or int(staves_el.text or "1") != 2:
+        return [part]
 
     def _staff_num(el: ET.Element) -> int:
         s = el.find("staff")
@@ -101,7 +187,7 @@ def _split_grand_staff(xml_text: str) -> str:
 
     # Build two lists of measure elements, one per staff.
     split: list[list[ET.Element]] = [[], []]
-    for measure in parts[0].findall("measure"):
+    for measure in part.findall("measure"):
         for idx in range(2):
             split[idx].append(ET.Element("measure", measure.attrib))
 
@@ -149,21 +235,52 @@ def _split_grand_staff(xml_text: str) -> str:
             split[0][-1].append(child)
             split[1][-1].append(copy.deepcopy(child))
 
-    # Reconstruct the score with two parts.
-    new_root = ET.Element(root.tag, root.attrib)
-    for child in root:
-        if child.tag == "part-list":
-            pl = ET.SubElement(new_root, "part-list")
-            for pid in ("P1", "P2"):
-                sp = ET.SubElement(pl, "score-part", id=pid)
-                ET.SubElement(sp, "part-name").text = pid
-        elif child.tag != "part":
-            new_root.append(copy.deepcopy(child))
-
-    for idx, measures in enumerate(split):
-        p = ET.SubElement(new_root, "part", id=f"P{idx + 1}")
+    result = []
+    for measures in split:
+        p = ET.Element("part")
         for m in measures:
             p.append(m)
+        result.append(p)
+    return result
+
+
+def _split_grand_staff(xml_text: str) -> str:
+    """
+    Split every <part> that has <staves>2</staves> into two single-staff
+    <part> elements, in place, keeping the relative order of the other parts.
+
+    Tools like homr output a piano grand staff as one <Part> with
+    <staves>2</staves> and each note tagged <staff>1</staff> or
+    <staff>2</staff>. music_xml_file_to_tokens treats a part as a single
+    voice, so an unsplit grand staff dumps both staves into one token stream
+    -- inflating NED massively against a kern ground truth that has the
+    staves as separate spines. This isn't limited to piano-only scores (a
+    single <part> document): the same problem occurs whenever a grand staff
+    is combined with other parts, e.g. a solo voice plus piano accompaniment,
+    so we split every matching part rather than only a lone one.
+    """
+    try:
+        root = ET.fromstring(xml_text)  # noqa: S314
+    except ET.ParseError:
+        return xml_text
+
+    parts = root.findall("part")
+    final_parts = [split for part in parts for split in _split_grand_staff_part(part)]
+    if len(final_parts) == len(parts):
+        return xml_text  # nothing was split
+
+    new_root = ET.Element(root.tag, root.attrib)
+    for child in root:
+        if child.tag not in ("part-list", "part"):
+            new_root.append(copy.deepcopy(child))
+
+    part_list = ET.SubElement(new_root, "part-list")
+    for index, final_part in enumerate(final_parts):
+        part_id = f"P{index + 1}"
+        final_part.set("id", part_id)
+        score_part = ET.SubElement(part_list, "score-part", id=part_id)
+        ET.SubElement(score_part, "part-name").text = part_id
+        new_root.append(final_part)
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(new_root, encoding="unicode")
 
@@ -223,34 +340,111 @@ def _parse_output(
     raw_output: str,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
-    """Parse ground-truth kern and tool raw output into aligned per-part token lists."""
+    """Parse ground-truth kern and tool raw output into aligned per-part token lists.
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions"
+    above - opt-in only, set by callers benchmarking datasets with confirmed-unreliable
+    articulation ground truth.
+    """
     kern_raw = _kern_parts(kern_text, kern_parser)
     gt_parts = [
         _strip_position([t for chord in sort_token_chords(p) for t in chord]) for p in kern_raw
     ]
-    return gt_parts, _pred_parts(raw_output, kern_parser, xml_parser)
+    pred_parts = _pred_parts(raw_output, kern_parser, xml_parser)
+    if ignore_unreliable_articulation:
+        gt_parts = _strip_articulation_from_parts(gt_parts)
+        pred_parts = _strip_articulation_from_parts(pred_parts)
+    return gt_parts, pred_parts
+
+
+# Brute-force exact assignment is only used up to this many parts (8! = 40320
+# permutations, each a handful of editdistance.eval calls - a few tens of ms
+# at most). Real scores in these datasets top out around quartets (4 parts);
+# this is a generous margin above that, not a tuned/observed limit.
+_MAX_PARTS_FOR_EXACT_MATCHING = 8
+
+
+def _greedy_part_permutation(cost: list[list[int]]) -> list[int]:
+    """Fallback for _best_part_permutation when there are too many parts to brute-force:
+    repeatedly take the cheapest remaining (kern-index, xml-index) pair. Not guaranteed
+    optimal, but reasonable, and only reached for part counts not observed in practice.
+    """
+    n = len(cost)
+    remaining_rows = set(range(n))
+    remaining_cols = set(range(n))
+    perm = [-1] * n
+    pairs = sorted((cost[i][j], i, j) for i in range(n) for j in range(n))
+    for _, i, j in pairs:
+        if i in remaining_rows and j in remaining_cols:
+            perm[i] = j
+            remaining_rows.discard(i)
+            remaining_cols.discard(j)
+    return perm
+
+
+def _best_part_permutation(cost: list[list[int]]) -> list[int]:
+    """Returns perm such that pairing row i with column perm[i] minimizes total cost."""
+    n = len(cost)
+    if n <= 1:
+        return list(range(n))
+    if n > _MAX_PARTS_FOR_EXACT_MATCHING:
+        return _greedy_part_permutation(cost)
+    best_perm = list(range(n))
+    best_total = sum(cost[i][best_perm[i]] for i in range(n))
+    for perm in itertools.permutations(range(n)):
+        total = sum(cost[i][j] for i, j in enumerate(perm))
+        if total < best_total:
+            best_total = total
+            best_perm = list(perm)
+    return best_perm
+
+
+def _align_parts(
+    kern_parts: list[list[EncodedSymbol]],
+    xml_parts: list[list[EncodedSymbol]],
+) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
+    """
+    Reorders xml_parts (after padding both lists to equal length with empty parts as
+    needed) so that xml_parts[i] is the best content match for kern_parts[i], rather than
+    assuming the two already agree on part order.
+
+    Kern's spine order and a tool's part order do not always follow the same convention -
+    e.g. a kern file can encode a vocal-plus-piano piece as [bass, treble, treble], while
+    homr's split-grand-staff output (see _split_grand_staff) lists [vocal, piano-treble,
+    piano-bass] for the same piece - a near-exact reversal despite every part having a
+    real, correct match. Aligning purely by position would compare kern's bass against
+    homr's vocal part, wildly inflating both the aggregate NED and any per-part
+    diagnostics, even though the transcription itself may be perfectly fine. Matching by
+    minimum total edit distance (an assignment problem, solved exactly for the realistic
+    part counts in these datasets - see _best_part_permutation) finds the correct
+    correspondence regardless of what order either side happens to list parts in.
+    """
+    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_padded = [kern_parts[i] if i < len(kern_parts) else [] for i in range(n)]
+    xml_padded = [xml_parts[i] if i < len(xml_parts) else [] for i in range(n)]
+    cost = [[editdistance.eval(k, x) for x in xml_padded] for k in kern_padded]
+    perm = _best_part_permutation(cost)
+    return kern_padded, [xml_padded[j] for j in perm]
 
 
 def _ned_from_parts(
     kern_parts: list[list[EncodedSymbol]],
     xml_parts: list[list[EncodedSymbol]],
 ) -> NedResult:
-    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_parts, xml_parts = _align_parts(kern_parts, xml_parts)
+    n = len(kern_parts)
 
-    def _kp(i: int) -> list[EncodedSymbol]:
-        return kern_parts[i] if i < len(kern_parts) else []
-
-    def _xp(i: int) -> list[EncodedSymbol]:
-        return xml_parts[i] if i < len(xml_parts) else []
-
-    total_dist = sum(editdistance.eval(_kp(i), _xp(i)) for i in range(n))
+    total_dist = sum(editdistance.eval(kern_parts[i], xml_parts[i]) for i in range(n))
     kern_len = sum(len(k) for k in kern_parts)
     xml_len = sum(len(x) for x in xml_parts)
     denominator = max(kern_len + xml_len, 1)
 
     def _cned(field: str) -> float:
-        return sum(_component_dist(_kp(i), _xp(i), field) for i in range(n)) / denominator
+        return (
+            sum(_component_dist(kern_parts[i], xml_parts[i], field) for i in range(n)) / denominator
+        )
 
     return NedResult(
         ned=total_dist / denominator,
@@ -275,12 +469,11 @@ def _events_for_parts(
     kern_parts: list[list[EncodedSymbol]],
     xml_parts: list[list[EncodedSymbol]],
 ) -> list[TokenEvent]:
-    n = max(len(kern_parts), len(xml_parts), 1)
+    kern_parts, xml_parts = _align_parts(kern_parts, xml_parts)
+    n = len(kern_parts)
     events: list[TokenEvent] = []
     for i in range(n):
-        k = kern_parts[i] if i < len(kern_parts) else []
-        x = xml_parts[i] if i < len(xml_parts) else []
-        events.extend(_alignment_events(k, x, _part_staff_name(i, n)))
+        events.extend(_alignment_events(kern_parts[i], xml_parts[i], _part_staff_name(i, n)))
     return events
 
 
@@ -337,9 +530,16 @@ def _alignment_events(
     return events
 
 
-def compute_ned(kern_text: str, raw_output: str) -> NedResult:
-    """Compute OMR-NED between kern ground truth and tool output (MusicXML or **kern)."""
-    kern_parts, pred_parts = _parse_output(kern_text, raw_output)
+def compute_ned(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
+    """Compute OMR-NED between kern ground truth and tool output (MusicXML or **kern).
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
+    """
+    kern_parts, pred_parts = _parse_output(
+        kern_text, raw_output, ignore_unreliable_articulation=ignore_unreliable_articulation
+    )
     return _ned_from_parts(kern_parts, pred_parts)
 
 
@@ -376,7 +576,9 @@ def _musicdiff_register_once() -> None:
         )
 
 
-def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
+def _musicdiff_parse_scores(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> tuple:
     """Parse kern ground truth and tool output into music21 Score objects.
 
     For kern predictions, acceptSyntaxErrors=True lets converter21 repair malformed
@@ -384,6 +586,8 @@ def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
     Each repaired error is counted as an additional edit-distance unit via
     AnnScore.num_syntax_errors_fixed, so they are penalised without completely
     breaking the alignment.
+
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
     """
     import music21 as m21  # noqa: PLC0415
 
@@ -422,10 +626,15 @@ def _musicdiff_parse_scores(kern_text: str, raw_output: str) -> tuple:
     pred_score: m21.stream.Score = (
         pred_raw if isinstance(pred_raw, m21.stream.Score) else m21.stream.Score()
     )
+    if ignore_unreliable_articulation:
+        _strip_articulation_from_score(gt_score)
+        _strip_articulation_from_score(pred_score)
     return gt_score, pred_score
 
 
-def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
+def _musicdiff_ned_for_sample(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
     """Compute OMR-NED using musicdiff's full structural comparison (DetailLevel.Default).
 
     Component NEDs (rhythm, pitch, lift, articulation, slur) are not available in this
@@ -433,11 +642,14 @@ def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
     (OMR-ED + syntax_fixes) / (numsyms_gt + numsyms_pred).
 
     Call _musicdiff_register_once() before entering a batch loop.
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above.
     """
     from musicdiff.annotation import AnnScore  # noqa: PLC0415
     from musicdiff.comparison import Comparison  # noqa: PLC0415
 
-    gt_score, pred_score = _musicdiff_parse_scores(kern_text, raw_output)
+    gt_score, pred_score = _musicdiff_parse_scores(
+        kern_text, raw_output, ignore_unreliable_articulation
+    )
 
     ann_gt: AnnScore = AnnScore(gt_score)
     ann_pred: AnnScore = AnnScore(pred_score)
@@ -465,7 +677,9 @@ def _musicdiff_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
     )
 
 
-def _musicdiff_detailed_ned_for_sample(kern_text: str, raw_output: str) -> NedResult:
+def _musicdiff_detailed_ned_for_sample(
+    kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
+) -> NedResult:
     """Compute OMR-NED with per-component breakdown using multiple musicdiff DetailLevel runs.
 
     Runs 5 separate comparisons to isolate component costs:
@@ -480,12 +694,17 @@ def _musicdiff_detailed_ned_for_sample(kern_text: str, raw_output: str) -> NedRe
 
     Slower than the plain 'musicdiff' mode due to the additional comparisons.
     Call _musicdiff_register_once() before entering a batch loop.
+    ignore_unreliable_articulation: see "Known ground-truth reliability exceptions" above -
+    when set, articulation_ned above is computed from scores with no articulations left on
+    either side, so it will read as 0 (or NaN if artic_syms ends up 0), not a real measurement.
     """
     from musicdiff.annotation import AnnScore  # noqa: PLC0415
     from musicdiff.comparison import Comparison  # noqa: PLC0415
     from musicdiff.detaillevel import DetailLevel  # noqa: PLC0415
 
-    gt_score, pred_score = _musicdiff_parse_scores(kern_text, raw_output)
+    gt_score, pred_score = _musicdiff_parse_scores(
+        kern_text, raw_output, ignore_unreliable_articulation
+    )
 
     def _compare(dl: int) -> tuple[int, int, int, int]:
         """Return (ed, syntax_fixes, gt_size, pred_size) for one DetailLevel."""
