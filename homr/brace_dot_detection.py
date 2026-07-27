@@ -19,6 +19,41 @@ def prepare_brace_dot_image(symbols: NDArray, staff: NDArray) -> NDArray:
     return cv2.dilate(out, kernel)
 
 
+def _trim_symbol_to_core_span(symbol: RotatedBoundingBox) -> RotatedBoundingBox:
+    """
+    Recover a brace/bracket candidate's true vertical span even if it merged
+    with unrelated ink during preprocessing. A real brace is wide (it
+    bulges), while ink it can accidentally fuse with, such as a neighboring
+    staff's clef or a chain of note stems, is comparatively thin. We keep
+    only the rows that are close to the blob's own widest row, using a
+    threshold relative to that blob (not an absolute pixel count), so this
+    works regardless of scan resolution or how much extra ink got attached.
+    """
+    x, y, w, h = cv2.boundingRect(symbol.contours)
+    if h <= 0 or w <= 0:
+        return symbol
+    mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.drawContours(mask, [symbol.contours - (x, y)], -1, 255, thickness=cv2.FILLED)
+    row_widths = (mask > 0).sum(axis=1)
+    max_width = row_widths.max()
+    if max_width == 0:
+        return symbol
+    core_rows = np.where(row_widths >= max_width * constants.brace_core_width_ratio)[0]
+    if len(core_rows) == 0:
+        return symbol
+    core_min_y = y + int(core_rows.min())
+    core_max_y = y + int(core_rows.max()) + 1
+    core_height = core_max_y - core_min_y
+    if core_height <= 0:
+        return symbol
+    new_box = (
+        (symbol.center[0], (core_min_y + core_max_y) / 2),
+        (symbol.size[0], core_height),
+        symbol.angle,
+    )
+    return RotatedBoundingBox(new_box, symbol.contours, symbol.debug_id)
+
+
 def _filter_for_tall_elements(
     brace_dot: list[RotatedBoundingBox], staffs: list[Staff]
 ) -> list[RotatedBoundingBox]:
@@ -26,6 +61,11 @@ def _filter_for_tall_elements(
     We filter elements in two steps:
     1. Use a rough unit size estimate to reduce the data size
     2. Find the closest staff and take its unit size to take warping into account
+
+    Also drops candidates narrower than min_width_for_brace_dot_candidate here (see its
+    definition in homr/constants.py) - a fixed pixel width tied to the dilation kernel that
+    built these candidates, not to unit size, so it belongs in this rough/absolute pass
+    rather than the per-staff unit-size-relative pass below.
     """
     rough_unit_size = staffs[0].average_unit_size
     symbols_larger_than_rough_estimate = [
@@ -33,6 +73,7 @@ def _filter_for_tall_elements(
         for symbol in brace_dot
         if symbol.size[1] > constants.min_height_for_brace_rough(rough_unit_size)
         and symbol.size[0] < constants.max_width_for_brace_rough(rough_unit_size)
+        and symbol.size[0] >= constants.min_width_for_brace_dot_candidate
     ]
     result = []
     for symbol in symbols_larger_than_rough_estimate:
@@ -145,6 +186,7 @@ def find_braces_brackets_and_grand_staff_lines(
     """
     Connect staffs from multiple voices or grand staffs by searching for brackets and grand staffs.
     """
+    brace_dot = [_trim_symbol_to_core_span(symbol) for symbol in brace_dot]
     brace_dot = _filter_for_tall_elements(brace_dot, staffs)
     result = []
     for i, staff in enumerate(staffs):

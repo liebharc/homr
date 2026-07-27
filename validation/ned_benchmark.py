@@ -105,15 +105,20 @@ def _record_success(
     db: BenchmarkDB | None,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     kern_parts: list[list[EncodedSymbol]] = []
     xml_parts: list[list[EncodedSymbol]] = []
     if xml_parser == "musicdiff":
-        result = _musicdiff_ned_for_sample(kern_text, raw_output)
+        result = _musicdiff_ned_for_sample(kern_text, raw_output, ignore_unreliable_articulation)
     elif xml_parser == "musicdiff_detailed":
-        result = _musicdiff_detailed_ned_for_sample(kern_text, raw_output)
+        result = _musicdiff_detailed_ned_for_sample(
+            kern_text, raw_output, ignore_unreliable_articulation
+        )
     else:
-        kern_parts, xml_parts = _parse_output(kern_text, raw_output, kern_parser, xml_parser)
+        kern_parts, xml_parts = _parse_output(
+            kern_text, raw_output, kern_parser, xml_parser, ignore_unreliable_articulation
+        )
         result = _ned_from_parts(kern_parts, xml_parts)
     results.append(result)
     print(  # noqa: T201
@@ -158,6 +163,7 @@ def update_ned_scores(
     kern_parser: str = "native",
     xml_parser: str = "native",
     limit: int | None = None,
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     """Recompute NED for all samples with stored actual_text using the current parsers.
 
@@ -185,14 +191,18 @@ def update_ned_scores(
     for sample_id, kern_text, actual_text in rows:
         try:
             if xml_parser == "musicdiff":
-                result = _musicdiff_ned_for_sample(kern_text, actual_text)
+                result = _musicdiff_ned_for_sample(
+                    kern_text, actual_text, ignore_unreliable_articulation
+                )
                 events: list[TokenEvent] = []
             elif xml_parser == "musicdiff_detailed":
-                result = _musicdiff_detailed_ned_for_sample(kern_text, actual_text)
+                result = _musicdiff_detailed_ned_for_sample(
+                    kern_text, actual_text, ignore_unreliable_articulation
+                )
                 events = []
             else:
                 kern_parts, xml_parts = _parse_output(
-                    kern_text, actual_text, kern_parser, xml_parser
+                    kern_text, actual_text, kern_parser, xml_parser, ignore_unreliable_articulation
                 )
                 result = _ned_from_parts(kern_parts, xml_parts)
                 events = _events_for_parts(kern_parts, xml_parts)
@@ -285,6 +295,7 @@ def run_benchmark(
     batch_size: int = 10,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     """
     Wire data source, tool, and check together.
@@ -298,6 +309,8 @@ def run_benchmark(
     output_db:    path to a SQLite file; written fresh by default, or appended with continue_run
     continue_run: if True, skip sample_ids already present in output_db
     batch_size:   number of samples per batch_run() call (default 10)
+    ignore_unreliable_articulation: see ned_score.py's "Known ground-truth reliability
+                  exceptions" - only ever set True by validation/polish-scores.py.
     """
     db: BenchmarkDB | None = None
     skip_ids: set[str] = set()
@@ -375,6 +388,7 @@ def run_benchmark(
                                 db,
                                 kern_parser,
                                 xml_parser,
+                                ignore_unreliable_articulation,
                             )
                     except Exception as e:  # noqa: BLE001
                         _record_failure(
@@ -406,6 +420,7 @@ def run_benchmark(
                         db,
                         kern_parser,
                         xml_parser,
+                        ignore_unreliable_articulation,
                     )
             except Exception as e:  # noqa: BLE001
                 _record_failure(

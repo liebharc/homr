@@ -1,4 +1,6 @@
+import copy
 import re
+from typing import NamedTuple
 
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
@@ -9,10 +11,26 @@ from training.omr_datasets.staff_merging import (
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 
+class _SignatureState(NamedTuple):
+    """The clef/key/time signature in force at the end of a staff's kern document.
+
+    Carried across concatenated multi-document kern (one document per system) so a
+    system's opening clef/key/time is only emitted as a token when it actually differs
+    from what was already in force - not just because the document restarts.
+    """
+
+    clef: EncodedSymbol
+    key: EncodedSymbol
+    time: EncodedSymbol
+
+
 def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
     merged = merge_upper_and_lower_staff(
-        [_convert_single_staff(staff_no, staff) for staff_no, staff in enumerate(reversed(staffs))]
+        [
+            _convert_single_staff(staff_no, staff)[0]
+            for staff_no, staff in enumerate(reversed(staffs))
+        ]
     )
     merged = _remove_redundant_key_changes(merged)
     merged = _fix_final_repeat_start(merged)
@@ -29,17 +47,26 @@ def convert_kern_to_parts(lines: list[str]) -> list[list[EncodedSymbol]]:
     also preserves in its XML output.
 
     Handles concatenated multi-document kern (multiple **kern...*- sections, as
-    produced by datasets that store one kern document per staff system) by
-    parsing each document separately and extending the corresponding parts.
+    produced by datasets that store one kern document per staff system) by parsing
+    each document separately and extending the corresponding parts. The clef/key/time
+    signature in force is carried from one document to the next, so a system's opening
+    declarations only become tokens when they are an actual change - not just because
+    every system re-prints them (see _SignatureState).
     """
     docs = _split_kern_documents(lines)
     if len(docs) == 1:
-        return _parse_kern_document(docs[0])
+        parts, _carry = _parse_kern_document(docs[0])
+        return parts
 
-    all_parts = [_parse_kern_document(doc) for doc in docs]
-    n_parts = max(len(p) for p in all_parts)
+    carry: list[_SignatureState] | None = None
+    doc_parts_list: list[list[list[EncodedSymbol]]] = []
+    for doc in docs:
+        parts, carry = _parse_kern_document(doc, carry)
+        doc_parts_list.append(parts)
+
+    n_parts = max(len(p) for p in doc_parts_list)
     merged: list[list[EncodedSymbol]] = [[] for _ in range(n_parts)]
-    for doc_parts in all_parts:
+    for doc_parts in doc_parts_list:
         for i, part in enumerate(doc_parts):
             merged[i].extend(part)
     return merged
@@ -60,18 +87,23 @@ def _split_kern_documents(lines: list[str]) -> list[list[str]]:
     return docs or [lines]
 
 
-def _parse_kern_document(lines: list[str]) -> list[list[EncodedSymbol]]:
+def _parse_kern_document(
+    lines: list[str], carry: list[_SignatureState] | None = None
+) -> tuple[list[list[EncodedSymbol]], list[_SignatureState]]:
     staffs = _merge_multiple_voices_on_the_same_staff(lines)
     ordered = list(reversed(staffs)) if len(staffs) == 2 else staffs
     result = []
+    new_carry: list[_SignatureState] = []
     for staff_no, staff in enumerate(ordered):
-        single = _convert_single_staff(staff_no, staff)
+        initial = carry[staff_no] if carry is not None and staff_no < len(carry) else None
+        single, final_state = _convert_single_staff(staff_no, staff, initial)
         part = merge_upper_and_lower_staff([single])
         part = _remove_redundant_key_changes(part)
         part = _fix_final_repeat_start(part)
         part = strip_naturals(part)
         result.append(part)
-    return result
+        new_carry.append(final_state)
+    return result, new_carry
 
 
 def _merge_multiple_voices_on_the_same_staff(
@@ -171,9 +203,11 @@ def _fix_final_repeat_start(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]
     return symbols
 
 
-def _convert_single_staff(staff_no: int, lines: list[str]) -> list[EncodedSymbolWithPos]:
+def _convert_single_staff(
+    staff_no: int, lines: list[str], initial: _SignatureState | None = None
+) -> tuple[list[EncodedSymbolWithPos], _SignatureState]:
     converter = HumdrumKernConverter()
-    return converter.convert_humdrum_kern(staff_no, lines)
+    return converter.convert_humdrum_kern(staff_no, lines, initial)
 
 
 class HumdrumKernConverter:
@@ -357,13 +391,17 @@ class HumdrumKernConverter:
         return result
 
     def convert_humdrum_kern(
-        self, staff_no: int, lines: list[str]
-    ) -> list[EncodedSymbolWithPos]:  # noqa: C901
+        self, staff_no: int, lines: list[str], initial: _SignatureState | None = None
+    ) -> tuple[list[EncodedSymbolWithPos], _SignatureState]:  # noqa: C901
         result: list[EncodedSymbolWithPos] = []
 
-        clef = EncodedSymbolWithPos(-10, self._get_default_clef(staff_no))
-        keySignature = EncodedSymbolWithPos(-9, EncodedSymbol("keySignature_0"))
-        timeSignature = EncodedSymbolWithPos(-8, EncodedSymbol("timeSignature/4"))
+        prev_clef = initial.clef if initial is not None else self._get_default_clef(staff_no)
+        prev_key = initial.key if initial is not None else EncodedSymbol("keySignature_0")
+        prev_time = initial.time if initial is not None else EncodedSymbol("timeSignature/4")
+
+        clef = EncodedSymbolWithPos(-10, prev_clef)
+        keySignature = EncodedSymbolWithPos(-9, prev_key)
+        timeSignature = EncodedSymbolWithPos(-8, prev_time)
         initial_signature_was_added = False
         for line_no, line in self._add_line_numbers(lines):
             if line.startswith("="):
@@ -371,27 +409,39 @@ class HumdrumKernConverter:
                     parsed = self.parse_barline(line)
                     result.extend([EncodedSymbolWithPos(line_no, p) for p in parsed])
             elif line.startswith("*k"):
-                keySignature = EncodedSymbolWithPos(-9, self.parse_key_signature(line))
-                if initial_signature_was_added:
-                    result.append(EncodedSymbolWithPos(line_no, keySignature.symbol))
+                new_key = self.parse_key_signature(line)
+                if initial_signature_was_added and new_key != keySignature.symbol:
+                    result.append(EncodedSymbolWithPos(line_no, new_key))
+                keySignature = EncodedSymbolWithPos(-9, new_key)
             elif line.startswith("*M"):
-                timeSignature = EncodedSymbolWithPos(-8, self.parse_time_signature(line))
-                if initial_signature_was_added:
-                    result.append(EncodedSymbolWithPos(line_no, timeSignature.symbol))
+                new_time = self.parse_time_signature(line)
+                if initial_signature_was_added and new_time != timeSignature.symbol:
+                    result.append(EncodedSymbolWithPos(line_no, new_time))
+                timeSignature = EncodedSymbolWithPos(-8, new_time)
             elif line.startswith("*clef"):
-                clef = EncodedSymbolWithPos(-10, self.parse_clef(line))
-                if initial_signature_was_added:
-                    result.append(EncodedSymbolWithPos(line_no, clef.symbol))
+                new_clef = self.parse_clef(line)
+                if initial_signature_was_added and new_clef != clef.symbol:
+                    result.append(EncodedSymbolWithPos(line_no, new_clef))
+                clef = EncodedSymbolWithPos(-10, new_clef)
             elif line.startswith("*"):
                 # All other control instructions can be ignored
                 pass
             else:
                 if not initial_signature_was_added:
                     # Symbols can be appear in various order
-                    # and duplicated (in which the latest wins)
-                    result.append(clef)
-                    result.append(keySignature)
-                    result.append(timeSignature)
+                    # and duplicated (in which the latest wins). With no carried-over
+                    # state (the very first document of a piece), always emit - that is
+                    # the real start of the piece, regardless of whether it happens to
+                    # match our internal defaults. With carried-over state (a later
+                    # system in a multi-document kern file, see _SignatureState), only
+                    # emit if it actually changed - a system restart re-declaring the
+                    # same clef/key/time is not a real change.
+                    if initial is None or clef.symbol != prev_clef:
+                        result.append(clef)
+                    if initial is None or keySignature.symbol != prev_key:
+                        result.append(keySignature)
+                    if initial is None or timeSignature.symbol != prev_time:
+                        result.append(timeSignature)
                     initial_signature_was_added = True
                 symbols = line.split()
                 chord_dur = "4"
@@ -408,7 +458,12 @@ class HumdrumKernConverter:
                         EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token, chord_dur))
                     )
 
-        return result
+        # Snapshot independent copies: the symbols above are later mutated in place
+        # (e.g. merge_upper_and_lower_staff fills in symbol.position), so returning the
+        # same objects would let that later mutation leak back into the carried state.
+        return result, _SignatureState(
+            copy.copy(clef.symbol), copy.copy(keySignature.symbol), copy.copy(timeSignature.symbol)
+        )
 
 
 if __name__ == "__main__":
