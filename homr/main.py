@@ -166,6 +166,7 @@ class ProcessingConfig:
     # Opt-in (--coreml-encoder): run the encoder on the Apple GPU via CoreML.
     # Only helps across many images (slow one-time MLProgram compile).
     coreml_encoder: bool
+    title_detection: bool
 
 
 def process_image(
@@ -278,7 +279,7 @@ def detect_staffs_in_image(
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")
-    title_future = detect_title(debug, staffs[0])
+    title_future = detect_title(debug, staffs[0], config.title_detection)
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
     brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
@@ -408,6 +409,12 @@ def main() -> None:
         + "CoreML. Compiling the model takes 26-60 s at startup, so this only "
         + "pays off when processing many images. Has no effect with CUDA.",
     )
+    parser.add_argument(
+        "--no-title",
+        action="store_true",
+        help="Don't detect title for faster inference"
+    )
+
 
     args = parser.parse_args()
 
@@ -438,6 +445,7 @@ def main() -> None:
         transformer_use_gpu,
         segnet_use_gpu,
         coreml_encoder,
+        not args.no_title
     )
 
     xml_generator_args = XmlGeneratorArguments(
