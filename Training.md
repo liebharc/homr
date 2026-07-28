@@ -82,14 +82,13 @@ Implementation: `rate_validation_result.py`
 Commit: b6fd20809a8dcaf10dfd39a4ca4f64c6f056e644
 Day: 13 July 2026
 Transformer Smoke Test: 5%
-System Level: Total: 5.7 diffs, SER: 4.2%
-System Level after adding https://github.com/liebharc/homr/issues/110: Total: 5.5 diffs, SER: 4.1%
-Polish scores: OMR-NED 24.30%
-SMB scores: OMR-NED 22.06%
+System Level: Total: 5.7 diffs, SER: 4.2% | 5.1 diffs, SER: 4.0% after PR-112
+Polish scores: OMR-NED 24.30% | 18.1% after PR-112
+SMB scores: OMR-NED 22.06% | 14.5% after PR-112
 
 Training with lieder+grandstaff+primux+pdmx+musetrainer datasets.
 
-Note that https://github.com/liebharc/homr/issues/110 will from now on remain in the system level datset to avoid regressions.
+Note that PR-110 and PR-112 improved the scoring results independent from the model itself.
 
 ## Run 414
 
