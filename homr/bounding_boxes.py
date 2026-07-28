@@ -31,7 +31,20 @@ def calculate_edges_of_rotated_rectangle(
 
 
 def do_polygons_overlap(poly1: cvt.MatLike, poly2: cvt.MatLike) -> bool:
-    # Check if any point of one ellipse is inside the other ellipse
+    # A vertex-containment check ("is a corner of one polygon inside the other") is not
+    # sufficient: two long, thin, near-parallel rectangles (e.g. two staffs' bounding boxes
+    # with slightly opposite rotation) can overlap heavily along their shared middle while
+    # every corner of each stays outside the other - the overlap region is bounded by edge
+    # crossings, not by either polygon containing the other's vertices. Use a proper convex
+    # polygon intersection (both boxPoints-derived polygons here are convex) as the primary
+    # check instead of reimplementing edge-intersection tests by hand.
+    area, _ = cv2.intersectConvexConvex(poly1.astype(np.float32), poly2.astype(np.float32))
+    if area > 0:
+        return True
+
+    # Two polygons that merely touch (share an edge or corner, zero-width contact) are
+    # still considered "overlapping" by callers - intersectConvexConvex reports zero area
+    # for that degenerate case, so fall back to the boundary-inclusive vertex check for it.
     for point in poly1:
         if cv2.pointPolygonTest(poly2, (float(point[0]), float(point[1])), False) >= 0:
             return True

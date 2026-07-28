@@ -10,6 +10,8 @@ from homr.simple_logging import eprint
 nonote = "."
 empty = "_"  # used for decorations on note, if there is no decoration
 
+VALID_TIME_SIGNATURE_DENOMINATORS = [1, 2, 3, 4, 6, 8, 12, 16, 32, 48]
+
 
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:
     result = {}
@@ -44,10 +46,11 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend([f"clef_F{c}" for c in range(3, 6)])
     rhythm.extend([f"clef_C{c}" for c in range(1, 6)])
     rhythm.extend([f"clef_G{c}" for c in range(1, 3)])
+    rhythm.append("clef_TAB5")
 
     # signatures
     rhythm.extend([f"keySignature_{c}" for c in range(-7, 8)])
-    rhythm.extend([f"timeSignature/{c}" for c in [1, 2, 3, 4, 6, 8, 12, 16, 32, 48]])
+    rhythm.extend([f"timeSignature/{c}" for c in VALID_TIME_SIGNATURE_DENOMINATORS])
 
     # rhythm, kern durations are based on https://www.humdrum.org/rep/kern/
     rhythm.extend([f"rest_{c}m" for c in range(2, 11)])  # multirests
@@ -109,19 +112,22 @@ def build_articulation() -> dict[str, int]:
         "accent_breathMark",
         "accent_breathMark_fermata",
         "accent_fermata",
-        "accent_fermata_staccato",
+        "accent_fermata_tremolo",
         "accent_staccatissimo",
         "accent_staccato",
         "accent_staccato_tenuto",
+        "accent_staccato_tremolo",
+        "accent_staccato_trill",
         "accent_tenuto",
         "accent_tremolo",
         "accent_trill",
-        "accent_fermata_trill",
         "arpeggiate",
-        "arpeggiate_breathMark_fermata",
+        "arpeggiate_breathMark",
         "arpeggiate_fermata",
         "arpeggiate_fermata_staccato",
+        "arpeggiate_fermata_tenuto",
         "arpeggiate_staccatissimo",
+        "arpeggiate_staccatissimo_staccato",
         "arpeggiate_staccato",
         "arpeggiate_staccato_tenuto",
         "arpeggiate_tenuto",
@@ -132,26 +138,30 @@ def build_articulation() -> dict[str, int]:
         "breathMark_fermata_tenuto",
         "breathMark_staccato",
         "breathMark_tenuto",
-        "breathMark_trill",
         "breathMark_tremolo",
-        "breathMark_staccato_tenuto",
+        "breathMark_trill",
         "fermata",
         "fermata_staccato",
-        "fermata_staccato_tenuto",
         "fermata_tenuto",
         "fermata_tremolo",
         "fermata_trill",
         "fermata_turn",
-        "spiccato",
         "staccatissimo",
+        "staccatissimo_staccato",
+        "staccatissimo_staccato_tenuto",
+        "staccatissimo_staccato_tenuto_trill",
+        "staccatissimo_tenuto",
         "staccato",
         "staccato_tenuto",
         "staccato_tremolo",
         "staccato_trill",
         "staccato_turn",
         "tenuto",
+        "tenuto_tremolo",
+        "tenuto_trill",
         "tremolo",
         "trill",
+        "trill_turn",
         "turn",
     ]
 

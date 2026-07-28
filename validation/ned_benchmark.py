@@ -1,3 +1,5 @@
+# flake8: noqa: T201
+
 """
 OMR-NED benchmark framework.
 
@@ -37,11 +39,14 @@ Example queries:
 
 import contextlib
 import os
+import queue
 import signal
 import statistics
 import sys
+import threading
+import time
 import traceback
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from homr.transformer.vocabulary import EncodedSymbol
@@ -100,15 +105,20 @@ def _record_success(
     db: BenchmarkDB | None,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     kern_parts: list[list[EncodedSymbol]] = []
     xml_parts: list[list[EncodedSymbol]] = []
     if xml_parser == "musicdiff":
-        result = _musicdiff_ned_for_sample(kern_text, raw_output)
+        result = _musicdiff_ned_for_sample(kern_text, raw_output, ignore_unreliable_articulation)
     elif xml_parser == "musicdiff_detailed":
-        result = _musicdiff_detailed_ned_for_sample(kern_text, raw_output)
+        result = _musicdiff_detailed_ned_for_sample(
+            kern_text, raw_output, ignore_unreliable_articulation
+        )
     else:
-        kern_parts, xml_parts = _parse_output(kern_text, raw_output, kern_parser, xml_parser)
+        kern_parts, xml_parts = _parse_output(
+            kern_text, raw_output, kern_parser, xml_parser, ignore_unreliable_articulation
+        )
         result = _ned_from_parts(kern_parts, xml_parts)
     results.append(result)
     print(  # noqa: T201
@@ -153,6 +163,7 @@ def update_ned_scores(
     kern_parser: str = "native",
     xml_parser: str = "native",
     limit: int | None = None,
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     """Recompute NED for all samples with stored actual_text using the current parsers.
 
@@ -180,14 +191,18 @@ def update_ned_scores(
     for sample_id, kern_text, actual_text in rows:
         try:
             if xml_parser == "musicdiff":
-                result = _musicdiff_ned_for_sample(kern_text, actual_text)
+                result = _musicdiff_ned_for_sample(
+                    kern_text, actual_text, ignore_unreliable_articulation
+                )
                 events: list[TokenEvent] = []
             elif xml_parser == "musicdiff_detailed":
-                result = _musicdiff_detailed_ned_for_sample(kern_text, actual_text)
+                result = _musicdiff_detailed_ned_for_sample(
+                    kern_text, actual_text, ignore_unreliable_articulation
+                )
                 events = []
             else:
                 kern_parts, xml_parts = _parse_output(
-                    kern_text, actual_text, kern_parser, xml_parser
+                    kern_text, actual_text, kern_parser, xml_parser, ignore_unreliable_articulation
                 )
                 result = _ned_from_parts(kern_parts, xml_parts)
                 events = _events_for_parts(kern_parts, xml_parts)
@@ -239,9 +254,40 @@ def update_ned_scores(
         _print_stats("Pitch NED   ", [r.pitch_ned for r in results])
 
 
+class Sample:
+    def __init__(self, sample_id: str, kern_text: str, image_path: Path) -> None:
+        self.sample_id = sample_id
+        self.kern_text = kern_text
+        self.image_path = image_path
+
+    def set_success(self, raw_output: str) -> None:
+        self.raw_output = raw_output
+        self.error = ""
+
+    def set_failure(self, error: str) -> None:
+        self.raw_output = ""
+        self.error = error
+
+
+class SampleBatch:
+    def __init__(self, index: int, samples: list[Sample]) -> None:
+        self.index = index
+        self.samples = samples
+
+    def begin(self) -> None:
+        self.time = time.perf_counter()
+
+    def end(self) -> None:
+        self.time = time.perf_counter() - self.time
+        print(
+            f"\n--- Batch {self.index} ({len(self.samples)} samples) done in {self.time:.1f}s ---"
+        )
+
+
 def run_benchmark(
-    samples: Iterable[tuple[str, str, Path | None]],
+    samples: list[Sample],
     tool: Callable[[str, Path | None], str],
+    num_workers: int,
     limit: int | None = None,
     verbose: bool = False,
     output_db: str | None = None,
@@ -249,11 +295,12 @@ def run_benchmark(
     batch_size: int = 10,
     kern_parser: str = "native",
     xml_parser: str = "native",
+    ignore_unreliable_articulation: bool = False,
 ) -> None:
     """
     Wire data source, tool, and check together.
 
-    samples:      iterable of (sample_id, kern_text, image_path) from any data source
+    samples:      list of (sample_id, kern_text, image_path) from any data source
     tool:         (kern_text, image_path) -> output_text (MusicXML or **kern)
     kern_parser:  "native" (default) or "music21" - kern ground-truth parser
     xml_parser:   "native" (default), "music21", "musicdiff", or "musicdiff_detailed"
@@ -262,6 +309,8 @@ def run_benchmark(
     output_db:    path to a SQLite file; written fresh by default, or appended with continue_run
     continue_run: if True, skip sample_ids already present in output_db
     batch_size:   number of samples per batch_run() call (default 10)
+    ignore_unreliable_articulation: see ned_score.py's "Known ground-truth reliability
+                  exceptions" - only ever set True by validation/polish-scores.py.
     """
     db: BenchmarkDB | None = None
     skip_ids: set[str] = set()
@@ -280,81 +329,109 @@ def run_benchmark(
     results: list[NedResult] = []
     failures: list[tuple[str, str]] = []
 
-    # Collect from iterator (applying limit and skips) so we can optionally batch.
-    all_from_iter: list[tuple[str, str, Path | None]] = []
-    for count, triple in enumerate(samples):
-        if limit is not None and count >= limit:
-            break
-        all_from_iter.append(triple)
-
-    skipped = sum(1 for s, _, _ in all_from_iter if s in skip_ids)
-    active = [(s, k, i) for s, k, i in all_from_iter if s not in skip_ids]
+    samples = samples[:limit]
+    active = [s for s in samples if s.sample_id not in skip_ids]
+    skipped = len(samples) - len(active)
 
     if xml_parser in ("musicdiff", "musicdiff_detailed"):
         _musicdiff_register_once()
 
     if hasattr(tool, "batch_run") and active:
         # Batch mode: split into chunks so progress is visible after each batch.
-        chunks = [active[i : i + batch_size] for i in range(0, len(active), batch_size)]
-        n_chunks = len(chunks)
-        done = 0
-        for chunk_idx, chunk in enumerate(chunks, start=1):
-            print(  # noqa: T201
-                f"\n--- Batch {chunk_idx}/{n_chunks} "
-                f"({done + 1}–{done + len(chunk)} of {len(active)}) ---"
-            )
-            batch_results: list[tuple[str | None, str | None]] = tool.batch_run(chunk)
-            for (sample_id, kern_text, _image), (raw_output, error) in zip(
-                chunk, batch_results, strict=False
-            ):
-                if error is not None or raw_output is None:
+        pending: queue.Queue[SampleBatch] = queue.Queue()
+        completed: queue.Queue[SampleBatch] = queue.Queue()
+        for i in range(0, len(active), batch_size):
+            index_batch = i // batch_size + 1
+            samples_batch = active[i : i + batch_size]
+            pending.put(SampleBatch(index_batch, samples_batch))
+
+        num_batches = pending.qsize()
+        num_workers = min(num_workers, num_batches)
+
+        print(f"start {num_batches} batches with {num_workers} workers")
+
+        def _worker() -> None:
+            while True:
+                try:
+                    batch = pending.get_nowait()
+                except queue.Empty:
+                    return
+                batch.begin()
+                tool.batch_run(batch.samples)
+                batch.end()
+                completed.put(batch)
+
+        workers = [
+            threading.Thread(target=_worker, name=f"benchmark-worker-{i}")
+            for i in range(num_workers)
+        ]
+        start_time = time.perf_counter()
+        for w in workers:
+            w.start()
+
+        for _ in range(num_batches):
+            batch = completed.get()
+
+            for sample in batch.samples:
+                if sample.error:
                     _record_failure(
-                        sample_id, kern_text, error or "unknown error", failures, db, verbose
+                        sample.sample_id, sample.kern_text, sample.error, failures, db, verbose
                     )
                 else:
                     try:
                         with _sample_timeout():
                             _record_success(
-                                sample_id,
-                                kern_text,
-                                raw_output,
+                                sample.sample_id,
+                                sample.kern_text,
+                                sample.raw_output,
                                 results,
                                 db,
                                 kern_parser,
                                 xml_parser,
+                                ignore_unreliable_articulation,
                             )
                     except Exception as e:  # noqa: BLE001
                         _record_failure(
-                            sample_id,
-                            kern_text,
+                            sample.sample_id,
+                            sample.kern_text,
                             str(e),
                             failures,
                             db,
                             verbose,
                             e,
-                            actual_text=raw_output,
+                            actual_text=sample.raw_output,
                         )
-            done += len(chunk)
+
+        for w in workers:
+            w.join()
+
+        print(f"All batch done in {(time.perf_counter() - start_time):.1f}s, ")
     else:
         # Single-sample mode.
-        for sample_id, kern_text, image in active:
-            raw_output = None
+        for sample in active:
             try:
                 with _sample_timeout():
-                    raw_output = tool(kern_text, image)
+                    tool(sample.kern_text, sample.image_path)
                     _record_success(
-                        sample_id, kern_text, raw_output, results, db, kern_parser, xml_parser
+                        sample.sample_id,
+                        sample.kern_text,
+                        sample.raw_output,
+                        results,
+                        db,
+                        kern_parser,
+                        xml_parser,
+                        ignore_unreliable_articulation,
                     )
             except Exception as e:  # noqa: BLE001
                 _record_failure(
-                    sample_id,
-                    kern_text,
+                    sample.sample_id,
+                    sample.kern_text,
                     str(e),
                     failures,
                     db,
                     verbose,
                     e,
-                    actual_text=raw_output,
+                    actual_text=sample.raw_output,
                 )
 
     if db is not None:

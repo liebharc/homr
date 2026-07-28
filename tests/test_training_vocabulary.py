@@ -37,9 +37,14 @@ class TestTrainingVocabulary(unittest.TestCase):
         self.assertEqual(result, expected)
 
     def test_clef_anchor_coverage(self) -> None:
+        # Clefs that don't represent pitch by vertical staff position (e.g. tablature)
+        # have no meaningful diatonic anchor and are intentionally excluded from
+        # CLEF_ANCHORS. Any other new clef must be added to CLEF_ANCHORS.
+        non_pitched_clefs = {"clef_TAB5"}
+
         vocabulary = Vocabulary()
         clef_tokens = {token for token in vocabulary.rhythm if token.startswith("clef_")}
-        self.assertEqual(clef_tokens, set(CLEF_ANCHORS.keys()))
+        self.assertEqual(clef_tokens - non_pitched_clefs, set(CLEF_ANCHORS.keys()))
 
     def test_max_ledger_lines(self) -> None:
         tokens = [

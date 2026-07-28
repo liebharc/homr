@@ -1,3 +1,5 @@
+# flake8: noqa: S101
+
 """
 btrkeks/polish-scores benchmark: measures OMR quality on the Polish Scores dataset.
 
@@ -8,10 +10,9 @@ Check:       ned_benchmark.run_benchmark
 
 import argparse
 import tempfile
-from collections.abc import Iterator
 from pathlib import Path
 
-from validation.ned_benchmark import run_benchmark, update_ned_scores
+from validation.ned_benchmark import Sample, run_benchmark, update_ned_scores
 from validation.tools import TOOLS
 
 
@@ -28,28 +29,27 @@ def _add_kern_header(kern: str) -> str:
     return kern
 
 
-def iter_polish_scores(
-    image_dir: Path | None = None,
-) -> Iterator[tuple[str, str, Path | None]]:
-    """Yield (sample_id, kern_text, image_path) for each sample in btrkeks/polish-scores."""
-    from datasets import load_dataset  # type: ignore  # noqa: PLC0415
+def get_polish_scores_samples(
+    image_dir: Path,
+) -> list[Sample]:
+    from datasets import Image, load_dataset  # type: ignore  # noqa: PLC0415
 
-    ds = load_dataset("btrkeks/polish-scores")
-    for i, sample in enumerate(ds["train"]):
+    ds = load_dataset("btrkeks/polish-scores")["train"]
+    ds = ds.cast_column("image", Image(decode=False))  # Don't decode on image colume.
+    result = []
+    for i, sample in enumerate(ds):
+        assert sample["transcription_kern"] and sample["image"]["bytes"]
         kern = _add_kern_header(sample["transcription_kern"])
-        image_path: Path | None = None
-        if image_dir is not None:
-            img = sample.get("image")
-            if img is not None and hasattr(img, "save"):
-                candidate = image_dir / f"{i}.png"
-                img.save(candidate)
-                image_path = candidate
-        yield str(i), kern, image_path
+        image_path = image_dir / f"{i}.png"
+        image_path.write_bytes(sample["image"]["bytes"])
+        result.append(Sample(str(i), kern, image_path))
+    return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="OMR-NED benchmark for btrkeks/polish-scores.")
     parser.add_argument("--limit", type=int, default=None, help="Only process N samples.")
+    parser.add_argument("--workers", type=int, default=1, help="Number of threads to use.")
     parser.add_argument("--verbose", action="store_true", help="Print traceback on failure.")
     parser.add_argument("--output", type=str, default=None, help="Path to SQLite output file.")
     parser.add_argument(
@@ -108,14 +108,16 @@ def main() -> None:
             kern_parser=args.kern_parser,
             xml_parser=args.xml_parser,
             limit=args.limit,
+            ignore_unreliable_articulation=True,
         )
         return
 
     tool = TOOLS[args.tool]
     with tempfile.TemporaryDirectory() as image_dir:
         run_benchmark(
-            iter_polish_scores(image_dir=Path(image_dir)),
+            get_polish_scores_samples(Path(image_dir)),
             tool,
+            args.workers,
             limit=args.limit,
             verbose=args.verbose,
             output_db=output_db,
@@ -123,6 +125,7 @@ def main() -> None:
             batch_size=args.batch_size,
             kern_parser=args.kern_parser,
             xml_parser=args.xml_parser,
+            ignore_unreliable_articulation=True,
         )
 
 

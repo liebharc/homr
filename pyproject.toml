@@ -13,7 +13,6 @@ dependencies = [
   "Pillow >= 12.1.1, < 13",
   "types-Pillow >= 10.2.0.20240822, < 11",
   "typing_extensions >= 4.15.0, < 5",
-  "musicxml == 1.4",
   "rapidocr >= 3.7.0, < 4",
   "onnxruntime >= 1.24.1, < 2",
   "requests >= 2.32.5, < 3",
@@ -38,8 +37,10 @@ dev = [
   "coverage >= 7.13.4, < 8",
   "augly >= 1.0.0, < 2",
   "editdistance >= 0.8.1, < 0.9",
+  "augraphy >= 8.2.6, < 9",
   "transformers[torch] >= 4.53.2, < 5",
   "cairosvg >= 2.8.2, < 3",
+  "verovio >= 6.2.1, < 7",
   "types-requests >= 2.32.4.20260107, < 3",
   "segmentation-models-pytorch >= 0.5.0, < 0.6",
   "pytorch-lightning >= 2.6.1, < 3",
@@ -52,6 +53,7 @@ dev = [
   "tensorboard >= 2.20.0, < 3",
   "onnxscript >= 0.6.2, < 0.7",
   "music21 >= 10.3.0, < 11",
+  "pyvips >= 3.1.1, < 4",
   "musicdiff >= 5.2, < 6",
   "datasets >= 5.0.0, < 6",
 ]
@@ -114,7 +116,9 @@ ignore = [
     "PLR0912",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
     "PLR0915",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
     "C901",  # the parsing & conversion logic tends to create large functions , if someone has an idea then open a PR please!
-    "PLR2004"  # 
+    "PLR2004",  #
+    "PLR0911",  # the parsing & conversion logic tends to create large functions, if someone has an idea then open a PR please!
+
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]

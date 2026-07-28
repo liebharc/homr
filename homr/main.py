@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+import xml.etree.ElementTree as ET
 from concurrent.futures import Future
 from dataclasses import dataclass
 from enum import Enum
@@ -195,7 +196,7 @@ def process_image(
             # two code paths feed the symbol-recognition encoder consistent input.
             image = color_adjust.apply_clahe(image)
         else:
-            multi_staffs, image, debug, title_future = detect_staffs_in_image(image_path, config)
+            multi_staffs, image, debug, title_future, _ = detect_staffs_in_image(image_path, config)
         debug_cleanup = debug
 
         transformer_config = Config()
@@ -216,7 +217,7 @@ def process_image(
 
         eprint("Writing XML", result_staffs)
         xml = generate_xml(xml_generator_args, result_staffs, title)
-        xml.write(xml_file)
+        ET.ElementTree(xml).write(xml_file, encoding="unicode", xml_declaration=True)
 
         eprint("Finished parsing " + str(len(result_staffs)) + " staves")
         teaser_file = replace_extension(image_path, "_teaser.png")
@@ -238,7 +239,7 @@ def process_image(
 
 def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
-) -> tuple[list[MultiStaff], NDArray, Debug, Future[str]]:
+) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int]:
     predictions, debug = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache, config.segnet_use_gpu
     )
@@ -300,7 +301,7 @@ def detect_staffs_in_image(
 
     debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
 
-    return multi_staffs, predictions.preprocessed, debug, title_future
+    return multi_staffs, predictions.preprocessed, debug, title_future, len(staffs)
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:

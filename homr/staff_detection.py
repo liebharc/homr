@@ -284,10 +284,37 @@ def connect_staff_lines(
     return connected_lines
 
 
+def _extrapolated_line_y(line: StaffLineSegment, x: float) -> float:
+    fragment = line.get_at(x) or line.staff_fragments[0]
+    return fragment.get_center_extrapolated(x)
+
+
 def are_lines_crossing(lines: list[StaffLineSegment]) -> bool:
+    """
+    Two staff lines cross if their relative vertical order flips somewhere across their
+    shared x-range - checked via each line's own extrapolated y-position (the same
+    extrapolation StaffAnchor and resample_staff_segment already use to place a line at a
+    given x), rather than a literal polygon-overlap test on the underlying fragments.
+
+    A raw polygon test is too sensitive to a single wide fragment with a few degrees of
+    rotation: its far corners can swing several pixels beyond its own center and
+    geometrically touch an adjacent, unrelated staff line's box even though the two lines
+    never actually cross in y (seen on smb/123.png's system 4 bass staff, where this false
+    positive silently discarded an otherwise-valid 5-line anchor).
+    """
     for i in range(len(lines)):
         for j in range(i + 1, len(lines)):
-            if lines[i].is_overlapping(lines[j]):
+            overlap_start = max(lines[i].min_x, lines[j].min_x)
+            overlap_stop = min(lines[i].max_x, lines[j].max_x)
+            if overlap_start >= overlap_stop:
+                continue
+            delta_start = _extrapolated_line_y(lines[i], overlap_start) - _extrapolated_line_y(
+                lines[j], overlap_start
+            )
+            delta_stop = _extrapolated_line_y(lines[i], overlap_stop) - _extrapolated_line_y(
+                lines[j], overlap_stop
+            )
+            if delta_start == 0 or delta_stop == 0 or (delta_start > 0) != (delta_stop > 0):
                 return True
     return False
 
@@ -325,6 +352,59 @@ def begins_or_ends_on_one_staff_line(
         if abs(staff_y - line.center[1]) < unit_size:
             return True
     return False
+
+
+def _extrapolate_missing_staff_line(
+    connected_lines: list[StaffLineSegment],
+    symbol: RotatedBoundingBox,
+    estimated_unit_size: int,
+) -> list[StaffLineSegment] | None:
+    """
+    Segnet's line prediction can miss one of a staff's five lines outright, especially in
+    densely packed multi-staff systems - a real gap in the underlying detection, not a
+    logic bug. If that happens but the other four lines are still evenly spaced at the
+    estimated unit size, synthesize the missing line by extrapolation instead of discarding
+    the whole anchor attempt.
+
+    The anchor symbol (a bar line or clef stem) spans close to the full staff height by
+    construction, so comparing the found lines' own extent against the symbol's own
+    top/bottom tells us which end is short a line, rather than guessing. Returns None
+    (leaving the anchor attempt to fail as before) unless exactly one end shows a
+    unit-size-sized gap and the other end doesn't - anything less clear-cut (e.g. a real
+    3-line pattern, or noise) is left alone rather than guessed at.
+    """
+    if len(connected_lines) != constants.number_of_lines_on_a_staff - 1:
+        return None
+    ordered = sorted(connected_lines, key=lambda line: line.staff_fragments[0].center[1])
+    positions = [line.staff_fragments[0].center[1] for line in ordered]
+    gaps = [positions[i + 1] - positions[i] for i in range(len(positions) - 1)]
+    tolerance = 0.3 * estimated_unit_size
+    if any(abs(gap - estimated_unit_size) > tolerance for gap in gaps):
+        return None
+
+    symbol_top = symbol.center[1] - symbol.size[1] / 2
+    symbol_bottom = symbol.center[1] + symbol.size[1] / 2
+    gap_above = positions[0] - symbol_top
+    gap_below = symbol_bottom - positions[-1]
+    is_missing_above = abs(gap_above - estimated_unit_size) <= tolerance and gap_below <= tolerance
+    is_missing_below = abs(gap_below - estimated_unit_size) <= tolerance and gap_above <= tolerance
+    if is_missing_above == is_missing_below:
+        return None
+
+    reference = ordered[0] if is_missing_above else ordered[-1]
+    offset = -estimated_unit_size if is_missing_above else estimated_unit_size
+    synthesized_fragments = [
+        RotatedBoundingBox(
+            ((fragment.center[0], fragment.center[1] + offset), fragment.box[1], fragment.box[2]),
+            fragment.contours,
+            fragment.debug_id,
+        )
+        for fragment in reference.staff_fragments
+    ]
+    synthesized_line = StaffLineSegment(reference.debug_id, synthesized_fragments)
+    if is_missing_above:
+        return [synthesized_line, *ordered]
+    return [*ordered, synthesized_line]
 
 
 def find_staff_anchors(
@@ -616,8 +696,16 @@ def find_horizontal_lines(
 
     count = np.insert(count, [0, len(count)], [0, 0])
     norm = (count - np.mean(count)) / np.std(count)
+    # distance is meant to merge anti-aliasing sub-peaks within one line's own thickness into
+    # a single center, not to suppress a neighboring, genuinely distinct staff line - but two
+    # real adjacent staff lines are themselves spaced ~unit_size apart, so passing unit_size
+    # unmodified leaves no margin for the normal +/-1-2px jitter in real scans: a line-to-line
+    # gap that measures a pixel under unit_size gets one of its two real peaks suppressed,
+    # fragmenting a clean 5-line group into incomplete ones. Match the 0.3 * unit_size
+    # tolerance already used for gap validation elsewhere in this file (see
+    # _extrapolate_missing_staff_line) rather than a hard, jitter-intolerant cutoff.
     centers, _ = find_peaks.find_peaks(
-        norm, height=line_threshold, distance=unit_size, prominence=1
+        norm, height=line_threshold, distance=0.7 * unit_size, prominence=1
     )
     centers -= 1
     norm = norm[1:-1]  # Remove prepend / append

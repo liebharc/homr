@@ -77,6 +77,19 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+## Run 426 - 27 epochs
+
+Commit: b6fd20809a8dcaf10dfd39a4ca4f64c6f056e644
+Day: 13 July 2026
+Transformer Smoke Test: 5%
+System Level: Total: 5.7 diffs, SER: 4.2% | 5.1 diffs, SER: 4.0% after PR-112
+Polish scores: OMR-NED 24.30% | 18.1% after PR-112
+SMB scores: OMR-NED 22.06% | 14.5% after PR-112
+
+Training with lieder+grandstaff+primux+pdmx+musetrainer datasets.
+
+Note that PR-110 and PR-112 improved the scoring results independent from the model itself.
+
 ## Run 414
 
 Commit: 79aec9b6b66de2281972c9d4f9c606f3f84c9cd1
@@ -85,7 +98,6 @@ Transformer Smoke Test: 6%
 System Level: Total: 5.9 diffs, SER: 4.9%
 
 Clean the Lieder dataset to introduce more training data
-
 
 ## Run 407 - at epoch 6
 
