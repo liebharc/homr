@@ -87,8 +87,10 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     largest_text = max(filtered_results, key=font_size_score)[1]
     return cleanup_text(largest_text)
 
-def _return_empty():
+
+def _return_empty() -> str:
     return ""
+
 
 def download_ocr_weights() -> None:
     """
@@ -96,12 +98,12 @@ def download_ocr_weights() -> None:
     """
     _initialize_reader()
 
-def detect_title(debug: Debug, top_staff: Staff, title_detection) -> Future[str]:
+
+def detect_title(debug: Debug, top_staff: Staff, title_detection: bool) -> Future[str]:
     """
     Runs the title detection in a separate thread and returns a Future.
     """
     if title_detection:
-        print("detecting title")
         return _executor.submit(_detect_title_task, debug, top_staff)
     else:
         return _executor.submit(_return_empty)

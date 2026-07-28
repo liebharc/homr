@@ -21,14 +21,12 @@ from homr.segmentation.config import (
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
-_segnet_inference = None
 
 class Segnet:
     def __init__(self, use_gpu_inference: bool) -> None:
         self.use_gpu = False
         if use_gpu_inference and cuda_available():
             try:
-                print("Loading segnet")
                 # I had this issue: https://github.com/microsoft/onnxruntime/issues/21684
                 # If torch is installed, this fixes
                 # "libcudnn.so.9: cannot open shared object file"
@@ -119,6 +117,9 @@ class ExtractResult:
         self.clefs_keys = clefs_keys
 
 
+_segnet_inference: Segnet | None = None
+
+
 def extract_patch(image: NDArray, y: int, x: int, win_size: int) -> NDArray:
     """
     Returns a full-size (3, win_size, win_size) patch.
@@ -192,7 +193,7 @@ def inference(
     if step_size < 0:
         step_size = win_size // 2
 
-    global _segnet_inference
+    global _segnet_inference  # noqa: PLW0603
     if _segnet_inference is None:
         _segnet_inference = Segnet(use_gpu_inference)
 

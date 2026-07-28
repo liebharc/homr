@@ -178,9 +178,9 @@ def _run_homr_on_dir(image_dir: Path) -> None:
     result = subprocess.run(  # noqa: S603
         ["poetry", "run", "python", str(_HOMR_MAIN), str(image_dir), "--no-title"],  # noqa: S607
         # Command I use on ubuntu
-        # ["poetry", "run", "python3", "-m", "homr.main", str(image_dir), "--no-title"],  # noqa: S607
+        # ["poetry", "run", "python3", "-m", "homr.main", str(image_dir), "--no-title"],
         cwd=str(_REPO_ROOT),
-        capture_output=True, # if True does not show log from homr
+        capture_output=True,  # if True does not show log from homr
         check=False,
     )
     if result.returncode != 0:

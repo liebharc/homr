@@ -410,11 +410,8 @@ def main() -> None:
         + "pays off when processing many images. Has no effect with CUDA.",
     )
     parser.add_argument(
-        "--no-title",
-        action="store_true",
-        help="Don't detect title for faster inference"
+        "--no-title", action="store_true", help="Don't detect title for faster inference"
     )
-
 
     args = parser.parse_args()
 
@@ -445,7 +442,7 @@ def main() -> None:
         transformer_use_gpu,
         segnet_use_gpu,
         coreml_encoder,
-        not args.no_title
+        not args.no_title,
     )
 
     xml_generator_args = XmlGeneratorArguments(
