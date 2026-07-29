@@ -88,10 +88,6 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     return cleanup_text(largest_text)
 
 
-def _return_empty() -> str:
-    return ""
-
-
 def download_ocr_weights() -> None:
     """
     Pre-download and initialize OCR reader weights before detection runs.
@@ -99,11 +95,8 @@ def download_ocr_weights() -> None:
     _initialize_reader()
 
 
-def detect_title(debug: Debug, top_staff: Staff, title_detection: bool) -> Future[str]:
+def detect_title(debug: Debug, top_staff: Staff) -> Future[str]:
     """
     Runs the title detection in a separate thread and returns a Future.
     """
-    if title_detection:
-        return _executor.submit(_detect_title_task, debug, top_staff)
-    else:
-        return _executor.submit(_return_empty)
+    return _executor.submit(_detect_title_task, debug, top_staff)

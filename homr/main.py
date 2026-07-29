@@ -280,7 +280,12 @@ def detect_staffs_in_image(
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")
-    title_future = detect_title(debug, staffs[0], config.title_detection)
+    if config.title_detection:
+        title_future = detect_title(debug, staffs[0])
+    else:
+        title_future: Future[str] = Future()
+        title_future.set_result("")
+
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
     brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
