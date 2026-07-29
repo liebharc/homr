@@ -283,7 +283,7 @@ def detect_staffs_in_image(
     if config.title_detection:
         title_future = detect_title(debug, staffs[0])
     else:
-        title_future: Future[str] = Future()
+        title_future = Future()
         title_future.set_result("")
 
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
