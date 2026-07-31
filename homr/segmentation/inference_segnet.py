@@ -117,6 +117,9 @@ class ExtractResult:
         self.clefs_keys = clefs_keys
 
 
+_segnet_inference: Segnet | None = None
+
+
 def extract_patch(image: NDArray, y: int, x: int, win_size: int) -> NDArray:
     """
     Returns a full-size (3, win_size, win_size) patch.
@@ -190,7 +193,9 @@ def inference(
     if step_size < 0:
         step_size = win_size // 2
 
-    model = Segnet(use_gpu_inference)
+    global _segnet_inference  # noqa: PLW0603
+    if _segnet_inference is None:
+        _segnet_inference = Segnet(use_gpu_inference)
 
     image_org = cv2.cvtColor(image_org, cv2.COLOR_GRAY2BGR)
     image = np.transpose(image_org, (2, 0, 1)).astype(np.float32)
@@ -209,13 +214,13 @@ def inference(
             batch.append(hop)
 
             if len(batch) == batch_size:
-                batch_out = model.run(np.stack(batch, axis=0))
+                batch_out = _segnet_inference.run(np.stack(batch, axis=0))
                 for out in batch_out:
                     data.append(np.argmax(out, axis=0))
                 batch.clear()
 
     if batch:
-        batch_out = model.run(np.stack(batch, axis=0))
+        batch_out = _segnet_inference.run(np.stack(batch, axis=0))
         for out in batch_out:
             data.append(np.argmax(out, axis=0))
 

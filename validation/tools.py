@@ -179,9 +179,9 @@ def music21(kern_text: str, image: Path | None) -> str:
 def _run_homr_on_dir(image_dir: Path) -> None:
     """Run homr on every image in image_dir, writing .musicxml alongside each."""
     result = subprocess.run(  # noqa: S603
-        ["poetry", "run", "python", str(_HOMR_MAIN), str(image_dir)],  # noqa: S607
+        ["poetry", "run", "python3", "-m", "homr.main", str(image_dir), "--no-title"],  # noqa: S607
         cwd=str(_REPO_ROOT),
-        capture_output=True,
+        capture_output=True,  # if True does not show log from homr
         check=False,
     )
     if result.returncode != 0:

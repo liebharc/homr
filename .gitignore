@@ -28,6 +28,7 @@ _build/
 *.onnx
 *.pt
 *.onnx.data
+*.trt
 
 # Byprodcuts of a training run
 /seg_unet.keras
