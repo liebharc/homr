@@ -33,6 +33,7 @@ from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.onnx_providers import coreml_available, cuda_available
+from homr.pdf_utils import render_pdf_to_image
 from homr.resize import resize_image
 from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
 from homr.segmentation.inference_segnet import extract
@@ -176,6 +177,9 @@ def process_image(
     xml_generator_args: XmlGeneratorArguments,
 ) -> None:
     eprint("Processing " + image_path)
+    if image_path.lower().endswith(".pdf"):
+        render_pdf_to_image(image_path)
+        image_path = replace_extension(image_path, ".png")
     xml_file = replace_extension(image_path, ".musicxml")
     debug_cleanup: Debug | None = None
     try:
@@ -311,7 +315,7 @@ def detect_staffs_in_image(
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
     image_files = []
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+    for ext in ["png", "jpg", "jpeg", "pdf", "PNG", "JPG", "JPEG", "PDF"]:
         image_files.extend(glob.glob(os.path.join(folder, "**", f"*.{ext}"), recursive=True))
     without_teasers = [
         img
