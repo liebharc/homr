@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+import json
 import xml.etree.ElementTree as ET
 from concurrent.futures import Future
 from dataclasses import dataclass
@@ -168,6 +169,7 @@ class ProcessingConfig:
     # Only helps across many images (slow one-time MLProgram compile).
     coreml_encoder: bool
     title_detection: bool
+    write_noteheads_json: bool
 
 
 def process_image(
@@ -224,6 +226,43 @@ def process_image(
         if config.write_staff_positions:
             staff_position_files = replace_extension(image_path, ".txt")
             save_staff_positions(multi_staffs, image.shape, staff_position_files)
+        if config.write_noteheads_json:
+            json_file = replace_extension(image_path, "_coordinates.json")
+            noteheads_data = []
+            note_id = 1
+            for staff_idx, multi_staff in enumerate(multi_staffs):
+                for staff in multi_staff.staffs:
+                    for note in staff.get_notes():
+                        box = note.box
+                        noteheads_data.append({
+                            "id": note_id,
+                            "staff_index": staff_idx,
+                            "center": [float(box.center[0]), float(box.center[1])],
+                            "size": [float(box.size[0]), float(box.size[1])],
+                            "angle": float(box.angle),
+                            "top_left": [float(box.top_left[0]), float(box.top_left[1])],
+                            "top_right": [float(box.top_right[0]), float(box.top_right[1])],
+                            "bottom_left": [float(box.bottom_left[0]), float(box.bottom_left[1])],
+                            "bottom_right": [float(box.bottom_right[0]), float(box.bottom_right[1])],
+                            "bounding_box": [
+                                int(box.top_left[0]),
+                                int(box.top_left[1]),
+                                int(box.bottom_right[0]),
+                                int(box.bottom_right[1])
+                            ],
+                            "position": note.position,
+                            "stem_direction": note.stem_direction.name if note.stem_direction else None,
+                            "has_dot": note.has_dot
+                        })
+                        note_id += 1
+            output_data = {
+                "image_path": image_path,
+                "total_noteheads": len(noteheads_data),
+                "noteheads": noteheads_data
+            }
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(output_data, f, indent=2)
+            eprint("Notehead coordinates written to", json_file)
         debug.write_teaser(teaser_file, multi_staffs)
         debug.clean_debug_files_from_previous_runs()
 
@@ -418,6 +457,11 @@ def main() -> None:
     parser.add_argument(
         "--no-title", action="store_true", help="Don't detect title for faster inference"
     )
+    parser.add_argument(
+        "--write-noteheads-json",
+        action="store_true",
+        help="Writes pixel coordinates of all detected noteheads to a JSON file.",
+    )
 
     args = parser.parse_args()
 
@@ -449,6 +493,7 @@ def main() -> None:
         segnet_use_gpu,
         coreml_encoder,
         not args.no_title,
+        args.write_noteheads_json,
     )
 
     xml_generator_args = XmlGeneratorArguments(
