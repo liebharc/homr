@@ -273,6 +273,20 @@ def process_image(
             with open(json_file, "w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2)
             eprint("Notehead coordinates written to", json_file)
+
+            json_staffs_file = replace_extension(image_path, "_staffs.json")
+            staffs_data = []
+            for staff_idx, multi_staff in enumerate(multi_staffs):
+                for staff in multi_staff.staffs:
+                    staffs_data.append({
+                        "staff_index": staff_idx,
+                        "top_y": float(staff.min_y),
+                        "bottom_y": float(staff.max_y),
+                        "spacing": float((staff.max_y - staff.min_y) / 4.0)
+                    })
+            with open(json_staffs_file, "w", encoding="utf-8") as f:
+                json.dump({"staffs": staffs_data}, f, indent=2)
+            eprint("Staff positions written to", json_staffs_file)
         debug.write_teaser(teaser_file, multi_staffs)
         debug.clean_debug_files_from_previous_runs()
 
