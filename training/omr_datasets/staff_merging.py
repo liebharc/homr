@@ -1,10 +1,6 @@
 from collections import defaultdict
 
-from homr.transformer.vocabulary import (
-    EncodedSymbol,
-    has_rhythm_symbol_a_position,
-    nonote,
-)
+from homr.transformer.vocabulary import EncodedSymbol
 
 
 class EncodedSymbolWithPos:
@@ -27,14 +23,8 @@ class EncodedSymbolWithPos:
 def merge_upper_and_lower_staff(voices: list[list[EncodedSymbolWithPos]]) -> list[EncodedSymbol]:
     voices = [voice for voice in voices if len(voice) > 0]
     positions: defaultdict[int, list[EncodedSymbol]] = defaultdict(list)
-    for voice_no, voice in enumerate(voices):
-        position = "upper" if voice_no == 0 else "lower"
+    for voice in voices:
         for symbol in voice:
-            if (
-                has_rhythm_symbol_a_position(symbol.symbol.rhythm)
-                and symbol.symbol.position == nonote
-            ):
-                symbol.symbol.position = position
             positions[symbol.sort_order()].append(symbol.symbol)
 
     result: list[EncodedSymbol] = []

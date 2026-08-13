@@ -1,6 +1,5 @@
-import copy
 import re
-from typing import NamedTuple
+from enum import Enum
 
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote
@@ -11,167 +10,217 @@ from training.omr_datasets.staff_merging import (
 from training.transformer.training_vocabulary import VocabularyStats, check_token_lines
 
 
-class _SignatureState(NamedTuple):
-    """The clef/key/time signature in force at the end of a staff's kern document.
+class StaffPosition(Enum):
+    UPPER = "upper"
+    LOWER = "lower"
 
-    Carried across concatenated multi-document kern (one document per system) so a
-    system's opening clef/key/time is only emitted as a token when it actually differs
-    from what was already in force - not just because the document restarts.
-    """
 
-    clef: EncodedSymbol
-    key: EncodedSymbol
-    time: EncodedSymbol
+# How much a barline token says about the line it describes, see _merge_barlines.
+_BARLINE_RANK = {
+    "barline": 0,
+    "doublebarline": 1,
+    "bolddoublebarline": 2,
+    "repeatStart": 3,
+    "repeatEnd": 3,
+    "repeatEndStart": 4,
+}
+
+
+def _merge_barlines(kept: EncodedSymbol, dropped: EncodedSymbol) -> EncodedSymbol:
+    """Combine two barlines which the image draws as a single one."""
+    if {kept.rhythm, dropped.rhythm} == {"repeatEnd", "repeatStart"}:
+        return EncodedSymbol("repeatEndStart")
+    if _BARLINE_RANK.get(dropped.rhythm, -1) > _BARLINE_RANK[kept.rhythm]:
+        return dropped
+    return kept
+
+
+class _StaffState:
+    def __init__(self, position: StaffPosition) -> None:
+        clef_name = "clef_G2" if position is StaffPosition.UPPER else "clef_F4"
+        self.clef = EncodedSymbolWithPos(
+            -10, EncodedSymbol(clef_name, empty, empty, empty, empty, position.value)
+        )
+        self.key = EncodedSymbolWithPos(-9, EncodedSymbol("keySignature_0"))
+        self.time = EncodedSymbolWithPos(-8, EncodedSymbol("timeSignature/4"))
+        self.explicit_clef_seen = False
+
+        self.position = position
+        self.result: list[EncodedSymbolWithPos] = []
+        self.opening_added = False
+        self.data_seen = False
+        self.line_no = 0
+        self.in_control_group = True
+
+    def advance_line_no(self, line: str) -> None:
+        # Control chars seem to have no specific order and must be treated
+        # as if we would be on the same line.
+        control_line = line.startswith("*")
+        if control_line and self.in_control_group:
+            return
+        self.line_no += 1
+        self.in_control_group = control_line
+
+    def add_barline(self, symbols: list[EncodedSymbol]) -> None:
+        """Add a barline, or merge it into the one before if the image draws them as one.
+
+        Kern can write two barlines without anything in between, a repeat end followed
+        by a repeat start for example, or the barline a staff system ends with followed
+        by the same barline again at the start of the next system. A data line of rests
+        or even placeholders (see nonote) means the staff has moved on and whatever
+        barline comes next is a line of its own.
+        """
+        if not self.data_seen:
+            if symbols and self.result and self.result[-1].rhythm in _BARLINE_RANK:
+                self.result[-1] = EncodedSymbolWithPos(
+                    self.result[-1].position, _merge_barlines(self.result[-1].symbol, symbols[0])
+                )
+            return
+        if symbols:
+            self.data_seen = False
+        self.result.extend(EncodedSymbolWithPos(self.line_no, sym) for sym in symbols)
+
+    def set_key(self, new_key: EncodedSymbol) -> None:
+        if self.opening_added and new_key != self.key.symbol:
+            self.result.append(EncodedSymbolWithPos(self.line_no, new_key))
+        self.key = EncodedSymbolWithPos(-9, new_key)
+
+    def set_time(self, new_time: EncodedSymbol) -> None:
+        if self.opening_added and new_time != self.time.symbol:
+            self.result.append(EncodedSymbolWithPos(self.line_no, new_time))
+        self.time = EncodedSymbolWithPos(-8, new_time)
+
+    def set_clef(self, new_clef: EncodedSymbol) -> None:
+        if self.opening_added and (not self.explicit_clef_seen or new_clef != self.clef.symbol):
+            self.result.append(EncodedSymbolWithPos(self.line_no, new_clef))
+        self.explicit_clef_seen = True
+        self.clef = EncodedSymbolWithPos(-10, new_clef)
+
+    def add_note(self, symbol: EncodedSymbol) -> None:
+        if not self.opening_added:
+            self.result.extend([self.clef, self.key, self.time])
+            self.opening_added = True
+        self.result.append(EncodedSymbolWithPos(self.line_no, symbol))
 
 
 def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
-    staffs = _merge_multiple_voices_on_the_same_staff(lines)
-    merged = merge_upper_and_lower_staff(
-        [
-            _convert_single_staff(staff_no, staff)[0]
-            for staff_no, staff in enumerate(reversed(staffs))
-        ]
-    )
-    merged = _remove_redundant_key_changes(merged)
-    merged = _fix_final_repeat_start(merged)
-    merged = strip_naturals(merged)
-    return merged
+    staffs, warnings = _convert_into_staffs(lines)
+    if warnings:
+        raise ValueError(" ".join(warnings))
+    if len(staffs) != 2:
+        raise ValueError("Skip scores with only 1 staff")
+    staffs = list(reversed(staffs))  # reverse to get treble first
+    return _post_process(merge_upper_and_lower_staff(staffs))
 
 
 def convert_kern_to_parts(lines: list[str]) -> list[list[EncodedSymbol]]:
-    """Return one token list per spine group for part-by-part NED comparison.
-
-    Two-spine grand-staff scores are reversed so treble comes first, matching
-    how _split_grand_staff orders MusicXML parts (staff 1 = treble first).
-    All other spine counts preserve the original spine order, which music21
-    also preserves in its XML output.
-
-    Handles concatenated multi-document kern (multiple **kern...*- sections, as
-    produced by datasets that store one kern document per staff system) by parsing
-    each document separately and extending the corresponding parts. The clef/key/time
-    signature in force is carried from one document to the next, so a system's opening
-    declarations only become tokens when they are an actual change - not just because
-    every system re-prints them (see _SignatureState).
-    """
-    docs = _split_kern_documents(lines)
-    if len(docs) == 1:
-        parts, _carry = _parse_kern_document(docs[0])
-        return parts
-
-    carry: list[_SignatureState] | None = None
-    doc_parts_list: list[list[list[EncodedSymbol]]] = []
-    for doc in docs:
-        parts, carry = _parse_kern_document(doc, carry)
-        doc_parts_list.append(parts)
-
-    n_parts = max(len(p) for p in doc_parts_list)
-    merged: list[list[EncodedSymbol]] = [[] for _ in range(n_parts)]
-    for doc_parts in doc_parts_list:
-        for i, part in enumerate(doc_parts):
-            merged[i].extend(part)
-    return merged
+    staffs, _ = _convert_into_staffs(lines)
+    # NED ignores Position, so no need to reverse the staffs
+    return [_post_process(merge_upper_and_lower_staff([staff])) for staff in staffs]
 
 
-def _split_kern_documents(lines: list[str]) -> list[list[str]]:
-    """Split a (possibly concatenated) kern text into individual documents."""
-    docs: list[list[str]] = []
-    current: list[str] = []
+def _post_process(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    symbols = _remove_redundant_key_changes(symbols)
+    symbols = _fix_final_repeat_start(symbols)
+    return strip_naturals(symbols)
+
+
+def _convert_into_staffs(lines: list[str]) -> tuple[list[list[EncodedSymbolWithPos]], list[str]]:
+    def _is_exordium(tokens: list[str]) -> bool:
+        return all(tok.startswith("**") for tok in tokens)
+
+    # Count staffs in a first pass before actual parsing. Staff count is the number of
+    # spines, but a later document may open extra spines, so take the minimum.
+    num_of_staffs = 999
     for line in lines:
-        current.append(line)
-        stripped = line.strip()
-        if stripped and all(tok.strip() == "*-" for tok in stripped.split("\t")):
-            docs.append(current)
-            current = []
-    if current:
-        docs.append(current)
-    return docs or [lines]
+        tokens = line.rstrip("\n").split("\t")
+        if _is_exordium(tokens):
+            num_of_staffs = min(num_of_staffs, len(tokens))
+    assert num_of_staffs != 999, "No exordium found"  # noqa: S101
 
-
-def _parse_kern_document(
-    lines: list[str], carry: list[_SignatureState] | None = None
-) -> tuple[list[list[EncodedSymbol]], list[_SignatureState]]:
-    staffs = _merge_multiple_voices_on_the_same_staff(lines)
-    ordered = list(reversed(staffs)) if len(staffs) == 2 else staffs
-    result = []
-    new_carry: list[_SignatureState] = []
-    for staff_no, staff in enumerate(ordered):
-        initial = carry[staff_no] if carry is not None and staff_no < len(carry) else None
-        single, final_state = _convert_single_staff(staff_no, staff, initial)
-        part = merge_upper_and_lower_staff([single])
-        part = _remove_redundant_key_changes(part)
-        part = _fix_final_repeat_start(part)
-        part = strip_naturals(part)
-        result.append(part)
-        new_carry.append(final_state)
-    return result, new_carry
-
-
-def _merge_multiple_voices_on_the_same_staff(
-    lines: list[str],
-) -> list[list[str]]:
-    """
-    Merges voices into staffs.
-
-    Humdrum kern uses special symbols: *^ and *v to split and merge voices
-    """
-    staff_lines: list[list[str]] = []
-    spine_to_staff: list[int] = []
+    # Typically we expect num_of_staffs == 2, which the training dataset
+    # `grandstaff`` mostly follows.
+    # Kern lists the bass staff first and the treble staff second, so the code here should work.
+    #
+    # However, in the validation dataset `smb`, kern scores concatenate several documents,
+    # so num_of_staffs != 2. Then we cannot tell the StaffPosition and assign one arbitrarily.
+    # NED ignores Position, so the assignment does not affect NED correctness.
+    staffs = [
+        HumdrumKernConverter(StaffPosition.LOWER if i == 0 else StaffPosition.UPPER)
+        for i in range(num_of_staffs)
+    ]
+    # Indexed by spine, several spines can point to the same staff (see Split)
+    spine_to_staff: list[HumdrumKernConverter] = []
+    warnings: list[str] = []
 
     for raw_line in lines:
         line = raw_line.rstrip("\n")
+
+        # empty
         if not line.strip():
-            for staff in staff_lines:
-                staff.append("")
+            for staff in staffs:
+                staff.feed("")
             continue
 
+        # comment
+        if line.startswith("!"):
+            continue
+
+        # real processing
         tokens = line.split("\t")
+        num_of_spine = len(tokens)
 
-        # Initialize spines
-        if all(tok.startswith("**") for tok in tokens):
-            spine_to_staff = list(range(len(tokens)))
-            staff_lines = [[] for _ in range(max(spine_to_staff) + 1)]
-            for i in range(len(staff_lines)):
-                staff_lines[i].append("**kern")
+        # Exordium. Spines beyond the staff count belong to a staff which carries two
+        # voices without being split with "*^" (see _count_staffs). We assume they are the
+        # bass staff, which is where they usually are.
+        if _is_exordium(tokens):
+            if num_of_spine == num_of_staffs:
+                spine_to_staff = staffs
+            else:
+                # special case for validation dataset `smb`:
+                # one staff carries two voices without being split with "*^",
+                # so num_of_spine != num_of_staffs. Here we assume the extra spines
+                # belong to the bass staff, which is where they usually are.
+                spine_to_staff = [staffs[0]] * (num_of_spine - num_of_staffs + 1) + staffs[1:]
             continue
 
-        # Split
-        if "*^" in tokens:
-            new_map = []
-            for i, tok in enumerate(tokens):
-                if tok == "*^":
-                    new_map.extend([spine_to_staff[i], spine_to_staff[i]])
-                else:
-                    new_map.append(spine_to_staff[i])
-            spine_to_staff = new_map
-            continue
+        assert num_of_spine == len(spine_to_staff), "Number of spines does not match"  # noqa: S101
 
-        # Join
-        elif "*v" in tokens:
+        # Spine operations: "*^" splits a spine into two voices, "*v" joins them
+        # back into one. Both can appear on the same line.
+        if "*^" in tokens or "*v" in tokens:
             new_map = []
             i = 0
-            while i < len(tokens):
-                if i + 1 < len(tokens) and tokens[i] == "*v" and tokens[i + 1] == "*v":
-                    new_map.append(spine_to_staff[i])
-                    i += 2
-                else:
-                    new_map.append(spine_to_staff[i])
+            while i < num_of_spine:
+                staff = spine_to_staff[i]
+                if tokens[i] == "*^":
+                    new_map.extend([staff, staff])
                     i += 1
+                    continue
+                new_map.append(staff)
+                if tokens[i] != "*v":
+                    i += 1
+                    continue
+                end = i + 1
+                # count how many *v there are.
+                while end < num_of_spine and tokens[end] == "*v":
+                    end += 1
+                for _staff in spine_to_staff[i + 1 : end]:
+                    if _staff is not staff:
+                        warnings.append("voices to join should point to the same staff")
+                        break
+                i = end
             spine_to_staff = new_map
             continue
 
         # Data line
-        grouped: dict[int, list[str]] = {}
-        for i, tok in enumerate(tokens):
-            if i >= len(spine_to_staff):
-                continue  # skip extra unexpected tokens
-            s = spine_to_staff[i]
-            grouped.setdefault(s, []).append(tok)
-        for s, items in grouped.items():
-            while len(staff_lines) <= s:
-                staff_lines.append([])
-            staff_lines[s].append(" ".join(items))
+        grouped: dict[HumdrumKernConverter, list[str]] = {}
+        for staff, tok in zip(spine_to_staff, tokens, strict=True):
+            grouped.setdefault(staff, []).append(tok)
+        for staff, items in grouped.items():
+            staff.feed(" ".join(items))
 
-    return staff_lines
+    return [staff.state.result for staff in staffs], warnings
 
 
 def _remove_redundant_key_changes(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
@@ -203,15 +252,8 @@ def _fix_final_repeat_start(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]
     return symbols
 
 
-def _convert_single_staff(
-    staff_no: int, lines: list[str], initial: _SignatureState | None = None
-) -> tuple[list[EncodedSymbolWithPos], _SignatureState]:
-    converter = HumdrumKernConverter()
-    return converter.convert_humdrum_kern(staff_no, lines, initial)
-
-
 class HumdrumKernConverter:
-    def __init__(self) -> None:
+    def __init__(self, position: StaffPosition) -> None:
         # Grandstaff definitions: https://link.springer.com/article/10.1007/s10032-023-00432-z#Tab1
         self.ignore_beams = ("L", "J", "K", "k")
         self.ignore_alteration_displays = ("x", "X", "i", "I", "j", "Z", "y", "Y")
@@ -219,6 +261,8 @@ class HumdrumKernConverter:
         # According to the grandstaff paper angleBracketOpen & Close stands for tieStart and tieEnd
         # but there is no tie visible
         self.angled_brackets = ("<", ">")
+
+        self.state = _StaffState(position)
 
     def _accidental_to_lift(self, accidental: str) -> str:
         return {"-": "b", "--": "bb", "#": "#", "##": "##", "n": "N"}.get(accidental, empty)
@@ -273,11 +317,11 @@ class HumdrumKernConverter:
             # return empty, empty in line 148
             return empty, empty
 
-    def parse_clef(self, clef: str) -> EncodedSymbol:
+    def parse_clef(self, clef: str, position: str) -> EncodedSymbol:
         clef_name = clef.split(maxsplit=1)[0].replace("*clef", "clef_")
         defaults = {"clef_F": "clef_F4", "clef_G": "clef_G2", "clef_C": "clef_C3"}
         clef_name = defaults.get(clef_name, clef_name)
-        return EncodedSymbol(clef_name, empty, empty, empty, empty)
+        return EncodedSymbol(clef_name, empty, empty, empty, empty, position)
 
     def parse_key_signature(self, key_signature: str) -> EncodedSymbol:
         mapping = {
@@ -297,6 +341,7 @@ class HumdrumKernConverter:
             "*k[f#c#g#d#a#e#]": 6,
             "*k[f#c#g#d#a#e#b#]": 7,
             "*kcancel": 0,
+            "*kcancek": 0,  # typo for *kcancel in smb sample 267
         }
         circle = mapping[key_signature.split(maxsplit=1)[0]]
         return EncodedSymbol(f"keySignature_{circle}")
@@ -327,7 +372,9 @@ class HumdrumKernConverter:
         m = self._DUR_RE.match(token)
         return m.group(1) if m else None
 
-    def parse_note_or_rest(self, token: str, default_dur: str = "4") -> EncodedSymbol:
+    def parse_note_or_rest(
+        self, token: str, position: str, default_dur: str = "4"
+    ) -> EncodedSymbol:
         # Prefix: slur/tie/accent/stem/roll/alteration markers before the duration.
         # Between duration and pitch: grace note q, sforzando ^^, tuplet % ratios, etc.
         # Non-capturing group for "between" keeps group indices identical to before.
@@ -345,125 +392,60 @@ class HumdrumKernConverter:
 
         rhythm_key = self.parse_duration(dur or default_dur, is_rest=is_rest, is_grace=is_grace)
         if is_rest:
-            return EncodedSymbol(rhythm_key, empty, empty, empty, empty)
+            return EncodedSymbol(rhythm_key, empty, empty, empty, empty, position)
 
         lift_val = self._accidental_to_lift(accidental)
         pitch_val = self.kern_note_to_pitch(pitch)
         articulation_val, slur_val = self._articulation_from_suffix(suffix)
-        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur_val)
+        return EncodedSymbol(rhythm_key, pitch_val, lift_val, articulation_val, slur_val, position)
 
     def parse_barline(self, line: str) -> list[EncodedSymbol]:
         symbol = line.split(" ", maxsplit=1)[0]
+        # A fermata over the barline is not a barline shape of its own.
+        symbol = symbol.rstrip(";")
         mapping = {
             "=:|!|:": ["repeatEndStart"],
             "=": ["barline"],
             "=-": [],  # barline after clef, key and time sig
             "==:|!": ["repeatEnd"],
             "==": ["bolddoublebarline"],
+            "==!!": ["bolddoublebarline"],
             "=:|!": ["repeatEnd"],
             "=!|:": ["repeatStart"],
+            "=:!!:": ["repeatEndStart"],
             "=||": ["doublebarline"],
             "=|!": ["barline"],
         }
         return [EncodedSymbol(s) for s in mapping[symbol]]
 
-    def _get_default_clef(self, staff_no: int) -> EncodedSymbol:
-        if staff_no == 0:
-            return EncodedSymbol("clef_G2", empty, empty, empty, empty, "upper")
-        return EncodedSymbol("clef_F4", empty, empty, empty, empty, "lower")
-
-    def _add_line_numbers(self, lines: list[str]) -> list[tuple[int, str]]:
-        """
-        Control chars seem to have no specific order and must be treated
-        as if we would be on the same line.
-        """
-        line_no = 0
-        result: list[tuple[int, str]] = []
-        in_control_group = True
-        for line in lines:
-            control_line = line.startswith("*")
-            if control_line and in_control_group:
-                result.append((line_no, line))
-            else:
-                line_no += 1
-                result.append((line_no, line))
-                in_control_group = control_line
-        return result
-
-    def convert_humdrum_kern(
-        self, staff_no: int, lines: list[str], initial: _SignatureState | None = None
-    ) -> tuple[list[EncodedSymbolWithPos], _SignatureState]:  # noqa: C901
-        result: list[EncodedSymbolWithPos] = []
-
-        prev_clef = initial.clef if initial is not None else self._get_default_clef(staff_no)
-        prev_key = initial.key if initial is not None else EncodedSymbol("keySignature_0")
-        prev_time = initial.time if initial is not None else EncodedSymbol("timeSignature/4")
-
-        clef = EncodedSymbolWithPos(-10, prev_clef)
-        keySignature = EncodedSymbolWithPos(-9, prev_key)
-        timeSignature = EncodedSymbolWithPos(-8, prev_time)
-        initial_signature_was_added = False
-        for line_no, line in self._add_line_numbers(lines):
-            if line.startswith("="):
-                if initial_signature_was_added:
-                    parsed = self.parse_barline(line)
-                    result.extend([EncodedSymbolWithPos(line_no, p) for p in parsed])
-            elif line.startswith("*k"):
-                new_key = self.parse_key_signature(line)
-                if initial_signature_was_added and new_key != keySignature.symbol:
-                    result.append(EncodedSymbolWithPos(line_no, new_key))
-                keySignature = EncodedSymbolWithPos(-9, new_key)
-            elif line.startswith("*M"):
-                new_time = self.parse_time_signature(line)
-                if initial_signature_was_added and new_time != timeSignature.symbol:
-                    result.append(EncodedSymbolWithPos(line_no, new_time))
-                timeSignature = EncodedSymbolWithPos(-8, new_time)
-            elif line.startswith("*clef"):
-                new_clef = self.parse_clef(line)
-                if initial_signature_was_added and new_clef != clef.symbol:
-                    result.append(EncodedSymbolWithPos(line_no, new_clef))
-                clef = EncodedSymbolWithPos(-10, new_clef)
-            elif line.startswith("*"):
-                # All other control instructions can be ignored
-                pass
-            else:
-                if not initial_signature_was_added:
-                    # Symbols can be appear in various order
-                    # and duplicated (in which the latest wins). With no carried-over
-                    # state (the very first document of a piece), always emit - that is
-                    # the real start of the piece, regardless of whether it happens to
-                    # match our internal defaults. With carried-over state (a later
-                    # system in a multi-document kern file, see _SignatureState), only
-                    # emit if it actually changed - a system restart re-declaring the
-                    # same clef/key/time is not a real change.
-                    if initial is None or clef.symbol != prev_clef:
-                        result.append(clef)
-                    if initial is None or keySignature.symbol != prev_key:
-                        result.append(keySignature)
-                    if initial is None or timeSignature.symbol != prev_time:
-                        result.append(timeSignature)
-                    initial_signature_was_added = True
-                symbols = line.split()
-                chord_dur = "4"
-                first = True
-                for token in symbols:
-                    if token == nonote:
-                        continue
-                    if first:
-                        extracted = self._extract_dur(token)
-                        if extracted:
-                            chord_dur = extracted
-                        first = False
-                    result.append(
-                        EncodedSymbolWithPos(line_no, self.parse_note_or_rest(token, chord_dur))
-                    )
-
-        # Snapshot independent copies: the symbols above are later mutated in place
-        # (e.g. merge_upper_and_lower_staff fills in symbol.position), so returning the
-        # same objects would let that later mutation leak back into the carried state.
-        return result, _SignatureState(
-            copy.copy(clef.symbol), copy.copy(keySignature.symbol), copy.copy(timeSignature.symbol)
-        )
+    def feed(self, line: str) -> None:
+        s = self.state
+        s.advance_line_no(line)
+        if line.startswith("="):
+            s.add_barline(self.parse_barline(line))
+        elif line.startswith("*k"):
+            s.set_key(self.parse_key_signature(line))
+        elif line.startswith("*M"):
+            s.set_time(self.parse_time_signature(line))
+        elif line.startswith("*clef"):
+            s.set_clef(self.parse_clef(line, s.position.value))
+        elif line.startswith("*"):
+            # All other control instructions can be ignored
+            pass
+        else:
+            if line.strip():  # blank lines are formatting, not data
+                s.data_seen = True
+            chord_dur = "4"
+            first = True
+            for token in line.split():
+                if token == nonote:
+                    continue
+                if first:
+                    extracted = self._extract_dur(token)
+                    if extracted:
+                        chord_dur = extracted
+                    first = False
+                s.add_note(self.parse_note_or_rest(token, s.position.value, chord_dur))
 
 
 if __name__ == "__main__":
