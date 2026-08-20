@@ -94,8 +94,16 @@ def build_position() -> dict[str, int]:
     """
     The staff position, applies to notes, rests and clefs
     """
-    positions = [nonote, "upper", "lower"]
+    positions = [nonote, "upper", "upper2", "lower", "lower2"]
     return build_dict(positions)
+
+
+def is_lower_position(position: str) -> bool:
+    return position.startswith("lower")
+
+
+def is_upper_or_has_no_position(position: str) -> bool:
+    return not is_lower_position(position)
 
 
 def build_articulation() -> dict[str, int]:
@@ -338,10 +346,10 @@ class EncodedSymbol:
         return result
 
     def to_upper_position(self) -> "EncodedSymbol":
-        if self.position != "lower":
+        if is_upper_or_has_no_position(self.position):
             return self
         result = copy.copy(self)
-        result.position = "upper"
+        result.position = self.position.replace("lower", "upper")
         return result
 
     def is_valid(self) -> bool:
@@ -473,7 +481,7 @@ def _remove_redudant_clefs_keys_and_time_signatures(
         result = []
         for symbol in chord:
             if symbol.rhythm.startswith("clef"):
-                if symbol.position == "upper":
+                if is_upper_or_has_no_position(symbol.position):
                     if symbol.rhythm != clef_upper:
                         clef_upper = symbol.rhythm
                         result.append(symbol)
@@ -608,7 +616,7 @@ def _only_keep_lower_staff_if_there_is_a_clef(
         for symbol in chord:
             if has_lower_clef:
                 result.append(symbol)
-            elif i < 5 and symbol.rhythm.startswith("clef") and symbol.position == "lower":
+            elif i < 5 and symbol.rhythm.startswith("clef") and is_lower_position(symbol.position):
                 has_lower_clef = True
                 result.append(symbol)
             else:
