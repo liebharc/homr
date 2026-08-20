@@ -19,7 +19,7 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty, is_lower_position
 from training.omr_datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
@@ -450,7 +450,7 @@ class MeasureCutter:
         self.time = EncodedSymbol("timeSignature/4")
 
     def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
-        if symbol.position == "lower":
+        if is_lower_position(symbol.position):
             return 1
         return 0
 

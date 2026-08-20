@@ -2,10 +2,13 @@
 
 import re
 import unittest
+import xml.etree.ElementTree as ET
 from typing import Any
 
+from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import (
+    read_token_lines,
     token_lines_to_str,
 )
 
@@ -154,9 +157,9 @@ class TestMusicXmlParser(unittest.TestCase):
         expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 keySignature_1 . . . . .
 timeSignature/4 . . . . .
-note_1 G4 _ _ slurStart_slurStop upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper&note_4 G3 _ _ slurStop lower
+note_1 G4 _ _ slurStart_slurStop upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper2&note_4 G3 _ _ slurStop lower
 rest_4 _ _ _ _ lower
-note_2 E4 _ _ slurStart upper&note_2 C2 _ _ _ lower
+note_2 E4 _ _ slurStart upper2&note_2 C2 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
 
@@ -447,8 +450,8 @@ timeSignature/4 . . . . .
 note_12 B5 _ _ slurStart_slurStop upper&note_12 G5 _ _ _ upper&note_4 B1 _ _ _ lower
 note_12 G5 _ staccato _ upper&note_12 D5 # _ _ upper
 note_12 D5 # staccato _ upper&note_12 B4 _ _ _ upper
-note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
-note_4 A4 _ _ slurStop upper&note_4 F4 # _ _ upper&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper2&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
+note_4 A4 _ _ slurStop upper2&note_4 F4 # _ _ upper2&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
 
@@ -509,6 +512,126 @@ timeSignature/4 . . . . .
 note_1 D5 _ _ _ upper&note_1 D4 _ _ _ upper&note_1 B3 _ arpeggiate _ lower&note_1 D3 _ _ _ lower&note_1 G2 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
+
+    def test_two_voices_on_one_staff(self) -> None:
+        """The first visible voice of a staff is the main voice, the others get a "2"
+        suffix. Here voice 2 is written before voice 1 and voice 3 is folded into
+        the second voice."""
+        self.maxDiff = None
+        example = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>8</duration><voice>2</voice><type>half</type><staff>1</staff>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>8</duration><voice>2</voice><type>half</type><staff>1</staff>
+      </note>
+      <backup><duration>16</duration></backup>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff>
+      </note>
+      <backup><duration>16</duration></backup>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>16</duration><voice>3</voice><type>whole</type><staff>1</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+        tokens = music_xml_string_to_tokens(example)
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        token_str = token_lines_to_str(flat_list)
+        expected = """clef_G2 _ _ _ _ upper
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_1 G4 _ _ _ upper2&note_2 E4 _ _ _ upper&note_1 C4 _ _ _ upper2
+note_2 D4 _ _ _ upper
+barline . . . . ."""
+        self.assertEqual(token_str, expected)
+
+    def test_voice_assignment_is_per_staff_and_measure(self) -> None:
+        """Hidden rests do not claim a voice; each staff and measure starts fresh."""
+        example = """<score-partwise version="4.0"><part id="P1">
+<measure number="1">
+  <attributes>
+    <divisions>1</divisions>
+    <clef number="1"><sign>G</sign><line>2</line></clef>
+    <clef number="2"><sign>F</sign><line>4</line></clef>
+  </attributes>
+  <note print-object="no">
+    <rest/><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <rest/><duration>1</duration><voice>2</voice><type>quarter</type><staff>1</staff>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <pitch><step>C</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff>
+  </note>
+  <note>
+    <chord/><pitch><step>E</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <pitch><step>C</step><octave>3</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><staff>2</staff>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <rest/><duration>1</duration><voice>2</voice><type>quarter</type><staff>2</staff>
+  </note>
+</measure>
+<measure number="2">
+  <note>
+    <pitch><step>D</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff>
+  </note>
+</measure>
+</part></score-partwise>"""
+        tokens = music_xml_string_to_tokens(example)
+        symbols = [s for page in tokens for measure in page for s in measure]
+        notes = {s.pitch: s.position for s in symbols if s.rhythm.startswith("note")}
+        self.assertEqual(notes, {"C4": "upper2", "E4": "upper2", "C3": "lower", "D4": "upper"})
+        rests = [s.position for s in symbols if s.rhythm.startswith("rest")]
+        self.assertEqual(rests, ["upper", "lower2"])
+
+    def test_round_trip_of_two_voices_on_one_staff(self) -> None:
+        """tokens -> MusicXML -> tokens keeps the two upper voices apart.
+
+        Which one ends up as `upper` and which as `upper2` may swap: the generator
+        numbers the MusicXML voices by rhythmic layer (rebalance_measure_voices),
+        while we take the first visible voice of a staff as the main voice.
+        """
+        self.maxDiff = None
+        # Same input as test_music_xml_generator.test_two_voices_on_the_same_staff
+        original = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2 G4 _ _ _ upper&note_4 E4 _ _ _ upper2&note_1 C3 _ _ _ lower
+note_4 D4 _ _ _ upper2
+barline . . . . ."""
+        xml = generate_xml(XmlGeneratorArguments(), [read_token_lines(original.splitlines())], "")
+        tokens = music_xml_string_to_tokens(ET.tostring(xml, encoding="unicode"))
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        positions = {s.pitch: s.position for s in flat_list if s.rhythm.startswith("note")}
+        self.assertEqual(positions["C3"], "lower")
+        self.assertEqual(positions["E4"], positions["D4"])
+        self.assertEqual({positions["G4"], positions["E4"]}, {"upper", "upper2"})
 
     def _norm_expected(self, expected: str) -> str:
         norm = expected.replace("\n", "")

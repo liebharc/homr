@@ -8,6 +8,7 @@ from homr.transformer.vocabulary import (
     EncodedSymbol,
     empty,
     has_rhythm_symbol_a_position,
+    is_lower_position,
 )
 from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
@@ -133,6 +134,7 @@ class TokensMeasure:
 
     def __init__(self) -> None:
         self.symbols: list[EncodedSymbolWithPos] = []
+        self.main_voice: dict[int, int] = {}  # map staff id to its main voice id
         self.current_position = 0
         self.new_page = False
 
@@ -164,15 +166,31 @@ class TokensMeasure:
         self.current_position = new_position
 
     def append_rest(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
+        self,
+        staff: int,
+        voice: int,
+        is_chord: bool,
+        duration: int,
+        invisible: bool,
+        symbol: EncodedSymbol,
     ) -> None:
-        self.append_note(staff, is_chord, duration, invisible, symbol)
+        self.append_note(staff, voice, is_chord, duration, invisible, symbol)
 
     def append_note(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
+        self,
+        staff: int,
+        voice: int,
+        is_chord: bool,
+        duration: int,
+        invisible: bool,
+        symbol: EncodedSymbol,
     ) -> None:
         is_grace = "G" in symbol.rhythm
         symbol.position = self._get_staff_position(staff)
+        if not invisible:
+            # The first visible voice of each staff is the main voice in this measure.
+            if voice != self.main_voice.setdefault(staff, voice):
+                symbol.position += "2"
         if is_chord:
             previous_symbol = self.symbols[-1]
             if not invisible:
@@ -188,7 +206,7 @@ class TokensMeasure:
             self.current_position += duration
 
     def _get_staff_no(self, symbol: EncodedSymbolWithPos) -> int:
-        if symbol.symbol.position == "lower":
+        if is_lower_position(symbol.symbol.position):
             return 1
         return 0
 
@@ -377,16 +395,32 @@ class TokensPart:
         self._ensure_current_measure().mark_new_page()
 
     def append_rest(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
+        self,
+        staff: int,
+        voice: int,
+        is_chord: bool,
+        duration: int,
+        invisible: bool,
+        symbol: EncodedSymbol,
     ) -> None:
         self._flush_pending_clefs()
-        self._ensure_current_measure().append_rest(staff, is_chord, duration, invisible, symbol)
+        self._ensure_current_measure().append_rest(
+            staff, voice, is_chord, duration, invisible, symbol
+        )
 
     def append_note(
-        self, staff: int, is_chord: bool, duration: int, invisible: bool, symbol: EncodedSymbol
+        self,
+        staff: int,
+        voice: int,
+        is_chord: bool,
+        duration: int,
+        invisible: bool,
+        symbol: EncodedSymbol,
     ) -> None:
         self._flush_pending_clefs()
-        self._ensure_current_measure().append_note(staff, is_chord, duration, invisible, symbol)
+        self._ensure_current_measure().append_note(
+            staff, voice, is_chord, duration, invisible, symbol
+        )
 
     def append_position_change(self, duration: int) -> None:
         self._flush_pending_clefs()
@@ -573,6 +607,8 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
     invisible = print_object == "no"
     if len(staff_nodes) > 0:
         staff = _int_text(staff_nodes[0], 1) - 1
+    voice_nodes = _children(note, "voice")
+    voice = _int_text(voice_nodes[0], 0) if voice_nodes else 0
     is_grace = _child(note, "grace") is not None
     is_chord = _child(note, "chord") is not None
     duration_node = _child(note, "duration")
@@ -597,6 +633,7 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
             rhythm = _measure_rest_rhythm(duration, part.divisions)
             part.append_rest(
                 staff,
+                voice,
                 is_chord,
                 duration,
                 invisible,
@@ -605,7 +642,7 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
         else:
             rhythm = _rhythm_token("rest", base_duration, dots, is_grace)
             sym = EncodedSymbol(rhythm, empty, empty, art, slur)
-            part.append_rest(staff, is_chord, duration, invisible, sym)
+            part.append_rest(staff, voice, is_chord, duration, invisible, sym)
     pitch = _children(note, "pitch")
     if len(pitch) > 0:
         pitch_name = _pitch_name(pitch[0])
@@ -613,7 +650,7 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
         sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur)
 
-        part.append_note(staff, is_chord, max(duration, 1), invisible, sym)
+        part.append_note(staff, voice, is_chord, max(duration, 1), invisible, sym)
 
 
 def _process_backup(part: TokensPart, backup: ET.Element) -> None:
