@@ -159,7 +159,7 @@ def _convert_into_staffs(lines: list[str]) -> tuple[list[list[EncodedSymbolWithP
         # empty
         if not line.strip():
             for staff in staffs:
-                staff.feed("")
+                staff.feed([""])
             continue
 
         # comment
@@ -217,8 +217,8 @@ def _convert_into_staffs(lines: list[str]) -> tuple[list[list[EncodedSymbolWithP
         grouped: dict[HumdrumKernConverter, list[str]] = {}
         for staff, tok in zip(spine_to_staff, tokens, strict=True):
             grouped.setdefault(staff, []).append(tok)
-        for staff, items in grouped.items():
-            staff.feed(" ".join(items))
+        for staff, voices in grouped.items():
+            staff.feed(voices)
 
     return [staff.state.result for staff in staffs], warnings
 
@@ -418,8 +418,10 @@ class HumdrumKernConverter:
         }
         return [EncodedSymbol(s) for s in mapping[symbol]]
 
-    def feed(self, line: str) -> None:
+    def feed(self, voices: list[str]) -> None:
+        """Process one kern line of this staff, with one entry in voices per voice."""
         s = self.state
+        line = " ".join(voices)
         s.advance_line_no(line)
         if line.startswith("="):
             s.add_barline(self.parse_barline(line))
@@ -435,17 +437,23 @@ class HumdrumKernConverter:
         else:
             if line.strip():  # blank lines are formatting, not data
                 s.data_seen = True
-            chord_dur = "4"
-            first = True
-            for token in line.split():
-                if token == nonote:
-                    continue
-                if first:
-                    extracted = self._extract_dur(token)
-                    if extracted:
-                        chord_dur = extracted
-                    first = False
-                s.add_note(self.parse_note_or_rest(token, s.position.value, chord_dur))
+            for i, voice in enumerate(voices):
+                # We accept at most 2 voices per staff.
+                # Everything beyond 2nd is folded into 2nd.
+                position = s.position.value
+                if i >= 1:
+                    position = s.position.value + "2"
+                chord_dur = "4"
+                first = True
+                for token in voice.split():
+                    if token == nonote:
+                        continue
+                    if first:
+                        extracted = self._extract_dur(token)
+                        if extracted:
+                            chord_dur = extracted
+                        first = False
+                    s.add_note(self.parse_note_or_rest(token, position, chord_dur))
 
 
 if __name__ == "__main__":

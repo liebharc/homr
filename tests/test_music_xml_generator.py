@@ -139,6 +139,24 @@ barline . . . . ."""
             else:
                 self.assertGreaterEqual(v, 5)
 
+    def test_two_voices_on_the_same_staff(self) -> None:
+        two_voices = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2 G4 _ _ _ upper&note_4 E4 _ _ _ upper2&note_1 C3 _ _ _ lower
+note_4 D4 _ _ _ upper2
+barline . . . . ."""
+        tokens = read_token_lines(two_voices.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        by_pitch = {_pitch(n): n for n in _notes(_first_measure(xml))}
+
+        # The second voice belongs to the upper staff, but is a voice of its own
+        # instead of being a chord note of the first voice.
+        self.assertEqual(_staff(by_pitch["E"]), "1")
+        self.assertIsNone(by_pitch["E"].find("chord"))
+        self.assertNotEqual(_voice(by_pitch["E"]), _voice(by_pitch["G"]))
+        self.assertEqual(_voice(by_pitch["E"]), _voice(by_pitch["D"]))
+
     def test_begin_chord_with_standalone_rests(self) -> None:
         """
         If the lower position consists of a standalone rest then start the
