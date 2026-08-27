@@ -2,6 +2,7 @@
 
 import unittest
 import xml.etree.ElementTree as ET
+from fractions import Fraction
 
 from homr.music_xml_generator import (
     SymbolChord,
@@ -184,6 +185,187 @@ barline . . . . ."""
         self.assertEqual(self._read_note_voice(note4), "1")
         self.assertEqual(self._read_note_voice(note5), "6")
         self.assertEqual(self._read_note_voice(note6), "5")
+
+    def test_multi_voice_measure_retiming(self) -> None:
+        """
+        Measure 6 of the accompaniment in liebharc/homr#142: the model
+        serializes the two left-hand voices as sequential events, so the
+        shared-cursor interpretation overflows the measure (27/4 quarters
+        in 4/4). Re-timing must replay each staff on its own cursor and
+        shrink the held half note's advance to its engraved slot, so that
+        every staff closes exactly on the measure duration.
+        """
+        arpeggio_measure = """note_8 A4 b _ _ upper&note_8 E4 b _ _ upper&note_8 C4 _ _ _ upper&note_2 A2 b _ _ lower&note_2 A1 b _ _ lower
+note_4 E4 b _ _ upper&note_4 C4 _ _ _ upper&note_4 A3 b _ _ upper
+note_8 E4 b _ _ upper&note_8 C4 _ _ _ upper&note_8 A3 b _ _ upper
+note_8 A4 b _ _ upper&note_8 E4 b _ _ upper&note_8 C4 _ _ _ upper&note_2 A2 b _ _ lower&note_2 A1 b _ _ lower
+note_4 E4 b _ _ upper&note_4 C4 _ _ _ upper&note_4 A3 b _ _ upper
+note_8 E4 b _ _ upper&note_8 C4 _ _ _ upper&note_8 A3 b _ _ upper
+barline . . . . ."""
+        two_voice_measure = """note_4 A4 b _ _ upper&note_4 E4 b _ _ upper&note_4 C4 _ _ _ upper&note_2 A2 b _ _ lower
+note_4 A3 b _ _ lower
+note_8. A4 b _ _ upper&note_8. E4 b _ _ upper&note_8. C4 _ _ _ upper
+note_8 A3 b _ _ lower
+note_16 C5 _ _ _ upper&note_16 A4 b _ _ upper&note_16 E4 b _ _ upper
+note_8. C5 _ _ _ upper&note_8. A4 b _ _ upper&note_8. G4 b _ _ upper&note_8. E4 b _ _ upper&note_8 A2 b _ _ lower
+note_4 C4 _ _ _ lower&note_4 A3 b _ _ lower
+note_16 E5 b _ _ upper&note_16 A4 b _ _ upper&note_16 G4 b _ _ upper
+note_8. E5 b _ _ upper&note_8. A4 b _ _ upper&note_8. G4 b _ _ upper
+note_8 E4 b _ _ lower&note_8 C4 _ _ _ lower&note_8 A3 b _ _ lower
+note_16 E5 b _ _ upper&note_16 A4 b _ _ upper&note_16 G4 b _ _ upper
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_-4 . . . . .
+timeSignature/4 . . . . ."""
+        tokens = read_token_lines(
+            str.join(
+                "\n", [header, arpeggio_measure, two_voice_measure, arpeggio_measure]
+            ).splitlines()
+        )
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        part = xml.find("part")
+        assert part is not None
+        divisions_text = part.findtext("measure/attributes/divisions")
+        assert divisions_text is not None
+        divisions = int(divisions_text)
+
+        for measure in part.findall("measure"):
+            attacks = self._read_note_attacks(measure)
+            measure_end = max(attack + duration for attack, duration, _, _, _ in attacks)
+            self.assertEqual(measure_end, 4 * divisions, measure.get("number"))
+
+        retimed = part.findall("measure")[1]
+        lower = [
+            (attack, duration, pitch)
+            for attack, duration, pitch, staff, _ in self._read_note_attacks(retimed)
+            if staff == "2"
+        ]
+        in_beats = [(Fraction(a, divisions), Fraction(d, divisions), p) for a, d, p in lower]
+        self.assertEqual(
+            in_beats,
+            [
+                # The held half note keeps its duration but only advances the
+                # moving voice's first (unwritten) eighth
+                (Fraction(0), Fraction(2), "A2"),
+                (Fraction(1, 2), Fraction(1), "A3"),
+                (Fraction(3, 2), Fraction(1, 2), "A3"),
+                (Fraction(2), Fraction(1, 2), "A2"),
+                (Fraction(5, 2), Fraction(1), "C4"),
+                (Fraction(7, 2), Fraction(1, 2), "E4"),
+            ],
+        )
+
+        # Voice separation follows the plan, not overlap packing: the held
+        # half note is its own voice; the moving eighth-quarter-eighth
+        # ostinato stays in one voice even after the half has ended.
+        lower_voices = [
+            voice for _, _, _, staff, voice in self._read_note_attacks(retimed) if staff == "2"
+        ]
+        self.assertEqual(lower_voices, ["6", "5", "5", "5", "5", "5"])
+
+    def test_competing_retimings_are_left_alone(self) -> None:
+        """
+        An overflowing measure can admit more than one equally simple
+        re-timing: here either lower-staff half note can act as the held
+        voice and absorb the extra quarter, and the two readings put the
+        E3 attack on different beats. The arithmetic alone cannot decide,
+        so the measure must be left as it was instead of guessing.
+        """
+        clean_measure = """note_1 C5 _ _ _ upper&note_1 C3 _ _ _ lower
+barline . . . . ."""
+        ambiguous_measure = """note_4 C5 _ _ _ upper&note_2 C3 _ _ _ lower
+note_4 D5 _ _ _ upper
+note_2 E3 _ _ _ lower
+note_4 E5 _ _ _ upper
+note_4 F5 _ _ _ upper&note_4 G3 _ _ _ lower
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . ."""
+        tokens = read_token_lines(
+            str.join("\n", [header, clean_measure, ambiguous_measure, clean_measure]).splitlines()
+        )
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        part = xml.find("part")
+        assert part is not None
+        divisions_text = part.findtext("measure/attributes/divisions")
+        assert divisions_text is not None
+        divisions = int(divisions_text)
+
+        ambiguous = part.findall("measure")[1]
+        attacks = self._read_note_attacks(ambiguous)
+        measure_end = max(attack + duration for attack, duration, _, _, _ in attacks)
+        self.assertGreater(measure_end, 4 * divisions)
+
+    def test_retimed_chord_with_moving_and_held_note_splits_voices(self) -> None:
+        """
+        A single token chord can carry both lines of a staff: a quarter that
+        moves with the cursor and a half that keeps sounding across the next
+        attack. The held note must go to its own voice per note, not per
+        part — sharing the part's voice would make one voice carry two
+        overlapping notes.
+        """
+        clean_measure = """note_1 C5 _ _ _ upper&note_1 C2 _ _ _ lower
+barline . . . . ."""
+        mixed_measure = """note_4 C5 _ _ _ upper&note_4 E3 _ _ _ lower&note_2 C3 _ _ _ lower
+note_4 D5 _ _ _ upper
+note_2 G3 _ _ _ lower
+note_4 E5 _ _ _ upper
+note_4 F5 _ _ _ upper&note_4 B3 _ _ _ lower
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_1 . . . . .
+timeSignature/4 . . . . ."""
+        tokens = read_token_lines(
+            str.join("\n", [header, clean_measure, mixed_measure, clean_measure]).splitlines()
+        )
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        part = xml.find("part")
+        assert part is not None
+        divisions_text = part.findtext("measure/attributes/divisions")
+        assert divisions_text is not None
+        divisions = int(divisions_text)
+
+        retimed = part.findall("measure")[1]
+        attacks = self._read_note_attacks(retimed)
+        measure_end = max(attack + duration for attack, duration, _, _, _ in attacks)
+        self.assertEqual(measure_end, 4 * divisions)
+
+        lower = [event for event in attacks if event[3] == "2"]
+        self.assertEqual(
+            lower,
+            [
+                (0, divisions, "E3", "2", "5"),
+                (0, 2 * divisions, "C3", "2", "6"),
+                (divisions, 2 * divisions, "G3", "2", "5"),
+                (3 * divisions, divisions, "B3", "2", "5"),
+            ],
+        )
+
+    def _read_note_attacks(self, measure: ET.Element) -> list[tuple[int, int, str, str, str]]:
+        """Non-chord-tone note events as (attack, duration, pitch, staff, voice)."""
+        cursor = 0
+        events = []
+        for el in measure:
+            if el.tag == "note":
+                if el.find("chord") is not None:
+                    continue
+                duration = int(el.findtext("duration", "0"))
+                pitch = el.find("pitch")
+                name = (
+                    pitch.findtext("step", "") + pitch.findtext("octave", "")
+                    if pitch is not None
+                    else "rest"
+                )
+                events.append(
+                    (cursor, duration, name, el.findtext("staff", "1"), el.findtext("voice", ""))
+                )
+                cursor += duration
+            elif el.tag == "backup":
+                cursor -= int(el.findtext("duration", "0"))
+            elif el.tag == "forward":
+                cursor += int(el.findtext("duration", "0"))
+        return events
 
     def _build_test_note(
         self, duration: int, staff: int, voice: int, is_chord: bool = False

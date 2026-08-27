@@ -1,5 +1,6 @@
 # flake8: noqa: S101
 
+import itertools
 import math
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -146,14 +147,24 @@ def build_measures(
     is_first_part: bool,
     has_two_staves: bool = False,
 ) -> list[ET.Element]:
+    measure_cursor = Fraction(0)
+    measure_was_planned = False
+
     def close_current_measure() -> None:
-        rebalance_measure_voices(current_measure)
+        nonlocal measure_cursor, measure_was_planned
+        if not measure_was_planned:
+            # Planned measures carry their voicing from the plan itself; the
+            # overlap-based rebalancing would tear held/moving lines apart.
+            rebalance_measure_voices(current_measure)
         measures.append(current_measure)
+        measure_cursor = Fraction(0)
+        measure_was_planned = False
 
     measure_number = 1
     groups = add_tuplet_start_stop(group_into_chords(voice))
     division, nominator = find_division_and_time_signature_nominator(groups)
     state = ConversionState(division, nominator)
+    voice_plans = _plan_voice_repairs(groups, nominator)
     measures: list[ET.Element] = []
     current_measure = ET.Element("measure", number=str(measure_number))
     first_attributes = build_or_get_attributes(current_measure, None)
@@ -175,6 +186,26 @@ def build_measures(
             if len(group.symbols) == 1 and rhythm.endswith("m"):
                 attributes = build_or_get_attributes(current_measure, last_attributes)
                 build_multi_measure_rest(symbol, attributes)
+            elif group_no in voice_plans:
+                measure_was_planned = True
+                for planned in voice_plans[group_no]:
+                    delta = planned.attack - measure_cursor
+                    if delta > 0:
+                        current_measure.append(build_forward(delta, state))
+                    elif delta < 0:
+                        current_measure.append(build_backup(-delta, state))
+                    for note_xml in build_note_chord(planned.part, state, planned.advance):
+                        if note_xml.tag == "note":
+                            voice_el = note_xml.find("voice")
+                            duration_el = note_xml.find("duration")
+                            if voice_el is not None:
+                                xml_voice = planned.voice
+                                if duration_el is not None and duration_el.text:
+                                    duration = Fraction(int(duration_el.text), state.division)
+                                    xml_voice = planned.voice_by_duration.get(duration, xml_voice)
+                                voice_el.text = str(xml_voice)
+                        current_measure.append(note_xml)
+                    measure_cursor = planned.attack + planned.advance
             else:
                 staff_positions = group.into_positions()
                 for pos_no, staff_pos in enumerate(staff_positions):
@@ -635,6 +666,260 @@ def build_backup(duration: Fraction, state: ConversionState) -> ET.Element:
     backup = ET.Element("backup")
     ET.SubElement(backup, "duration").text = str(int(duration * state.division))
     return backup
+
+
+def build_forward(duration: Fraction, state: ConversionState) -> ET.Element:
+    assert duration > Fraction(0), "Forward duration must be positive"
+    forward = ET.Element("forward")
+    ET.SubElement(forward, "duration").text = str(int(duration * state.division))
+    return forward
+
+
+class PlannedPart:
+    """One staff's share of a token chord with an absolute attack time."""
+
+    def __init__(self, part: "SymbolChord", attack: Fraction, advance: Fraction) -> None:
+        self.part = part
+        self.attack = attack
+        self.advance = advance
+        self.voice = 1
+        self.voice_by_duration: dict[Fraction, int] = {}
+
+
+def _assign_plan_voices(plan: dict[int, list[PlannedPart]]) -> None:
+    """Voice numbers from the plan's own reading: notes that flow with the
+    staff cursor are the moving line and share the staff's first voice; a
+    note sounding past its part's cursor advance is a held voice layered
+    into the next free voice for as long as it sounds. Rebalancing by
+    overlap alone would instead splice the moving line's tail onto the held
+    voice once it ends. Held notes are decided per duration within a part:
+    a chord can carry a moving note and a held note in one token chord."""
+    by_staff: dict[int, list[PlannedPart]] = defaultdict(list)
+    for group_no in sorted(plan):
+        for planned in plan[group_no]:
+            by_staff[get_staff(planned.part.symbols[0])].append(planned)
+    for staff, staff_parts in by_staff.items():
+        held_active: list[tuple[Fraction, int]] = []  # (sounding end, layer)
+        for planned in staff_parts:  # already in attack order
+            held_active = [(end, layer) for end, layer in held_active if end > planned.attack]
+            planned.voice = get_xml_voice(staff, 0)
+            planned.voice_by_duration = {}
+            if planned.advance <= 0:
+                continue
+            for duration in sorted(_group_notes(planned.part.symbols)):
+                if duration <= planned.advance:
+                    continue
+                used = {layer for _, layer in held_active}
+                layer = 1
+                while layer in used:
+                    layer += 1
+                held_active.append((planned.attack + duration, layer))
+                planned.voice_by_duration[duration] = get_xml_voice(staff, layer)
+
+
+def _plan_measure_streams(
+    measure_groups: list[tuple[int, "SymbolChord"]], expected: Fraction
+) -> dict[int, list[PlannedPart]] | None:
+    """
+    Re-time a measure whose duration doesn't add up by giving each staff its
+    own time cursor instead of one shared cursor.
+
+    The token stream serializes simultaneous voices in raster order, so when
+    the model fails to chord a second voice with its neighbors, the shared
+    cursor treats concurrent events as sequential and the measure overflows.
+    A plan is accepted only when every staff closes exactly on the expected
+    duration with attack times non-decreasing in token order (the raster
+    property).
+
+    Candidates are ranked by how many notes they shrink. That ranking is a
+    prior, not arithmetic — a held voice is usually a single long note, so
+    when several interpretations close the checksum, the one that changes
+    the least is taken. The best-ranked candidates must also agree on the
+    sound (attacks, pitches, durations); when equally simple interpretations
+    sound different, or the alternative space is too large to enumerate
+    exhaustively, the arithmetic cannot decide and the caller keeps the
+    shared-cursor interpretation.
+    """
+    candidates = _attempt_stream_plans(measure_groups, expected)
+    if not candidates:
+        return None
+    fewest_shrunk = min(shrunk for _, shrunk in candidates)
+    top = [plan for plan, shrunk in candidates if shrunk == fewest_shrunk]
+    if len({_plan_sound(plan) for plan in top}) > 1:
+        return None
+    _assign_plan_voices(top[0])
+    return top[0]
+
+
+def _plan_sound(plan: dict[int, list[PlannedPart]]) -> tuple:
+    """What a plan sounds like: attack, pitch and printed duration of every
+    symbol. Staff assignment and cursor advances are voicing, not sound."""
+    events = []
+    for parts in plan.values():
+        for planned in parts:
+            for symbol in planned.part.symbols:
+                events.append((planned.attack, symbol.rhythm, symbol.pitch, symbol.lift))
+    return tuple(sorted(events))
+
+
+def _shrink_alternatives(
+    indices: list[int], base: list[Fraction], overshoot: Fraction
+) -> list[tuple[dict[int, Fraction], int]] | None:
+    """All ways to shed exactly `overshoot` from one staff by shrinking
+    notes' cursor advances, as (advance reduction by index, number of shrunk
+    notes). A note can give its advance away down to the shortest advance on
+    the staff; long notes are the held-voice candidates.
+
+    The enumeration is exhaustive on the duration grid the staff spans, so
+    the caller's uniqueness check covers the whole alternative space. None
+    means the space is too large to enumerate; the caller must then treat
+    the measure as undecidable instead of judging from a sample."""
+    positive = [i for i in indices if base[i] > 0]
+    if not positive:
+        return []
+    floor = min(base[i] for i in positive)
+    shrinkable = [i for i in positive if base[i] > floor]
+    capacities = [base[i] - floor for i in shrinkable]
+    if sum(capacities, start=Fraction(0)) < overshoot:
+        return []
+
+    grid = math.lcm(overshoot.denominator, *(c.denominator for c in capacities))
+    units = int(overshoot * grid)
+    cap_units = [int(c * grid) for c in capacities]
+
+    max_alternatives = 256
+    alternatives: list[tuple[dict[int, Fraction], int]] = []
+
+    def distribute(note: int, remaining: int, gives: list[int]) -> bool:
+        """False when the alternative space exceeds the enumeration cap."""
+        if remaining == 0:
+            reductions = {shrinkable[k]: Fraction(g, grid) for k, g in enumerate(gives) if g > 0}
+            alternatives.append((reductions, len(reductions)))
+            return len(alternatives) <= max_alternatives
+        if note == len(cap_units) or remaining > sum(cap_units[note:]):
+            return True
+        for give in range(min(remaining, cap_units[note]) + 1):
+            if not distribute(note + 1, remaining - give, [*gives, give]):
+                return False
+        return True
+
+    if not distribute(0, units, []):
+        return None
+    return alternatives
+
+
+def _attempt_stream_plans(
+    measure_groups: list[tuple[int, "SymbolChord"]],
+    expected: Fraction,
+) -> list[tuple[dict[int, list[PlannedPart]], int]] | None:
+    """Candidate interpretations of a measure: replay each staff on its own
+    cursor, shrinking long (held-voice) notes' advances when a staff
+    overruns, and validate the checksum and raster constraints. Each valid
+    choice of shrunk notes is one candidate, paired with its shrink count
+    for ranking. None means the alternative space is too large to enumerate
+    exhaustively, so uniqueness cannot be certified."""
+    parts_info: list[tuple[int, SymbolChord, int]] = []
+    for group_no, group in measure_groups:
+        for part in group.into_positions():
+            staff = get_staff(part.symbols[0])
+            parts_info.append((group_no, part, staff))
+
+    base = [part.get_duration() for _, part, _ in parts_info]
+    per_staff: list[list[tuple[dict[int, Fraction], int]]] = []
+    for staff in sorted({staff for _, _, staff in parts_info}):
+        indices = [i for i, (_, _, s) in enumerate(parts_info) if s == staff]
+        total = sum((base[i] for i in indices), start=Fraction(0))
+        if total == expected:
+            per_staff.append([({}, 0)])
+            continue
+        if total < expected:
+            # Notes are missing outright; re-timing can't reconstruct them
+            return []
+        alternatives = _shrink_alternatives(indices, base, total - expected)
+        if alternatives is None:
+            return None
+        if not alternatives:
+            return []
+        per_staff.append(alternatives)
+
+    max_combinations = 256
+    if math.prod(len(alternatives) for alternatives in per_staff) > max_combinations:
+        return None
+    plans: list[tuple[dict[int, list[PlannedPart]], int]] = []
+    for combination in itertools.product(*per_staff):
+        gives: dict[int, Fraction] = {}
+        shrunk = 0
+        for staff_gives, staff_shrunk in combination:
+            gives.update(staff_gives)
+            shrunk += staff_shrunk
+        advances = [base[i] - gives.get(i, Fraction(0)) for i in range(len(base))]
+        plan = _validate_stream_plan(parts_info, advances, expected)
+        if plan is not None:
+            plans.append((plan, shrunk))
+    return plans
+
+
+def _validate_stream_plan(
+    parts_info: list[tuple[int, "SymbolChord", int]],
+    advances: list[Fraction],
+    expected: Fraction,
+) -> dict[int, list[PlannedPart]] | None:
+    cursors: dict[int, Fraction] = defaultdict(Fraction)
+    last_attack = Fraction(0)
+    plan: dict[int, list[PlannedPart]] = defaultdict(list)
+    for group_no, group_parts in itertools.groupby(enumerate(parts_info), key=lambda p: p[1][0]):
+        parts = list(group_parts)
+        # Chorded parts across staves attack together
+        attack = max(cursors[staff] for _, (_, _, staff) in parts)
+        if attack < last_attack:
+            return None
+        last_attack = attack
+        for i, (_, part, staff) in parts:
+            plan[group_no].append(PlannedPart(part, attack, advances[i]))
+            cursors[staff] = attack + advances[i]
+
+    if any(cursor != expected for cursor in cursors.values()):
+        return None
+    return dict(plan)
+
+
+def _plan_voice_repairs(
+    groups: list["SymbolChord"], expected: Fraction
+) -> dict[int, list[PlannedPart]]:
+    """Find measures whose duration doesn't match the expectation and try to
+    repair them by re-timing their voices (see _plan_measure_streams)."""
+    plans: dict[int, list[PlannedPart]] = {}
+    if expected <= 0:
+        return plans
+    measure_no = 1
+    measure_groups: list[tuple[int, SymbolChord]] = []
+    has_multirest = False
+
+    def plan_current_measure() -> None:
+        if has_multirest or len(measure_groups) < 2:
+            return
+        duration = sum((group.get_duration() for _, group in measure_groups), start=Fraction(0))
+        if duration == expected:
+            return
+        plan = _plan_measure_streams(measure_groups, expected)
+        if plan is not None:
+            eprint("Re-timed voices of measure #", measure_no, "to close on", expected)
+            plans.update(plan)
+
+    for group_no, group in enumerate(groups):
+        first_rhythm = group.symbols[0].rhythm
+        if group.is_barline() or first_rhythm.startswith("repeat"):
+            plan_current_measure()
+            measure_no += 1
+            measure_groups = []
+            has_multirest = False
+        elif first_rhythm.startswith(("note", "rest")):
+            if len(group.symbols) == 1 and first_rhythm.endswith("m"):
+                has_multirest = True
+            else:
+                measure_groups.append((group_no, group))
+    plan_current_measure()
+    return plans
 
 
 def build_note_chord(
