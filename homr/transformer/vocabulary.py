@@ -582,17 +582,35 @@ def _remove_tuplets(measure: list[list[EncodedSymbol]]) -> list[list[EncodedSymb
 
 def _fix_over_eager_tuplets(chords: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
     """
-    The transformer tends to add too many tuplets, so we remove them
-    based on the length of a measurement.
+    The transformer sometimes adds spurious tuplets. Decide per measure by
+    beat checksum instead of the previous below-median heuristic (which
+    stripped correct tuplets en masse in uniformly tuplet-heavy pieces):
+    the expected measure duration is anchored on tuplet-free measures, and a
+    measure's tuplets are removed only when removal moves its duration onto
+    that expectation while keeping them misses it.
     """
     measures = _group_into_measures(chords)
-    mean = _get_typical_duration_of_measures(measures)
+    if len(measures) == 0:
+        return chords
+    with_tuplets = [_get_duration_of_measure(m) for m in measures]
+    without_tuplets = [_get_duration_of_measure(_remove_tuplets(m)) for m in measures]
+    # Anchor: measures containing no tuplets are reliable duration witnesses.
+    anchors = [w for w, wo in zip(with_tuplets, without_tuplets) if w == wo]
+    if anchors:
+        expected = sorted(anchors)[len(anchors) // 2]
+    else:
+        expected = _get_typical_duration_of_measures(measures)
     result = []
     for i, measure in enumerate(measures):
-        if _get_duration_of_measure(measure) < mean:
+        keep_ok = with_tuplets[i] == expected
+        strip_ok = without_tuplets[i] == expected
+        if strip_ok and not keep_ok:
             eprint("Removing tuplets from measure #", i + 1)
             result.append(_remove_tuplets(measure))
         else:
+            # Keeping is right, or neither closes the checksum — in doubt,
+            # preserve what the model read and let downstream verification
+            # flag the measure.
             result.append(measure)
     return _flatten_measures(result)
 
