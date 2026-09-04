@@ -44,12 +44,16 @@ th { background: #f4f4f4; font-size: 12px; text-transform: uppercase;
 tr.voice td { background: #fdecec; }
 tr.pitch td { background: #fde8d8; }
 tr.size  td { background: #fff8e1; }
+tr.timing td { background: #eef4fb; }
+tr.structure td { background: #f3e8fb; font-weight: 600; }
 tr.unison td { background: #f4f4f7; }
 td.ok { color: #1c5c2c; } td.no { color: #8a1f1f; font-weight: 600; }
 .sum { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 16px; }
 .sum b { font-size: 20px; display: block; }
 .up { color: #1c5c2c; font-weight: 600; } .down { color: #8a1f1f; font-weight: 600; }
 .same { color: #888; }
+p.warn { background: #f3e8fb; border: 1px solid #ddc7ee; border-radius: 6px;
+         padding: 9px 12px; margin: 0 0 14px; }
 """
 
 
@@ -73,15 +77,24 @@ def case_page(case, parsed: Path, result: Result, before: dict | None) -> str:
     reference = _engrave(case.reference, OUT / f"{case.name}-ref.png")
 
     def moved(field: str) -> str:
-        if not before:
+        if not before or field not in before:
             return ""
-        was = before.get(field, 0)
+        was = before[field]
         now = getattr(result, field)
         if was == now:
             return "<span class='same'>no change</span>"
         better = now < was if field != "agree" else now > was
         return (f"<span class='{'up' if better else 'down'}'>"
                 f"{now - was:+d} since the last run</span>")
+
+    structure = ""
+    if result.structure:
+        structure = (
+            f"<p class='warn'>The page prints <b>{result.staves_page}</b> staves and "
+            f"homr wrote <b>{result.staves_homr}</b>. Every note is matched on its "
+            f"staff, so from the first staff that diverges the rows below are "
+            f"comparing different music &mdash; read them as one wrong answer about "
+            f"the staves, not as many wrong notes.</p>")
 
     rows = "".join(
         f"<tr class='{row.kind if row.kind != 'agree' else ''}'>"
@@ -104,8 +117,10 @@ def case_page(case, parsed: Path, result: Result, before: dict | None) -> str:
   <div><b>{result.voice}</b>wrong voice {moved('voice')}</div>
   <div><b>{result.pitch}</b>wrong pitch {moved('pitch')}</div>
   <div><b>{result.size}</b>different number of notes {moved('size')}</div>
+  <div><b>{result.timing}</b>beat shifted {moved('timing')}</div>
   <div><b>{result.unison}</b>unisons</div>
 </div>
+{structure}
 
 <h3>Input &mdash; the printed page</h3>
 <img src="{page.name}" alt="the printed system">
@@ -131,7 +146,8 @@ direction.</p>
 def index_page(entries: list[dict], tier: str) -> Path:
     """The table of every case in this run, with what moved since the last one."""
     OUT.mkdir(parents=True, exist_ok=True)
-    total = {k: sum(e[k] for e in entries) for k in ("agree", "voice", "pitch", "size", "unison")}
+    total = {k: sum(e[k] for e in entries)
+             for k in ("agree", "voice", "pitch", "size", "timing", "structure", "unison")}
     judged = total["agree"] + total["voice"] + total["pitch"]
 
     def cell(entry: dict, field: str) -> str:
@@ -146,6 +162,8 @@ def index_page(entries: list[dict], tier: str) -> Path:
         f"<tr><td><a href='{html.escape(e['page'])}'>{html.escape(e['name'])}</a></td>"
         f"<td>{cell(e, 'agree')}</td><td>{cell(e, 'voice')}</td>"
         f"<td>{cell(e, 'pitch')}</td><td>{cell(e, 'size')}</td>"
+        f"<td>{cell(e, 'timing')}</td>"
+        f"<td>{'%d vs %d' % (e['staves_page'], e['staves_homr']) if e['structure'] else ''}</td>"
         f"<td>{e['score']:.1f}%</td></tr>"
         for e in sorted(entries, key=lambda e: (-e["voice"] - e["pitch"], e["name"])))
 
@@ -162,10 +180,15 @@ green or red is what changed since the last run of the same case.</p>
   <div><b>{total['voice']}</b>wrong voice</div>
   <div><b>{total['pitch']}</b>wrong pitch</div>
   <div><b>{total['size']}</b>different number of notes</div>
+  <div><b>{total['timing']}</b>beat shifted</div>
+  <div><b>{total['structure']}</b>case(s) with the wrong staves</div>
   <div><b>{100.0 * total['agree'] / judged if judged else 0:.1f}%</b>of judged notes right</div>
 </div>
+<p class="lead">A case whose staff count disagrees is one wrong answer about the
+structure, and the note rows under it are then comparing different music &mdash;
+read its counts as a consequence of that, not as many wrong notes.</p>
 <table><tr><th>case</th><th>agree</th><th>wrong voice</th><th>wrong pitch</th>
-<th>note count</th><th>score</th></tr>
+<th>note count</th><th>beat shifted</th><th>staves</th><th>score</th></tr>
 {rows}</table>
 </body></html>"""
     target = OUT / "index.html"
@@ -181,5 +204,6 @@ def load_previous() -> dict:
 def save_results(entries: list[dict]) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "results.json").write_text(json.dumps(
-        {e["name"]: {k: e[k] for k in ("agree", "voice", "pitch", "size", "unison")}
+        {e["name"]: {k: e[k] for k in ("agree", "voice", "pitch", "size", "timing",
+                                       "structure", "unison")}
          for e in entries}, indent=1))

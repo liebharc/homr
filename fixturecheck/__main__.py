@@ -98,13 +98,19 @@ def main() -> None:
         entries.append({"name": case.name, "page": page, "score": result.score,
                         "agree": result.agree, "voice": result.voice,
                         "pitch": result.pitch, "size": result.size,
+                        "timing": result.timing, "structure": result.structure,
+                        "staves_page": result.staves_page,
+                        "staves_homr": result.staves_homr,
                         "unison": result.unison, "before": before})
         moved = ""
         if before:
             change = (result.voice + result.pitch) - (before["voice"] + before["pitch"])
             moved = "  (no change)" if change == 0 else f"  ({change:+d} faults)"
+        staves = (f", staves {result.staves_page} vs {result.staves_homr}"
+                  if result.structure else "")
         print(f"  {case.name}: {result.agree} agree, {result.voice} voice, "
-              f"{result.pitch} pitch, {result.size} count{moved}")
+              f"{result.pitch} pitch, {result.size} count, "
+              f"{result.timing} beat{staves}{moved}")
 
     if entries:
         report.save_results(entries)
