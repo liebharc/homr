@@ -243,7 +243,7 @@ def kern_to_symbol_duration(kern: str) -> SymbolDuration:
     """
     if kern.endswith("m"):
         # Multirest
-        SymbolDuration(Fraction(1), 0, 1, 1, 4)
+        return SymbolDuration(Fraction(1), 0, 1, 1, 4)
 
     # Extract numeric prefix (can be > 1 digit)
     i = 0
