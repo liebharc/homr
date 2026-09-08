@@ -703,7 +703,7 @@ def build_note_or_rest(
         ET.SubElement(note, "type").text = DURATION_NAMES[base_duration]
     elif model_duration.fraction.numerator > 0:
         base_duration = 1 if model_duration.kern == 0 else model_duration.kern
-        ET.SubElement(note, "duration").text = str(int(model_duration.fraction * state.division))
+        ET.SubElement(note, "duration").text = str(max(1, int(model_duration.fraction * state.division)))
         ET.SubElement(note, "type").text = DURATION_NAMES[base_duration]
     else:
         ET.SubElement(note, "duration").text = str(state.beats)
@@ -740,7 +740,7 @@ def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> N
 def build_backup(duration: Fraction, state: ConversionState) -> ET.Element:
     assert duration > Fraction(0), "Backup duration must be positive"
     backup = ET.Element("backup")
-    ET.SubElement(backup, "duration").text = str(int(duration * state.division))
+    ET.SubElement(backup, "duration").text = str(max(1, int(duration * state.division)))
     return backup
 
 
@@ -832,9 +832,13 @@ def find_division_and_time_signature_nominator(voice: list[SymbolChord]) -> tupl
             measure_duration.append(duration_in_measure)
             duration_in_measure = Fraction(0)
         else:
+            for symbol in chord.symbols:
+                if symbol.rhythm.startswith(("note", "rest")):
+                    frac = symbol.get_duration().fraction
+                    if frac > Fraction(0):
+                        durations.append(frac)
             duration = chord.get_duration()
             if duration > Fraction(0):
-                durations.append(duration)
                 duration_in_measure += duration
 
     if duration_in_measure > Fraction(0):
