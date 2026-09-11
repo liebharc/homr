@@ -42,6 +42,8 @@ pdmx_mxl_root = os.path.join(pdmx_root, "mxl")
 pdmx_out_root = os.path.join(pdmx_root, "out")
 pdmx_train_index = os.path.join(pdmx_root, "index.txt")
 
+# Complexity 3 often has octave shifts (unsupported) and long sequences (see max_seq_len),
+# so we skip attempting those files rather than waste time converting ones we'd filter out later.
 _MAX_COMPLEXITY = 2
 _MAX_TRACKS = 2
 _TARGET_FILES = 10000  # ~50K images
