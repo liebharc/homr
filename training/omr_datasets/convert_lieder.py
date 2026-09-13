@@ -361,7 +361,7 @@ def _create_musicxml_and_svg_files() -> None:
 
 
 def _create_musicxml_and_svg_files_from_mxl(paths: list[str]) -> None:
-    dest = os.path.join(lieder, "flat")
+    dest = os.path.join(lieder, "rendered_scores")
     os.makedirs(dest, exist_ok=True)
     copy_mxl_files(paths, dest)
 
@@ -741,7 +741,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     from training.omr_datasets.convert_pdmx import _load_filtered_paths
 
     _create_musicxml_and_svg_files_from_mxl(_load_filtered_paths())
-    # _create_musicxml_and_svg_files()
+    _create_musicxml_and_svg_files()
 
     music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
     with open(lieder_train_index, "w") as f:
