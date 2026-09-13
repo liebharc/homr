@@ -40,6 +40,8 @@ lieder = os.path.join(dataset_root, "Lieder-main")
 quartets = os.path.join(dataset_root, "StringQuartets-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
+flat_data = os.path.join(lieder, "flat")
+os.makedirs(flat_data, exist_ok=True)
 
 
 class MusicXmlPage:
@@ -290,7 +292,7 @@ def _reset_note_positions(mscx_file: str) -> None:
 
 
 def _create_musicxml_and_svg_files() -> None:
-    dest = os.path.join(lieder, "flat")
+    dest = os.path.join(lieder, "rendered_scores")
     os.makedirs(dest, exist_ok=True)
     copy_all_mscx_files(os.path.join(lieder, "scores"), dest)
 
@@ -522,7 +524,9 @@ def _split_file_into_staffs(
     fail_if_image_is_missing: bool,
 ) -> list[str]:
     result: list[str] = []
-    png_file = svg_file.filename.replace(".svg", ".png")
+    file_name = os.path.basename(svg_file.filename.replace(".svg", ".png"))
+    png_file = os.path.join(flat_data, file_name)
+
     image = None
     if not just_token_files:
         target_width = 1400
@@ -739,7 +743,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     _create_musicxml_and_svg_files_from_mxl(_load_filtered_paths())
     # _create_musicxml_and_svg_files()
 
-    music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
+    music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
     with open(lieder_train_index, "w") as f:
         file_number = 0
         skipped_files = 0
