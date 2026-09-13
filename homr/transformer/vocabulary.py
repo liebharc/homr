@@ -146,6 +146,7 @@ def build_articulation() -> dict[str, int]:
         "fermata_tremolo",
         "fermata_trill",
         "fermata_turn",
+        "mordent",
         "staccatissimo",
         "staccatissimo_staccato",
         "staccatissimo_staccato_tenuto",
