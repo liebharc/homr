@@ -10,6 +10,8 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
@@ -38,6 +40,8 @@ lieder = os.path.join(dataset_root, "Lieder-main")
 quartets = os.path.join(dataset_root, "StringQuartets-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
+flat_data = os.path.join(lieder, "flat")
+os.makedirs(flat_data, exist_ok=True)
 
 
 class MusicXmlPage:
@@ -119,9 +123,12 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
                 source = os.path.join(root, file)
                 shutil.copyfile(source, os.path.join(dest, file))
 
+def copy_mxl_files(paths: str, dest: str) -> None:
+    for path in paths:
+        shutil.copyfile(path, os.path.join(dest, os.path.basename(path)))
 
 def create_formats(
-    source_file: str, formats: list[str], style_file: str | None = None
+    source_file: str, formats: list[str], style_file: str | None = None, ending: str = ".mscx",
 ) -> list[dict[str, str]]:
     jobs: list[dict[str, str]] = []
 
@@ -146,8 +153,8 @@ def create_formats(
     for target_format in formats:
         dirname = os.path.dirname(source_file)
         basename = os.path.basename(source_file)
-        out_name = dirname + "/" + basename.replace(".mscx", f".{target_format}")
-        out_name_alt = dirname + "/" + basename.replace(".mscx", f"-1.{target_format}")
+        out_name = dirname + "/" + basename.replace(ending, f".{target_format}")
+        out_name_alt = dirname + "/" + basename.replace(ending, f"-1.{target_format}")
         if os.path.exists(out_name) or os.path.exists(out_name_alt):
             eprint(out_name, "already exists")
             continue
@@ -285,7 +292,7 @@ def _reset_note_positions(mscx_file: str) -> None:
 
 
 def _create_musicxml_and_svg_files() -> None:
-    dest = os.path.join(lieder, "flat")
+    dest = os.path.join(lieder, "rendered_scores")
     os.makedirs(dest, exist_ok=True)
     copy_all_mscx_files(os.path.join(lieder, "scores"), dest)
 
@@ -351,6 +358,74 @@ def _create_musicxml_and_svg_files() -> None:
             eprint(" ", path)
     else:
         eprint("MuseScore export completed with no failures.")
+
+
+def _create_musicxml_and_svg_files_from_mxl(paths: list[str]) -> None:
+    dest = os.path.join(lieder, "rendered_scores")
+    os.makedirs(dest, exist_ok=True)
+    copy_mxl_files(paths, dest)
+
+    mxl_paths = list(Path(dest).rglob("*.mxl"))
+
+    MuseScore = os.path.join(dataset_root, "MuseScore")
+
+    _ensure_music_font_style_files()
+
+    all_jobs = []
+
+    for file in mxl_paths:
+        style_file = _music_font_style_file(_music_font_for_file(str(file)))
+        jobs = create_formats(str(file), ["musicxml", "svg"], style_file, ".mxl")
+        all_jobs.extend(jobs)
+
+    if len(all_jobs) == 0:
+        eprint("All musicxml were already created, going on with the next step")
+        return
+
+    eprint("Starting with", len(all_jobs), "jobs")
+
+    BATCH_SIZE = 50
+    failed_files: list[str] = []
+
+    batches = [all_jobs[i : i + BATCH_SIZE] for i in range(0, len(all_jobs), BATCH_SIZE)]
+
+    for batch_idx, batch in enumerate(batches):
+        eprint(f"Processing batch {batch_idx + 1}/{len(batches)} ({len(batch)} jobs)")
+
+        with open("job.json", "w") as f:
+            json.dump(batch, f)
+
+        if os.system(MuseScore + " --force -j job.json") == 0:  # noqa: S605
+            os.remove("job.json")
+            continue
+
+        env = os.environ.copy()
+        # No need to run GUI, so we can use offscreen backend
+        env["QT_QUICK_BACKEND"] = "software"
+        env["QT_QPA_PLATFORM"] = "offscreen"
+
+        # Batch failed - retry each job individually
+        eprint(f"Batch {batch_idx + 1} failed, retrying individually")
+        os.remove("job.json")
+
+        for job in batch:
+            with open("job.json", "w") as f:
+                json.dump([job], f)
+
+            if os.system(MuseScore + " --force -j job.json") != 0:  # noqa: S605
+                eprint("Failed:", job["in"])
+                failed_files.append(job["in"])
+
+            if os.path.exists("job.json"):
+                os.remove("job.json")
+
+    if failed_files:
+        eprint(f"\nMuseScore export finished with {len(failed_files)} failed file(s):")
+        for path in failed_files:
+            eprint(" ", path)
+    else:
+        eprint("MuseScore export completed with no failures.")
+
 
 
 def write_text_to_file(text: str, path: str) -> None:
@@ -449,7 +524,9 @@ def _split_file_into_staffs(
     fail_if_image_is_missing: bool,
 ) -> list[str]:
     result: list[str] = []
-    png_file = svg_file.filename.replace(".svg", ".png")
+    file_name = os.path.basename(svg_file.filename.replace(".svg", ".png"))
+    png_file = os.path.join(flat_data, file_name)
+
     image = None
     if not just_token_files:
         target_width = 1400
@@ -660,8 +737,13 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
         )
 
     eprint("Indexing Lieder dataset, this can up to several hours.")
+
+    from training.omr_datasets.convert_pdmx import _load_filtered_paths
+
+    _create_musicxml_and_svg_files_from_mxl(_load_filtered_paths())
     _create_musicxml_and_svg_files()
-    music_xml_files = list(Path(os.path.join(lieder, "flat")).rglob("*.musicxml"))
+
+    music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
     with open(lieder_train_index, "w") as f:
         file_number = 0
         skipped_files = 0
