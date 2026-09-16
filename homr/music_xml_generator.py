@@ -703,7 +703,9 @@ def build_note_or_rest(
         ET.SubElement(note, "type").text = DURATION_NAMES[base_duration]
     elif model_duration.fraction.numerator > 0:
         base_duration = 1 if model_duration.kern == 0 else model_duration.kern
-        ET.SubElement(note, "duration").text = str(max(1, int(model_duration.fraction * state.division)))
+        ET.SubElement(note, "duration").text = str(
+            max(1, int(model_duration.fraction * state.division))
+        )
         ET.SubElement(note, "type").text = DURATION_NAMES[base_duration]
     else:
         ET.SubElement(note, "duration").text = str(state.beats)
