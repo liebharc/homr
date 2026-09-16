@@ -87,7 +87,8 @@ def test_transformer_on_image(path_to_img: str) -> None:
     """
 
     model = Staff2Score(Config())
-    image = Image.open(path_to_img)
+    image = np.array(Image.open(path_to_img))
+    image = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
     out = model.predict(np.array(image))
     eprint(out)
 

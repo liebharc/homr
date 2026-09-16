@@ -41,6 +41,7 @@ pdmx_csv = os.path.join(pdmx_root, "PDMX.csv")
 pdmx_mxl_root = os.path.join(pdmx_root, "mxl")
 pdmx_out_root = os.path.join(pdmx_root, "out")
 pdmx_train_index = os.path.join(pdmx_root, "index.txt")
+wrong_ratio_root = os.path.join(dataset_root, "wrong_ratio")
 
 # Complexity 3 often has octave shifts (unsupported) and long sequences (see max_seq_len),
 # so we skip attempting those files rather than waste time converting ones we'd filter out later.
@@ -121,7 +122,7 @@ def _convert_file_impl(mxl_path: Path) -> list[str]:
                 else:
                     svg_str = _tokens_to_svg(tokens)
                     if svg_str is not None:
-                        img = _svg_to_png(svg_str)
+                        img = _svg_to_png(svg_str, n_staffs)
                         if img is not None:
                             basename = f"{stem}-v{voice_idx}-w{window_idx}"
                             img_path = os.path.join(out_dir, basename + ".jpg")
@@ -184,6 +185,7 @@ def _load_filtered_paths() -> list[Path]:
 
 def convert_pdmx() -> None:
     os.makedirs(pdmx_root, exist_ok=True)
+    os.makedirs(wrong_ratio_root, exist_ok=True)
 
     if not os.path.exists(pdmx_csv):
         eprint("Downloading PDMX.csv (~214 MB)")

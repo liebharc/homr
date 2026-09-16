@@ -6,6 +6,7 @@ import random
 import signal
 import subprocess
 import sys
+import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
@@ -40,12 +41,16 @@ git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 musetrainer_root = os.path.join(dataset_root, "musetrainer")
 musetrainer_train_index = os.path.join(musetrainer_root, "index.txt")
+wrong_ratio_root = os.path.join(dataset_root, "wrong_ratio")
+
 
 _WINDOW_SIZE = 8
 _VEROVIO_FONTS = ["Leipzig", "Bravura", "Gootville", "Leland", "Petaluma"]
 _N_WORKERS = max(1, os.cpu_count() or 4)
 _TIMEOUT_SECONDS = 20
 _RENDER_TIMEOUT_SECONDS = _TIMEOUT_SECONDS
+
+MAX_RATIO = 8
 
 
 def _read_mxl(path: Path) -> str:
@@ -203,7 +208,7 @@ def _tokens_to_svg(tokens: list[EncodedSymbol]) -> str | None:
     return _render_svg_in_subprocess(xml_str, scale, font, mnum_interval)
 
 
-def _svg_to_png(svg_str: str) -> NDArray | None:
+def _svg_to_png(svg_str: str, n_staffs: int = -1) -> NDArray | None:
     try:
         result = subprocess.run(  # noqa: S603
             ["rsvg-convert"],  # noqa: S607
@@ -222,8 +227,34 @@ def _svg_to_png(svg_str: str) -> NDArray | None:
     except Exception as e:
         eprint("SVG rasterization failed:", e)
         return None
+    height, width = img.shape
+    ratio = width / height
 
-    return add_image_into_tr_omr_canvas(img)
+    tromr_img = add_image_into_tr_omr_canvas(img)
+
+    if n_staffs == 2:
+        # grandstaff
+        if ratio > MAX_RATIO:
+            # Too long, dont add to index
+            save_img_wrong_ratio(tromr_img)
+            return None
+
+    elif n_staffs == 1:
+        # single staff
+        if ratio > MAX_RATIO * 2:
+            # Too long, dont add to index
+            save_img_wrong_ratio(tromr_img)
+            return None
+
+    return tromr_img
+
+
+def save_img_wrong_ratio(img: NDArray) -> str:
+    filename = f"{uuid.uuid4().hex}.jpg"
+    img_path = os.path.join(wrong_ratio_root, filename)
+
+    cv2.imwrite(img_path, img)
+    return img_path
 
 
 def _convert_file_impl(path: Path) -> list[str]:
@@ -281,7 +312,7 @@ def _convert_file_impl(path: Path) -> list[str]:
                 else:
                     svg_str = _tokens_to_svg(tokens)
                     if svg_str is not None:
-                        img = _svg_to_png(svg_str)
+                        img = _svg_to_png(svg_str, n_staffs)
                         if img is not None:
                             basename = f"{stem}-v{voice_idx}-w{window_idx}"
                             img_path = os.path.join(musetrainer_root, basename + ".jpg")
@@ -313,6 +344,7 @@ def convert_musetrainer() -> None:
             os.rename(extracted, musetrainer_root)
 
     os.makedirs(musetrainer_root, exist_ok=True)
+    os.makedirs(wrong_ratio_root, exist_ok=True)
     mxl_files = list(Path(musetrainer_root).rglob("*.mxl"))
     if not mxl_files:
         eprint("No .mxl files found in", musetrainer_root)
