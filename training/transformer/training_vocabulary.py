@@ -10,6 +10,7 @@ from homr.transformer.vocabulary import (
     Vocabulary,
     empty,
     has_rhythm_symbol_a_position,
+    is_lower_position,
     nonote,
     sort_token_chords,
 )
@@ -61,7 +62,7 @@ def check_token_lines(lines: list[EncodedSymbol]) -> None:
 
 
 def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
-    position = 10000000 if symbol.position == "lower" else 0
+    position = 10000000 if is_lower_position(symbol.position) else 0
     if "note" in symbol.rhythm:
         return (
             vocab.pitch[symbol.pitch] * len(vocab.rhythm) + vocab.rhythm[symbol.rhythm] + position
@@ -83,12 +84,12 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
         artic_stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
         slur_stripped, symbol_stripped = symbol_stripped.strip_slurs([], remove_all=True)
         for articulation in artic_stripped:
-            if symbol.position == "lower":
+            if is_lower_position(symbol.position):
                 lower_artics.add(articulation)
             else:
                 upper_artics.add(articulation)
         for slur in slur_stripped:
-            if symbol.position == "lower":
+            if is_lower_position(symbol.position):
                 lower_slurs.add(slur)
             else:
                 upper_slurs.add(slur)
@@ -107,7 +108,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
 
     if len(upper_slurs) > 0:
         first_upper = next(
-            (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
+            (idx for idx, s in enumerate(annotation_resorted) if not is_lower_position(s.position)),
+            None,
         )
         if first_upper is not None:
             annotation_resorted[first_upper] = annotation_resorted[first_upper].add_slurs(
@@ -115,7 +117,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             )
     if len(lower_slurs) > 0:
         first_lower = next(
-            (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
+            (idx for idx, s in enumerate(annotation_resorted) if is_lower_position(s.position)),
+            None,
         )
         if first_lower is not None:
             annotation_resorted[first_lower] = annotation_resorted[first_lower].add_slurs(
@@ -124,7 +127,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
 
     if len(upper_artics) > 0:
         first_upper = next(
-            (idx for idx, s in enumerate(annotation_resorted) if s.position != "lower"), None
+            (idx for idx, s in enumerate(annotation_resorted) if not is_lower_position(s.position)),
+            None,
         )
         if first_upper is not None:
             annotation_resorted[first_upper] = annotation_resorted[first_upper].add_articulations(
@@ -132,7 +136,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             )
     if len(lower_artics) > 0:
         first_lower = next(
-            (idx for idx, s in enumerate(annotation_resorted) if s.position == "lower"), None
+            (idx for idx, s in enumerate(annotation_resorted) if is_lower_position(s.position)),
+            None,
         )
         if first_lower is not None:
             annotation_resorted[first_lower] = annotation_resorted[first_lower].add_articulations(
@@ -173,12 +178,13 @@ def max_ledger_lines(tokens: list[EncodedSymbol]) -> int:
     }
     max_ledger_lines = 0
     for symbol in tokens:
+        family = symbol.position.removesuffix("2")
         if symbol.rhythm.startswith("clef"):
             anchor = _clef_anchor(symbol.rhythm)
             if anchor is None:
                 continue
-            if symbol.position in anchors:
-                anchors[symbol.position] = anchor
+            if family in anchors:
+                anchors[family] = anchor
             else:
                 anchors["upper"] = anchor
                 anchors["lower"] = anchor
@@ -194,7 +200,7 @@ def max_ledger_lines(tokens: list[EncodedSymbol]) -> int:
         if absolute_val is None:
             continue
 
-        anchor = anchors.get(symbol.position, anchors["upper"])
+        anchor = anchors.get(family, anchors["upper"])
         if anchor is None:
             raise ValueError("Failed to get anchor")
         offset = absolute_val - anchor

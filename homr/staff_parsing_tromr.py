@@ -1,7 +1,7 @@
 from homr.model import Staff
 from homr.transformer.configs import Config
 from homr.transformer.staff2score import Staff2Score
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import EncodedSymbol, is_lower_position
 from homr.type_definitions import NDArray
 
 inference: Staff2Score | None = None
@@ -19,4 +19,4 @@ def predict_best(org_image: NDArray, staff: Staff, config: Config) -> list[Encod
     result = inference.predict(org_image)
     if staff.is_grandstaff:
         return result
-    return [r for r in result if r.position != "lower"]
+    return [r for r in result if not is_lower_position(r.position)]

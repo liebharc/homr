@@ -88,17 +88,17 @@ repeatEnd . . . . ."""
         expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 keySignature_-2 . . . . .
 timeSignature/4 . . . . .
-note_8 G4 _ _ _ upper&rest_4 _ _ _ _ upper&note_8 G3 _ _ _ lower&note_8 G2 _ _ _ lower&rest_4 _ _ _ _ lower
-note_16 D5 _ _ _ upper&note_8 G3 _ _ _ lower&note_8 B2 b _ _ lower
+note_8 G4 _ _ _ upper&rest_4 _ _ _ _ upper2&note_8 G3 _ _ _ lower2&note_8 G2 _ _ _ lower2&rest_4 _ _ _ _ lower
+note_16 D5 _ _ _ upper&note_8 G3 _ _ _ lower2&note_8 B2 b _ _ lower2
 note_16 D4 _ _ _ upper
-note_8 E4 b _ _ upper&rest_4 _ _ _ _ upper&note_8 G3 _ _ _ lower&note_8 C3 _ _ _ lower&rest_4 _ _ _ _ lower
-note_16 C5 _ _ _ upper&note_8 A3 _ _ _ lower&note_8 A2 _ _ _ lower
+note_8 E4 b _ _ upper&rest_4 _ _ _ _ upper2&note_8 G3 _ _ _ lower2&note_8 C3 _ _ _ lower2&rest_4 _ _ _ _ lower
+note_16 C5 _ _ _ upper&note_8 A3 _ _ _ lower2&note_8 A2 _ _ _ lower2
 note_16 F4 # _ _ upper
-note_4. G4 _ _ _ upper&note_8 G4 _ _ _ upper&note_4 G3 _ _ _ lower&note_8 B2 b _ _ lower
-note_16 E4 b _ _ upper&note_8 C3 _ _ _ lower
-note_16 C4 _ _ _ upper
-note_8 B3 b _ _ upper&note_8 D3 _ _ _ lower&rest_4 _ _ _ _ lower
-note_8 F4 # _ _ upper&note_8 D4 _ _ _ upper&note_8 C4 _ _ _ upper&note_8 A3 _ _ _ upper&note_8 D2 _ _ _ lower
+note_4. G4 _ _ _ upper&note_8 G4 _ _ _ upper2&note_4 G3 _ _ _ lower&note_8 B2 b _ _ lower2
+note_16 E4 b _ _ upper2&note_8 C3 _ _ _ lower2
+note_16 C4 _ _ _ upper2
+note_8 B3 b _ _ upper2&note_8 D3 _ _ _ lower&rest_4 _ _ _ _ lower2
+note_8 F4 # _ _ upper&note_8 D4 _ _ _ upper2&note_8 C4 _ _ _ upper2&note_8 A3 _ _ _ upper2&note_8 D2 _ _ _ lower
 barline . . . . .
 note_1 D4 _ _ _ upper&note_1 B3 b _ _ upper&note_1 G2 _ _ _ lower
 repeatEnd . . . . ."""
@@ -497,14 +497,14 @@ barline . . . . ."""
         expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 keySignature_0 . . . . .
 timeSignature/4 . . . . .
-note_16 B4 _ _ _ upper&rest_8 _ _ _ _ upper&note_8 E2 _ _ _ lower
-note_16 G4 # _ _ upper
-note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper&rest_8 _ _ _ _ lower
-note_16 G4 # _ _ upper
-note_8 F5 _ _ _ upper&note_16 B4 _ _ _ upper&rest_4 _ _ _ _ lower
-note_16 G4 # _ _ upper
-note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper
-note_16 G4 # _ _ upper
+note_16 B4 _ _ _ upper2&rest_8 _ _ _ _ upper&note_8 E2 _ _ _ lower
+note_16 G4 # _ _ upper2
+note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper2&rest_8 _ _ _ _ lower
+note_16 G4 # _ _ upper2
+note_8 F5 _ _ _ upper&note_16 B4 _ _ _ upper2&rest_4 _ _ _ _ lower
+note_16 G4 # _ _ upper2
+note_8 E5 _ _ _ upper&note_16 E4 _ _ _ upper2
+note_16 G4 # _ _ upper2
 barline . . . . ."""
         self.maxDiff = None
         self.assertEqual(tokens, expected)
