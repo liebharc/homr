@@ -122,8 +122,16 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
                 shutil.copyfile(source, os.path.join(dest, file))
 
 
+def copy_mxl_files(paths: list[Path], dest: str) -> None:
+    for path in paths:
+        shutil.copyfile(path, os.path.join(dest, os.path.basename(path)))
+
+
 def create_formats(
-    source_file: str, formats: list[str], style_file: str | None = None
+    source_file: str,
+    formats: list[str],
+    style_file: str | None = None,
+    ending: str = ".mscx",
 ) -> list[dict[str, str]]:
     jobs: list[dict[str, str]] = []
 
@@ -148,8 +156,8 @@ def create_formats(
     for target_format in formats:
         dirname = os.path.dirname(source_file)
         basename = os.path.basename(source_file)
-        out_name = dirname + "/" + basename.replace(".mscx", f".{target_format}")
-        out_name_alt = dirname + "/" + basename.replace(".mscx", f"-1.{target_format}")
+        out_name = dirname + "/" + basename.replace(ending, f".{target_format}")
+        out_name_alt = dirname + "/" + basename.replace(ending, f"-1.{target_format}")
         if os.path.exists(out_name) or os.path.exists(out_name_alt):
             eprint(out_name, "already exists")
             continue
@@ -355,6 +363,74 @@ def _create_musicxml_and_svg_files() -> None:
         eprint("MuseScore export completed with no failures.")
 
 
+def create_musicxml_and_svg_files_from_mxl(paths: list[Path], dest: str) -> None:
+    """
+    Used for pdmx conversion
+    """
+    copy_mxl_files(paths, dest)
+
+    mxl_paths = list(Path(dest).rglob("*.mxl"))
+
+    MuseScore = os.path.join(dataset_root, "MuseScore")
+
+    _ensure_music_font_style_files()
+
+    all_jobs = []
+
+    for file in mxl_paths:
+        style_file = _music_font_style_file(_music_font_for_file(str(file)))
+        jobs = create_formats(str(file), ["musicxml", "svg"], style_file, ".mxl")
+        all_jobs.extend(jobs)
+
+    if len(all_jobs) == 0:
+        eprint("All musicxml were already created, going on with the next step")
+        return
+
+    eprint("Starting with", len(all_jobs), "jobs")
+
+    BATCH_SIZE = 50
+    failed_files: list[str] = []
+
+    batches = [all_jobs[i : i + BATCH_SIZE] for i in range(0, len(all_jobs), BATCH_SIZE)]
+
+    for batch_idx, batch in enumerate(batches):
+        eprint(f"Processing batch {batch_idx + 1}/{len(batches)} ({len(batch)} jobs)")
+
+        with open("job.json", "w") as f:
+            json.dump(batch, f)
+
+        if os.system(MuseScore + " --force -j job.json") == 0:  # noqa: S605
+            os.remove("job.json")
+            continue
+
+        env = os.environ.copy()
+        # No need to run GUI, so we can use offscreen backend
+        env["QT_QUICK_BACKEND"] = "software"
+        env["QT_QPA_PLATFORM"] = "offscreen"
+
+        # Batch failed - retry each job individually
+        eprint(f"Batch {batch_idx + 1} failed, retrying individually")
+        os.remove("job.json")
+
+        for job in batch:
+            with open("job.json", "w") as f:
+                json.dump([job], f)
+
+            if os.system(MuseScore + " --force -j job.json") != 0:  # noqa: S605
+                eprint("Failed:", job["in"])
+                failed_files.append(job["in"])
+
+            if os.path.exists("job.json"):
+                os.remove("job.json")
+
+    if failed_files:
+        eprint(f"\nMuseScore export finished with {len(failed_files)} failed file(s):")
+        for path in failed_files:
+            eprint(" ", path)
+    else:
+        eprint("MuseScore export completed with no failures.")
+
+
 def write_text_to_file(text: str, path: str) -> None:
     with open(path, "w") as f:
         f.write(text)
@@ -449,10 +525,11 @@ def _split_file_into_staffs(
     splitter: list[MeasureCutter],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
+    flat_folder: str,
 ) -> list[str]:
     result: list[str] = []
     file_name = os.path.basename(svg_file.filename.replace(".svg", ".png"))
-    png_file = os.path.join(flat_data, file_name)
+    png_file = os.path.join(flat_folder, file_name)
 
     image = None
     if not just_token_files:
@@ -563,7 +640,7 @@ def get_svg_voice_count(voice: list[Measure]) -> int:
 
 
 def convert_xml_and_svg_file(
-    file: Path, just_token_files: bool, fail_if_image_is_missing: bool = True
+    file: Path, just_token_files: bool, flat_folder: str, fail_if_image_is_missing: bool = True
 ) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
@@ -599,7 +676,12 @@ def convert_xml_and_svg_file(
                 continue
             result.extend(
                 _split_file_into_staffs(
-                    number_of_voices, svg_file, splitter, just_token_files, fail_if_image_is_missing
+                    number_of_voices,
+                    svg_file,
+                    splitter,
+                    just_token_files,
+                    fail_if_image_is_missing,
+                    flat_folder,
                 )
             )
         return result
@@ -609,12 +691,29 @@ def convert_xml_and_svg_file(
         return []
 
 
+# This is really ugly but it is simple
 def _convert_file_only_token(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, True)
+    return convert_xml_and_svg_file(path, True, flat_data)
 
 
 def _convert_token_and_image(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, False)
+    return convert_xml_and_svg_file(path, False, flat_data)
+
+
+def convert_file_only_token_pdmx(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, True, flat_pdmx)
+
+
+def convert_token_and_image_pdmx(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, False, flat_pdmx)
+
+
+def convert_file_only_token_musetrainer(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, True, flat_musetrainer)
+
+
+def convert_token_and_image_musetrainer(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, False, flat_musetrainer)
 
 
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
@@ -692,6 +791,9 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
                     )
     eprint("Done indexing")
 
+
+from training.omr_datasets.convert_musetrainer import flat_musetrainer
+from training.omr_datasets.convert_pdmx import flat_pdmx
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
