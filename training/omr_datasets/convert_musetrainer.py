@@ -1,14 +1,12 @@
+# ruff: noqa: E402
+
 import multiprocessing
 import os
+import sys
 from pathlib import Path
 
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from training.omr_datasets.convert_lieder import (
-    convert_file_only_token_musetrainer,
-    convert_token_and_image_musetrainer,
-    create_musicxml_and_svg_files_from_mxl,
-)
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -18,6 +16,12 @@ musetrainer_mxl_root = os.path.join(musetrainer_root, "scores")
 flat_musetrainer = os.path.join(musetrainer_root, "flat")
 rendered_scores = os.path.join(musetrainer_root, "rendered_scores")
 musetrainer_train_index = os.path.join(musetrainer_root, "index.txt")
+
+from training.omr_datasets.convert_lieder import (
+    convert_file_only_token_musetrainer,
+    convert_token_and_image_musetrainer,
+    create_musicxml_and_svg_files_from_mxl,
+)
 
 
 def convert_musetrainer(only_recreate_token_files: bool = False) -> None:
@@ -74,4 +78,8 @@ def convert_musetrainer(only_recreate_token_files: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    convert_musetrainer()
+    multiprocessing.set_start_method("spawn")
+    only_recreate_token_files = False
+    if "--only-tokens" in sys.argv:
+        only_recreate_token_files = True
+    convert_musetrainer(only_recreate_token_files)

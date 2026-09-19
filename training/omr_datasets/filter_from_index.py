@@ -34,13 +34,20 @@ def find_tokens() -> tuple[VocabularyStats, set[str]]:
 
 def remove_entry_from_train_index(file_path: str, files: set[str]) -> None:
     for file in files:
-        os.remove(file)
+        if os.path.exists(file):
+            os.remove(file)
+            eprint(f"removing {file}")
 
-    temp_filename = "index_temp.txt"
+    temp_filename = file_path + ".tmp"
+
     with open(file_path, "r") as f:
         lines = f.readlines()
 
-    kept_lines = [line for line in lines if not any(item in line for item in files)]
+    kept_lines = [
+        line
+        for line in lines
+        if not any(os.path.normpath(item) in os.path.normpath(line) for item in files)
+    ]
 
     with open(temp_filename, "w") as f:
         f.writelines(kept_lines)
