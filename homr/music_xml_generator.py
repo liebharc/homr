@@ -600,6 +600,8 @@ def build_articulations(
             ET.SubElement(notation, "arpeggiate")
         elif articulation == "accent":
             xml_articulations.append(ET.Element("accent"))
+        elif articulation == "mordent":
+            xml_articulations.append(ET.Element("mordent"))
         elif articulation == "staccato":
             xml_articulations.append(ET.Element("staccato"))
         elif articulation == "staccatissimo":

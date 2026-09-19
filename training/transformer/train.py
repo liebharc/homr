@@ -30,6 +30,7 @@ from training.omr_datasets.convert_primus import (
     convert_primus_dataset,
     primus_train_index,
 )
+from training.omr_datasets.filter_from_index import remove_tokens
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.distribute import Distribute
@@ -123,6 +124,15 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
+    remove_tokens(
+        [
+            lieder_train_index,
+            musetrainer_train_index,
+            pdmx_train_index,
+            grandstaff_train_index,
+            primus_train_index,
+        ]
+    )
     return selected_datasets
 
 
