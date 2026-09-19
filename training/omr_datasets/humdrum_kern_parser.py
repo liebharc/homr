@@ -38,6 +38,74 @@ def convert_kern_to_tokens(lines: list[str]) -> list[EncodedSymbol]:
     return merged
 
 
+def convert_kern_to_parts(lines: list[str]) -> list[list[EncodedSymbol]]:
+    """Return one token list per spine group for part-by-part NED comparison.
+
+    Two-spine grand-staff scores are reversed so treble comes first, matching
+    how _split_grand_staff orders MusicXML parts (staff 1 = treble first).
+    All other spine counts preserve the original spine order, which music21
+    also preserves in its XML output.
+
+    Handles concatenated multi-document kern (multiple **kern...*- sections, as
+    produced by datasets that store one kern document per staff system) by parsing
+    each document separately and extending the corresponding parts. The clef/key/time
+    signature in force is carried from one document to the next, so a system's opening
+    declarations only become tokens when they are an actual change - not just because
+    every system re-prints them (see _SignatureState).
+    """
+    docs = _split_kern_documents(lines)
+    if len(docs) == 1:
+        parts, _carry = _parse_kern_document(docs[0])
+        return parts
+
+    carry: list[_SignatureState] | None = None
+    doc_parts_list: list[list[list[EncodedSymbol]]] = []
+    for doc in docs:
+        parts, carry = _parse_kern_document(doc, carry)
+        doc_parts_list.append(parts)
+
+    n_parts = max(len(p) for p in doc_parts_list)
+    merged: list[list[EncodedSymbol]] = [[] for _ in range(n_parts)]
+    for doc_parts in doc_parts_list:
+        for i, part in enumerate(doc_parts):
+            merged[i].extend(part)
+    return merged
+
+
+def _split_kern_documents(lines: list[str]) -> list[list[str]]:
+    """Split a (possibly concatenated) kern text into individual documents."""
+    docs: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        current.append(line)
+        stripped = line.strip()
+        if stripped and all(tok.strip() == "*-" for tok in stripped.split("\t")):
+            docs.append(current)
+            current = []
+    if current:
+        docs.append(current)
+    return docs or [lines]
+
+
+def _parse_kern_document(
+    lines: list[str], carry: list[_SignatureState] | None = None
+) -> tuple[list[list[EncodedSymbol]], list[_SignatureState]]:
+    staffs = _merge_multiple_voices_on_the_same_staff(lines)
+    ordered = list(reversed(staffs)) if len(staffs) == 2 else staffs
+    result = []
+    new_carry: list[_SignatureState] = []
+    for staff_no, staff in enumerate(ordered):
+        initial = carry[staff_no] if carry is not None and staff_no < len(carry) else None
+        single, final_state = _convert_single_staff(staff_no, staff, initial)
+        part = merge_upper_and_lower_staff([single])
+        part = _remove_redundant_key_changes(part)
+        part = _fix_final_repeat_start(part)
+        part = strip_naturals(part)
+        result.append(part)
+        new_carry.append(final_state)
+    return result, new_carry
+
+
 def _merge_multiple_voices_on_the_same_staff(
     lines: list[str],
 ) -> list[list[str]]:

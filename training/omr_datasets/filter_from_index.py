@@ -32,7 +32,7 @@ def find_tokens() -> tuple[VocabularyStats, set[str]]:
     return stats, errors
 
 
-def remove_entry_from_train_index(file_path: str, files: set[str]):
+def remove_entry_from_train_index(file_path: str, files: set[str]) -> None:
     for file in files:
         os.remove(file)
 
@@ -48,7 +48,7 @@ def remove_entry_from_train_index(file_path: str, files: set[str]):
     os.replace(temp_filename, file_path)
 
 
-def remove_tokens(indexes: list[str]):
+def remove_tokens(indexes: list[str]) -> None:
     stats, errors = find_tokens()
     for index in indexes:
         remove_entry_from_train_index(index, errors)
