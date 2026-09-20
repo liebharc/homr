@@ -469,8 +469,11 @@ def main() -> None:
     coreml_encoder = args.coreml_encoder and not transformer_use_gpu and coreml_available()
 
     download_weights(segnet_use_gpu, transformer_use_gpu, coreml_encoder)
-    if args.init:
+
+    if not args.no_title:
         download_ocr_weights()
+
+    if args.init:
         eprint("Init finished")
         return
 
