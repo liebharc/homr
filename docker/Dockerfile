@@ -1,5 +1,5 @@
-# Run: docker build -f docker/Dockerfile build -t homr . && docker run --rm -p 8080:8000 homr
-# And then send images: curl -X POST -F "file=@tabi.jpg" http://localhost:8080/process --output tabi.musicxml
+# Run: docker build -f docker/Dockerfile -t homr . && docker run --rm -p 33203:8000 homr
+# Then: open http://localhost:33203/  or  curl -X POST -F "file=@tabi.jpg" http://localhost:33203/api/convert --output tabi.musicxml
 
 FROM python:3.11
 
@@ -20,4 +20,4 @@ RUN /root/.local/bin/poetry run python homr/main.py --init
 
 EXPOSE 8000
 
-CMD ["/root/.local/bin/poetry", "run", "uvicorn", "docker.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/root/.local/bin/poetry", "run", "uvicorn", "docker.web.app:app", "--host", "0.0.0.0", "--port", "8000"]
