@@ -124,15 +124,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
-    remove_tokens(
-        [
-            lieder_train_index,
-            musetrainer_train_index,
-            pdmx_train_index,
-            grandstaff_train_index,
-            primus_train_index,
-        ]
-    )
+    remove_tokens(selected_datasets)
     return selected_datasets
 
 
