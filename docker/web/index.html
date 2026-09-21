@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HOMR</title>
+  <style>
+    :root {
+      --ink: #1c1b19;
+      --muted: #5c5852;
+      --line: #d8d2c8;
+      --bg: #f7f4ef;
+      --accent: #0f5c4c;
+      --accent-hover: #0a463a;
+      --danger: #8b2e2e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%, #e8efe9 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, #efe6d8 0%, transparent 50%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 2rem 1rem;
+    }
+    main {
+      width: min(28rem, 100%);
+    }
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: clamp(2.4rem, 8vw, 3.2rem);
+      letter-spacing: 0.04em;
+      font-weight: 700;
+    }
+    p {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.4;
+    }
+    form {
+      display: grid;
+      gap: 0.9rem;
+    }
+    label.file {
+      display: block;
+      border: 1px dashed var(--line);
+      background: rgba(255, 255, 255, 0.55);
+      padding: 1.1rem 1rem;
+      cursor: pointer;
+    }
+    label.file:hover { border-color: var(--accent); }
+    label.file span {
+      display: block;
+      font-size: 0.95rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    input[type="file"] { display: none; }
+    button {
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: #f7f4ef;
+      font: inherit;
+      font-size: 1.05rem;
+      padding: 0.85rem 1rem;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    #status {
+      min-height: 1.4rem;
+      margin-top: 0.9rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    #status.error { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>HOMR</h1>
+    <p>Upload sheet music image, download MusicXML.</p>
+    <form id="form">
+      <label class="file">
+        <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required />
+        <span id="filename">Choose a JPG or PNG file</span>
+      </label>
+      <button id="submit" type="submit">Convert</button>
+    </form>
+    <div id="status" aria-live="polite"></div>
+  </main>
+  <script>
+    const form = document.getElementById("form");
+    const fileInput = document.getElementById("file");
+    const filename = document.getElementById("filename");
+    const submit = document.getElementById("submit");
+    const status = document.getElementById("status");
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      filename.textContent = file ? file.name : "Choose a JPG or PNG file";
+      status.textContent = "";
+      status.className = "";
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      submit.disabled = true;
+      status.className = "";
+      status.textContent = "Processing (may take 1–2 minutes)…";
+
+      const body = new FormData();
+      body.append("file", file);
+
+      try {
+        const response = await fetch("/api/convert", { method: "POST", body });
+        if (!response.ok) {
+          let detail = "Conversion failed.";
+          try {
+            const data = await response.json();
+            if (data && data.detail) detail = data.detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        let downloadName = "result.musicxml";
+        const match = /filename="?([^"]+)"?/i.exec(disposition);
+        if (match) downloadName = match[1];
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = downloadName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+
+        status.textContent = "Done. Download started.";
+      } catch (error) {
+        status.className = "error";
+        status.textContent = error.message || "Conversion failed.";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
