@@ -2,6 +2,7 @@ import csv
 import multiprocessing
 import os
 import random
+import sys
 from itertools import zip_longest
 from pathlib import Path
 
@@ -98,7 +99,7 @@ def convert_pdmx(only_recreate_token_files: bool = False) -> None:
     mxl_paths = _load_filtered_paths()
     eprint(f"{len(mxl_paths)} files pass pre-filters (c<={_MAX_COMPLEXITY}, tracks<={_MAX_TRACKS})")
 
-    create_musicxml_and_svg_files_from_mxl(_load_filtered_paths(), rendered_scores)
+    create_musicxml_and_svg_files_from_mxl(mxl_paths, rendered_scores)
     music_xml_files = list(Path(rendered_scores).rglob("*.musicxml"))
     with open(pdmx_train_index, "w") as f:
         file_number = 0
@@ -128,4 +129,8 @@ def convert_pdmx(only_recreate_token_files: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    convert_pdmx()
+    multiprocessing.set_start_method("spawn")
+    only_recreate_token_files = False
+    if "--only-tokens" in sys.argv:
+        only_recreate_token_files = True
+    convert_pdmx(only_recreate_token_files)
