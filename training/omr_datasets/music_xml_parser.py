@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from typing import Iterable, SupportsIndex, TypeVar, overload
 
 from homr.music_xml_generator import DURATION_NAMES
@@ -188,8 +189,7 @@ class TokensMeasure:
         is_grace = "G" in symbol.rhythm
         symbol.position = self._get_staff_position(staff)
         if not invisible:
-            # The first visible voice of each staff is the main voice in this measure.
-            if voice != self.main_voice.setdefault(staff, voice):
+            if voice != self.main_voice[staff]:
                 symbol.position += "2"
         if is_chord:
             previous_symbol = self.symbols[-1]
@@ -426,6 +426,9 @@ class TokensPart:
         self._flush_pending_clefs()
         self._ensure_current_measure().append_position_change(duration)
 
+    def set_main_voices(self, main_voices: dict[int, int]) -> None:
+        self._ensure_current_measure().main_voice = main_voices
+
     def on_end_of_measure(self) -> None:
         self.measures.append(self._ensure_current_measure().complete_measure())
         self.current_measure = TokensMeasure()
@@ -595,6 +598,55 @@ def _collect_articulation(note: ET.Element, part: TokensPart, staff: int) -> tup
     return str.join("_", sorted(articulations)), str.join("_", sorted(slurs))
 
 
+def _is_hidden_note(note: ET.Element) -> bool:
+    return note.get("print-object", None) == "no" or any(
+        _text(note_head) == "none" for note_head in _children(note, "notehead")
+    )
+
+
+def _find_main_voices(measure: ET.Element) -> dict[int, int]:
+    """
+    Find the main voice of each staff in a measure.
+    Main voice gets the position upper/lower, all others get upper2/lower2.
+
+    How to find the main voice?
+    The main voice is drawn with stems up and the others with stems down.
+    Usually that's the first visible voice, but engravers sometimes enter
+    the upper part in the second voice and flip the stems.
+    So if the first voice has mostly down stems and exactly one other
+    voice has mostly up stems, then that voice is the main voice.
+    We use stem_score to count the number of up stems and down stems.
+    """
+    # map staff index to voice index
+    first_voice: dict[int, int] = {}
+    # map (staff, voice) to its score
+    stem_score: dict[tuple[int, int], int] = defaultdict(int)
+    for note in _children(measure, "note"):
+        if _is_hidden_note(note):
+            continue
+        # in MusicXML, staff index starts at 1, but in our internal representation,
+        # it starts at 0 (the same as _process_note())
+        staff = _int_text(_child(note, "staff"), 1) - 1
+        voice = _int_text(_child(note, "voice"), 0)
+        first_voice.setdefault(staff, voice)
+        stem = _text(_child(note, "stem"))
+        if stem == "up":
+            stem_score[(staff, voice)] += 1
+        elif stem == "down":
+            stem_score[(staff, voice)] -= 1
+
+    result: dict[int, int] = {}
+    for staff, voice in first_voice.items():
+        if stem_score[(staff, voice)] < 0:
+            # first voice isn't the main voice, look for another one
+            alternatives = [v for (s, v), score in stem_score.items() if s == staff and score > 0]
+            if len(alternatives) == 1:
+                result[staff] = alternatives[0]
+                continue
+        result[staff] = voice
+    return result
+
+
 def _process_note(part: TokensPart, note: ET.Element) -> None:
     staff = 0
     note_heads = _children(note, "notehead")
@@ -724,6 +776,7 @@ def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
 def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
     tokens = TokensPart()
     for measure in _children(part, "measure"):
+        tokens.set_main_voices(_find_main_voices(measure))
         for child in list(measure):
             if child.tag == "attributes":
                 _process_attributes(tokens, child)
