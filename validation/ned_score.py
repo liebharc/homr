@@ -25,7 +25,10 @@ import editdistance
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
 from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
-from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import (
+    music_xml_file_to_tokens,
+    normalize_barlines_and_repeats,
+)
 
 if TYPE_CHECKING:
     import music21 as m21
@@ -313,7 +316,7 @@ def _xml_parts_from_text(xml_text: str, xml_parser: str) -> list[list[EncodedSym
         xml_voices = music_xml_file_to_tokens(xml_path)
     finally:
         os.remove(xml_path)
-    return [_flatten_part(p) for p in xml_voices]
+    return [normalize_barlines_and_repeats(_flatten_part(p)) for p in xml_voices]
 
 
 def _is_xml(text: str) -> bool:

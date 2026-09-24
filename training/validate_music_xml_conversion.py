@@ -2,7 +2,11 @@ import difflib
 import xml.etree.ElementTree as ET
 
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
-from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+from homr.simple_logging import eprint
+from training.omr_datasets.music_xml_parser import (
+    music_xml_file_to_tokens,
+    normalize_barlines_and_repeats,
+)
 from training.transformer.training_vocabulary import read_tokens, token_lines_to_str
 
 
@@ -14,7 +18,7 @@ def validate_conversion(file: str) -> bool:
     ET.ElementTree(xml).write(tmp, encoding="unicode", xml_declaration=True)
 
     actual = music_xml_file_to_tokens(tmp)
-    flat_list = [x for xxs in actual for xs in xxs for x in xs]
+    flat_list = normalize_barlines_and_repeats([x for xxs in actual for xs in xxs for x in xs])
 
     actual_str = token_lines_to_str(flat_list)
     expected_str = token_lines_to_str(expected)
@@ -30,8 +34,6 @@ def validate_conversion(file: str) -> bool:
 if __name__ == "__main__":
     import multiprocessing
     import sys
-
-    from homr.simple_logging import eprint
 
     filename = sys.argv[1]
 

@@ -25,7 +25,11 @@ from training.omr_datasets.musescore_svg import (
     SvgStaff,
     get_position_from_multiple_svg_files,
 )
-from training.omr_datasets.music_xml_parser import Measure, music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import (
+    Measure,
+    music_xml_file_to_tokens,
+    normalize_barlines_and_repeats,
+)
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,
@@ -470,33 +474,36 @@ class MeasureCutter:
         for i in range(count):
             selected_measure = self.voice.pop(0)
             is_first_measure = i == 0
-            first_measure_before_any_non_key_or_clef = is_first_measure
+            in_opening_context = is_first_measure
             measure_result: list[EncodedSymbol] = []
             for symbol in selected_measure:
                 if "clef" in symbol.rhythm:
                     self.clefs[self._position_to_staff_no(symbol)] = symbol
-                    if not first_measure_before_any_non_key_or_clef:
+                    if not in_opening_context:
                         measure_result.append(symbol)
                     else:
                         clefs[self._position_to_staff_no(symbol)] = symbol
                 elif "keySignature" in symbol.rhythm:
                     self.key = symbol
-                    if not first_measure_before_any_non_key_or_clef:
+                    if not in_opening_context:
                         measure_result.append(symbol)
                     else:
                         key = symbol
                 elif "chord" in symbol.rhythm:
-                    if not first_measure_before_any_non_key_or_clef:
+                    if not in_opening_context:
                         measure_result.append(symbol)
                 elif "timeSignature" in symbol.rhythm:
                     self.time = symbol
-                    if not first_measure_before_any_non_key_or_clef:
+                    if not in_opening_context:
                         measure_result.append(symbol)
                     else:
                         has_time = True
                         time = symbol
                 else:
-                    first_measure_before_any_non_key_or_clef = False
+                    # A leading repeat can precede attributes in MusicXML. It
+                    # must not prevent those attributes replacing inherited ones.
+                    if symbol.rhythm != "repeatStart":
+                        in_opening_context = False
                     measure_result.append(symbol)
 
             if is_first_measure:
@@ -508,7 +515,7 @@ class MeasureCutter:
                         measure_result.insert(0, EncodedSymbol("chord"))
                     measure_result.insert(0, clef)
             result.extend(measure_result)
-        return result
+        return normalize_barlines_and_repeats(result)
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:

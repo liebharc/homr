@@ -703,12 +703,20 @@ def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
             if child.tag == "direction":
                 _process_direction(tokens, child)
         tokens.on_end_of_measure()
-    return _cleanup_barlines_and_repeats(tokens.get_measures())
+    measures = tokens.get_measures()
+    for token_measure in measures:
+        # A later image cut may separate any two measures. Keep repeat symbols
+        # in their source measure until the caller selects the image's contents.
+        token_measure[:] = normalize_barlines_and_repeats(token_measure)
+    return measures
 
 
-def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
+def normalize_barlines_and_repeats(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
     """
-    Normalize measure-ending barlines and adjacent repeat symbols.
+    Normalize adjacent barline symbols within one transcription.
+
+    Call on individual source measures before selecting an image, or on the
+    complete symbol sequence after selecting it. Never span separate images.
     """
 
     def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
@@ -739,25 +747,14 @@ def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
             return a
         return b
 
-    last_symbol = EncodedSymbol("")
-    result: list[Measure] = []
-    for measure in measures:
-        measure_result: Measure = Measure()
-        measure_result.new_page = measure.new_page
-        for symbol in measure:
-            if can_merge(symbol, last_symbol):
-                merged = merge_barlines_and_repeats(symbol, last_symbol)
-                if len(measure_result) == 0:
-                    result[-1][-1] = merged
-                else:
-                    measure_result[-1] = merged
-                last_symbol = merged
-            else:
-                measure_result.append(symbol)
-                last_symbol = symbol
-        if len(measure_result) == 0 or not is_barline_or_repeat(measure_result[-1]):
-            measure_result.append(EncodedSymbol("barline"))
-        result.append(measure_result)
+    result: list[EncodedSymbol] = []
+    for symbol in symbols:
+        if result and can_merge(symbol, result[-1]):
+            result[-1] = merge_barlines_and_repeats(symbol, result[-1])
+        else:
+            result.append(symbol)
+    if result and not is_barline_or_repeat(result[-1]):
+        result.append(EncodedSymbol("barline"))
     return result
 
 
