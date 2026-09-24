@@ -77,6 +77,28 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 455
+
+Commit: 7bf1389908b44047d4cba9d5d06e868ceaf946ef
+Day: 16 September 2026
+Transformer Smoke Test: 5%
+System Level: Total: ?
+Polish scores: 17.8%
+SMB scores: ?
+
+Using lieder pipeline for pdmx dataset. For more details see PR 162. 
+
+# Run 455 - discarded PR 153
+
+Commit: 7bf1389908b44047d4cba9d5d06e868ceaf946ef
+Day: 9 September 2026
+Transformer Smoke Test: 5%
+System Level: ?
+Polish scores: 17.9%
+SMB scores: ?
+
+Filtering images from pdmx dataset with low resolution due to wrong aspect ratio.
+
 ## Run 426 - 27 epochs
 
 Commit: b6fd20809a8dcaf10dfd39a4ca4f64c6f056e644
