@@ -561,6 +561,43 @@ note_2 D4 _ _ _ upper
 barline . . . . ."""
         self.assertEqual(token_str, expected)
 
+    def test_stem_up_voice_is_main_voice(self) -> None:
+        """If the first voice has stems down and exactly one other voice has stems up,
+        then the stem up voice is the main voice. Otherwise the first voice stays the
+        main voice."""
+        example = """<score-partwise version="4.0"><part id="P1">
+<measure number="1">
+  <attributes>
+    <divisions>1</divisions>
+    <clef number="1"><sign>G</sign><line>2</line></clef>
+  </attributes>
+  <note>
+    <pitch><step>C</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><stem>down</stem>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <pitch><step>G</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>2</voice><type>quarter</type><stem>up</stem>
+  </note>
+</measure>
+<measure number="2">
+  <note>
+    <pitch><step>D</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>1</voice><type>quarter</type><stem>down</stem>
+  </note>
+  <backup><duration>1</duration></backup>
+  <note>
+    <pitch><step>A</step><octave>4</octave></pitch>
+    <duration>1</duration><voice>2</voice><type>quarter</type><stem>down</stem>
+  </note>
+</measure>
+</part></score-partwise>"""
+        tokens = music_xml_string_to_tokens(example)
+        symbols = [s for page in tokens for measure in page for s in measure]
+        notes = {s.pitch: s.position for s in symbols if s.rhythm.startswith("note")}
+        self.assertEqual(notes, {"C4": "upper2", "G4": "upper", "D4": "upper", "A4": "upper2"})
+
     def test_voice_assignment_is_per_staff_and_measure(self) -> None:
         """Hidden rests do not claim a voice; each staff and measure starts fresh."""
         example = """<score-partwise version="4.0"><part id="P1">
