@@ -39,7 +39,6 @@ quartets = os.path.join(dataset_root, "StringQuartets-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
 flat_data = os.path.join(lieder, "flat")
-os.makedirs(flat_data, exist_ok=True)
 
 
 class MusicXmlPage:
@@ -762,6 +761,7 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
             os.path.join(quartets, "scores"), os.path.join(lieder, "scores"), dirs_exist_ok=True
         )
 
+    os.makedirs(flat_data, exist_ok=True)
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
