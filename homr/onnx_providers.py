@@ -20,6 +20,29 @@ from typing import Any
 
 import onnxruntime as ort
 
+from homr.simple_logging import eprint
+
+
+def _preload_gpu_libraries() -> None:
+    """Load CUDA/cuDNN libraries that were installed as pip wheels.
+
+    With ``pip install onnxruntime-gpu[cuda,cudnn]`` the CUDA runtime and
+    cuDNN live inside the ``nvidia-*`` wheel packages, where the dynamic
+    loader does not find them on its own. onnxruntime locates them via
+    ``preload_dlls()``; without this call ``CUDAExecutionProvider`` is
+    reported as available, but session creation fails to load it and
+    silently falls back to the CPU.
+    """
+    preload = getattr(ort, "preload_dlls", None)  # onnxruntime >= 1.21
+    if preload is not None:
+        try:
+            preload()
+        except Exception as e:  # noqa: BLE001 - CPU-only hosts have nothing to preload
+            eprint("Preloading GPU libraries failed, continuing without them:", e)
+
+
+_preload_gpu_libraries()
+
 # Let CoreML use the whole Apple Neural Engine + GPU + CPU and pick the
 # fastest unit per op. Use "CPUAndGPU" to force the GPU only.
 _COREML_DEFAULT_OPTIONS: dict[str, str] = {"MLComputeUnits": "ALL"}
