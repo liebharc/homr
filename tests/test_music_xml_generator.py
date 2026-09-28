@@ -416,12 +416,10 @@ barline . . . . ."""
         self.assertEqual(_slurs(xml), ["start", "stop"])
 
     def test_image_position_is_written_as_comment(self) -> None:
-        tokens = read_token_lines(
-            """clef_G2 . . . . upper
+        tokens = read_token_lines("""clef_G2 . . . . upper
 note_4 E4 _ _ _ upper
 note_4 C4 _ _ _ upper
-barline . . . . .""".splitlines()
-        )
+barline . . . . .""".splitlines())
         tokens[1].image_coordinates = (45.4, 230.6)
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
