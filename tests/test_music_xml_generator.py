@@ -414,3 +414,18 @@ barline . . . . ."""
         self.assertEqual(_tieds(xml), ["start", "stop"])
         # the outer slur is untouched
         self.assertEqual(_slurs(xml), ["start", "stop"])
+
+    def test_image_position_is_written_as_comment(self) -> None:
+        tokens = read_token_lines(
+            """clef_G2 . . . . upper
+note_4 E4 _ _ _ upper
+note_4 C4 _ _ _ upper
+barline . . . . .""".splitlines()
+        )
+        tokens[1].image_coordinates = (45.4, 230.6)
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        notes = list(xml.iter("note"))
+        comments = [[c.text for c in n if c.tag is ET.Comment] for n in notes]  # type: ignore[comparison-overlap]
+        self.assertEqual(comments, [[" imgpos: 45, 231 "], []])
+        self.assertIn("<!-- imgpos: 45, 231 -->", ET.tostring(xml, encoding="unicode"))

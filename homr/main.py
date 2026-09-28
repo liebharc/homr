@@ -12,7 +12,7 @@ import numpy as np
 import onnxruntime as ort
 
 from homr import color_adjust, download_utils
-from homr.autocrop import autocrop
+from homr.autocrop import autocrop_with_offset
 from homr.bar_line_detection import (
     detect_bar_lines,
     prepare_bar_line_image,
@@ -34,6 +34,7 @@ from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.onnx_providers import coreml_available, cuda_available, rocm_available
 from homr.pdf_utils import render_pdf_to_image
+from homr.point_mapping import PointMapping, chain, undo_crop, undo_resize
 from homr.relieur import process_concat
 from homr.resize import resize_image
 from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
@@ -108,16 +109,23 @@ def replace_extension(path: str, new_extension: str) -> str:
 
 def load_and_preprocess_predictions(
     image_path: str, enable_debug: bool, enable_cache: bool, segnet_use_gpu: bool
-) -> tuple[InputPredictions, Debug]:
+) -> tuple[InputPredictions, Debug, PointMapping]:
+    """
+    The returned mapping takes coordinates of the predictions back to the input image.
+    """
     image = cv2.imread(image_path)
     if image is None:
         raise InvalidProgramArgumentException(
             "The file format is not supported, please provide a JPG or PNG image file:" + image_path
         )
-    image = autocrop(image)
+    image, crop_top_left = autocrop_with_offset(image)
+    cropped_shape = image.shape
     image = resize_image(image)
     preprocessed = color_adjust.apply_clahe(image)
     predictions = get_predictions(image, preprocessed, image_path, enable_cache, segnet_use_gpu)
+    to_input_image = chain(
+        undo_resize(cropped_shape, predictions.preprocessed.shape), undo_crop(*crop_top_left)
+    )
     debug = Debug(predictions.original, image_path, enable_debug)
     debug.write_image("color_adjust", preprocessed)
 
@@ -129,7 +137,7 @@ def load_and_preprocess_predictions(
     debug.write_threshold_image("stems_rest", predictions.stems_rest)
     debug.write_threshold_image("notehead", predictions.notehead)
     debug.write_threshold_image("clefs_keys", predictions.clefs_keys)
-    return predictions, debug
+    return predictions, debug, to_input_image
 
 
 def predict_symbols(debug: Debug, predictions: InputPredictions) -> PredictedSymbols:
@@ -185,7 +193,9 @@ def process_image(
             image = cv2.imread(image_path)
             if image is None:
                 raise ValueError("Failed to read " + image_path)
+            original_shape = image.shape
             image = resize_image(image)
+            to_input_image = undo_resize(original_shape, image.shape)
             debug = Debug(image, image_path, config.enable_debug)
             staff_position_files = replace_extension(image_path, ".txt")
             multi_staffs = load_staff_positions(
@@ -198,7 +208,9 @@ def process_image(
             # two code paths feed the symbol-recognition encoder consistent input.
             image = color_adjust.apply_clahe(image)
         else:
-            multi_staffs, image, debug, title_future, _ = detect_staffs_in_image(image_path, config)
+            multi_staffs, image, debug, title_future, _, to_input_image = detect_staffs_in_image(
+                image_path, config
+            )
         debug_cleanup = debug
 
         transformer_config = Config()
@@ -211,6 +223,7 @@ def process_image(
             image,
             selected_staff=config.selected_staff,
             config=transformer_config,
+            page_to_input_image=to_input_image,
         )
 
         if not config.read_staff_positions:
@@ -242,8 +255,8 @@ def process_image(
 
 def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
-) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int]:
-    predictions, debug = load_and_preprocess_predictions(
+) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
+    predictions, debug, to_input_image = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache, config.segnet_use_gpu
     )
     symbols = predict_symbols(debug, predictions)
@@ -309,7 +322,7 @@ def detect_staffs_in_image(
 
     debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
 
-    return multi_staffs, predictions.preprocessed, debug, title_future, len(staffs)
+    return multi_staffs, predictions.preprocessed, debug, title_future, len(staffs), to_input_image
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:

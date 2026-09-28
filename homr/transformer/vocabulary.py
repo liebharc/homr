@@ -312,6 +312,8 @@ class EncodedSymbol:
         # this ordering can be used to reject cases where attention-based coordinates
         # violate monotonic scan constraints and are therefore unreliable.
         self.coordinates = coordinates
+        # The coordinates mapped back to the image which was given to homr as input
+        self.image_coordinates: tuple[float, float] | None = None
         self._duration: SymbolDuration | None = None
 
     def is_control_symbol(self) -> bool:

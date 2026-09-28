@@ -722,8 +722,20 @@ def build_note_or_rest(
 
     build_articulations(note, model_note.articulation, tuplet_mark, state)
     build_slurs(note, model_note.slur, slur_number)
+    build_image_position(note, model_note)
 
     return note
+
+
+def build_image_position(xml: ET.Element, symbol: EncodedSymbol) -> None:
+    """
+    Adds the position of the symbol on the input image as comment. The position is estimated
+    from the attention of the transformer, it points roughly at the symbol but isn't precise.
+    """
+    if symbol.image_coordinates is None:
+        return
+    x, y = symbol.image_coordinates
+    xml.append(ET.Comment(f" imgpos: {round(x)}, {round(y)} "))
 
 
 def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> None:
