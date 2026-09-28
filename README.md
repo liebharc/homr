@@ -100,7 +100,7 @@ Each staff is dewarped (perspective-corrected) and passed through a transformer-
 
 The transformer model generates these predictions in sequence, processing the dewarped staff image to understand the spatial and temporal relationships between musical symbols.
 
-**Note**: The transformer output provides the sequence of symbols but does not include explicit positional information (horizontal or vertical coordinates). However, the model computes the center of attention as a byproduct of the attention mechanism, which can be used to estimate the focus point on the staff image.
+**Note**: The transformer output provides the sequence of symbols but does not include explicit positional information (horizontal or vertical coordinates). However, the model computes the center of attention as a byproduct of the attention mechanism, which is used to estimate the focus point on the staff image. homr maps this point back to the input image and writes it as a comment into each note of the MusicXML output, e.g. `<!-- imgpos: 45, 231 -->`. These are rough positions: they point at or near the symbol, but aren't pixel-exact.
 
 ### Stage 4: MusicXML Output
 
