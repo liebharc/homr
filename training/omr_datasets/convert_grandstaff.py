@@ -188,15 +188,11 @@ def convert_grandstaff(only_recreate_token_files: bool = False) -> None:
         untar_file(grandstaff_archive, grandstaff_root)
         eprint("Adding musicxml files to grandstaff dataset")
 
-    index_file = grandstaff_train_index
-    if only_recreate_token_files:
-        index_file = os.path.join(grandstaff_root, "index_tmp.txt")
-
     eprint("Indexing Grandstaff dataset, this can up to several hours.")
     krn_files = list(Path(grandstaff_root).rglob("*.krn"))
     krn_files = [file for file in krn_files if _filter_out_known_bad_ones(file)]
     skipped: set[Path] = set()
-    with open(index_file, "w") as f:
+    with open(grandstaff_train_index, "w") as f:
         file_number = 0
         with multiprocessing.Pool() as p:
             for file, result in p.imap_unordered(
