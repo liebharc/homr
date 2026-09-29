@@ -75,8 +75,7 @@ def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
 
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     sorted_chord = sorted(chord, key=_symbol_to_sortable)
-    upper_slurs = set()
-    lower_slurs = set()
+    slurs_by_position: dict[str, set[str]] = defaultdict(set)
     upper_artics = set()
     lower_artics = set()
 
@@ -90,10 +89,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             else:
                 upper_artics.add(articulation)
         for slur in slur_stripped:
-            if is_lower_position(symbol.position):
-                lower_slurs.add(slur)
-            else:
-                upper_slurs.add(slur)
+            slurs_by_position[symbol.position].add(slur)
 
         annotation_resorted.append(symbol_stripped)
 
@@ -104,31 +100,14 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
 
     upper_artics = _remove_item_helper(upper_artics, ".")
     lower_artics = _remove_item_helper(lower_artics, ".")
-    upper_slurs = _remove_item_helper(upper_slurs, ".")
-    lower_slurs = _remove_item_helper(lower_slurs, ".")
-
-    if len(upper_slurs) > 0:
-        first_upper = next(
-            (
-                idx
-                for idx, s in enumerate(annotation_resorted)
-                if is_upper_or_has_no_position(s.position)
-            ),
-            None,
+    for position, slurs in slurs_by_position.items():
+        voice_slurs = _remove_item_helper(slurs, ".")
+        first_in_voice = next(
+            idx for idx, s in enumerate(annotation_resorted) if s.position == position
         )
-        if first_upper is not None:
-            annotation_resorted[first_upper] = annotation_resorted[first_upper].add_slurs(
-                list(upper_slurs)
-            )
-    if len(lower_slurs) > 0:
-        first_lower = next(
-            (idx for idx, s in enumerate(annotation_resorted) if is_lower_position(s.position)),
-            None,
+        annotation_resorted[first_in_voice] = annotation_resorted[first_in_voice].add_slurs(
+            list(voice_slurs)
         )
-        if first_lower is not None:
-            annotation_resorted[first_lower] = annotation_resorted[first_lower].add_slurs(
-                list(lower_slurs)
-            )
 
     if len(upper_artics) > 0:
         first_upper = next(

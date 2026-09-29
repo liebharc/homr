@@ -8,6 +8,29 @@ from training.transformer.training_vocabulary import token_lines_to_str
 
 class TestHumdrumKern(unittest.TestCase):
 
+    def test_slurs_in_separate_voices(self) -> None:
+        # Reduced from Beethoven sonata15-4/min3_down_m-120-124.krn.
+        kern = """**kern\t**kern
+*\t*^
+8BB\t8b[\t8d#
+=\t=\t=
+4BBB\t4b]\t4.e[
+8C#\t8a#\t.
+4BBB\t8ff#\t8e]
+*\t*v\t*v
+*-\t*-
+"""
+        result = token_lines_to_str(convert_kern_to_tokens(kern.splitlines()))
+        slurred_lines = [line for line in result.splitlines() if "slur" in line]
+        self.assertEqual(
+            slurred_lines,
+            [
+                "note_8 B4 _ _ slurStart upper&note_8 D4 # _ _ upper2&note_8 B2 _ _ _ lower",
+                "note_4 B4 _ _ slurStop upper&note_4. E4 _ _ slurStart upper2&note_4 B1 _ _ _ lower",
+                "note_8 F5 # _ _ upper&note_8 E4 _ _ slurStop upper2&note_4 B1 _ _ _ lower",
+            ],
+        )
+
     def test_humdrum_to_semantic_note_duration(self) -> None:
         """
         This file is the reason why we implemented an own conversion logic.
