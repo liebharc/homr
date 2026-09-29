@@ -470,7 +470,7 @@ class MeasureCutter:
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
-        result: list[EncodedSymbol] = []
+        selected_measures: list[list[EncodedSymbol]] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
             is_first_measure = i == 0
@@ -514,8 +514,8 @@ class MeasureCutter:
                     if j > 0:
                         measure_result.insert(0, EncodedSymbol("chord"))
                     measure_result.insert(0, clef)
-            result.extend(measure_result)
-        return normalize_barlines_and_repeats(result)
+            selected_measures.append(measure_result)
+        return normalize_barlines_and_repeats(selected_measures)
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:

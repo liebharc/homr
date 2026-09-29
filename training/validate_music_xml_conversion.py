@@ -18,7 +18,7 @@ def validate_conversion(file: str) -> bool:
     ET.ElementTree(xml).write(tmp, encoding="unicode", xml_declaration=True)
 
     actual = music_xml_file_to_tokens(tmp)
-    flat_list = normalize_barlines_and_repeats([x for xxs in actual for xs in xxs for x in xs])
+    flat_list = [symbol for part in actual for symbol in normalize_barlines_and_repeats(part)]
 
     actual_str = token_lines_to_str(flat_list)
     expected_str = token_lines_to_str(expected)
