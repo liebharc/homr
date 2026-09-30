@@ -141,9 +141,17 @@ def build_measures(
     is_first_part: bool,
     has_two_staves: bool = False,
 ) -> list[ET.Element]:
+    # Tokens say which notes start together, not when each group starts. A group starts
+    # when the earliest still-sounding note ends (that is how training data is grouped),
+    # so track the end times of sounding notes instead of only the last group's shortest note.
+    clock = Fraction(0)
+    sounding: list[Fraction] = []
+
     def close_current_measure() -> None:
+        nonlocal clock, sounding
         rebalance_measure_voices(current_measure)
         measures.append(current_measure)
+        clock, sounding = Fraction(0), []
 
     measure_number = 1
     groups = add_tuplet_start_stop(group_into_chords(voice))
@@ -172,10 +180,11 @@ def build_measures(
                 build_multi_measure_rest(symbol, attributes)
             else:
                 staff_positions = group.into_positions()
+                advance = _advance_to_next_group(group, clock, sounding)
+                clock += advance
+                sounding = [end for end in sounding if end > clock]
                 for pos_no, staff_pos in enumerate(staff_positions):
-                    chord_duration = (
-                        group.get_duration() if pos_no == len(staff_positions) - 1 else Fraction(0)
-                    )
+                    chord_duration = advance if pos_no == len(staff_positions) - 1 else Fraction(0)
                     for note_xml in build_note_chord(staff_pos, state, chord_duration):
                         current_measure.append(note_xml)
             continue
@@ -244,6 +253,20 @@ def build_measures(
         ET.SubElement(time_el, "beats").text = str(beats)
         ET.SubElement(time_el, "beat-type").text = "4"
     return measures
+
+
+def _advance_to_next_group(
+    group: SymbolChord, clock: Fraction, sounding: list[Fraction]
+) -> Fraction:
+    """How far the next group starts after this one, updating the sounding notes in place."""
+    durations = [
+        s.get_duration().fraction for s in group.symbols if s.rhythm.startswith(("note", "rest"))
+    ]
+    timed = [d for d in durations if d > 0]  # grace notes have no duration and take no time
+    if not timed:
+        return Fraction(0)
+    sounding.extend(clock + d for d in timed)
+    return min(end for end in sounding if end > clock) - clock
 
 
 def build_work(title_text: str) -> ET.Element:
