@@ -96,6 +96,18 @@ class DelaunayTriangulation:
         return a >= -1e-10 and b >= -1e-10 and c >= -1e-10
 
 
+def _is_point_in_triangle(point: tuple[float, float], triangle: NDArray) -> bool:
+    def cross(a: NDArray, b: NDArray) -> float:
+        return float((b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0]))
+
+    d1 = cross(triangle[0], triangle[1])
+    d2 = cross(triangle[1], triangle[2])
+    d3 = cross(triangle[2], triangle[0])
+    has_negative = d1 < 0 or d2 < 0 or d3 < 0
+    has_positive = d1 > 0 or d2 > 0 or d3 > 0
+    return not (has_negative and has_positive)
+
+
 class PiecewiseAffineTransform:
     """Piecewise affine transformation using triangulation"""
 
@@ -148,6 +160,27 @@ class PiecewiseAffineTransform:
         transformed = mat @ point_homogeneous
 
         return (float(transformed[0]), float(transformed[1]))
+
+    def inverse_transform_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        """
+        Maps a point of the warped image back to the source image. Uses the same
+        triangles as warp_image, only looked up by their destination corners.
+        """
+        if (
+            self.triangulation is None
+            or self.triangulation.simplices is None
+            or self.dst_points is None
+        ):
+            return point
+
+        for simplex, mat in zip(self.triangulation.simplices, self.affine_matrices, strict=True):
+            if mat is None or not _is_point_in_triangle(point, self.dst_points[simplex]):
+                continue
+            inverse = cv2.invertAffineTransform(mat)
+            transformed = inverse @ np.array([point[0], point[1], 1.0], dtype=np.float32)
+            return (float(transformed[0]), float(transformed[1]))
+
+        return point
 
     def warp_image(self, image: NDArray, fill_color: int = 1, order: int = 1) -> NDArray:
         """Warp an image using the piecewise affine transformation"""
@@ -274,6 +307,11 @@ class StaffDewarping:
         if self.tform is None:
             return point
         return self.tform.transform_point(point)
+
+    def undewarp_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        if self.tform is None:
+            return point
+        return self.tform.inverse_transform_point(point)
 
 
 def is_point_on_image(pts: tuple[int, int], image: NDArray) -> bool:

@@ -19,7 +19,7 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty
+from homr.transformer.vocabulary import EncodedSymbol, empty, is_lower_position
 from training.omr_datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
@@ -454,7 +454,7 @@ class MeasureCutter:
         self.time = EncodedSymbol("timeSignature/4")
 
     def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
-        if symbol.position == "lower":
+        if is_lower_position(symbol.position):
             return 1
         return 0
 
@@ -470,31 +470,31 @@ class MeasureCutter:
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
-        selected_measures: list[list[EncodedSymbol]] = []
+        result: list[list[EncodedSymbol]] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
             is_first_measure = i == 0
-            in_opening_context = is_first_measure
+            first_measure_before_any_non_key_or_clef = is_first_measure
             measure_result: list[EncodedSymbol] = []
             for symbol in selected_measure:
                 if "clef" in symbol.rhythm:
                     self.clefs[self._position_to_staff_no(symbol)] = symbol
-                    if not in_opening_context:
+                    if not first_measure_before_any_non_key_or_clef:
                         measure_result.append(symbol)
                     else:
                         clefs[self._position_to_staff_no(symbol)] = symbol
                 elif "keySignature" in symbol.rhythm:
                     self.key = symbol
-                    if not in_opening_context:
+                    if not first_measure_before_any_non_key_or_clef:
                         measure_result.append(symbol)
                     else:
                         key = symbol
                 elif "chord" in symbol.rhythm:
-                    if not in_opening_context:
+                    if not first_measure_before_any_non_key_or_clef:
                         measure_result.append(symbol)
                 elif "timeSignature" in symbol.rhythm:
                     self.time = symbol
-                    if not in_opening_context:
+                    if not first_measure_before_any_non_key_or_clef:
                         measure_result.append(symbol)
                     else:
                         has_time = True
@@ -503,7 +503,7 @@ class MeasureCutter:
                     # A leading repeat can precede attributes in MusicXML. It
                     # must not prevent those attributes replacing inherited ones.
                     if symbol.rhythm != "repeatStart":
-                        in_opening_context = False
+                        first_measure_before_any_non_key_or_clef = False
                     measure_result.append(symbol)
 
             if is_first_measure:
@@ -514,8 +514,8 @@ class MeasureCutter:
                     if j > 0:
                         measure_result.insert(0, EncodedSymbol("chord"))
                     measure_result.insert(0, clef)
-            selected_measures.append(measure_result)
-        return normalize_barlines_and_repeats(selected_measures)
+            result.append(measure_result)
+        return normalize_barlines_and_repeats(result)
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:

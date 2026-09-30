@@ -16,6 +16,7 @@ import itertools
 import os
 import tempfile
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
@@ -160,6 +161,11 @@ def _strip_articulation_from_score(score: "m21.stream.Score") -> None:
 
 def _strip_position(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
     return [EncodedSymbol(s.rhythm, s.pitch, s.lift, s.articulation, s.slur) for s in symbols]
+
+
+def _flatten_part(measures: Sequence[Sequence[EncodedSymbol]]) -> list[EncodedSymbol]:
+    flat = normalize_barlines_and_repeats(measures)
+    return [t for chord in sort_token_chords(flat) for t in chord]
 
 
 def _component_dist(a: list[EncodedSymbol], b: list[EncodedSymbol], field: str) -> int:
@@ -310,11 +316,7 @@ def _xml_parts_from_text(xml_text: str, xml_parser: str) -> list[list[EncodedSym
         xml_voices = music_xml_file_to_tokens(xml_path)
     finally:
         os.remove(xml_path)
-    parts = []
-    for measures in xml_voices:
-        symbols = normalize_barlines_and_repeats(measures)
-        parts.append([symbol for chord in sort_token_chords(symbols) for symbol in chord])
-    return parts
+    return [_flatten_part(p) for p in xml_voices]
 
 
 def _is_xml(text: str) -> bool:

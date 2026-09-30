@@ -7,6 +7,7 @@ from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.model import MultiStaff, Staff
+from homr.point_mapping import PointMapping, chain, identity, undo_crop, undo_resize
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
@@ -159,6 +160,11 @@ def get_tr_omr_canvas_size(
     return np.array(new_shape)
 
 
+def _canvas_y_offset(resized_height: int, margin_top: int = 0, margin_bottom: int = 0) -> int:
+    tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
+    return (tr_omr_max_height_with_margin - resized_height) // 2 + margin_top
+
+
 def center_image_on_canvas(
     image: NDArray, canvas_size: NDArray, margin_top: int = 0, margin_bottom: int = 0
 ) -> NDArray:
@@ -180,8 +186,7 @@ def center_image_on_canvas(
         )
 
     x_offset = 0
-    tr_omr_max_height_with_margin = tr_omr_max_height - margin_top - margin_bottom
-    y_offset = (tr_omr_max_height_with_margin - resized.shape[0]) // 2 + margin_top
+    y_offset = _canvas_y_offset(resized.shape[0], margin_top, margin_bottom)
 
     new_image[
         y_offset : y_offset + resized.shape[0],
@@ -233,32 +238,50 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
 
 def prepare_staff_image(
     debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
-) -> tuple[NDArray, Staff]:
+) -> tuple[NDArray, Staff, PointMapping]:
+    """
+    Returns the staff image for the transformer, the staff in the coordinates of that image
+    and a mapping from the coordinates of that image back to the coordinates of the page.
+    """
     region = _calculate_region(staff, regions)
     image_dimensions = get_tr_omr_canvas_size(
         (int(region[3] - region[1]), int(region[2] - region[0]))
     )
     scaling_factor = image_dimensions[1] / (region[3] - region[1])
+    page_shape = staff_image.shape
     staff_image = cv2.resize(
         staff_image,
         (int(staff_image.shape[1] * scaling_factor), int(staff_image.shape[0] * scaling_factor)),
     )
+    undo_scaling = undo_resize(page_shape, staff_image.shape)
     region = np.round(region * scaling_factor)
     eprint("Dewarping staff", index)
     region_step1 = np.array(region) + np.array([-10, -50, 10, 50])
     staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step1)
+    undo_crop1 = undo_crop(*top_left)
     region_step2 = np.array(region) - np.array([*top_left, *top_left])
     top_left = top_left / scaling_factor
     staff = _dewarp_staff(staff, None, top_left, scaling_factor)
     dewarp = dewarp_staff_image(staff_image, staff, index, debug)
     staff_image = dewarp.dewarp(staff_image)
     staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
+    undo_crop2 = undo_crop(*top_left)
     scaling_factor = 1
 
     eprint("Dewarping staff", index, "done")
 
     staff_image = remove_black_contours_at_edges_of_image(staff_image, staff.average_unit_size)
+    before_canvas_shape = staff_image.shape
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
+    canvas_content_shape = (int(image_dimensions[1]), int(image_dimensions[0]))
+    to_page = chain(
+        undo_crop(0, -_canvas_y_offset(canvas_content_shape[0])),
+        undo_resize(before_canvas_shape, canvas_content_shape),
+        undo_crop2,
+        dewarp.undewarp_point,
+        undo_crop1,
+        undo_scaling,
+    )
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
         transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
@@ -278,7 +301,7 @@ def prepare_staff_image(
         debug.write_image_with_fixed_suffix(
             f"_staff-{index}_debug_annotated.jpg", transformed_staff_image
         )
-    return staff_image, staff
+    return staff_image, staff, to_page
 
 
 def _dewarp_staff(
@@ -301,21 +324,38 @@ def _dewarp_staff(
     return staff.transform_coordinates(transform_coordinates)
 
 
+def _get_symbol_center(symbol: EncodedSymbol) -> tuple[float, float] | None:
+    if symbol.coordinates is None or symbol.rhythm.startswith("chord"):
+        return None
+    center = np.asarray(symbol.coordinates, dtype=np.float64).reshape(-1)
+    if len(center) < 2 or math.isnan(center[0]) or math.isnan(center[1]):  # noqa: PLR2004
+        return None
+    return float(center[0]), float(center[1])
+
+
 def parse_staff_image(
-    debug: Debug, index: int, staff: Staff, image: NDArray, regions: StaffRegions, config: Config
+    debug: Debug,
+    index: int,
+    staff: Staff,
+    image: NDArray,
+    regions: StaffRegions,
+    config: Config,
+    page_to_input_image: PointMapping = identity,
 ) -> list[EncodedSymbol]:
-    staff_image, transformed_staff = prepare_staff_image(
+    staff_image, transformed_staff, staff_to_page = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
+    for symbol in result:
+        center = _get_symbol_center(symbol)
+        if center is not None:
+            symbol.image_coordinates = page_to_input_image(staff_to_page(center))
     if debug.debug:
         result_image = staff_image.copy()
         for i, symbol in enumerate(result):
-            center = symbol.coordinates
-            if center is None or symbol.rhythm.startswith("chord"):
-                continue
-            if math.isnan(center[0]) or math.isnan(center[1]):
+            center = _get_symbol_center(symbol)
+            if center is None:
                 continue
             center_int = (int(center[0]), int(center[1]))
             cv2.circle(result_image, center_int, 5, color=(0, 0, 255), thickness=2)
@@ -334,11 +374,19 @@ def parse_staff_image(
 
 
 def parse_staffs(
-    debug: Debug, staffs: list[MultiStaff], image: NDArray, config: Config, selected_staff: int = -1
+    debug: Debug,
+    staffs: list[MultiStaff],
+    image: NDArray,
+    config: Config,
+    selected_staff: int = -1,
+    page_to_input_image: PointMapping = identity,
 ) -> list[list[EncodedSymbol]]:
     """
     Dewarps each staff and then runs it through an algorithm which extracts
     the rhythm and pitch information.
+
+    page_to_input_image maps the coordinates of image back to the image the user provided,
+    it's used to fill EncodedSymbol.image_coordinates.
     """
     staffs = _ensure_same_number_of_staffs(staffs)
     # For simplicity we call every staff in a multi staff a voice,
@@ -355,7 +403,9 @@ def parse_staffs(
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
-            result_staff = parse_staff_image(debug, i, staff, image, regions, config)
+            result_staff = parse_staff_image(
+                debug, i, staff, image, regions, config, page_to_input_image
+            )
             if len(result_staff) == 0:
                 eprint("Skipping empty staff", i)
                 i += 1

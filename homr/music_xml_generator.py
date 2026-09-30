@@ -14,6 +14,7 @@ from homr.transformer.vocabulary import (
     EncodedSymbol,
     SymbolDuration,
     empty,
+    is_lower_position,
     nonote,
     sort_token_chords,
 )
@@ -73,22 +74,15 @@ class SymbolChord:
         return min(notes_rests)
 
     def into_positions(self) -> list["SymbolChord"]:
-        upper = []
-        lower = []
-        lower_is_only_rest = True
+        buckets: dict[str, list[EncodedSymbol]] = defaultdict(list)
         for symbol in self.symbols:
-            if symbol.position == "upper":
-                upper.append(symbol)
-            else:
-                lower.append(symbol)
-                lower_is_only_rest = lower_is_only_rest and symbol.rhythm.startswith("rest")
-        chords = (
-            SymbolChord(upper, self.tuplet_mark),
-            SymbolChord(lower, self.tuplet_mark),
+            buckets[symbol.position].append(symbol)
+        chords = [SymbolChord(symbols, self.tuplet_mark) for symbols in buckets.values()]
+        # Voices of only rests go first, the last chord is the one which advances time.
+        chords.sort(
+            key=lambda chord: all(s.rhythm.startswith("rest") for s in chord.symbols), reverse=True
         )
-        if lower_is_only_rest:
-            chords = (chords[1], chords[0])
-        return [chord for chord in chords if len(chord.symbols) > 0]
+        return chords
 
 
 class XmlGeneratorArguments:
@@ -127,7 +121,7 @@ def xml_to_string(element: ET.Element) -> str:
 
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
     """True if any symbol uses the lower staff (e.g. piano left hand / bass clef)."""
-    return any(s.position == "lower" for s in voice)
+    return any(is_lower_position(s.position) for s in voice)
 
 
 def build_part(
@@ -325,7 +319,7 @@ def build_key(model_key: EncodedSymbol, attributes: ET.Element) -> None:
 
 
 def get_staff(symbol: EncodedSymbol) -> int:
-    return 2 if symbol.position == "lower" else 1
+    return 2 if is_lower_position(symbol.position) else 1
 
 
 def get_xml_voice(staff_num: int, rhythmic_layer: int) -> int:
@@ -728,8 +722,20 @@ def build_note_or_rest(
 
     build_articulations(note, model_note.articulation, tuplet_mark, state)
     build_slurs(note, model_note.slur, slur_number)
+    build_image_position(note, model_note)
 
     return note
+
+
+def build_image_position(xml: ET.Element, symbol: EncodedSymbol) -> None:
+    """
+    Adds the position of the symbol on the input image as comment. The position is estimated
+    from the attention of the transformer, it points roughly at the symbol but isn't precise.
+    """
+    if symbol.image_coordinates is None:
+        return
+    x, y = symbol.image_coordinates
+    xml.append(ET.Comment(f" imgpos: {round(x)}, {round(y)} "))
 
 
 def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> None:
