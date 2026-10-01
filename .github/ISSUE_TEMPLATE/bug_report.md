@@ -22,3 +22,6 @@ The complete error traceback.
 
 **Command You Execute**
 The complete command you executed. Should looks like `homr sheet.png`, including flags you added.
+
+**AI usage**
+If you used an AI to create this issue, please explain how you used it. For example to what extend you verified the AI's output.

@@ -38,11 +38,14 @@ Before you begin, make sure you have a GitHub account and have familiarized your
 - Update the README.md or documentation if your changes require it.
 - Add comments to your code where necessary to explain complex or non-obvious parts of your implementation.
 
+### AI usage
+Please explain how you used AI. For example to what extend you verified the AI's output.
+
 ### Detection Algorithm Changes
 
 If your contribution impacts the detection algorithm, please include examples that showcase the enhancements. 
 This should cover both qualitative examples and, where possible, quantitative metrics to illustrate the improvements. 
-Utilize the [rate_validation_result.py](https://github.com/liebharc/homr/blob/main/validation/rate_validation_result.py) script to generate metrics across multiple images, 
+Utilize the [rate_validation_result.py](https://github.com/liebharc/homr/blob/main/validation/rate_validation_result.py) script or our benchmark (for more details see [Benchmark.md](https://github.com/liebharc/homr/blob/main/Benchmark.md)) to generate metrics across multiple images, 
 provided you have access to corresponding groundtruth MusicXML files.
 
 ### Training Model Updates
