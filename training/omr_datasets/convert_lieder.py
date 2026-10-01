@@ -25,7 +25,11 @@ from training.omr_datasets.musescore_svg import (
     SvgStaff,
     get_position_from_multiple_svg_files,
 )
-from training.omr_datasets.music_xml_parser import Measure, music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import (
+    Measure,
+    music_xml_file_to_tokens,
+    normalize_barlines_and_repeats,
+)
 from training.transformer.training_vocabulary import (
     calc_ratio_of_tuplets,
     token_lines_to_str,
@@ -466,7 +470,7 @@ class MeasureCutter:
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
-        result: list[EncodedSymbol] = []
+        result: list[list[EncodedSymbol]] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
             is_first_measure = i == 0
@@ -496,7 +500,10 @@ class MeasureCutter:
                         has_time = True
                         time = symbol
                 else:
-                    first_measure_before_any_non_key_or_clef = False
+                    # A leading repeat can precede attributes in MusicXML. It
+                    # must not prevent those attributes replacing inherited ones.
+                    if symbol.rhythm != "repeatStart":
+                        first_measure_before_any_non_key_or_clef = False
                     measure_result.append(symbol)
 
             if is_first_measure:
@@ -507,8 +514,8 @@ class MeasureCutter:
                     if j > 0:
                         measure_result.insert(0, EncodedSymbol("chord"))
                     measure_result.insert(0, clef)
-            result.extend(measure_result)
-        return result
+            result.append(measure_result)
+        return normalize_barlines_and_repeats(result)
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:

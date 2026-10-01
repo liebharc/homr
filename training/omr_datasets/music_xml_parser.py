@@ -1,6 +1,25 @@
+"""Convert MusicXML scores into musical symbols for training and evaluation.
+
+music_xml_string_to_tokens() and music_xml_file_to_tokens() return a list of
+parts, each containing a list of Measure objects. A part usually represents
+one instrument or singing role and may contain multiple staves. Each Measure
+contains an ordered list of EncodedSymbol objects and a page-break flag.
+
+TokensMeasure collects symbols and their positions while reading one measure,
+then orders them across staves and supplies its ending barline when needed.
+Even a measure with no emitted symbols retains its ending barline. TokensPart
+collects the finished measures and carries state between them, such as duration
+units and clef changes queued for the next measure.
+
+Repeat signs stay in their source measures during parsing. Callers use
+normalize_barlines_and_repeats() after selecting the measures for one training
+image or a complete part for comparison. It combines signs at shared measure
+boundaries, then returns a flat list of symbols.
+"""
+
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from typing import Iterable, SupportsIndex, TypeVar, overload
+from typing import Iterable, Sequence, SupportsIndex, TypeVar, overload
 
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
@@ -246,6 +265,12 @@ class TokensMeasure:
                 sym.articulation = art
 
     def complete_measure(self) -> Measure:  # noqa: C901
+        """Build a Measure from the collected symbols.
+
+        Order the symbols, combine the staff sequences, and add an ordinary
+        ending barline when needed. Preserve the page-break flag.
+        Empty source measures produce a single barline.
+        """
         self._fill_in_arpeggiate(self.symbols)
         result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
         grouped_symbols: dict[int, list[EncodedSymbolWithPos]] = {}
@@ -268,7 +293,13 @@ class TokensMeasure:
             for symbol_in_group in group_pos:
                 result_staff[self._get_staff_no(symbol_in_group)].append(symbol_in_group)
 
-        result_measure = Measure(merge_upper_and_lower_staff(result_staff))
+        # Staff merging supplies ending barlines for nonempty symbol lists,
+        # but treats any repeat as an ending. An empty measure still needs an
+        # ending barline when it has no symbols or only an opening repeat.
+        merged_symbols = merge_upper_and_lower_staff(result_staff)
+        if not merged_symbols or merged_symbols[-1].rhythm == "repeatStart":
+            merged_symbols.append(EncodedSymbol("barline"))
+        result_measure = Measure(merged_symbols)
         result_measure.new_page = self.new_page
         return result_measure
 
@@ -793,61 +824,33 @@ def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
             if child.tag == "direction":
                 _process_direction(tokens, child)
         tokens.on_end_of_measure()
-    return _cleanup_barlines_and_repeats(tokens.get_measures())
+    return tokens.get_measures()
 
 
-def _cleanup_barlines_and_repeats(measures: list[Measure]) -> list[Measure]:
+def normalize_barlines_and_repeats(
+    measures: Sequence[Sequence[EncodedSymbol]],
+) -> list[EncodedSymbol]:
+    """Combine shared measure boundaries and return a flat transcription.
+
+    Pass consecutive measures from one part, selected for one image or a whole
+    part comparison. Source measures already include their ending barlines.
+    An ending barline and the next measure's opening repeat describe the same
+    boundary: keep the repeat, combining repeatEnd + repeatStart as repeatEndStart.
+
+    Keep symbols within each measure separate, even if no visible notes lie
+    between them. Do not modify the source measures or merge across images.
     """
-    Normalize measure-ending barlines and adjacent repeat symbols.
-    """
-
-    def is_barline_or_repeat(symbol: EncodedSymbol) -> bool:
-        return "barline" in symbol.rhythm or "repeat" in symbol.rhythm
-
-    def is_barline_repeat_or_other(symbol: EncodedSymbol) -> str:
-        if symbol.rhythm.startswith("repeat"):
-            return "repeat"
-        if "barline" in symbol.rhythm:
-            return "barline"
-        return "other"
-
-    def can_merge(a: EncodedSymbol, b: EncodedSymbol) -> bool:
-        a_cat = is_barline_repeat_or_other(a)
-        b_cat = is_barline_repeat_or_other(b)
-        if a_cat == "other" or b_cat == "other":
-            return False
-        if a_cat == "barline" and b_cat == "barline":
-            return False
-        return True
-
-    def merge_barlines_and_repeats(a: EncodedSymbol, b: EncodedSymbol) -> EncodedSymbol:
-        if (a.rhythm == "repeatStart" and b.rhythm == "repeatEnd") or (
-            a.rhythm == "repeatEnd" and b.rhythm == "repeatStart"
-        ):
-            return EncodedSymbol("repeatEndStart")
-        if "repeat" in a.rhythm:
-            return a
-        return b
-
-    last_symbol = EncodedSymbol("")
-    result: list[Measure] = []
-    for measure in measures:
-        measure_result: Measure = Measure()
-        measure_result.new_page = measure.new_page
-        for symbol in measure:
-            if can_merge(symbol, last_symbol):
-                merged = merge_barlines_and_repeats(symbol, last_symbol)
-                if len(measure_result) == 0:
-                    result[-1][-1] = merged
-                else:
-                    measure_result[-1] = merged
-                last_symbol = merged
-            else:
-                measure_result.append(symbol)
-                last_symbol = symbol
-        if len(measure_result) == 0 or not is_barline_or_repeat(measure_result[-1]):
-            measure_result.append(EncodedSymbol("barline"))
-        result.append(measure_result)
+    result: list[EncodedSymbol] = []
+    for index, measure in enumerate(measures):
+        if index > 0 and measures[index - 1] and measure and measure[0].rhythm == "repeatStart":
+            ending = measures[index - 1][-1].rhythm
+            if ending in ("repeatEnd", "repeatEndStart"):
+                result[-1] = EncodedSymbol("repeatEndStart")
+                result.extend(measure[1:])
+                continue
+            if "barline" in ending:
+                result.pop()
+        result.extend(measure)
     return result
 
 
