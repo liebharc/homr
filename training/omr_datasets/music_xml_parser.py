@@ -10,6 +10,7 @@ from homr.transformer.vocabulary import (
     empty,
     has_rhythm_symbol_a_position,
     is_lower_position,
+    DYNAMICS
 )
 from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
@@ -376,6 +377,12 @@ class TokensPart:
         current_measure = self._ensure_current_measure()
         for staff, symbol in resolved:
             current_measure.append_symbol_to_staff(staff, symbol)
+
+    def append_dynamic(self, dynamic: EncodedSymbol, staff: int):
+        self._flush_pending_clefs()
+        current_measure = self._ensure_current_measure()
+        dynamic.position = current_measure._get_staff_position(staff)
+        current_measure.append_symbol_to_staff(staff, dynamic)
 
     def queue_clefs_for_next_measure(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         """
@@ -757,11 +764,31 @@ def _process_print(part: TokensPart, xmlprint: ET.Element) -> None:
         part.mark_new_page()
 
 
-def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
+def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:#
+    # Get the number of the staff the dynamic is on
+    staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
         has_octave_shift = _child(direction_type, "octave-shift") is not None
         if has_octave_shift:
             raise ValueError("Octave shift isn't supported")
+        for dynamics in _children(direction_type, "dynamics"):
+            if dynamics.get("print-object", None) == "no":
+                continue
+            for dyn in dynamics:
+                if dyn.tag in DYNAMICS:
+                    name = dyn.tag
+                elif dyn.tag == "other-dynamics":
+                    name = _text(dyn)
+                else:
+                    continue
+                if name:
+                    if name in DYNAMICS:
+                        part.append_dynamic(
+                            EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
+                        )
+                    else:
+                        with open("not_supported.txt", "a") as f:
+                            f.write(f"{name}\n")
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
