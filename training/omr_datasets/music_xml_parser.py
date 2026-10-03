@@ -772,7 +772,9 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:#
         if has_octave_shift:
             raise ValueError("Octave shift isn't supported")
         for dynamics in _children(direction_type, "dynamics"):
-            if dynamics.get("print-object", None) == "no":
+            print_object = dynamics.get("print-object", None)
+            invisible = print_object == "no"
+            if invisible:
                 continue
             for dyn in dynamics:
                 if dyn.tag in DYNAMICS:
@@ -787,7 +789,7 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:#
                             EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
                         )
                     else:
-                        with open("not_supported.txt", "a") as f:
+                        with open("dynamics_not_supported.txt", "a") as f:
                             f.write(f"{name}\n")
 
 
