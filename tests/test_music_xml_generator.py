@@ -57,6 +57,10 @@ def _slurs(xml: ET.Element) -> list[str]:
     return [s.get("type", "") for s in xml.iter("slur")]
 
 
+def _dynamics(xml: ET.Element) -> list[str]:
+    return [mark.tag for d in xml.iter("dynamics") for mark in d]
+
+
 def _first_measure(xml: ET.Element) -> ET.Element:
     part = xml.find("part")
     assert part is not None
@@ -529,3 +533,40 @@ barline . . . . .""".splitlines())
         comments = [[c.text for c in n if c.tag is ET.Comment] for n in notes]  # type: ignore[comparison-overlap]
         self.assertEqual(comments, [[" imgpos: 45, 231 "], []])
         self.assertIn("<!-- imgpos: 45, 231 -->", ET.tostring(xml, encoding="unicode"))
+
+    def test_dynamics_single_staff(self) -> None:
+        tokens = read_token_lines("""clef_G2 . . . . upper
+note_4 E4 _ _ _ upper
+dynamic_p _ _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        self.assertEqual(_dynamics(xml), ["p"])
+
+    def test_dynamics_take_no_time(self) -> None:
+        tokens = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 E4 _ _ _ upper
+dynamic_p _ _ _ _ upper
+note_4 C4 _ _ _ upper
+note_2 D4 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        by_pitch = {name: onset for _, name, onset in _onsets(xml)}
+        self.assertEqual(by_pitch["C4"], 1.0)
+        self.assertEqual(by_pitch["D4"], 2.0)
+
+    def test_dynamics_in_grand_staff(self) -> None:
+        tokens = read_token_lines("""clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+    keySignature_0 . . . . .
+    timeSignature/4 . . . . .
+    note_2 E4 _ _ _ upper&note_2 C3 _ _ _ lower
+    dynamic_pp _ _ _ _ upper&dynamic_ff _ _ _ _ lower
+    note_2 G4 _ _ _ upper&note_2 G2 _ _ _ lower
+    barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        print(ET.tostring(xml, encoding="unicode"))
+        by_staff = {
+            d.findtext("staff"): [mark.tag for dyn in d.iter("dynamics") for mark in dyn]
+            for d in xml.iter("direction")
+        }
+        self.assertEqual(by_staff, {"1": ["pp"], "2": ["ff"]})

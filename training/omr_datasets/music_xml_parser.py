@@ -5,12 +5,12 @@ from typing import Iterable, SupportsIndex, TypeVar, overload
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    DYNAMICS,
     VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
     has_rhythm_symbol_a_position,
     is_lower_position,
-    DYNAMICS
 )
 from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
@@ -764,7 +764,7 @@ def _process_print(part: TokensPart, xmlprint: ET.Element) -> None:
         part.mark_new_page()
 
 
-def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:#
+def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:  #
     # Get the number of the staff the dynamic is on
     staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
