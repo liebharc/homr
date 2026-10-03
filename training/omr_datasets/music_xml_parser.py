@@ -5,6 +5,7 @@ from typing import Iterable, SupportsIndex, TypeVar, overload
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    DYNAMICS,
     VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
@@ -376,6 +377,12 @@ class TokensPart:
         current_measure = self._ensure_current_measure()
         for staff, symbol in resolved:
             current_measure.append_symbol_to_staff(staff, symbol)
+
+    def append_dynamic(self, dynamic: EncodedSymbol, staff: int) -> None:
+        self._flush_pending_clefs()
+        current_measure = self._ensure_current_measure()
+        dynamic.position = current_measure._get_staff_position(staff)
+        current_measure.append_symbol_to_staff(staff, dynamic)
 
     def queue_clefs_for_next_measure(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         """
@@ -758,10 +765,32 @@ def _process_print(part: TokensPart, xmlprint: ET.Element) -> None:
 
 
 def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
+    # Get the number of the staff the dynamic is on
+    staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
         has_octave_shift = _child(direction_type, "octave-shift") is not None
         if has_octave_shift:
             raise ValueError("Octave shift isn't supported")
+        for dynamics in _children(direction_type, "dynamics"):
+            print_object = dynamics.get("print-object", None)
+            invisible = print_object == "no"
+            if invisible:
+                continue
+            for dyn in dynamics:
+                # Dynamics in musicxml have 2 entries: tag, which is an element (like p, f...)
+                # and other-dynamics which is just text.
+                # For now I'd to only use tag because it'd be harder to use both at the same time:
+                # We could either split them into two tokens or merge them into one which would
+                # result in a lot of classes. Another idea could be to use an unused branch - for
+                # example articulation - and put the other-dynamics text there
+                name = dyn.tag
+                if name in DYNAMICS:
+                    part.append_dynamic(
+                        EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
+                    )
+                else:
+                    with open("dynamics_not_supported.txt", "a") as f:
+                        f.write(f"{name}\n")
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:

@@ -11,6 +11,7 @@ nonote = "."
 empty = "_"  # used for decorations on note, if there is no decoration
 
 VALID_TIME_SIGNATURE_DENOMINATORS = [1, 2, 3, 4, 6, 8, 12, 16, 32, 48]
+DYNAMICS = {"ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp", "sf", "fz", "rf", "sfp"}
 
 
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:
@@ -70,18 +71,7 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend([f"rest_{d}" for d in irregular_durations])
 
     # Dynamics
-    # rhythm.extend(
-    #    [f"dynamic_{d}" for d in ["ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp"]]
-    # )
-    # rhythm.extend(
-    #    [
-    #        "crescendoStart",
-    #        "crescendoEnd",
-    #        "diminuendoStart",
-    #        "diminuendoEnd",
-    #    ]
-    # )
-
+    rhythm.extend([f"dynamic_{d}" for d in DYNAMICS])
     return build_dict(rhythm)
 
 
@@ -194,7 +184,7 @@ def build_pitch() -> dict[str, int]:
 
 
 def has_rhythm_symbol_a_position(rhythm: str) -> bool:
-    return rhythm.startswith(("note", "rest", "clef"))
+    return rhythm.startswith(("note", "rest", "clef", "dynamic"))
 
 
 class Vocabulary:

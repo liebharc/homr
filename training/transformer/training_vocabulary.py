@@ -418,5 +418,3 @@ if __name__ == "__main__":
             errors.add(file)
 
     eprint("Stats", stats)
-    if len(errors) > 0:
-        eprint("errors", errors)

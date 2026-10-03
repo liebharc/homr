@@ -159,6 +159,7 @@ keySignature_1 . . . . .
 timeSignature/4 . . . . .
 note_1 G4 _ _ slurStart_slurStop upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper2&note_4 G3 _ _ slurStop lower
 rest_4 _ _ _ _ lower
+dynamic_pp _ _ _ _ upper
 note_2 E4 _ _ slurStart upper2&note_2 C2 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
