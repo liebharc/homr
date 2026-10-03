@@ -11,23 +11,7 @@ nonote = "."
 empty = "_"  # used for decorations on note, if there is no decoration
 
 VALID_TIME_SIGNATURE_DENOMINATORS = [1, 2, 3, 4, 6, 8, 12, 16, 32, 48]
-DYNAMICS = {
-    "ppp",
-    "pp",
-    "p",
-    "mp",
-    "mf",
-    "f",
-    "ff",
-    "fff",
-    "sfz",
-    "fp",
-    "più",
-    "sempre",
-    "dolce",
-    "poco",
-    "espress.",
-}
+DYNAMICS = {"ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "sfz", "fp", "sf", "fz", "rf", "sfp"}
 
 
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:

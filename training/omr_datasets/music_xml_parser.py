@@ -378,7 +378,7 @@ class TokensPart:
         for staff, symbol in resolved:
             current_measure.append_symbol_to_staff(staff, symbol)
 
-    def append_dynamic(self, dynamic: EncodedSymbol, staff: int):
+    def append_dynamic(self, dynamic: EncodedSymbol, staff: int) -> None:
         self._flush_pending_clefs()
         current_measure = self._ensure_current_measure()
         dynamic.position = current_measure._get_staff_position(staff)
@@ -764,7 +764,7 @@ def _process_print(part: TokensPart, xmlprint: ET.Element) -> None:
         part.mark_new_page()
 
 
-def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:  #
+def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
     # Get the number of the staff the dynamic is on
     staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
@@ -777,20 +777,20 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:  #
             if invisible:
                 continue
             for dyn in dynamics:
-                if dyn.tag in DYNAMICS:
-                    name = dyn.tag
-                elif dyn.tag == "other-dynamics":
-                    name = _text(dyn)
+                # Dynamics in musicxml have 2 entries: tag, which is an element (like p, f...)
+                # and other-dynamics which is just text.
+                # For now I'd to only use tag because it'd be harder to use both at the same time:
+                # We could either split them into two tokens or merge them into one which would
+                # result in a lot of classes. Another idea could be to use an unused branch - for
+                # example articulation - and put the other-dynamics text there
+                name = dyn.tag
+                if name in DYNAMICS:
+                    part.append_dynamic(
+                        EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
+                    )
                 else:
-                    continue
-                if name:
-                    if name in DYNAMICS:
-                        part.append_dynamic(
-                            EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
-                        )
-                    else:
-                        with open("dynamics_not_supported.txt", "a") as f:
-                            f.write(f"{name}\n")
+                    with open("dynamics_not_supported.txt", "a") as f:
+                        f.write(f"{name}\n")
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:

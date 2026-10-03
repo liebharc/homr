@@ -564,7 +564,6 @@ barline . . . . .""".splitlines())
     note_2 G4 _ _ _ upper&note_2 G2 _ _ _ lower
     barline . . . . .""".splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
-        print(ET.tostring(xml, encoding="unicode"))
         by_staff = {
             d.findtext("staff"): [mark.tag for dyn in d.iter("dynamics") for mark in dyn]
             for d in xml.iter("direction")
