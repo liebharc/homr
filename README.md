@@ -52,6 +52,10 @@ in the output, the overall structure remains accurate.
 The homr result is obtained by processing the [homr output](figures/tabi.musicxml) and rendering it
 with [musescore](https://musescore.com/).
 
+## Preprocessing
+
+Depending on the input, preprocessing the image can improve the results. A common step is to remove the background from scanned images.
+
 ## Limitations
 
 The current implementation focuses on pitch and rhythm information on the bass or treble clef, neglecting dynamics,
