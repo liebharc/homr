@@ -781,43 +781,21 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
             modifier = "_".join(
                 _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
             )
-            all_tags = {child.tag for child in dynamics}
-            if len(all_tags) > 2:
-                with open("multi_dynamics.txt", "a") as f:
-                    f.write(f"{all_tags}\n")
-
-            merge = True if all_tags & DYNAMICS else False
+            modifier_symbol = f"dynamic_{modifier}" if modifier in DYNAMICS_MODIFIER else empty
+            has_normal_tag = any(child.tag in DYNAMICS for child in dynamics)
 
             for dyn in dynamics:
                 name = dyn.tag
                 if name in DYNAMICS:
-                    if modifier in DYNAMICS_MODIFIER:
-                        part.append_dynamic(
-                            EncodedSymbol(
-                                f"dynamic_{name}", empty, empty, f"dynamic_{modifier}", empty
-                            ),
-                            staff,
-                        )
-                    else:
-                        if modifier != "":
-                            with open("dynamics_modifier.txt", "a") as f:
-                                f.write(f"{modifier}\n")
-                        part.append_dynamic(
-                            EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
-                        )
-                elif not merge:
-                    if modifier in DYNAMICS_MODIFIER:
-                        part.append_dynamic(
-                            EncodedSymbol(empty, empty, empty, f"dynamic_{modifier}", empty),
-                            staff,
-                        )
-                    else:
-                        if modifier != "":
-                            with open("dynamics_modifier.txt", "a") as f:
-                                f.write(f"{modifier}\n")
-
-                    with open("dynamics_tag.txt", "a") as f:
-                        f.write(f"{dyn.tag}\n")
+                    part.append_dynamic(
+                        EncodedSymbol(f"dynamic_{name}", empty, empty, modifier_symbol, empty),
+                        staff,
+                    )
+                elif not has_normal_tag and modifier in DYNAMICS_MODIFIER:
+                    part.append_dynamic(
+                        EncodedSymbol(empty, empty, empty, modifier_symbol, empty),
+                        staff,
+                    )
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:

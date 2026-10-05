@@ -725,9 +725,7 @@ barline . . . . ."""
         return recurse(xml)
 
     def test_dynamics_with_other_dynamics_text(self) -> None:
-        """A <dynamics> element containing <other-dynamics> text (e.g. "più")
-        followed by a regular dynamic like <p/> is parsed as that regular dynamic.
-        The free text is not part of the token vocabulary and gets dropped."""
+        """Single staff with a p and piu at the same time"""
         self.maxDiff = None
         example = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -775,9 +773,11 @@ barline . . . . ."""
         self.assertEqual(token_str, expected)
 
     def test_grandstaff_and_only_piu(self) -> None:
-        """On a grand staff, the upper staff has a regular dynamic (ff) and the lower
-        staff has a <dynamics> element with only <other-dynamics>più</other-dynamics>
-        and no regular dynamic tag like <p/>."""
+        """
+        On a grand staff, the upper staff has two dynamics (pp and f) with an invalid
+        other-dynamics text. The lower staff has a <dynamics> element with only
+        <other-dynamics>più</other-dynamics> and no regular dynamic tag like <p/>.
+        """
         self.maxDiff = None
         example = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">

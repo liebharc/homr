@@ -30,7 +30,17 @@ DYNAMICS = {
     "rfz",
     "sfp",
 }
-DYNAMICS_MODIFIER = {"più", "dolce", "poco", "espress.", "subito", "atempo", "leggiero", "pocopiù"}
+DYNAMICS_MODIFIER = {
+    "più",
+    "dolce",
+    "poco",
+    "espress.",
+    "subito",
+    "atempo",
+    "leggiero",
+    "pocopiù",
+    "sempre",
+}
 
 
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:
