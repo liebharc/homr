@@ -777,11 +777,9 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
             invisible = print_object == "no"
             if invisible:
                 continue
-            
+
             modifier = "_".join(
-                _text(child).replace(" ", "")
-                for child in dynamics
-                if child.tag == "other-dynamics"
+                _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
             )
             all_tags = {child.tag for child in dynamics}
             if len(all_tags) > 2:
@@ -794,7 +792,12 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
                 name = dyn.tag
                 if name in DYNAMICS:
                     if modifier in DYNAMICS_MODIFIER:
-                        part.append_dynamic(EncodedSymbol(f"dynamic_{name}", empty, empty, f"dynamic_{modifier}", empty), staff)
+                        part.append_dynamic(
+                            EncodedSymbol(
+                                f"dynamic_{name}", empty, empty, f"dynamic_{modifier}", empty
+                            ),
+                            staff,
+                        )
                     else:
                         if modifier != "":
                             with open("dynamics_modifier.txt", "a") as f:

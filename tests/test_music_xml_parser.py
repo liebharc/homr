@@ -797,7 +797,12 @@ barline . . . . ."""
       </note>
       <direction placement="below">
         <direction-type>
-          <dynamics><ff/></dynamics>
+          <dynamics default-x="-55.37" default-y="28.85" relative-x="50" relative-y="10">
+            <other-dynamics>1st time </other-dynamics>
+            <f/>
+            <other-dynamics>, 2nd </other-dynamics>
+            <pp/>
+            </dynamics>
         </direction-type>
         <staff>1</staff>
       </direction>
@@ -831,7 +836,7 @@ barline . . . . ."""
 keySignature_0 . . . . .
 timeSignature/4 . . . . .
 note_2 C5 _ _ _ upper&note_2 C3 _ _ _ lower
-dynamic_ff _ _ _ _ upper&_ _ _ dynamic_più _ lower
+dynamic_pp _ _ _ _ upper&dynamic_f _ _ _ _ upper&_ _ _ dynamic_più _ lower
 note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
