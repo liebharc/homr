@@ -6,6 +6,7 @@ from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
     DYNAMICS,
+    DYNAMICS_MODIFIER,
     VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
@@ -776,21 +777,44 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
             invisible = print_object == "no"
             if invisible:
                 continue
+            
+            modifier = "_".join(
+                _text(child).replace(" ", "")
+                for child in dynamics
+                if child.tag == "other-dynamics"
+            )
+            all_tags = {child.tag for child in dynamics}
+            if len(all_tags) > 2:
+                with open("multi_dynamics.txt", "a") as f:
+                    f.write(f"{all_tags}\n")
+
+            merge = True if all_tags & DYNAMICS else False
+
             for dyn in dynamics:
-                # Dynamics in musicxml have 2 entries: tag, which is an element (like p, f...)
-                # and other-dynamics which is just text.
-                # For now I'd to only use tag because it'd be harder to use both at the same time:
-                # We could either split them into two tokens or merge them into one which would
-                # result in a lot of classes. Another idea could be to use an unused branch - for
-                # example articulation - and put the other-dynamics text there
                 name = dyn.tag
                 if name in DYNAMICS:
-                    part.append_dynamic(
-                        EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
-                    )
-                else:
-                    with open("dynamics_not_supported.txt", "a") as f:
-                        f.write(f"{name}\n")
+                    if modifier in DYNAMICS_MODIFIER:
+                        part.append_dynamic(EncodedSymbol(f"dynamic_{name}", empty, empty, f"dynamic_{modifier}", empty), staff)
+                    else:
+                        if modifier != "":
+                            with open("dynamics_modifier.txt", "a") as f:
+                                f.write(f"{modifier}\n")
+                        part.append_dynamic(
+                            EncodedSymbol(f"dynamic_{name}", empty, empty, empty, empty), staff
+                        )
+                elif not merge:
+                    if modifier in DYNAMICS_MODIFIER:
+                        part.append_dynamic(
+                            EncodedSymbol(empty, empty, empty, f"dynamic_{modifier}", empty),
+                            staff,
+                        )
+                    else:
+                        if modifier != "":
+                            with open("dynamics_modifier.txt", "a") as f:
+                                f.write(f"{modifier}\n")
+
+                    with open("dynamics_tag.txt", "a") as f:
+                        f.write(f"{dyn.tag}\n")
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
