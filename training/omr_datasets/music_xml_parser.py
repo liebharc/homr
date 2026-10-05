@@ -280,15 +280,16 @@ class TupletState:
         self.last_stop_position = -1
 
     def get_tuplet_factor(self, note: ET.Element, position: int) -> float:
+        # A tuplet counts whether or not its number is printed: many editions only print the
+        # "3" on the first groups. Notes with a <time-modification> outside of a <tuplet>
+        # (e.g. a two-note tremolo) keep their written length.
         notations = _children(note, "notations")
         was_started = self.started or self.last_stop_position == position
         if len(notations) > 0:
             tuplets = _children(notations[0], "tuplet")
-            print_object = notations[0].get("print-object", None)
             for t in tuplets:
                 t_type = t.get("type", None)
-                show_number = t.get("show-number", None)
-                if t_type == "start" and show_number != "none" and print_object != "no":
+                if t_type == "start":
                     self.started = True
                 if t_type == "stop":
                     self.started = False

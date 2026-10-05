@@ -722,3 +722,80 @@ barline . . . . ."""
                 return f"{name}()"
 
         return recurse(xml)
+
+    def _rhythms_per_measure(self, measures_xml: str) -> list[list[str]]:
+        attributes = (
+            "<attributes><divisions>6</divisions><key><fifths>0</fifths></key>"
+            "<time><beats>2</beats><beat-type>4</beat-type></time>"
+            "<clef><sign>G</sign><line>2</line></clef></attributes>"
+        )
+        xml = (
+            '<?xml version="1.0"?><score-partwise version="4.0"><part-list><score-part id="P1">'
+            f'<part-name/></score-part></part-list><part id="P1">{measures_xml.replace("ATTRIBUTES", attributes, 1)}'
+            "</part></score-partwise>"
+        )
+        return [
+            [str(s).split(" ")[0] for s in measure if str(s).startswith("note")]
+            for measure in music_xml_string_to_tokens(xml)[0]
+        ]
+
+    @staticmethod
+    def _note(step: str, duration: int, kind: str, extra: str = "") -> str:
+        return (
+            f"<note><pitch><step>{step}</step><octave>5</octave></pitch>"
+            f"<duration>{duration}</duration><type>{kind}</type>{extra}</note>"
+        )
+
+    def _triplet_measure(self, number: int, start: str, notations: str = "<notations>") -> str:
+        triplet = "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>"
+        quarter = self._note("G", 6, "quarter")
+        return (
+            f'<measure number="{number}">{"ATTRIBUTES" if number == 1 else ""}'
+            + self._note("C", 2, "eighth", f"{triplet}{notations}{start}</notations>")
+            + self._note("D", 2, "eighth", triplet)
+            + self._note("E", 2, "eighth", f'{triplet}{notations}<tuplet type="stop"/></notations>')
+            + f"{quarter}</measure>"
+        )
+
+    def test_triplets_count_whether_or_not_the_number_is_printed(self) -> None:
+        """Many editions print the "3" only on the first groups; the rhythm is a triplet either way."""
+        measures = (
+            self._triplet_measure(1, '<tuplet type="start"/>')
+            + self._triplet_measure(2, '<tuplet type="start" show-number="none" bracket="no"/>')
+            + self._triplet_measure(3, '<tuplet type="start"/>', '<notations print-object="no">')
+            + '<measure number="4">'
+            + self._note("C", 3, "eighth")
+            + self._note("D", 3, "eighth")
+            + self._note("G", 6, "quarter")
+            + "</measure>"
+        )
+        self.assertEqual(
+            self._rhythms_per_measure(measures),
+            [
+                ["note_12", "note_12", "note_12", "note_4"],  # "3" shown
+                ["note_12", "note_12", "note_12", "note_4"],  # show-number="none"
+                ["note_12", "note_12", "note_12", "note_4"],  # notations print-object="no"
+                ["note_8", "note_8", "note_4"],  # plain eighths
+            ],
+        )
+
+    def test_tremolo_keeps_its_written_length(self) -> None:
+        """A two-note tremolo has a <time-modification> but is not a tuplet (Lieder, Élégie)."""
+        half = "<time-modification><actual-notes>2</actual-notes><normal-notes>1</normal-notes></time-modification>"
+        measure = (
+            '<measure number="1">ATTRIBUTES'
+            + self._note(
+                "G",
+                6,
+                "half",
+                f'{half}<notations><ornaments><tremolo type="start">4</tremolo></ornaments></notations>',
+            )
+            + self._note(
+                "E",
+                6,
+                "half",
+                f'{half}<notations><ornaments><tremolo type="stop">4</tremolo></ornaments></notations>',
+            )
+            + "</measure>"
+        )
+        self.assertEqual(self._rhythms_per_measure(measure), [["note_2", "note_2"]])
