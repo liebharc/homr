@@ -136,6 +136,7 @@ class TokensMeasure:
     def __init__(self) -> None:
         self.symbols: list[EncodedSymbolWithPos] = []
         self.main_voice: dict[int, int] = {}  # map staff id to its main voice id
+        self.graces_at: dict[tuple[int, int], int] = {}  # (staff, position) -> grace notes so far
         self.current_position = 0
         self.new_page = False
 
@@ -195,13 +196,28 @@ class TokensMeasure:
             previous_symbol = self.symbols[-1]
             if not invisible:
                 self.symbols.append(
-                    EncodedSymbolWithPos(previous_symbol.position, symbol, insert_before=is_grace)
+                    EncodedSymbolWithPos(
+                        previous_symbol.position,
+                        symbol,
+                        insert_before=is_grace,
+                        grace_index=previous_symbol.grace_index,
+                    )
                 )
             self.current_position = previous_symbol.position + duration
         else:
+            grace_index = 0
+            if is_grace:
+                key = (staff, self.current_position)
+                grace_index = self.graces_at.get(key, 0)
+                self.graces_at[key] = grace_index + 1
             if not invisible:
                 self.symbols.append(
-                    EncodedSymbolWithPos(self.current_position, symbol, insert_before=is_grace)
+                    EncodedSymbolWithPos(
+                        self.current_position,
+                        symbol,
+                        insert_before=is_grace,
+                        grace_index=grace_index,
+                    )
                 )
             self.current_position += duration
 
@@ -221,15 +237,16 @@ class TokensMeasure:
         as it would affect all notes in a chord, even if the MusicXML doesn't
         reflect that.
         """
-        arpegiatted_positions = set()
+        arpegiatted_positions: set[tuple[tuple[int, int], str]] = set()
         for entry in symbols_with_pos:
-            pos, sym = entry.position, entry.symbol
+            # `pos` is the place in the measure (grace notes come before the chord at the same
+            # position), `sym.position` is the upper/lower staff.
+            pos, sym = entry.sort_order(), entry.symbol
             if "arpeggiate" in sym.articulation:
-                # `pos` is the position in the measure, `sym.position` is the upper/lower staff.
                 arpegiatted_positions.add((pos, sym.position))
 
         for entry in symbols_with_pos:
-            pos, sym = entry.position, entry.symbol
+            pos, sym = entry.sort_order(), entry.symbol
             if (
                 (pos, sym.position) in arpegiatted_positions
                 and "arpeggiate" not in sym.articulation
@@ -248,7 +265,7 @@ class TokensMeasure:
     def complete_measure(self) -> Measure:  # noqa: C901
         self._fill_in_arpeggiate(self.symbols)
         result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
-        grouped_symbols: dict[int, list[EncodedSymbolWithPos]] = {}
+        grouped_symbols: dict[tuple[int, int], list[EncodedSymbolWithPos]] = {}
         for symbol in self.symbols:
             sort_order = symbol.sort_order()
             if sort_order not in grouped_symbols:
@@ -702,7 +719,9 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
         sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur)
 
-        part.append_note(staff, voice, is_chord, max(duration, 1), invisible, sym)
+        # Grace notes have no duration and take no time
+        duration = 0 if is_grace else max(duration, 1)
+        part.append_note(staff, voice, is_chord, duration, invisible, sym)
 
 
 def _process_backup(part: TokensPart, backup: ET.Element) -> None:
