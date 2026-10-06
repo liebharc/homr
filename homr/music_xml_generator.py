@@ -243,10 +243,9 @@ def build_measures(
             barline = build_or_get_barline(current_measure, "right")
             build_barline_ending(symbol, barline, volta_number)
 
-        elif rhythm.startswith("dynamic"):
+        elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
             for dynamic in group.symbols:
-                if dynamic.rhythm.startswith("dynamic"):
-                    build_dynamic(dynamic, current_measure)
+                build_dynamic(dynamic, current_measure)
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
@@ -345,7 +344,12 @@ def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
     direction = ET.SubElement(measure, "direction", placement="below")
     direction_type = ET.SubElement(direction, "direction-type")
     dynamics = ET.SubElement(direction_type, "dynamics")
-    ET.SubElement(dynamics, model_dynamic.rhythm.split("_")[1])
+    if model_dynamic.rhythm.startswith("dynamic"):
+        ET.SubElement(dynamics, model_dynamic.rhythm.split("_")[1])
+    if model_dynamic.articulation.startswith("dynamic"):
+        text = ET.SubElement(dynamics, "other-dynamics")
+        text.text = model_dynamic.articulation.split("_")[1]
+
     ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
 
 

@@ -546,26 +546,54 @@ barline . . . . .""".splitlines())
         tokens = read_token_lines("""clef_G2 . . . . upper
 timeSignature/4 . . . . .
 note_4 E4 _ _ _ upper
-dynamic_p _ _ _ _ upper
+dynamic_ff _ _ dynamic_sempre _ upper
 note_4 C4 _ _ _ upper
 note_2 D4 _ _ _ upper
 barline . . . . .""".splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
         by_pitch = {name: onset for _, name, onset in _onsets(xml)}
         self.assertEqual(by_pitch["C4"], 1.0)
         self.assertEqual(by_pitch["D4"], 2.0)
 
+        self.assertIn("ff", _dynamics(xml))
+
+        other_dynamics = [
+            (od.text or "").strip()
+            for dyn in xml.iter("dynamics")
+            for od in dyn.findall("other-dynamics")
+        ]
+        self.assertIn("sempre", other_dynamics)
+
     def test_dynamics_in_grand_staff(self) -> None:
         tokens = read_token_lines("""clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
-    keySignature_0 . . . . .
-    timeSignature/4 . . . . .
-    note_2 E4 _ _ _ upper&note_2 C3 _ _ _ lower
-    dynamic_pp _ _ _ _ upper&dynamic_ff _ _ _ _ lower
-    note_2 G4 _ _ _ upper&note_2 G2 _ _ _ lower
-    barline . . . . .""".splitlines())
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2 E4 _ _ _ upper&note_2 C3 _ _ _ lower
+dynamic_pp _ _ _ _ upper&dynamic_ff _ _ _ _ lower
+note_2 G4 _ _ _ upper&note_2 G2 _ _ _ lower
+barline . . . . .""".splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
         by_staff = {
             d.findtext("staff"): [mark.tag for dyn in d.iter("dynamics") for mark in dyn]
             for d in xml.iter("direction")
         }
         self.assertEqual(by_staff, {"1": ["pp"], "2": ["ff"]})
+
+    def test_other_dynamics(self) -> None:
+        tokens = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 E4 _ _ _ upper
+dynamic_ff _ _ dynamic_sempre _ upper
+note_4 C4 _ _ _ upper
+_ _ _ dynamic_poco _ upper
+note_2 D4 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        other_dynamics = [
+            (od.text or "").strip()
+            for dyn in xml.iter("dynamics")
+            for od in dyn.findall("other-dynamics")
+        ]
+        self.assertIn("sempre", other_dynamics)
+        self.assertIn("poco", other_dynamics)
