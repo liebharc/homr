@@ -154,7 +154,7 @@ def build_measures(
         clock, sounding = Fraction(0), []
 
     measure_number = 1
-    groups = add_tuplet_start_stop(group_into_chords(voice))
+    groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
     division, nominator = find_division_and_time_signature_nominator(groups)
     state = ConversionState(division, nominator)
     measures: list[ET.Element] = []
@@ -900,6 +900,55 @@ def find_division_and_time_signature_nominator(voice: list[SymbolChord]) -> tupl
     nominator: Fraction = np.median(measure_duration)  # type: ignore
 
     return find_common_division(durations), nominator
+
+
+_BEFORE_NOTES_ORDER = ["clef", "keySignature", "timeSignature"]
+
+
+def _split_mixed_chord(symbols: list[EncodedSymbol]) -> list[list[EncodedSymbol]]:
+    """
+    The transformer sometimes joins a clef, key, time signature or barline to a chord
+    of notes, e.g. a clef change in one staff on the beat where the other staff plays.
+    build_measures handles a group by its first symbol: if that is a note the extra
+    symbol becomes a zero-length rest (and fails an assertion), otherwise the notes
+    are dropped. Split it: clefs, keys and time signatures go before the notes (in
+    the order they have at the start of a line), barlines and repeats after them.
+    """
+    notes = [s for s in symbols if s.rhythm.startswith(("note", "rest"))]
+    if not notes or len(notes) == len(symbols):
+        return [symbols]
+    others = [s for s in symbols if not s.rhythm.startswith(("note", "rest"))]
+    after = [s for s in others if "barline" in s.rhythm or "repeat" in s.rhythm]
+    before: dict[str, list[EncodedSymbol]] = defaultdict(list)
+    for s in others:
+        if s not in after:
+            before[s.rhythm.split("_")[0].split("/")[0]].append(s)
+    rank = {kind: i for i, kind in enumerate(_BEFORE_NOTES_ORDER)}
+    ordered = sorted(before, key=lambda kind: rank.get(kind, len(rank)))
+    return [*(before[kind] for kind in ordered), notes, *([s] for s in after)]
+
+
+def split_mixed_chords(groups: list[SymbolChord]) -> list[SymbolChord]:
+    """
+    Applies _split_mixed_chord to every group. Runs after the tuplet marks are set, so
+    the notes keep their mark and a split-off clef doesn't interrupt a tuplet.
+    """
+    result: list[SymbolChord] = []
+    split_barline = False
+    for group in groups:
+        parts = _split_mixed_chord(group.symbols)
+        if split_barline and group.is_barline() and len(parts) == 1:
+            # The barline split off the previous chord and this one are the same barline:
+            # keep one, preferring a repeat or double barline over a plain barline.
+            if group.symbols[0].rhythm == "barline" and result[-1].symbols[0].rhythm != "barline":
+                split_barline = False
+                continue
+            result.pop()
+        for part in parts:
+            is_notes = part[0].rhythm.startswith(("note", "rest"))
+            result.append(SymbolChord(part, group.tuplet_mark if is_notes else ""))
+        split_barline = len(parts) > 1 and result[-1].is_barline()
+    return result
 
 
 def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolChord]:

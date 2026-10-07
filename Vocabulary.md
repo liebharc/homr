@@ -6,7 +6,7 @@ The vocabulary is closely linked to how the transformer operates. Symbols are di
 2. **Pitch**: represents absolute pitches (C0–B9).
 3. **Lift**: represents accidentals (sharp, flat, natural, etc.).
 4. **Articulation**: represents articulation markings (staccato, accent, trill, etc.).
-5. **Position**: represents staff position for notes, rests, and clefs (upper or lower staff).
+5. **Position**: represents staff position for notes, rests, and clefs (upper or lower staff), see [Positions and voices](#positions-and-voices).
 
 The vocabulary follows these rules:
 
@@ -26,6 +26,15 @@ The vocabulary follows these rules:
 7. Multiple articulations may appear together, e.g. `note_4 D5 # accent_arpeggiate_tenuto`. Not all combinations are supported, since the transformer can only generate symbols it encountered during training. Refer to the vocabulary for the full list.
 
 The complete vocabulary is defined in `homr/transformer/vocabulary.py`.
+
+## Positions and voices
+
+The position branch can be `upper`, `upper2`, `lower` or `lower2`:
+
+- `upper` and `lower` refer to the upper and lower staff of a grand staff. A single staff always uses `upper`.
+- The `2` suffix marks a second voice on the same staff. Stem direction tells the voices apart: notes with stems up get `upper`/`lower`, notes with stems down get `upper2`/`lower2`.
+
+This was introduced in [#156](https://github.com/liebharc/homr/pull/156).
 
 ## Full example
 
