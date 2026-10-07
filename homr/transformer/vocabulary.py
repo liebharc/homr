@@ -194,6 +194,7 @@ def build_articulation() -> dict[str, int]:
     ]
 
     articulation.extend(articulations_lieder)
+    articulation.extend([f"dynamic_{d}" for d in DYNAMICS_MODIFIER])
 
     return build_dict(articulation)
 
