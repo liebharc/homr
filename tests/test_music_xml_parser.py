@@ -836,7 +836,7 @@ barline . . . . ."""
 keySignature_0 . . . . .
 timeSignature/4 . . . . .
 note_2 C5 _ _ _ upper&note_2 C3 _ _ _ lower
-dynamic_pp _ _ _ _ upper&dynamic_f _ _ _ _ upper&_ _ _ dynamic_più _ lower
+dynamic_pp _ _ _ _ upper&dynamic_f _ _ _ _ upper&dynamic_empty _ _ dynamic_più _ lower
 note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)

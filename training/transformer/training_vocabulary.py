@@ -82,6 +82,14 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
 
     annotation_resorted: list[EncodedSymbol] = []
     for symbol in sorted_chord:
+        # Dynamic modifiers live in the articulation branch of a dynamic symbol,
+        # but belong to that dynamic rather than to the notes at the same position.
+        # Keep them attached so they cannot be moved onto a control symbol such as
+        # voltaStart when annotations are consolidated below.
+        if symbol.rhythm.startswith("dynamic"):
+            annotation_resorted.append(symbol)
+            continue
+
         artic_stripped, symbol_stripped = symbol.strip_articulations([], remove_all=True)
         slur_stripped, symbol_stripped = symbol_stripped.strip_slurs([], remove_all=True)
         for articulation in artic_stripped:
@@ -112,7 +120,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (
                 idx
                 for idx, s in enumerate(annotation_resorted)
-                if is_upper_or_has_no_position(s.position)
+                if s.rhythm.startswith(("note", "rest"))
+                and is_upper_or_has_no_position(s.position)
             ),
             None,
         )
@@ -122,7 +131,11 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             )
     if len(lower_slurs) > 0:
         first_lower = next(
-            (idx for idx, s in enumerate(annotation_resorted) if is_lower_position(s.position)),
+            (
+                idx
+                for idx, s in enumerate(annotation_resorted)
+                if s.rhythm.startswith(("note", "rest")) and is_lower_position(s.position)
+            ),
             None,
         )
         if first_lower is not None:
@@ -135,7 +148,8 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (
                 idx
                 for idx, s in enumerate(annotation_resorted)
-                if is_upper_or_has_no_position(s.position)
+                if s.rhythm.startswith(("note", "rest"))
+                and is_upper_or_has_no_position(s.position)
             ),
             None,
         )
@@ -145,7 +159,11 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             )
     if len(lower_artics) > 0:
         first_lower = next(
-            (idx for idx, s in enumerate(annotation_resorted) if is_lower_position(s.position)),
+            (
+                idx
+                for idx, s in enumerate(annotation_resorted)
+                if s.rhythm.startswith(("note", "rest")) and is_lower_position(s.position)
+            ),
             None,
         )
         if first_lower is not None:

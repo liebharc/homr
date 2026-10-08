@@ -782,20 +782,22 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
                 _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
             ).replace(".", "")
             modifier_symbol = f"dynamic_{modifier}" if modifier in DYNAMICS_MODIFIER else empty
+            
+            # Check if it has a tag like p or ff
             has_normal_tag = any(child.tag in DYNAMICS for child in dynamics)
 
             for dyn in dynamics:
-                name = dyn.tag
-                if name in DYNAMICS:
-                    part.append_dynamic(
-                        EncodedSymbol(f"dynamic_{name}", empty, empty, modifier_symbol, empty),
-                        staff,
-                    )
+                if dyn.tag in DYNAMICS:
+                    name = f"dynamic_{dyn.tag}"
+
                 elif not has_normal_tag and modifier in DYNAMICS_MODIFIER:
-                    part.append_dynamic(
-                        EncodedSymbol(empty, empty, empty, modifier_symbol, empty),
-                        staff,
-                    )
+                    name = f"dynamic_empty"
+                else: 
+                    continue
+                part.append_dynamic(
+                    EncodedSymbol(name, empty, empty, modifier_symbol, empty),
+                    staff,
+                )
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:

@@ -29,6 +29,7 @@ DYNAMICS = {
     "rf",
     "rfz",
     "sfp",
+    "empty"
 }
 DYNAMICS_MODIFIER = {
     "più",
@@ -101,7 +102,6 @@ def build_rhythm() -> dict[str, int]:
 
     # Dynamics
     rhythm.extend([f"dynamic_{d}" for d in DYNAMICS])
-    rhythm.extend(empty)
 
     return build_dict(rhythm)
 
