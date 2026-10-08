@@ -188,7 +188,12 @@ def build_measures(
                     for note_xml in build_note_chord(staff_pos, state, chord_duration):
                         current_measure.append(note_xml)
             continue
-        if rhythm == "newline":
+        if rhythm == "measureRest":
+            for staff_no, rest in enumerate(sorted(group.symbols, key=get_staff)):
+                if staff_no > 0:
+                    current_measure.append(build_backup(state.nominator, state))
+                current_measure.append(build_measure_rest(rest, state))
+        elif rhythm == "newline":
             is_last_measure = group_no == len(groups) - 1
             if not is_last_measure:
                 ET.SubElement(current_measure, "print", attrib={"new-system": "yes"})
@@ -768,6 +773,17 @@ def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> N
     duration = int(symbol.rhythm.split("_")[1].replace("m", ""))
     style = ET.SubElement(attributes, "measure-style")
     ET.SubElement(style, "multiple-rest").text = str(duration)
+
+
+def build_measure_rest(symbol: EncodedSymbol, state: ConversionState) -> ET.Element:
+    """A rest which fills the measure, e.g. in a staff which is hidden in a system."""
+    note = ET.Element("note")
+    ET.SubElement(note, "rest", measure="yes")
+    duration = max(1, int(state.nominator * state.division))
+    ET.SubElement(note, "duration").text = str(duration)
+    ET.SubElement(note, "voice").text = "1"
+    ET.SubElement(note, "staff").text = str(get_staff(symbol))
+    return note
 
 
 def build_backup(duration: Fraction, state: ConversionState) -> ET.Element:

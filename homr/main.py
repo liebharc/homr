@@ -43,6 +43,7 @@ from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
+from homr.system_repair import repair_systems
 from homr.title_detection import detect_title, download_ocr_weights
 from homr.transformer.configs import Config, default_config, root_dir
 from homr.type_definitions import NDArray
@@ -212,6 +213,7 @@ def process_image(
                 image_path, config
             )
         debug_cleanup = debug
+        multi_staffs = repair_systems(debug, multi_staffs)
 
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.transformer_use_gpu

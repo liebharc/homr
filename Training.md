@@ -82,9 +82,9 @@ Implementation: `rate_validation_result.py`
 Commit: 597144cab54c8f6d0f6c9619df5c5312694eadd6
 Day: 26 September 2026
 Transformer Smoke Test: 5%
-System Level: Total: 5.1 diffs, SER: 4.0%
-Polish scores: 17.52%
-SMB scores: 13.84%
+System Level: Total: 5.1 diffs, SER: 4.0% | 4.7 diffs, SER: 3.4% after staff detection improvements
+Polish scores: 17.52% | 17.57% after staff detection improvements
+SMB scores: 13.84% | 13.60% after staff detection improvements
 
 Parse multiple voices per staff. For more details see PR 156.
 

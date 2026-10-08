@@ -236,6 +236,46 @@ def remove_duplicate_staffs(staffs: list[RawStaff]) -> list[RawStaff]:
     return result
 
 
+def _continues(left: RawStaff, right: RawStaff) -> bool:
+    """
+    True if right continues left in the same row: a short gap and the lines line up.
+    One line may be off, the line tracking sometimes jumps to a neighboring line.
+    """
+    anchors = left.anchors + right.anchors
+    unit_size = float(np.mean([anchor.average_unit_size for anchor in anchors]))
+    gap = right.min_x - left.max_x
+    max_gap_in_unit_sizes = 15
+    if unit_size <= 0 or gap < 0 or gap > max_gap_in_unit_sizes * unit_size:
+        return False
+    lines_which_line_up = 0
+    for left_line, right_line in zip(left.lines, right.lines, strict=True):
+        left_end = left_line.staff_fragments[-1]
+        right_start = right_line.staff_fragments[0]
+        left_y = left_end.get_center_extrapolated(left_line.max_x)
+        right_y = right_start.get_center_extrapolated(right_line.min_x)
+        if abs(left_y - right_y) <= unit_size / 2:
+            lines_which_line_up += 1
+    return lines_which_line_up >= constants.number_of_lines_on_a_staff - 1
+
+
+def merge_staffs_in_same_row(staffs: list[RawStaff]) -> list[RawStaff]:
+    """
+    The line tracking breaks a staff in two if symbols cover its lines over a long
+    distance, e.g. at a clef change. This merges the two parts again.
+    """
+    result = sorted(staffs, key=lambda staff: staff.min_x)
+    i = 0
+    while i < len(result):
+        right = next((other for other in result[i + 1 :] if _continues(result[i], other)), None)
+        if right is None:
+            i += 1
+            continue
+        merged = result[i].merge(right)
+        result.remove(right)
+        result[i] = merged
+    return result
+
+
 def connect_staff_lines(
     staff_lines: list[RotatedBoundingBox], unit_size: float
 ) -> list[StaffLineSegment]:
@@ -589,6 +629,40 @@ def filter_edge_of_vision(staffs: list[Staff], image_shape: tuple[int, ...]) -> 
     return result
 
 
+def _main_column(extents: list[tuple[float, float]]) -> tuple[float, float]:
+    """
+    The horizontal range (left, right) of the long staffs on the page. The median, as
+    single staffs can be connected to staffs of a neighbor page.
+    """
+    longest = max(right - left for left, right in extents)
+    long_staffs = [(left, right) for left, right in extents if right - left >= 0.75 * longest]
+    return (
+        float(np.median([left for left, _ in long_staffs])),
+        float(np.median([right for _, right in long_staffs])),
+    )
+
+
+def _share_in_column(left: float, right: float, column: tuple[float, float]) -> float:
+    inside = min(right, column[1]) - max(left, column[0])
+    return inside / (right - left) if right > left else 0.0
+
+
+def filter_neighbor_page(staffs: list[Staff]) -> list[Staff]:
+    """
+    Removes staffs of a partly visible neighbor page, e.g. in a photo of a book:
+    much shorter than the staffs of the page and mostly beside them.
+    """
+    if len(staffs) == 0:
+        return staffs
+    column = _main_column([(s.min_x, s.max_x) for s in staffs])
+    min_width = (column[1] - column[0]) / 2
+    return [
+        s
+        for s in staffs
+        if s.max_x - s.min_x >= min_width or _share_in_column(s.min_x, s.max_x, column) >= 0.5
+    ]
+
+
 def sort_staffs_top_to_bottom(staffs: list[Staff]) -> list[Staff]:
     return sorted(staffs, key=lambda staff: staff.min_y)
 
@@ -695,6 +769,8 @@ def find_horizontal_lines(
         count[y] += 1
 
     count = np.insert(count, [0, len(count)], [0, 0])
+    if np.std(count) == 0:
+        return []
     norm = (count - np.mean(count)) / np.std(count)
     # distance is meant to merge anti-aliasing sub-peaks within one line's own thickness into
     # a single center, not to suppress a neighboring, genuinely distinct staff line - but two
@@ -708,6 +784,8 @@ def find_horizontal_lines(
         norm, height=line_threshold, distance=0.7 * unit_size, prominence=1
     )
     centers -= 1
+    if len(centers) < constants.number_of_lines_on_a_staff:
+        return []
     norm = norm[1:-1]  # Remove prepend / append
     _valid_centers, groups = filter_line_peaks(centers, norm)
     grouped_centers: dict[int, list[int]] = {}
@@ -723,6 +801,23 @@ def find_horizontal_lines(
     return complete_groups
 
 
+def _find_five_line_groups(
+    image: NDArray, zones: list[range], unit_size: float
+) -> list[RotatedBoundingBox]:
+    result: list[RotatedBoundingBox] = []
+    for zone in zones:
+        vertical_slice = image[:, zone]
+        lines_groups = find_horizontal_lines(vertical_slice, unit_size)
+        for group in lines_groups:
+            min_y = min(group)
+            max_y = max(group)
+            center_y = (min_y + max_y) / 2
+            center_x = zone.start + (zone.stop - zone.start) / 2
+            box = ((int(center_x), int(center_y)), (zone.stop - zone.start, int(max_y - min_y)), 0)
+            result.append(RotatedBoundingBox(box, np.array([]), 0))
+    return result
+
+
 def predict_other_anchors_from_clefs(
     clef_anchors: list[StaffAnchor], image: NDArray
 ) -> list[RotatedBoundingBox]:
@@ -731,18 +826,47 @@ def predict_other_anchors_from_clefs(
     average_unit_size = float(np.mean([anchor.average_unit_size for anchor in clef_anchors]))
     anchor_symbols = [anchor.symbol for anchor in clef_anchors]
     clef_zones = init_zone(clef_anchors, image.shape)
-    result: list[RotatedBoundingBox] = []
-    for zone in clef_zones:
-        vertical_slice = image[:, zone]
-        lines_groups = find_horizontal_lines(vertical_slice, average_unit_size)
-        for group in lines_groups:
-            min_y = min(group)
-            max_y = max(group)
-            center_y = (min_y + max_y) / 2
-            center_x = zone.start + (zone.stop - zone.start) / 2
-            box = ((int(center_x), int(center_y)), (zone.stop - zone.start, int(max_y - min_y)), 0)
-            result.append(RotatedBoundingBox(box, np.array([]), 0))
+    result = _find_five_line_groups(image, clef_zones, average_unit_size)
     return [r for r in result if not r.is_overlapping_with_any(anchor_symbols)]
+
+
+# Positions across the page, as fraction of its width, to search for staffs without clef
+slices_across_page = (0.2, 0.35, 0.5, 0.65, 0.8)
+
+
+def find_staffs_without_clef(
+    raw_staffs: list[RawStaff],
+    clef_anchors: list[StaffAnchor],
+    staff_fragments: list[RotatedBoundingBox],
+    image: NDArray,
+) -> list[RawStaff]:
+    """
+    Finds staffs whose clef and bar lines were missed, e.g. in a blurry photo, by their
+    staff lines alone. Only keeps staffs in the column of the other staffs and where no
+    staff is yet, as lines shining through the paper can create shifted duplicates.
+    """
+    if len(raw_staffs) == 0 or len(clef_anchors) == 0:
+        return []
+    unit_size = float(np.mean([anchor.average_unit_size for anchor in clef_anchors]))
+    width = image.shape[1]
+    slice_width = max(10, int(2 * unit_size))
+    zones = [
+        range(int(f * width), min(width, int(f * width) + slice_width)) for f in slices_across_page
+    ]
+    boxes = _find_five_line_groups(image, zones, unit_size)
+    anchors = filter_unusual_anchors(find_staff_anchors(staff_fragments, boxes, are_clefs=True))
+    candidates = remove_duplicate_staffs(
+        find_raw_staffs_by_connecting_line_fragments(anchors, staff_fragments)
+    )
+    column = _main_column([(s.min_x, s.max_x) for s in raw_staffs])
+    min_width = (column[1] - column[0]) / 2
+    return [
+        c
+        for c in candidates
+        if c.max_x - c.min_x >= min_width
+        and _share_in_column(c.min_x, c.max_x, column) >= 0.9
+        and not any(c.is_overlapping(s) for s in raw_staffs)
+    ]
 
 
 def break_wide_fragments(
@@ -789,10 +913,11 @@ def detect_staff(
     """
     Detect staffs on the image. Staffs can be warped, have gaps and can be interrupted by symbols.
     """
-    staff_anchors = find_staff_anchors(staff_fragments, clefs_keys, are_clefs=True)
-    eprint("Found " + str(len(staff_anchors)) + " clefs")
+    clef_anchors = find_staff_anchors(staff_fragments, clefs_keys, are_clefs=True)
+    eprint("Found " + str(len(clef_anchors)) + " clefs")
+    staff_anchors = list(clef_anchors)
 
-    possible_other_clefs = predict_other_anchors_from_clefs(staff_anchors, image)
+    possible_other_clefs = predict_other_anchors_from_clefs(clef_anchors, image)
     eprint("Found " + str(len(possible_other_clefs)) + " possible other clefs")
     staff_anchors.extend(find_staff_anchors(staff_fragments, possible_other_clefs, are_clefs=True))
 
@@ -815,6 +940,14 @@ def detect_staff(
             + str(len(raw_staffs_with_possible_duplicates) - len(raw_staffs))
             + " duplicate staffs"
         )
+    number_of_staffs = len(raw_staffs)
+    raw_staffs = merge_staffs_in_same_row(raw_staffs)
+    if len(raw_staffs) != number_of_staffs:
+        eprint("Merged " + str(number_of_staffs - len(raw_staffs)) + " staffs split in a row")
+    staffs_without_clef = find_staffs_without_clef(raw_staffs, clef_anchors, staff_fragments, image)
+    if len(staffs_without_clef) > 0:
+        eprint("Found " + str(len(staffs_without_clef)) + " staffs without clef")
+    raw_staffs.extend(staffs_without_clef)
     debug.write_bounding_boxes_alternating_colors(
         "raw_staffs", raw_staffs + likely_bar_or_rests_lines + clefs_keys
     )
@@ -822,6 +955,7 @@ def detect_staff(
     staffs = resample_staffs(raw_staffs)
 
     staffs = filter_edge_of_vision(staffs, image.shape)
+    staffs = filter_neighbor_page(staffs)
 
     staffs = sort_staffs_top_to_bottom(staffs)
 
