@@ -744,7 +744,7 @@ barline . . . . ."""
       <direction placement="below">
         <direction-type>
           <dynamics default-x="-7.46" default-y="-40" relative-x="-7.01" relative-y="-30.21">
-            <other-dynamics>più </other-dynamics>
+            <other-dynamics>dolce </other-dynamics>
             <p/>
             </dynamics>
           </direction-type>
@@ -767,7 +767,7 @@ barline . . . . ."""
 keySignature_0 . . . . .
 timeSignature/4 . . . . .
 note_2 C5 _ _ _ upper
-dynamic_p _ _ dynamic_più _ upper
+dynamic_p _ _ dynamic_dolce _ upper
 note_2 D5 _ _ _ upper
 barline . . . . ."""
         self.assertEqual(token_str, expected)

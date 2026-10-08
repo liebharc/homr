@@ -34,7 +34,7 @@ DYNAMICS_MODIFIER = {
     "più",
     "dolce",
     "poco",
-    "espress.",
+    "espress",
     "subito",
     "atempo",
     "leggiero",
@@ -101,6 +101,8 @@ def build_rhythm() -> dict[str, int]:
 
     # Dynamics
     rhythm.extend([f"dynamic_{d}" for d in DYNAMICS])
+    rhythm.extend(empty)
+
     return build_dict(rhythm)
 
 
@@ -123,6 +125,30 @@ def is_lower_position(position: str) -> bool:
 
 def is_upper_or_has_no_position(position: str) -> bool:
     return not is_lower_position(position)
+
+
+def _split_articulations(articulation: str) -> list[str]:
+    """Split combined articulations while keeping dynamic modifiers intact.
+
+    Dynamic modifiers use the ``dynamic_`` prefix as part of their vocabulary
+    token (for example ``dynamic_dolce``), so that underscore is not a
+    separator.
+    """
+    parts = [part for part in articulation.split("_") if part]
+    result: list[str] = []
+    index = 0
+    while index < len(parts):
+        if (
+            parts[index] == "dynamic"
+            and index + 1 < len(parts)
+            and parts[index + 1] in DYNAMICS_MODIFIER
+        ):
+            result.append(f"dynamic_{parts[index + 1]}")
+            index += 2
+        else:
+            result.append(parts[index])
+            index += 1
+    return result
 
 
 def build_articulation() -> dict[str, int]:
@@ -385,7 +411,7 @@ class EncodedSymbol:
     def add_articulations(self, articulations: list[str]) -> "EncodedSymbol":
         all_articulations = []
         all_articulations.extend(articulations)
-        all_articulations.extend([a for a in self.articulation.split("_") if a])
+        all_articulations.extend(_split_articulations(self.articulation))
         result = copy.copy(self)
         result.articulation = str.join("_", sorted(all_articulations))
         return result
@@ -405,9 +431,7 @@ class EncodedSymbol:
             return [], copy.copy(self)
         stripped = []
         remaining = []
-        for articulation in self.articulation.split("_"):
-            if not articulation:
-                continue
+        for articulation in _split_articulations(self.articulation):
             if remove_all or articulation in to_be_removed:
                 stripped.append(articulation)
             else:

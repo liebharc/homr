@@ -780,7 +780,7 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
 
             modifier = "_".join(
                 _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
-            )
+            ).replace(".", "")
             modifier_symbol = f"dynamic_{modifier}" if modifier in DYNAMICS_MODIFIER else empty
             has_normal_tag = any(child.tag in DYNAMICS for child in dynamics)
 
