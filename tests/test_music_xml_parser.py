@@ -671,6 +671,104 @@ barline . . . . ."""
         self.assertEqual(positions["E4"], positions["D4"])
         self.assertEqual({positions["G4"], positions["E4"]}, {"upper", "upper2"})
 
+    def _grand_staff_bar(self, right_hand: str, left_hand: str) -> str:
+        """One 2/4 bar, eighths are 2 divisions long."""
+        tokens = music_xml_string_to_tokens(f"""<score-partwise version="4.0"><part id="P1">
+<measure number="1">
+  <attributes>
+    <divisions>4</divisions>
+    <key><fifths>0</fifths></key>
+    <time><beats>2</beats><beat-type>4</beat-type></time>
+    <staves>2</staves>
+    <clef number="1"><sign>G</sign><line>2</line></clef>
+    <clef number="2"><sign>F</sign><line>4</line></clef>
+  </attributes>
+  {right_hand}
+  <backup><duration>8</duration></backup>
+  {left_hand}
+</measure>
+</part></score-partwise>""")
+        return token_lines_to_str([x for xxs in tokens for xs in xxs for x in xs])
+
+    @staticmethod
+    def _eighth(
+        step: str, octave: int, staff: int, grace: bool = False, chord: bool = False
+    ) -> str:
+        return (
+            f"<note>{'<grace/>' if grace else ''}{'<chord/>' if chord else ''}"
+            f"<pitch><step>{step}</step><octave>{octave}</octave></pitch>"
+            f"{'' if grace else '<duration>2</duration>'}"
+            f"<voice>{staff}</voice><type>eighth</type><staff>{staff}</staff></note>"
+        )
+
+    def test_grace_note_takes_no_time(self) -> None:
+        """Grace notes have no duration, so the hands still line up after one."""
+        self.maxDiff = None
+        right = [self._eighth(step, 5, 1) for step in "CDEF"]
+        right.insert(2, self._eighth("F", 5, 1, grace=True))
+        left = "".join(self._eighth(step, 3, 2) for step in "CDEF")
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_8 C5 _ _ _ upper&note_8 C3 _ _ _ lower
+note_8 D5 _ _ _ upper&note_8 D3 _ _ _ lower
+note_8G F5 _ _ _ upper
+note_8 E5 _ _ _ upper&note_8 E3 _ _ _ lower
+note_8 F5 _ _ _ upper&note_8 F3 _ _ _ lower
+barline . . . . ."""
+        self.assertEqual(self._grand_staff_bar("".join(right), left), expected)
+
+    def test_grace_notes_in_a_row_stay_in_order(self) -> None:
+        self.maxDiff = None
+        right = [self._eighth(step, 5, 1) for step in "CDEF"]
+        right[2:2] = [self._eighth("F", 5, 1, grace=True), self._eighth("G", 5, 1, grace=True)]
+        left = "".join(self._eighth(step, 3, 2) for step in "CDEF")
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_8 C5 _ _ _ upper&note_8 C3 _ _ _ lower
+note_8 D5 _ _ _ upper&note_8 D3 _ _ _ lower
+note_8G F5 _ _ _ upper
+note_8G G5 _ _ _ upper
+note_8 E5 _ _ _ upper&note_8 E3 _ _ _ lower
+note_8 F5 _ _ _ upper&note_8 F3 _ _ _ lower
+barline . . . . ."""
+        self.assertEqual(self._grand_staff_bar("".join(right), left), expected)
+
+    def test_grace_chord_stays_a_chord(self) -> None:
+        self.maxDiff = None
+        right = [self._eighth(step, 5, 1) for step in "CDEF"]
+        right[2:2] = [
+            self._eighth("F", 5, 1, grace=True),
+            self._eighth("A", 5, 1, grace=True, chord=True),
+        ]
+        left = "".join(self._eighth(step, 3, 2) for step in "CDEF")
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_8 C5 _ _ _ upper&note_8 C3 _ _ _ lower
+note_8 D5 _ _ _ upper&note_8 D3 _ _ _ lower
+note_8G A5 _ _ _ upper&note_8G F5 _ _ _ upper
+note_8 E5 _ _ _ upper&note_8 E3 _ _ _ lower
+note_8 F5 _ _ _ upper&note_8 F3 _ _ _ lower
+barline . . . . ."""
+        self.assertEqual(self._grand_staff_bar("".join(right), left), expected)
+
+    def test_arpeggio_is_not_given_to_a_grace_note_before_the_chord(self) -> None:
+        right = "".join(self._eighth(step, 5, 1) for step in "CDEF")
+        left = (
+            self._eighth("G", 2, 2, grace=True)
+            + self._eighth("C", 3, 2).replace(
+                "</staff>", "</staff><notations><arpeggiate/></notations>"
+            )
+            + self._eighth("E", 3, 2, chord=True)
+            + "".join(self._eighth(step, 3, 2) for step in "DEF")
+        )
+        tokens = self._grand_staff_bar(right, left)
+        grace = [t for t in tokens.replace("&", "\n").splitlines() if t.startswith("note_8G")]
+        self.assertEqual(grace, ["note_8G G2 _ _ _ lower"])
+        self.assertIn("arpeggiate", tokens)
+
     def _norm_expected(self, expected: str) -> str:
         norm = expected.replace("\n", "")
         norm = re.sub(r",\s+", ",", norm)
