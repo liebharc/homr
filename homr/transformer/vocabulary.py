@@ -29,7 +29,7 @@ DYNAMICS = {
     "rf",
     "rfz",
     "sfp",
-    "empty"
+    "empty",
 }
 DYNAMICS_MODIFIER = {
     "più",

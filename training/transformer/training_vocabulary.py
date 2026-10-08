@@ -120,8 +120,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (
                 idx
                 for idx, s in enumerate(annotation_resorted)
-                if s.rhythm.startswith(("note", "rest"))
-                and is_upper_or_has_no_position(s.position)
+                if s.rhythm.startswith(("note", "rest")) and is_upper_or_has_no_position(s.position)
             ),
             None,
         )
@@ -148,8 +147,7 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
             (
                 idx
                 for idx, s in enumerate(annotation_resorted)
-                if s.rhythm.startswith(("note", "rest"))
-                and is_upper_or_has_no_position(s.position)
+                if s.rhythm.startswith(("note", "rest")) and is_upper_or_has_no_position(s.position)
             ),
             None,
         )
