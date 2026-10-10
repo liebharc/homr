@@ -518,6 +518,15 @@ barline . . . . ."""
         self.assertEqual(by_pitch["F5"], 2.0)
         self.assertEqual(by_pitch["G2"], 2.0)
 
+    def test_grace_note_without_pitch_is_skipped(self) -> None:
+        tokens = read_token_lines("""clef_G2 _ _ _ _ upper
+timeSignature/4 . . . . .
+note_8G . _ _ _ upper
+note_2 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        self.assertEqual([name for _, name, _ in _onsets(xml)], ["C5"])
+
     def test_measure_rest_of_a_hidden_grand_staff(self) -> None:
         tokens = read_token_lines("""clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 timeSignature/4 . . . . .

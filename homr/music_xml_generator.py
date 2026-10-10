@@ -807,8 +807,8 @@ def build_note_chord(
             result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
             is_first = False
 
-        if rests:
-            assert group_duration > Fraction(0)
+        # A grace note without pitch would be a rest which takes no time
+        if rests and group_duration > Fraction(0):
             if notes:
                 # There are other notes, so to avoid rest being merged into chord, we emit a backup
                 result.append(build_backup(group_duration, state))
