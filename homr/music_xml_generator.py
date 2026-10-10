@@ -247,7 +247,8 @@ def build_measures(
 
     if len(list(current_measure)) > 0:
         close_current_measure()
-    if first_attributes.find("time") is None:
+    # A clef opens a second attributes element, so look at the whole first measure
+    if measures[0].find("attributes/time") is None:
         time_el = ET.SubElement(first_attributes, "time")
         beats = max(int(state.nominator * 4), 1)
         ET.SubElement(time_el, "beats").text = str(beats)

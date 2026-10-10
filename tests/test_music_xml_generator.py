@@ -58,6 +58,10 @@ def _slurs(xml: ET.Element) -> list[str]:
     return [s.get("type", "") for s in xml.iter("slur")]
 
 
+def _times(xml: ET.Element) -> list[tuple[str, str]]:
+    return [(t.findtext("beats", ""), t.findtext("beat-type", "")) for t in xml.iter("time")]
+
+
 def _first_measure(xml: ET.Element) -> ET.Element:
     part = xml.find("part")
     assert part is not None
@@ -126,6 +130,39 @@ barline . . . . ."""
         for note in notes:
             self.assertNotEqual(_voice(note), "")
             self.assertEqual(_staff(note), "1")
+
+    def test_recognized_time_signature_is_the_only_one(self) -> None:
+        """
+        The clef opens a second attributes element in the first measure. The computed
+        fallback time signature must not be added next to a recognized one (issue #161).
+        """
+        six_eight = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+timeSignature/8 . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+barline . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(six_eight.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("6", "8")])
+
+    def test_time_signature_is_computed_if_none_was_recognized(self) -> None:
+        no_time_signature = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+barline . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(no_time_signature.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("3", "4")])
 
     def test_grand_staff_generation(self) -> None:
         grandstaff = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
