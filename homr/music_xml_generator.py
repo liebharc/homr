@@ -242,6 +242,10 @@ def build_measures(
             volta_number = state.stop_volta(measure_number)
             barline = build_or_get_barline(current_measure, "right")
             build_barline_ending(symbol, barline, volta_number)
+
+        elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
+            for dynamic in group.symbols:
+                build_dynamic(dynamic, current_measure)
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
@@ -334,6 +338,19 @@ def build_or_get_barline(measure: ET.Element, location: str) -> ET.Element:
         if child.tag == "barline" and child.get("location") == location:
             return child
     return ET.SubElement(measure, "barline", location=location)
+
+
+def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
+    direction = ET.SubElement(measure, "direction", placement="below")
+    direction_type = ET.SubElement(direction, "direction-type")
+    dynamics = ET.SubElement(direction_type, "dynamics")
+    if model_dynamic.rhythm.startswith("dynamic"):
+        ET.SubElement(dynamics, model_dynamic.rhythm.split("_")[1])
+    if model_dynamic.articulation.startswith("dynamic"):
+        text = ET.SubElement(dynamics, "other-dynamics")
+        text.text = model_dynamic.articulation.split("_")[1]
+
+    ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
 
 
 def build_key(model_key: EncodedSymbol, attributes: ET.Element) -> None:

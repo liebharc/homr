@@ -159,6 +159,7 @@ keySignature_1 . . . . .
 timeSignature/4 . . . . .
 note_1 G4 _ _ slurStart_slurStop upper&note_1 A3 # _ _ upper&rest_2 _ _ _ _ upper2&note_4 G3 _ _ slurStop lower
 rest_4 _ _ _ _ lower
+dynamic_pp _ _ _ _ upper
 note_2 E4 _ _ slurStart upper2&note_2 C2 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
@@ -820,3 +821,120 @@ barline . . . . ."""
                 return f"{name}()"
 
         return recurse(xml)
+
+    def test_dynamics_with_other_dynamics_text(self) -> None:
+        """Single staff with a p and piu at the same time"""
+        self.maxDiff = None
+        example = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>8</duration><voice>1</voice><type>half</type><staff>1</staff>
+      </note>
+      <direction placement="below">
+        <direction-type>
+          <dynamics default-x="-7.46" default-y="-40" relative-x="-7.01" relative-y="-30.21">
+            <other-dynamics>dolce </other-dynamics>
+            <p/>
+            </dynamics>
+          </direction-type>
+        <offset>-3</offset>
+        <staff>1</staff>
+        <sound dynamics="54.44"/>
+        </direction>
+      <note>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <duration>8</duration><voice>1</voice><type>half</type><staff>1</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+        tokens = music_xml_string_to_tokens(example)
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        token_str = token_lines_to_str(flat_list)
+        expected = """clef_G2 _ _ _ _ upper
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2 C5 _ _ _ upper
+dynamic_p _ _ dynamic_dolce _ upper
+note_2 D5 _ _ _ upper
+barline . . . . ."""
+        self.assertEqual(token_str, expected)
+
+    def test_grandstaff_and_only_piu(self) -> None:
+        """
+        On a grand staff, the upper staff has two dynamics (pp and f) with an invalid
+        other-dynamics text. The lower staff has a <dynamics> element with only
+        <other-dynamics>più</other-dynamics> and no regular dynamic tag like <p/>.
+        """
+        self.maxDiff = None
+        example = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>8</duration><voice>1</voice><type>half</type><staff>1</staff>
+      </note>
+      <direction placement="below">
+        <direction-type>
+          <dynamics default-x="-55.37" default-y="28.85" relative-x="50" relative-y="10">
+            <other-dynamics>1st time </other-dynamics>
+            <f/>
+            <other-dynamics>, 2nd </other-dynamics>
+            <pp/>
+            </dynamics>
+        </direction-type>
+        <staff>1</staff>
+      </direction>
+      <direction placement="below">
+        <direction-type>
+          <dynamics><other-dynamics>più </other-dynamics></dynamics>
+        </direction-type>
+        <staff>2</staff>
+      </direction>
+      <note>
+        <pitch><step>D</step><octave>5</octave></pitch>
+        <duration>8</duration><voice>1</voice><type>half</type><staff>1</staff>
+      </note>
+      <backup><duration>16</duration></backup>
+      <note>
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>8</duration><voice>5</voice><type>half</type><staff>2</staff>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>3</octave></pitch>
+        <duration>8</duration><voice>5</voice><type>half</type><staff>2</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+        tokens = music_xml_string_to_tokens(example)
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        token_str = token_lines_to_str(flat_list)
+        expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2 C5 _ _ _ upper&note_2 C3 _ _ _ lower
+dynamic_pp _ _ _ _ upper&dynamic_f _ _ _ _ upper&dynamic_empty _ _ dynamic_più _ lower
+note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
+barline . . . . ."""
+        self.assertEqual(token_str, expected)

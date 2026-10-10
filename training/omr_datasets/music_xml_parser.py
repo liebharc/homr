@@ -24,6 +24,8 @@ from typing import Iterable, Sequence, SupportsIndex, TypeVar, overload
 from homr.music_xml_generator import DURATION_NAMES
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    DYNAMICS,
+    DYNAMICS_MODIFIER,
     VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
@@ -425,6 +427,12 @@ class TokensPart:
         for staff, symbol in resolved:
             current_measure.append_symbol_to_staff(staff, symbol)
 
+    def append_dynamic(self, dynamic: EncodedSymbol, staff: int) -> None:
+        self._flush_pending_clefs()
+        current_measure = self._ensure_current_measure()
+        dynamic.position = current_measure._get_staff_position(staff)
+        current_measure.append_symbol_to_staff(staff, dynamic)
+
     def queue_clefs_for_next_measure(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         """
         A <clef after-barline="yes"> is printed at the end of the current
@@ -808,10 +816,38 @@ def _process_print(part: TokensPart, xmlprint: ET.Element) -> None:
 
 
 def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
+    # Get the number of the staff the dynamic is on
+    staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
         has_octave_shift = _child(direction_type, "octave-shift") is not None
         if has_octave_shift:
             raise ValueError("Octave shift isn't supported")
+        for dynamics in _children(direction_type, "dynamics"):
+            print_object = dynamics.get("print-object", None)
+            invisible = print_object == "no"
+            if invisible:
+                continue
+
+            modifier = "_".join(
+                _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
+            ).replace(".", "")
+            modifier_symbol = f"dynamic_{modifier}" if modifier in DYNAMICS_MODIFIER else empty
+
+            # Check if it has a tag like p or ff
+            has_normal_tag = any(child.tag in DYNAMICS for child in dynamics)
+
+            for dyn in dynamics:
+                if dyn.tag in DYNAMICS:
+                    name = f"dynamic_{dyn.tag}"
+
+                elif not has_normal_tag and modifier in DYNAMICS_MODIFIER:
+                    name = "dynamic_empty"
+                else:
+                    continue
+                part.append_dynamic(
+                    EncodedSymbol(name, empty, empty, modifier_symbol, empty),
+                    staff,
+                )
 
 
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
