@@ -12,10 +12,15 @@ def render_pdf_to_image(pdf_path: str, dpi: int = 300) -> list[str]:
     scale = dpi / 72.0
     pdf = pdfium.PdfDocument(pdf_path)
     assert pdf, f"invalid PDF {pdf_path}"  # noqa: S101
+    path_prefix = os.path.splitext(pdf_path)[0]
     paths = []
     try:
         for i, page in enumerate(pdf):
-            output_path = f"{os.path.splitext(pdf_path)[0]}_{i}.png"
+            if i == 0:
+                # Omit the page suffix because the first rendered image determines the MusicXML name.
+                output_path = f"{path_prefix}.png"
+            else:
+                output_path = f"{path_prefix}_{i}.png"
             bitmap = page.render(scale=scale)
             rgb = np.array(bitmap.to_pil().convert("RGB"))
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
