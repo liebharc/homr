@@ -310,6 +310,21 @@ class Staff(DebugDrawable):
         result.is_grandstaff = True
         return result
 
+    def split(self) -> tuple["Staff", "Staff"] | None:
+        """
+        Inverse of merge: splits a grand staff into its upper and lower staff.
+        """
+        lines = constants.number_of_lines_on_a_staff
+        grid = [p for p in self.grid if len(p.y) == 2 * lines]
+        if len(grid) == 0:
+            return None
+        upper = Staff([StaffPoint(p.x, p.y[:lines], p.angle) for p in grid])
+        lower = Staff([StaffPoint(p.x, p.y[lines:], p.angle) for p in grid])
+        boundary = float(np.median([(p.y[lines - 1] + p.y[lines]) / 2 for p in grid]))
+        for symbol in self.symbols:
+            (upper if symbol.center[1] < boundary else lower).add_symbol(symbol)
+        return upper, lower
+
     def add_symbol(self, symbol: SymbolOnStaff) -> None:
         self.symbols.append(symbol)
 

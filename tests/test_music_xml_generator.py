@@ -555,6 +555,37 @@ barline . . . . ."""
         self.assertEqual(by_pitch["F5"], 2.0)
         self.assertEqual(by_pitch["G2"], 2.0)
 
+    def test_grace_note_without_pitch_is_skipped(self) -> None:
+        tokens = read_token_lines("""clef_G2 _ _ _ _ upper
+timeSignature/4 . . . . .
+note_8G . _ _ _ upper
+note_2 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        self.assertEqual([name for _, name, _ in _onsets(xml)], ["C5"])
+
+    def test_measure_rest_of_a_hidden_grand_staff(self) -> None:
+        tokens = read_token_lines("""clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+timeSignature/4 . . . . .
+note_2 C5 _ _ _ upper&note_2 C3 _ _ _ lower
+barline . . . . .""".splitlines())
+        tokens += [
+            EncodedSymbol("newline"),
+            EncodedSymbol("measureRest", position="upper"),
+            EncodedSymbol("chord"),
+            EncodedSymbol("measureRest", position="lower"),
+            EncodedSymbol("barline"),
+        ]
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        measures = xml.findall("part/measure")
+        self.assertEqual(2, len(measures))
+        rests = _notes(measures[1])
+        self.assertEqual(["1", "2"], [n.findtext("staff") for n in rests])
+        self.assertEqual("yes", rests[0].find("rest").get("measure"))  # type: ignore[union-attr]
+        self.assertEqual(_duration(_notes(measures[0])[0]), _duration(rests[0]))
+        self.assertEqual(["1", "5"], [_voice(n) for n in rests])
+
     def test_image_position_is_written_as_comment(self) -> None:
         tokens = read_token_lines("""clef_G2 . . . . upper
 note_4 E4 _ _ _ upper
