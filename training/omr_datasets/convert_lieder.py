@@ -30,10 +30,7 @@ from training.omr_datasets.music_xml_parser import (
     music_xml_file_to_tokens,
     normalize_barlines_and_repeats,
 )
-from training.transformer.training_vocabulary import (
-    calc_ratio_of_tuplets,
-    token_lines_to_str,
-)
+from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -586,9 +583,7 @@ def _split_file_into_staffs(
             total_staff_area.number_of_measures
         )
 
-        if calc_ratio_of_tuplets(selected_measures) <= 0.2 and contains_only_supported_clefs(
-            selected_measures
-        ):
+        if contains_only_supported_clefs(selected_measures):
             selected_measures = strip_naturals(selected_measures)
             tokens_content = token_lines_to_str(selected_measures)
             write_text_to_file(tokens_content, token_file_name)
