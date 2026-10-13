@@ -30,7 +30,7 @@ import numpy as np
 from validation.degradations import GROUPS, VARIANTS, set_background_photos
 
 default_directory = Path("datasets/staff_structure_lieder")
-lieder_directory = Path("datasets/Lieder-main/flat")
+lieder_directory = Path("datasets/Lieder-main/rendered_scores")
 lieder_scores = Path("datasets/Lieder-main/scores")
 # Scores rendered with their own setting to hide empty staffs, for layout changes
 hidden_staffs_directory = Path("datasets/Lieder-main/hidden_staffs")
@@ -143,7 +143,12 @@ def _render_hidden_staffs() -> None:
     print(f"Rendering {len(jobs)} scores with MuseScore", flush=True)
     job_file = hidden_staffs_directory / "jobs.json"
     job_file.write_text(json.dumps(jobs))
-    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software"}
+    env = {
+        **os.environ,
+        "QT_QPA_PLATFORM": "offscreen",
+        "QT_QUICK_BACKEND": "software",
+        "MU_QT_QPA_PLATFORM": "offscreen",
+    }
     subprocess.run(  # noqa: S603
         [str(musescore), "--force", "-j", str(job_file)],
         env=env,
