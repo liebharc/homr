@@ -110,6 +110,10 @@ The transformer model generates these predictions in sequence, processing the de
 
 The symbol sequence is converted into MusicXML format and saved to disk. The resulting file can be processed with tools like [musescore](https://musescore.com/) or [relieur](https://github.com/papoteur-mga/relieur) (for multi-image combinations).
 
+## License
+
+homr is licensed under AGPL-3.0. For commercial use and the licenses of the training data behind the model weights, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
+
 ## Citation
 
 If you use this code in your research work, please cite [oemer](https://github.com/BreezeWhite/oemer)
