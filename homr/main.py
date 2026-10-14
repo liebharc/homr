@@ -329,6 +329,8 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     image_files = []
     for ext in ["png", "jpg", "jpeg", "pdf", "PNG", "JPG", "JPEG", "PDF"]:
         image_files.extend(glob.glob(os.path.join(folder, "**", f"*.{ext}"), recursive=True))
+    # On case-insensitive file systems the upper and lower case patterns match the same files
+    image_files = list(dict.fromkeys(image_files))
     without_teasers = [
         img
         for img in image_files
