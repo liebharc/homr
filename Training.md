@@ -77,14 +77,25 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 480
+
+Commit: 5eed84636c96eca5ce6d8e2f62580b74e7ed85e8
+Day: 11 October 2026
+Transformer Smoke Test: 6%
+System Level: 5.4 diffs, SER: 3.7%
+Polish scores: 16.41% | 16.46% after staff detection improvements
+SMB scores: 12.71% | 12.46% after staff detection improvements
+
+Tuplets whose number isn't printed are labelled as tuplets, and staff lines with many tuplets are kept in the training data. For more details see PR 181.
+
 # Run 465
 
 Commit: 597144cab54c8f6d0f6c9619df5c5312694eadd6
 Day: 26 September 2026
 Transformer Smoke Test: 5%
-System Level: Total: 5.1 diffs, SER: 4.0%
-Polish scores: 17.52%
-SMB scores: 13.84%
+System Level: Total: 5.1 diffs, SER: 4.0% | 4.7 diffs, SER: 3.4% after staff detection improvements
+Polish scores: 17.52% | 17.70% after staff detection improvements
+SMB scores: 13.84% | 13.60% after staff detection improvements
 
 Parse multiple voices per staff. For more details see PR 156.
 

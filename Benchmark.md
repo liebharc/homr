@@ -129,6 +129,29 @@ poetry run python validation/show_diff.py smb_homr.db --sample 3 --output /tmp/d
 
 The display uses `<` for deleted tokens (in reference, missing from output), `>` for inserted tokens (hallucinated), and `!` for substitutions.
 
+## Staff Structure Benchmark
+
+Checks the staffs of every system and that no staff was dropped. Stops after staff detection.
+
+- Pages: 82 Lieder pages, clean and degraded to look like phone photos (`validation/degradations.py`). 62 have 2, 3 or 4+ staffs in every system, 20 change their layout, e.g. a piano intro before the voice enters.
+- Ground truth: the staffs of every system, read from the bar lines at the start of each system in MuseScore's SVGs.
+- Lieder only, so that SMB, polish-scores and the test data stay independent for evaluation.
+- Needs the Lieder dataset and MuseScore (`python -m training.omr_datasets.convert_lieder`) and `rsvg-convert`.
+
+```bash
+poetry run python -m validation.staff_structure prepare
+poetry run python -m validation.staff_structure run --output before.jsonl
+# change code
+poetry run python -m validation.staff_structure run --output after.jsonl
+poetry run python -m validation.staff_structure compare before.jsonl after.jsonl
+```
+
+- `--variants light optics` limits a run to some groups or variants. Groups: `light`, `paper`, `geometry`, `optics`, `surroundings`, `photos`. The first run of a variant is slow, as it runs the segmentation.
+- `report <results>` prints the report, also while a run is still going.
+- `run --gpu` segments uncached images on the GPU, much faster than on the CPU.
+- `prepare --backgrounds <dir>` uses your photos as surroundings.
+- "of clean correct" counts only pages which are correct on the clean variant.
+
 ## Benchmark results
 
 All results are mean OMR-NED in % over the samples where the tool produced output. Means are only comparable between tools when coverage is similar. For performance on latest homr model, refer to `Training.md` for details.
