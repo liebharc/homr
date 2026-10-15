@@ -354,7 +354,7 @@ def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
         ET.SubElement(dynamics, model_dynamic.rhythm.split("_")[1])
     if model_dynamic.articulation.startswith("dynamic"):
         text = ET.SubElement(dynamics, "other-dynamics")
-        text.text = model_dynamic.articulation.split("_")[1]
+        text.text = model_dynamic.articulation.split("_")[1].replace("piu", "più")
 
     ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
 

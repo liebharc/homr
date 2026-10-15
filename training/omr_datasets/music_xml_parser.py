@@ -829,9 +829,15 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
             if invisible:
                 continue
 
-            modifier = "_".join(
-                _text(child).replace(" ", "") for child in dynamics if child.tag == "other-dynamics"
-            ).replace(".", "")
+            modifier = (
+                "_".join(
+                    _text(child).replace(" ", "")
+                    for child in dynamics
+                    if child.tag == "other-dynamics"
+                )
+                .replace(".", "")
+                .replace("ù", "u")
+            )
             modifier_symbol = f"dynamic_{modifier}" if modifier in DYNAMICS_MODIFIER else empty
 
             # Check if it has a tag like p or ff

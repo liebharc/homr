@@ -32,14 +32,14 @@ DYNAMICS = {
     "empty",
 }
 DYNAMICS_MODIFIER = {
-    "più",
+    "piu",
     "dolce",
     "poco",
     "espress",
     "subito",
     "atempo",
     "leggiero",
-    "pocopiù",
+    "pocopiu",
     "sempre",
 }
 
