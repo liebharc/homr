@@ -84,7 +84,7 @@ Day: 11 October 2026
 Transformer Smoke Test: 6%
 System Level: 5.4 diffs, SER: 3.7%
 Polish scores: 16.41% | 16.46% after staff detection improvements
-SMB scores: 12.71% | ? after staff detection improvements
+SMB scores: 12.71% | 12.46% after staff detection improvements
 
 Tuplets whose number isn't printed are labelled as tuplets, and staff lines with many tuplets are kept in the training data. For more details see PR 181.
 
