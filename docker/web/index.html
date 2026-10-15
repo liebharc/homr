@@ -92,8 +92,8 @@
     <p>Upload sheet music image, download MusicXML.</p>
     <form id="form">
       <label class="file">
-        <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required />
-        <span id="filename">Choose a JPG or PNG file</span>
+        <input id="file" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required />
+        <span id="filename">Choose a JPG, PNG or PDF file</span>
       </label>
       <button id="submit" type="submit">Convert</button>
     </form>
@@ -108,7 +108,7 @@
 
     fileInput.addEventListener("change", () => {
       const file = fileInput.files[0];
-      filename.textContent = file ? file.name : "Choose a JPG or PNG file";
+      filename.textContent = file ? file.name : "Choose a JPG, PNG or PDF file";
       status.textContent = "";
       status.className = "";
     });

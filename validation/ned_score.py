@@ -25,7 +25,10 @@ import editdistance
 from homr.circle_of_fifths import strip_naturals
 from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
 from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
-from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+from training.omr_datasets.music_xml_parser import (
+    music_xml_file_to_tokens,
+    normalize_barlines_and_repeats,
+)
 
 if TYPE_CHECKING:
     import music21 as m21
@@ -161,7 +164,7 @@ def _strip_position(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
 
 
 def _flatten_part(measures: Sequence[Sequence[EncodedSymbol]]) -> list[EncodedSymbol]:
-    flat = [s for measure in measures for s in measure]
+    flat = normalize_barlines_and_repeats(measures)
     return [t for chord in sort_token_chords(flat) for t in chord]
 
 

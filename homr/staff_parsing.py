@@ -1,3 +1,4 @@
+import itertools
 import math
 
 import cv2
@@ -12,126 +13,10 @@ from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
 from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
+from homr.system_repair import _layout
 from homr.transformer.configs import Config, default_config
 from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
 from homr.type_definitions import NDArray
-
-
-def _flatten_staffs(staffs: list[MultiStaff]) -> list[Staff]:
-    return [s for multi_staff in staffs for s in multi_staff.staffs]
-
-
-def _regroup_by_period(
-    flat_staffs: list[Staff], period: int, front_trim: int, back_trim: int
-) -> list[MultiStaff]:
-    core = flat_staffs[front_trim : len(flat_staffs) - back_trim]
-    return [MultiStaff(core[i : i + period], []) for i in range(0, len(core), period)]
-
-
-def _find_periodic_core(flat_staffs: list[Staff]) -> tuple[int, int, int] | None:
-    """
-    Find a repeating sequence of staff layouts among individual staffs, e.g.
-    a solo staff followed by a piano grand staff (2 staffs), repeated for
-    every system in a vocal score with piano accompaniment.
-
-    We work on the flattened sequence of raw staffs rather than on the
-    MultiStaff rows produced upstream, because that upstream grouping is
-    itself only a heuristic (staffs sharing a bar line or clef get merged
-    into one row) and can be inconsistent across a page: the same kind of
-    solo-staff-plus-grand-staff pair might end up pre-merged into one row for
-    one system and left as two separate rows for another, purely because of
-    how cleanly a bar line lined up. Searching row-by-row would then see two
-    different "shapes" for what is structurally the same repeating pattern.
-    Working on individual staffs sidesteps that inconsistency entirely.
-
-    A system right at the start or end of the page can break the pattern on
-    its own without invalidating it: an introduction or coda system with a
-    genuinely different layout, or simply the most poorly detected staff on
-    the page. We therefore allow trimming up to one period's worth of staffs
-    from either edge before requiring the remainder to tile exactly. We
-    never trim from the middle of the page: a mismatch there is a detection
-    problem to fix upstream, not something to paper over here.
-
-    Returns (period, front_trim, back_trim) for the smallest total trim and,
-    among ties, the smallest period -- so an already-uniform page (period 1,
-    no trim) is always preferred when it fits, and we never discard more of
-    the page than necessary. Returns None if no repeating core of at least
-    two full cycles can be found.
-    """
-    layout = [s.is_grandstaff for s in flat_staffs]
-    n = len(layout)
-    best: tuple[int, int, int, int] | None = None
-    for period in range(1, n // 2 + 1):
-        for front_trim in range(period + 1):
-            for back_trim in range(period + 1):
-                core = layout[front_trim : n - back_trim]
-                if len(core) < 2 * period or len(core) % period != 0:
-                    continue
-                rows = [tuple(core[i : i + period]) for i in range(0, len(core), period)]
-                if not all(row == rows[0] for row in rows):
-                    continue
-                candidate = (front_trim + back_trim, period, front_trim, back_trim)
-                if best is None or candidate[:2] < best[:2]:
-                    best = candidate
-    if best is None:
-        return None
-    _, period, front_trim, back_trim = best
-    return period, front_trim, back_trim
-
-
-def _ensure_same_number_of_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
-    """
-    If every system already has the same number of *more than one* staff, trust that
-    directly rather than re-deriving it via _find_periodic_core. That function's signature
-    is each flat staff's is_grandstaff flag, which is a fine way to tell "solo staff" from
-    "piano grand staff" apart when the two are pre-merged inconsistently across the page
-    (see its own docstring) - but it carries zero information when a page has N genuinely
-    independent, same-type staffs per system and none of them are a grand staff (e.g. a
-    string quartet): the flattened signature is then a constant sequence, which trivially -
-    and wrongly - satisfies period=1, collapsing all N voices into one. Checking uniformity
-    upfront on the untouched, already-correct per-system grouping sidesteps that degenerate
-    case entirely.
-
-    Restricted to row length > 1: a page where every row is already a single raw staff
-    (nothing grouped yet, e.g. a solo-plus-piano page where no bar line happened to
-    pre-merge any pair) is *also* uniform by this same measure, but there _find_periodic_
-    core is exactly what's needed to discover the real, larger repeating pattern from
-    scratch - that's the case this function was originally written for, and it is never
-    already uniform at a row length above 1.
-    """
-    row_lengths = {len(multi_staff.staffs) for multi_staff in staffs}
-    if len(row_lengths) == 1 and next(iter(row_lengths)) > 1:
-        return staffs
-    flat_staffs = _flatten_staffs(staffs)
-    core = _find_periodic_core(flat_staffs)
-    if core is not None:
-        period, front_trim, back_trim = core
-        if front_trim > 0:
-            eprint(
-                f"Removing the first {front_trim} staff(s), as they don't fit "
-                "the staff layout the rest of the page repeats"
-            )
-        if back_trim > 0:
-            eprint(
-                f"Removing the last {back_trim} staff(s), as they don't fit "
-                "the staff layout the rest of the page repeats"
-            )
-        if period > 1:
-            eprint(
-                "Systems repeat every",
-                period,
-                "staffs with a different layout each time, combining them into one row",
-            )
-        return _regroup_by_period(flat_staffs, period, front_trim, back_trim)
-    result: list[MultiStaff] = []
-    for staff in staffs:
-        result.extend(staff.break_apart())
-    return sorted(result, key=lambda s: s.staffs[0].min_y)
-
-
-def _get_number_of_voices(staffs: list[MultiStaff]) -> int:
-    return len(staffs[0].staffs)
-
 
 tr_omr_max_height = default_config.max_height
 tr_omr_max_width = default_config.max_width
@@ -373,6 +258,60 @@ def parse_staff_image(
     return result
 
 
+def _slots_in_layout(row: tuple[bool, ...], layout: tuple[bool, ...]) -> tuple[int, ...] | None:
+    """
+    The staffs of the layout which the staffs of a system are, None if that isn't
+    unique, e.g. a system shows only the piano as the voice is hidden.
+    """
+    matches = [
+        slots
+        for slots in itertools.combinations(range(len(layout)), len(row))
+        if all(
+            layout[slot] == is_grandstaff for slot, is_grandstaff in zip(slots, row, strict=True)
+        )
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _assign_parts(staffs: list[MultiStaff]) -> list[tuple[int, ...]] | None:
+    """
+    For every system the parts which its staffs belong to, the parts are the staffs
+    of the largest system. None if a system doesn't fit into it unambiguously.
+    """
+    layouts = {_layout(row) for row in staffs}
+    largest = max(layouts, key=len)
+    if any(len(layout) == len(largest) and layout != largest for layout in layouts):
+        return None
+    result = []
+    for row in staffs:
+        slots = _slots_in_layout(_layout(row), largest)
+        if slots is None:
+            return None
+        result.append(slots)
+    return result
+
+
+def _measure_rests_like(symbols: list[EncodedSymbol], is_grandstaff: bool) -> list[EncodedSymbol]:
+    """
+    Rests for a staff which is hidden in a system: one per measure of the symbols
+    another staff of the system has, with the same barlines.
+    """
+    positions = ["upper", "lower"] if is_grandstaff else ["upper"]
+    result: list[EncodedSymbol] = []
+    in_measure = False
+    for symbol in symbols:
+        if symbol.rhythm.startswith(("note", "rest")) and not in_measure:
+            for i, position in enumerate(positions):
+                if i > 0:
+                    result.append(EncodedSymbol("chord"))
+                result.append(EncodedSymbol("measureRest", position=position))
+            in_measure = True
+        elif "barline" in symbol.rhythm or "repeat" in symbol.rhythm:
+            result.append(EncodedSymbol(symbol.rhythm))
+            in_measure = False
+    return result
+
+
 def parse_staffs(
     debug: Debug,
     staffs: list[MultiStaff],
@@ -388,31 +327,54 @@ def parse_staffs(
     page_to_input_image maps the coordinates of image back to the image the user provided,
     it's used to fill EncodedSymbol.image_coordinates.
     """
-    staffs = _ensure_same_number_of_staffs(staffs)
+    parts = [tuple(range(len(row.staffs))) for row in staffs]
+    if len({len(staff.staffs) for staff in staffs}) > 1:
+        # The voices are read across systems, a system with fewer staffs hides some
+        assigned = _assign_parts(staffs)
+        if assigned is None:
+            eprint("The layout changes on the page, reading every staff on its own")
+            staffs = [single for staff in staffs for single in staff.break_apart()]
+            parts = [(0,)] * len(staffs)
+        else:
+            eprint("Staffs are hidden in some systems, parts of the systems:", assigned)
+            parts = assigned
     # For simplicity we call every staff in a multi staff a voice,
     # even if it's part of a grand staff.
-    number_of_voices = _get_number_of_voices(staffs)
+    number_of_voices = max(len(staff.staffs) for staff in staffs)
+    layout = next(_layout(row) for row in staffs if len(row.staffs) == number_of_voices)
     i = 0
-    voices = []
+    results: dict[tuple[int, int], list[EncodedSymbol]] = {}
     regions = StaffRegions(staffs)
     for voice in range(number_of_voices):
-        staffs_for_voice = [staff.staffs[voice] for staff in staffs]
-        result_for_voice = []
-        for staff_index, staff in enumerate(staffs_for_voice):
+        for staff_index, row in enumerate(staffs):
+            if voice not in parts[staff_index]:
+                continue
             if selected_staff >= 0 and staff_index != selected_staff:
                 eprint("Ignoring staff due to selected_staff argument", i)
                 i += 1
                 continue
+            staff = row.staffs[parts[staff_index].index(voice)]
             result_staff = parse_staff_image(
                 debug, i, staff, image, regions, config, page_to_input_image
             )
-            if len(result_staff) == 0:
-                eprint("Skipping empty staff", i)
-                i += 1
-                continue
-            result_staff.append(EncodedSymbol("newline"))
-            result_for_voice.extend(result_staff)
             i += 1
+            if len(result_staff) == 0:
+                eprint("Skipping empty staff", i - 1)
+                continue
+            results[(staff_index, voice)] = result_staff
+
+    voices = []
+    for voice in range(number_of_voices):
+        result_for_voice = []
+        for staff_index, slots in enumerate(parts):
+            symbols = results.get((staff_index, voice))
+            shown = [results[(staff_index, v)] for v in slots if (staff_index, v) in results]
+            if voice not in slots and len(shown) > 0:
+                symbols = _measure_rests_like(shown[0], layout[voice])
+            if symbols is None:
+                continue
+            result_for_voice.extend(symbols)
+            result_for_voice.append(EncodedSymbol("newline"))
 
         voices.append(remove_duplicated_symbols(result_for_voice))
     return voices

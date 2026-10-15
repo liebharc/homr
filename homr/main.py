@@ -43,8 +43,9 @@ from homr.simple_logging import eprint
 from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
+from homr.system_repair import repair_systems
 from homr.title_detection import detect_title, download_ocr_weights
-from homr.transformer.configs import Config, default_config, root_dir
+from homr.transformer.configs import Config, default_config
 from homr.type_definitions import NDArray
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -212,6 +213,7 @@ def process_image(
                 image_path, config
             )
         debug_cleanup = debug
+        multi_staffs = repair_systems(debug, multi_staffs)
 
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.transformer_use_gpu
@@ -329,6 +331,8 @@ def get_all_image_files_in_folder(folder: str) -> list[str]:
     image_files = []
     for ext in ["png", "jpg", "jpeg", "pdf", "PNG", "JPG", "JPEG", "PDF"]:
         image_files.extend(glob.glob(os.path.join(folder, "**", f"*.{ext}"), recursive=True))
+    # On case-insensitive file systems the upper and lower case patterns match the same files
+    image_files = list(dict.fromkeys(image_files))
     without_teasers = [
         img
         for img in image_files
@@ -387,7 +391,6 @@ def run_homr(
     """
     eprint("Merging", len(images), "files:", images)
     xml_paths = []
-    filename = os.path.splitext(os.path.basename(images[0]))[0]
     for image_file in images:
         eprint("=========================================")
         try:
@@ -398,13 +401,13 @@ def run_homr(
             return  # Don't need to continue (save time)
 
     if len(xml_paths) == len(images) and len(xml_paths) > 1:
-        output_path = os.path.join(root_dir, f"{filename}_merged.musicxml")
         m, _, _ = process_concat(xml_paths)
-        ET.ElementTree(m).write(output_path, encoding="UTF-8", xml_declaration=True)
-
         for path in xml_paths:
             if os.path.exists(path):
                 os.remove(path)
+        filename = os.path.splitext(images[0])[0]
+        output_path = f"{filename}.musicxml"
+        ET.ElementTree(m).write(output_path, encoding="UTF-8", xml_declaration=True)
 
         eprint(f"Saved the generated musicxml at {output_path}")
 

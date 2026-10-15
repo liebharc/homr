@@ -257,23 +257,27 @@ def extract(
     if npy_path.exists() and use_cache:
         eprint("Found a cache")
         file_hash = hashlib.sha256(original_image).hexdigest()  # type: ignore
-        with lzma.open(npy_path, "rb") as f:
-            staff = np.load(f)
-            notehead = np.load(f)
-            symbols = np.load(f)
-            stems_rests = np.load(f)
-            clefs_keys = np.load(f)
-            cached_file_hash = f.readline().decode().strip()
-            model_name = f.readline().decode().strip()
-            if cached_file_hash == "" or model_name == "":
-                eprint("Cache is missing meta information, skipping cache")
-            elif file_hash != cached_file_hash:
-                eprint("File hash mismatch, skipping cache")
-            elif model_name != segmentation_version:
-                eprint("Models have been updated, skipping cache")
-            else:
-                loaded_from_cache = True
-                eprint("Loading from cache")
+        try:
+            with lzma.open(npy_path, "rb") as f:
+                staff = np.load(f)
+                notehead = np.load(f)
+                symbols = np.load(f)
+                stems_rests = np.load(f)
+                clefs_keys = np.load(f)
+                cached_file_hash = f.readline().decode().strip()
+                model_name = f.readline().decode().strip()
+        except (EOFError, lzma.LZMAError, ValueError):
+            # E.g. written by an interrupted run
+            cached_file_hash = model_name = ""
+        if cached_file_hash == "" or model_name == "":
+            eprint("Cache is missing meta information, skipping cache")
+        elif file_hash != cached_file_hash:
+            eprint("File hash mismatch, skipping cache")
+        elif model_name != segmentation_version:
+            eprint("Models have been updated, skipping cache")
+        else:
+            loaded_from_cache = True
+            eprint("Loading from cache")
 
     if not loaded_from_cache:
         staff, symbols, stems_rests, notehead, clefs_keys = inference(
