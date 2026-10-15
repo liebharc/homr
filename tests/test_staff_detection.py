@@ -10,6 +10,7 @@ from homr.staff_detection import (
     StaffAnchor,
     StaffLineSegment,
     connect_staff_lines,
+    estimate_unit_size_from_clefs,
     filter_neighbor_page,
     find_horizontal_lines,
     merge_staffs_in_same_row,
@@ -73,3 +74,12 @@ class TestStaffDetection(unittest.TestCase):
     def test_find_horizontal_lines_without_lines(self) -> None:
         empty = np.zeros((200, 20), dtype=np.uint8)
         self.assertEqual([], find_horizontal_lines(empty, 10))
+
+    def test_estimate_unit_size_from_clefs(self) -> None:
+        lines = [
+            RotatedBoundingBox(((300, 100 + 10 * i), (400, 2), 0), np.array([])) for i in range(5)
+        ]
+        clef = RotatedBoundingBox(((150, 120), (20, 40), 0), np.array([]))
+
+        self.assertAlmostEqual(10, estimate_unit_size_from_clefs(lines, [clef]) or 0, delta=0.5)
+        self.assertIsNone(estimate_unit_size_from_clefs(lines, []))

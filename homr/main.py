@@ -40,7 +40,12 @@ from homr.resize import resize_image
 from homr.segmentation.config import segnet_path_onnx, segnet_path_onnx_fp16
 from homr.segmentation.inference_segnet import extract
 from homr.simple_logging import eprint
-from homr.staff_detection import break_wide_fragments, detect_staff, make_lines_stronger
+from homr.staff_detection import (
+    break_wide_fragments,
+    detect_staff,
+    estimate_unit_size_from_clefs,
+    make_lines_stronger,
+)
 from homr.staff_parsing import parse_staffs
 from homr.staff_position_save_load import load_staff_positions, save_staff_positions
 from homr.system_repair import repair_systems
@@ -270,12 +275,15 @@ def detect_staffs_in_image(
     noteheads_with_stems = combine_noteheads_with_stems(symbols.noteheads, symbols.stems_rest)
     debug.write_bounding_boxes_alternating_colors("notehead_with_stems", noteheads_with_stems)
     eprint("Found " + str(len(noteheads_with_stems)) + " noteheads")
-    if len(noteheads_with_stems) == 0:
-        raise Exception("No noteheads found")
-
-    average_note_head_height = float(
-        np.median([notehead.notehead.size[1] for notehead in noteheads_with_stems])
-    )
+    if len(noteheads_with_stems) > 0:
+        average_note_head_height = float(
+            np.median([notehead.notehead.size[1] for notehead in noteheads_with_stems])
+        )
+    else:
+        unit_size = estimate_unit_size_from_clefs(symbols.staff_fragments, symbols.clefs_keys)
+        if unit_size is None:
+            raise Exception("No noteheads or clefs found")
+        average_note_head_height = unit_size
     eprint("Average note head height: " + str(average_note_head_height))
 
     all_noteheads = [notehead.notehead for notehead in noteheads_with_stems]
@@ -398,7 +406,7 @@ def run_homr(
             eprint("Finished", image_file)
         except Exception as e:
             eprint(f"An error occurred while processing {image_file}: {e}")
-            return  # Don't need to continue (save time)
+            raise
 
     if len(xml_paths) == len(images) and len(xml_paths) > 1:
         m, _, _ = process_concat(xml_paths)
@@ -560,6 +568,8 @@ def main() -> None:
         except InvalidProgramArgumentException as e:
             eprint(str(e))
             sys.exit(2)
+        except Exception:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

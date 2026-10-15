@@ -903,6 +903,19 @@ def break_wide_fragments(
     return result
 
 
+def estimate_unit_size_from_clefs(
+    staff_fragments: list[RotatedBoundingBox], clefs_keys: list[RotatedBoundingBox]
+) -> float | None:
+    """
+    Estimates the unit size from the staff lines around clefs.
+    Fallback for images without noteheads, e.g. a staff with only rests.
+    """
+    anchors = find_staff_anchors(staff_fragments, clefs_keys, are_clefs=True)
+    if len(anchors) == 0:
+        return None
+    return float(np.median([anchor.average_unit_size for anchor in anchors]))
+
+
 def detect_staff(
     debug: Debug,
     image: NDArray,
