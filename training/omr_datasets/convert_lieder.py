@@ -561,7 +561,7 @@ def _split_file_into_staffs(
         measures = splitter[current_voice]
         staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
         if not just_token_files:
-            y_offset = 50
+            y_offset = 80
             x_offset_right = 10
             x_offset_left = 40
             x = total_staff_area.x - x_offset_left
