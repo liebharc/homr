@@ -146,14 +146,14 @@ class TestUnreliableArticulation(unittest.TestCase):
         self.assertEqual(_without_unreliable_articulation("staccatissimo_staccato"), "_")
 
     def test_keeps_reliable_components_of_compound_values(self) -> None:
-        self.assertEqual(_without_unreliable_articulation("accent_staccato"), "accent")
+        self.assertEqual(_without_unreliable_articulation("accentStrong_staccato"), "accentStrong")
         self.assertEqual(_without_unreliable_articulation("fermata_turn"), "fermata")
         self.assertEqual(
-            _without_unreliable_articulation("accent_staccato_tenuto"), "accent_tenuto"
+            _without_unreliable_articulation("accentStrong_staccato_tenuto"), "accentStrong_tenuto"
         )
 
     def test_leaves_reliable_only_values_unchanged(self) -> None:
-        self.assertEqual(_without_unreliable_articulation("accent"), "accent")
+        self.assertEqual(_without_unreliable_articulation("accentStrong"), "accentStrong")
 
     def test_passes_through_nonote_and_empty(self) -> None:
         self.assertEqual(_without_unreliable_articulation("."), ".")
@@ -162,15 +162,15 @@ class TestUnreliableArticulation(unittest.TestCase):
     def test_strip_articulation_from_parts_clears_only_unreliable_symbols(self) -> None:
         part = [
             EncodedSymbol("note_4", "C5", articulation="staccato"),
-            EncodedSymbol("note_4", "D5", articulation="accent"),
-            EncodedSymbol("note_4", "E5", articulation="accent_staccato"),
+            EncodedSymbol("note_4", "D5", articulation="accentStrong"),
+            EncodedSymbol("note_4", "E5", articulation="accentStrong_staccato"),
         ]
 
         result = _strip_articulation_from_parts([part])
 
         self.assertEqual(
             [s.articulation for s in result[0]],
-            ["_", "accent", "accent"],
+            ["_", "accentStrong", "accentStrong"],
         )
         # Original symbols must not be mutated - only copies are edited.
         self.assertEqual(part[0].articulation, "staccato")

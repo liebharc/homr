@@ -115,8 +115,8 @@ class Measure(list[EncodedSymbol]):
 DURATION_NUMBER = {v: k for k, v in DURATION_NAMES.items()}
 
 ARTIC_MAPPING: dict[str, str] = {
-    "strongAccent": "accent",
-    "softAccent": "accent",
+    "strongAccent": "accentStrong",
+    "softAccent": "accentSoft",
     "invertedTurn": "turn",
     "trillMark": "trill",
     # trill and vibrato according to https://www.w3.org/2021/06/musicxml40/musicxml-reference/elements/wavy-line/

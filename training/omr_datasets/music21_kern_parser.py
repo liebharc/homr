@@ -77,7 +77,7 @@ _ARTIC_MAP: dict[str, str] = {
     "Staccato": "staccato",
     "Staccatissimo": "staccatissimo",
     "Accent": "accent",
-    "StrongAccent": "accent",
+    "StrongAccent": "accentStrong",
     "Tenuto": "tenuto",
     "Fermata": "fermata",
     "Arpeggiation": "arpeggiate",
