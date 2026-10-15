@@ -113,6 +113,7 @@ def build_articulation() -> dict[str, int]:
     # so we use it to define this list
     articulations_lieder = [
         "accent",
+        "accent_accentStrong",
         "accent_arpeggiate",
         "accent_arpeggiate_fermata",
         "accent_arpeggiate_staccato",

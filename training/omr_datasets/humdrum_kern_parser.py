@@ -295,7 +295,7 @@ class HumdrumKernConverter:
             "M": "trill",  # invertedMordent maps to trill in our XML parser
             "S": "turn",
             "$": "turn",
-            "^": "accent", # there are no marcato (accentStrong) in the datasets
+            "^": "accent",  # there are no marcato (accentStrong) in the datasets
             ";": "fermata",
         }
         articulations = []
