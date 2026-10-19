@@ -11,6 +11,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from random import randint
 
 import cv2
 import numpy as np
@@ -31,7 +32,6 @@ from training.omr_datasets.music_xml_parser import (
     normalize_barlines_and_repeats,
 )
 from training.transformer.training_vocabulary import token_lines_to_str
-from random import randint
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = Path(script_location).parent.parent.absolute()
@@ -565,7 +565,7 @@ def _split_file_into_staffs(
             # Before y_offset was 50 which sometimes cut off dynamics
             # The random offset creates more data augmentation
             y_offset = randint(65, 85)
-            x_offset_right = randint(8,12)
+            x_offset_right = randint(8, 12)
             x_offset_left = randint(30, 50)
             x = total_staff_area.x - x_offset_left
             y = total_staff_area.y - y_offset
