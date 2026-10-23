@@ -624,7 +624,7 @@ def build_articulations(
         elif articulation == "accent":
             xml_articulations.append(ET.Element("accent"))
         elif articulation == "accentStrong":
-            xml_articulations.append(ET.Element("accentStrong"))
+            xml_articulations.append(ET.Element("strong-accent"))
         elif articulation == "mordent":
             xml_articulations.append(ET.Element("mordent"))
         elif articulation == "staccato":
