@@ -1,27 +1,38 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Report a problem with a real image
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!--
+Thanks for taking the time to report a problem! homr is a volunteer project
+and we work on it in our free time. These points help us help you:
 
-**Input Image**
-The original image that triggers this bug (not the image name). In *.jpg* or *.png* format, *.pdf* file will not work.
+- Please attach a real image: a scan or photo of actual sheet music.
+  Synthetic or AI generated images show problems that don't occur in
+  practice, so we can't work with them.
+- Please keep it short. A few sentences and the image tell us more than a
+  long analysis. If an AI helps you write, trim its output to the essentials,
+  LLM text tends to be long and we read every word.
+- Issues are for problems, pull requests are for solutions. If you have a
+  fix, open a pull request: before, together with or without an issue is
+  all fine.
+-->
 
-You can attach the image file by simply dragging the file to the text area.
+**What happens**
+<!-- What did you expect and what did homr do instead? A few sentences are enough. -->
 
-***IMPORTANT*** The issue will be closed directly if you don't provide the image and the issue relates to transcription bugs.
+**Image**
+<!-- Drag the original image (.png, .jpg or .pdf) here. We can only look into transcription problems with the image. -->
 
-**Full Traceback**
-The complete error traceback.
+**Command**
+<!-- For example `homr sheet.png`, including the flags you used. -->
 
-**Command You Execute**
-The complete command you executed. Should looks like `homr sheet.png`, including flags you added.
+**Traceback**
+<!-- Only if homr crashed: the complete error output. -->
 
 **AI usage**
-If you used an AI to create this issue, please explain how you used it. For example to what extend you verified the AI's output.
+<!-- Did you use AI for this issue? How, and what did you check yourself? -->
