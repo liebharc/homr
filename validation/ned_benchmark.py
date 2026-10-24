@@ -357,7 +357,12 @@ def run_benchmark(
                 except queue.Empty:
                     return
                 batch.begin()
-                tool.batch_run(batch.samples)
+                try:
+                    tool.batch_run(batch.samples)
+                except Exception as e:  # noqa: BLE001
+                    # The main thread waits for every batch, it must not get lost
+                    for sample in batch.samples:
+                        sample.set_failure(str(e))
                 batch.end()
                 completed.put(batch)
 
