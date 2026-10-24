@@ -322,7 +322,6 @@ class TokensMeasure:
 
 
 class TupletState:
-
     def __init__(self) -> None:
         self.started = False
         self.last_stop_position = -1
@@ -518,7 +517,7 @@ def _count_dots(note: ET.Element) -> int:
     return len(dots)
 
 
-def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
+def _process_attributes(part: TokensPart, attribute: ET.Element) -> int:
     divs = _children(attribute, "divisions")
     if len(divs) > 0:
         part.divisions = _int_text(divs[0], 1) or 1
@@ -553,9 +552,11 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> None:
             raise ValueError(f"Unsupported time signature denominator: {beat_type}")
         part.append_symbol(EncodedSymbol(f"timeSignature/{beat_type}"))
 
+    multiple_rest_duration = 0
     style = _children(attribute, "measure-style")
     if len(style) > 0:
-        _process_multi_rests(part, style[0])
+        multiple_rest_duration = _process_multi_rests(part, style[0])
+    return multiple_rest_duration
 
 
 def _alter_to_lifts(alter: int) -> str:
@@ -815,27 +816,46 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
             raise ValueError("Octave shift isn't supported")
 
 
-def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> None:
+def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> int:
     rests = _children(measure_style, "multiple-rest")
     if len(rests) == 0:
-        return
+        return 0
     rest = rests[0]
-    rest_duration = min(_int_text(rest), 10)
-    part.append_symbol(EncodedSymbol(f"rest_{rest_duration}m", empty, empty, empty, empty, "upper"))
+    rest_duration = _int_text(rest)
+    # MusicXML represents a multi-measure rest as N ordinary <measure>s. MuseScore
+    # renders it as one measure, so the following N - 1 XML measures must be omitted
+    # by the caller to keep token and SVG measure counts aligned.
+    if rest_duration > 1:
+        part.append_symbol(
+            EncodedSymbol(f"rest_{min(rest_duration, 10)}m", empty, empty, empty, empty, "upper")
+        )
+    return rest_duration
 
 
 def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
     tokens = TokensPart()
+    measures_to_skip = 0
     for measure in _children(part, "measure"):
+        if measures_to_skip > 0:
+            # The final hidden measure can carry the rendered right barline.
+            if measures_to_skip == 1:
+                for child in list(measure):
+                    if child.tag == "barline":
+                        _process_barline(tokens, child)
+            measures_to_skip -= 1
+            continue
         tokens.set_main_voices(_find_main_voices(measure))
+        multiple_rest_duration = 0
         for child in list(measure):
             if child.tag == "attributes":
-                _process_attributes(tokens, child)
-            if child.tag == "note":
+                multiple_rest_duration = _process_attributes(tokens, child)
+            # The first collapsed measure contains a placeholder whole rest in
+            # MusicXML. Its duration is represented by the multi-rest token.
+            if child.tag == "note" and multiple_rest_duration <= 1:
                 _process_note(tokens, child)
-            if child.tag == "backup":
+            if child.tag == "backup" and multiple_rest_duration <= 1:
                 _process_backup(tokens, child)
-            if child.tag == "forward":
+            if child.tag == "forward" and multiple_rest_duration <= 1:
                 _process_forward(tokens, child)
             if child.tag == "barline":
                 _process_barline(tokens, child)
@@ -844,6 +864,7 @@ def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
             if child.tag == "direction":
                 _process_direction(tokens, child)
         tokens.on_end_of_measure()
+        measures_to_skip = max(multiple_rest_duration - 1, 0)
     return tokens.get_measures()
 
 

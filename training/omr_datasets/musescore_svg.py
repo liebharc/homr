@@ -204,7 +204,7 @@ def _parse_note_position(note: minidom.Element) -> tuple[float, float]:
         return values[4], values[5]
 
     class_name = note.getAttribute("class")
-    if class_name in ("Note", "Rest"):
+    if class_name in ("Note", "Rest", "MMRest"):
         points = note.getAttribute("d")
         match = re.search(r"[Mm]\s*(-?[\d.]+)[\s,]+(-?[\d.]+)", points)
         assert match, f"Could not parse note position: {points}"
@@ -381,7 +381,7 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
         notes: list[tuple[float, float]] = []
         for path in doc.getElementsByTagName("path"):
             class_name = path.getAttribute("class")
-            if class_name in ("Note", "Rest"):
+            if class_name in ("Note", "Rest", "MMRest"):
                 notes.append(_parse_note_position(path))
 
         combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
