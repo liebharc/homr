@@ -3,11 +3,21 @@ name: Polish scores
 # Runs the Polish scores benchmark. On main the result is cached as the baseline,
 # on PRs it's compared against the newest main result in the job summary.
 
+# Only files which can change the result: homr, the benchmark with its parsers and the dependencies
 on:
   push:
     branches: [main]
+    paths: &benchmark-paths
+      - 'homr/**'
+      - 'validation/**'
+      - 'training/omr_datasets/**'
+      - 'training/transformer/training_vocabulary.py'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - '.github/workflows/polish-scores.yml'
   pull_request:
     branches: [main]
+    paths: *benchmark-paths
 
   workflow_dispatch:
 
@@ -73,9 +83,6 @@ jobs:
         run: |
           if [ -f polish-main.db ]; then
             echo "Compared with ${{ steps.main.outputs.cache-matched-key }}" >> "$GITHUB_STEP_SUMMARY"
-            if [ "${{ steps.main.outputs.cache-hit }}" != "true" ]; then
-              echo "⚠️ No result for main at ${{ github.event.pull_request.base.sha }} yet, the difference includes changes on main" >> "$GITHUB_STEP_SUMMARY"
-            fi
             poetry run python -m validation.compare_benchmarks polish.db --base polish-main.db >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No main result cached yet" >> "$GITHUB_STEP_SUMMARY"
