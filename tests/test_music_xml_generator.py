@@ -843,7 +843,7 @@ keySignature_-2 . . . . .
 note_8 F5 _ _ _ upper&note_8 F4 _ _ _ upper&note_8 F2 _ _ _ lower&note_8 D5 _ _ _ upper&note_8 B4 b _ _ upper
 rest_8 _ _ _ _ upper&rest_8 _ _ _ _ lower
 clef_G2 _ _ _ _ lower&clef_F4 _ _ _ _ upper
-rest_8 _ _ _ _ upper&note_2 F4 _ _ _ lower&note_2 D4 _ _ _ lower&note_2 B4 b accent _ lower
+rest_8 _ _ _ _ upper&note_2 F4 _ _ _ lower&note_2 D4 _ _ _ lower&note_2 B4 b accentStrong _ lower
 note_12 C3 # _ slurStart upper
 note_12 E3 b _ _ upper
 note_12 D3 _ _ _ upper
