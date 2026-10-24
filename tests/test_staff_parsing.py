@@ -1,13 +1,14 @@
 import unittest
 
 from homr.model import MultiStaff, Staff, StaffPoint
-from homr.staff_parsing import _assign_parts, _measure_rests_like
+from homr.staff_parsing import _assign_parts, _clean_up_voice, _measure_rests_like
 from homr.system_repair import (
     _common_layout,
     _ensure_same_number_of_staffs,
     _unify_grand_staffs,
 )
 from homr.transformer.vocabulary import EncodedSymbol
+from training.transformer.training_vocabulary import read_token_lines
 
 
 def make_staff(number: float, is_grandstaff: bool = False) -> Staff:
@@ -294,3 +295,19 @@ class TestStaffParsing(unittest.TestCase):
             [s.rhythm for s in result],
         )
         self.assertEqual("lower", result[2].position)
+
+    def test_clean_up_voice_restores_unmarked_triplets(self) -> None:
+        # Three eighths in the right hand against each quarter in the left hand
+        measure = """note_8 C5 _ _ _ upper&note_4 C3 _ _ _ lower
+note_8 D5 _ _ _ upper
+note_8 E5 _ _ _ upper
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+keySignature_0 . . . . .
+timeSignature/4 . . . . ."""
+        symbols = read_token_lines([*header.splitlines(), *measure.splitlines() * 3])
+
+        result = _clean_up_voice(symbols)
+
+        right_hand = [s.rhythm for s in result if s.position == "upper" and "note" in s.rhythm]
+        self.assertEqual(["note_12"] * 9, right_hand)
