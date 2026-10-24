@@ -45,6 +45,8 @@ jobs:
         run: poetry run homr --init --gpu no
 
       - name: Benchmark
+        env:
+          PYTHONUNBUFFERED: 1  # Print the progress immediately
         run: poetry run python -m validation.polish-scores --tool homr --output polish.db
 
       - name: Store main result
