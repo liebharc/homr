@@ -20,6 +20,10 @@ you post.
   images are no evidence for a bug or an improvement.
 - It's easy to optimize an OMR system for a handful of examples. Such changes don't
   bring the project forward.
+- The benchmarks are a check, not a target. Our goal is to work well on diverse sheet
+  music, scanned or photographed with a smartphone, not to be the best at a benchmark.
+  Make a change for real images, then use the benchmarks to show that it holds up on
+  music it wasn't made for.
 - Polish scores is one benchmark of rather clean scans. A good result there is
   required, but it doesn't prove that a change helps real world use.
 
