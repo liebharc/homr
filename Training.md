@@ -82,11 +82,12 @@ Implementation: `rate_validation_result.py`
 Commit: 5eed84636c96eca5ce6d8e2f62580b74e7ed85e8
 Day: 11 October 2026
 Transformer Smoke Test: 6%
-System Level: 5.4 diffs, SER: 3.7%
-Polish scores: 16.41% | 16.46% after staff detection improvements
-SMB scores: 12.71% | 12.46% after staff detection improvements
+System Level: 5.4 diffs, SER: 3.7% | 5.0 diffs, SER: 3.5% with triplet restoration
+Polish scores: 16.41% | 16.46% after staff detection improvements | 15.41% with triplet restoration
+SMB scores: 12.71% | 12.46% after staff detection improvements | 12.75% with triplet restoration
 
 Tuplets whose number isn't printed are labelled as tuplets, and staff lines with many tuplets are kept in the training data. For more details see PR 181.
+Triplet restoration puts back triplets which are printed without their number after the transformer, see PR 194.
 
 # Run 465
 
