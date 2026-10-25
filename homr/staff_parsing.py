@@ -16,6 +16,7 @@ from homr.staff_regions import StaffRegions
 from homr.system_repair import _layout
 from homr.transformer.configs import Config, default_config
 from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
+from homr.triplet_restoration import restore_unmarked_triplets
 from homr.type_definitions import NDArray
 
 tr_omr_max_height = default_config.max_height
@@ -312,6 +313,10 @@ def _measure_rests_like(symbols: list[EncodedSymbol], is_grandstaff: bool) -> li
     return result
 
 
+def _clean_up_voice(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    return restore_unmarked_triplets(remove_duplicated_symbols(symbols))
+
+
 def parse_staffs(
     debug: Debug,
     staffs: list[MultiStaff],
@@ -376,5 +381,5 @@ def parse_staffs(
             result_for_voice.extend(symbols)
             result_for_voice.append(EncodedSymbol("newline"))
 
-        voices.append(remove_duplicated_symbols(result_for_voice))
+        voices.append(_clean_up_voice(result_for_voice))
     return voices
