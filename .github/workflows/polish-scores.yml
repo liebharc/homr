@@ -2,6 +2,7 @@ name: Polish scores
 
 # Runs the Polish scores benchmark. On main the result is cached as the baseline,
 # on PRs it's compared against the newest main result in the job summary.
+# PRs run once when opened; add the 'benchmark' label to run again on the latest commit.
 
 # Only files which can change the result: homr, the benchmark with its parsers and the dependencies
 on:
@@ -17,12 +18,14 @@ on:
       - '.github/workflows/polish-scores.yml'
   pull_request:
     branches: [main]
+    types: [opened, reopened, labeled]
     paths: *benchmark-paths
 
   workflow_dispatch:
 
 concurrency:
-  group: polish-scores-${{ github.event.pull_request.number || github.ref }}
+  # Other labels get their own group so they can't cancel a running benchmark
+  group: polish-scores-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'benchmark' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -30,6 +33,7 @@ permissions:
 
 jobs:
   benchmark:
+    if: github.event.action != 'labeled' || github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 300
 
