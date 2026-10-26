@@ -324,17 +324,17 @@ def _is_xml(text: str) -> bool:
     return stripped.startswith("<?xml") or "<score-partwise" in stripped[:500]
 
 
-def _pred_parts(raw_output: str, kern_parser: str, xml_parser: str) -> list[list[EncodedSymbol]]:
-    """Parse tool output (MusicXML or **kern) into per-part token lists.
+def _score_parts(text: str, kern_parser: str, xml_parser: str) -> list[list[EncodedSymbol]]:
+    """Parse a score (MusicXML or **kern) into per-part token lists.
 
     MusicXML is parsed with xml_parser; **kern is parsed directly with kern_parser
     - no intermediate kern->XML conversion.
     """
-    if _is_xml(raw_output):
-        xml_text = _split_grand_staff(raw_output)
+    if _is_xml(text):
+        xml_text = _split_grand_staff(text)
         raw = _xml_parts_from_text(xml_text, xml_parser)
         return [_strip_position(strip_naturals(p)) for p in raw]
-    raw = _kern_parts(raw_output, kern_parser)
+    raw = _kern_parts(text, kern_parser)
     return [_strip_position([t for chord in sort_token_chords(p) for t in chord]) for p in raw]
 
 
@@ -345,17 +345,14 @@ def _parse_output(
     xml_parser: str = "native",
     ignore_unreliable_articulation: bool = False,
 ) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
-    """Parse ground-truth kern and tool raw output into aligned per-part token lists.
+    """Parse ground truth (kern or MusicXML) and tool raw output into per-part token lists.
 
     ignore_unreliable_articulation: see "Known ground-truth reliability exceptions"
     above - opt-in only, set by callers benchmarking datasets with confirmed-unreliable
     articulation ground truth.
     """
-    kern_raw = _kern_parts(kern_text, kern_parser)
-    gt_parts = [
-        _strip_position([t for chord in sort_token_chords(p) for t in chord]) for p in kern_raw
-    ]
-    pred_parts = _pred_parts(raw_output, kern_parser, xml_parser)
+    gt_parts = _score_parts(kern_text, kern_parser, xml_parser)
+    pred_parts = _score_parts(raw_output, kern_parser, xml_parser)
     if ignore_unreliable_articulation:
         gt_parts = _strip_articulation_from_parts(gt_parts)
         pred_parts = _strip_articulation_from_parts(pred_parts)
@@ -595,7 +592,9 @@ def _musicdiff_parse_scores(
     import music21 as m21  # noqa: PLC0415
 
     with contextlib.redirect_stderr(io.StringIO()):
-        gt_raw = m21.converter.parse(kern_text, format="humdrum")
+        gt_raw = m21.converter.parse(
+            kern_text, format="musicxml" if _is_xml(kern_text) else "humdrum"
+        )
     if isinstance(gt_raw, m21.stream.Opus):
         gt_raw = gt_raw.scores[0] if gt_raw.scores else m21.stream.Score()
     gt_score: m21.stream.Score = (

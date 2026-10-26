@@ -1,0 +1,90 @@
+name: Sheet music photos
+
+# Runs the sheet music photos benchmark. On main the result is cached as the baseline,
+# on PRs it's compared against the newest main result in the job summary.
+
+# Only files which can change the result: homr, the benchmark with its parsers and the dependencies
+on:
+  push:
+    branches: [main]
+    paths: &benchmark-paths
+      - 'homr/**'
+      - 'validation/**'
+      - 'training/omr_datasets/**'
+      - 'training/transformer/training_vocabulary.py'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - '.github/workflows/sheet-music-photos.yml'
+  pull_request:
+    branches: [main]
+    paths: *benchmark-paths
+
+  workflow_dispatch:
+
+concurrency:
+  group: sheet-music-photos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            poetry.lock
+
+      - name: Install poetry
+        run: |
+          python -m pip install poetry
+
+      - name: Init
+        run: make init-poetry
+
+      - name: Download models
+        run: poetry run homr --init --gpu no
+
+      - name: Benchmark
+        env:
+          PYTHONUNBUFFERED: 1  # Print the progress immediately
+        run: poetry run python -m validation.sheet_music_photos --tool homr --output photos.db
+
+      - name: Store main result
+        if: github.ref == 'refs/heads/main'
+        run: cp photos.db photos-main.db
+
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: photos-main.db
+          key: photos-main-${{ github.sha }}
+
+      - name: Load main result
+        if: github.ref != 'refs/heads/main'
+        id: main
+        uses: actions/cache/restore@v4
+        with:
+          path: photos-main.db
+          key: photos-main-${{ github.event.pull_request.base.sha }}
+          restore-keys: photos-main-
+
+      - name: Compare with main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          if [ -f photos-main.db ]; then
+            echo "Compared with ${{ steps.main.outputs.cache-matched-key }}" >> "$GITHUB_STEP_SUMMARY"
+            poetry run python -m validation.compare_benchmarks photos.db --base photos-main.db >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No main result cached yet" >> "$GITHUB_STEP_SUMMARY"
+            poetry run python -m validation.compare_benchmarks photos.db >> "$GITHUB_STEP_SUMMARY"
+          fi

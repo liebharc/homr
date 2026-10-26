@@ -110,6 +110,19 @@ poetry run python -m validation.polish-scores --tool transcoda --limit 10
 poetry run python -m validation.report smb_homr.db
 ```
 
+### Sheet Music Photos
+
+[sheet-music-photos](https://github.com/liebharc/sheet-music-photos): public domain scans of printed editions (1833 to 1929) and phone photos of them. It is cloned to `datasets/sheet-music-photos` on first use.
+
+- Samples: every clean scan (rendered at 200 dpi) and every photo.
+- Ground truth: `page.musicxml` if verified, else `reference.musicxml`.
+
+```bash
+poetry run python -m validation.sheet_music_photos                 # scans and photos
+poetry run python -m validation.sheet_music_photos --only photos
+poetry run python -m validation.sheet_music_photos --verified      # verified pages only
+```
+
 Output databases are named `<dataset>_<tool>.db` by default (e.g. `smb_homr.db`, `polish-scores_transcoda.db`). Pass `--output <path>` to override.
 
 ## Investigating Results
