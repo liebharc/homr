@@ -77,6 +77,15 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 512
+Commit: 2293bba14bfea47d9d28411339362af15fce4c31
+Day: 26 October 2026
+System Level: ?
+Polish scores: 15.33%
+SMB scores: 13.31% with staff detection improvements but without triplet restoration
+
+Adding dynamcis (PR 174), strong accents (PR 191) and minor fix to multirests (PR 195)
+
 # Run 480
 
 Commit: 5eed84636c96eca5ce6d8e2f62580b74e7ed85e8
