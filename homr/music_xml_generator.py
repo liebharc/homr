@@ -347,14 +347,25 @@ def build_or_get_barline(measure: ET.Element, location: str) -> ET.Element:
 
 
 def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
+    marks: list[ET.Element] = []
+    if model_dynamic.rhythm.startswith("dynamic"):
+        dynamic_name = model_dynamic.rhythm.split("_", 1)[1]
+        # `dynamic_empty` is the internal placeholder used for a modifier-only
+        # marking (for example, "più"). It is not a MusicXML dynamics element.
+        if dynamic_name != "empty":
+            marks.append(ET.Element(dynamic_name))
+    if model_dynamic.articulation.startswith("dynamic"):
+        text = ET.Element("other-dynamics")
+        text.text = model_dynamic.articulation.split("_", 1)[1].replace("piu", "più")
+        marks.append(text)
+
+    if not marks:
+        return
+
     direction = ET.SubElement(measure, "direction", placement="below")
     direction_type = ET.SubElement(direction, "direction-type")
     dynamics = ET.SubElement(direction_type, "dynamics")
-    if model_dynamic.rhythm.startswith("dynamic"):
-        ET.SubElement(dynamics, model_dynamic.rhythm.split("_")[1])
-    if model_dynamic.articulation.startswith("dynamic"):
-        text = ET.SubElement(dynamics, "other-dynamics")
-        text.text = model_dynamic.articulation.split("_")[1].replace("piu", "più")
+    dynamics.extend(marks)
 
     ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
 
