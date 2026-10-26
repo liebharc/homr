@@ -247,6 +247,10 @@ def build_measures(
             volta_number = state.stop_volta(measure_number)
             barline = build_or_get_barline(current_measure, "right")
             build_barline_ending(symbol, barline, volta_number)
+
+        elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
+            for dynamic in group.symbols:
+                build_dynamic(dynamic, current_measure)
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
@@ -340,6 +344,30 @@ def build_or_get_barline(measure: ET.Element, location: str) -> ET.Element:
         if child.tag == "barline" and child.get("location") == location:
             return child
     return ET.SubElement(measure, "barline", location=location)
+
+
+def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
+    marks: list[ET.Element] = []
+    if model_dynamic.rhythm.startswith("dynamic"):
+        dynamic_name = model_dynamic.rhythm.split("_", 1)[1]
+        # `dynamic_empty` is the internal placeholder used for a modifier-only
+        # marking (for example, "più"). It is not a MusicXML dynamics element.
+        if dynamic_name != "empty":
+            marks.append(ET.Element(dynamic_name))
+    if model_dynamic.articulation.startswith("dynamic"):
+        text = ET.Element("other-dynamics")
+        text.text = model_dynamic.articulation.split("_", 1)[1].replace("piu", "più")
+        marks.append(text)
+
+    if not marks:
+        return
+
+    direction = ET.SubElement(measure, "direction", placement="below")
+    direction_type = ET.SubElement(direction, "direction-type")
+    dynamics = ET.SubElement(direction_type, "dynamics")
+    dynamics.extend(marks)
+
+    ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
 
 
 def build_key(model_key: EncodedSymbol, attributes: ET.Element) -> None:
@@ -611,50 +639,50 @@ def build_articulations(
 
     xml_articulations: list[ET.Element] = []
     xml_ornaments: list[ET.Element] = []
-
-    for articulation in articualations.split("_"):
-        if articulation == "":
-            continue
-        elif articulation == nonote:
-            eprint("WARNING note without valid articulation", articualations)
-        elif articulation == "fermata":
-            ET.SubElement(notation, "fermata")
-        elif articulation == "arpeggiate":
-            ET.SubElement(notation, "arpeggiate")
-        elif articulation == "accent":
-            xml_articulations.append(ET.Element("accent"))
-        elif articulation == "mordent":
-            xml_articulations.append(ET.Element("mordent"))
-        elif articulation == "staccato":
-            xml_articulations.append(ET.Element("staccato"))
-        elif articulation == "staccatissimo":
-            xml_articulations.append(ET.Element("staccatissimo"))
-        elif articulation == "tenuto":
-            xml_articulations.append(ET.Element("tenuto"))
-        elif articulation == "tremolo":
-            el = ET.Element("tremolo", type=state.toggle_tremolo_state())
-            el.text = "3"
-            xml_ornaments.append(el)
-        elif articulation == "trill":
-            xml_ornaments.append(ET.Element("trill-mark"))
-        elif articulation == "breathMark":
-            xml_articulations.append(ET.Element("breath-mark"))
-        elif articulation == "turn":
-            xml_ornaments.append(ET.Element("inverted-turn"))
-        elif articulation == "caesura":
-            xml_articulations.append(ET.Element("caesura"))
-        elif articulation == "doit":
-            xml_articulations.append(ET.Element("doit"))
-        elif articulation == "slurStart":
-            ET.SubElement(notation, "slur", type="start")
-        elif articulation == "slurStop":
-            ET.SubElement(notation, "slur", type="stop")
-        elif articulation == "tieStart":
-            ET.SubElement(notation, "tied", type="start")
-        elif articulation == "tieStop":
-            ET.SubElement(notation, "tied", type="stop")
-        else:
-            raise ValueError("Unsupported articulation " + articulation)
+    if not articualations.startswith("dynamic"):
+        for articulation in articualations.split("_"):
+            if articulation == "":
+                continue
+            elif articulation == nonote:
+                eprint("WARNING note without valid articulation", articualations)
+            elif articulation == "fermata":
+                ET.SubElement(notation, "fermata")
+            elif articulation == "arpeggiate":
+                ET.SubElement(notation, "arpeggiate")
+            elif articulation == "accent":
+                xml_articulations.append(ET.Element("accent"))
+            elif articulation == "mordent":
+                xml_articulations.append(ET.Element("mordent"))
+            elif articulation == "staccato":
+                xml_articulations.append(ET.Element("staccato"))
+            elif articulation == "staccatissimo":
+                xml_articulations.append(ET.Element("staccatissimo"))
+            elif articulation == "tenuto":
+                xml_articulations.append(ET.Element("tenuto"))
+            elif articulation == "tremolo":
+                el = ET.Element("tremolo", type=state.toggle_tremolo_state())
+                el.text = "3"
+                xml_ornaments.append(el)
+            elif articulation == "trill":
+                xml_ornaments.append(ET.Element("trill-mark"))
+            elif articulation == "breathMark":
+                xml_articulations.append(ET.Element("breath-mark"))
+            elif articulation == "turn":
+                xml_ornaments.append(ET.Element("inverted-turn"))
+            elif articulation == "caesura":
+                xml_articulations.append(ET.Element("caesura"))
+            elif articulation == "doit":
+                xml_articulations.append(ET.Element("doit"))
+            elif articulation == "slurStart":
+                ET.SubElement(notation, "slur", type="start")
+            elif articulation == "slurStop":
+                ET.SubElement(notation, "slur", type="stop")
+            elif articulation == "tieStart":
+                ET.SubElement(notation, "tied", type="start")
+            elif articulation == "tieStop":
+                ET.SubElement(notation, "tied", type="stop")
+            else:
+                raise ValueError("Unsupported articulation " + articulation)
 
     if tuplet_mark != "":
         ET.SubElement(notation, "tuplet", type=tuplet_mark)
