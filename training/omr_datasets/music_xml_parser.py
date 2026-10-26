@@ -117,7 +117,7 @@ class Measure(list[EncodedSymbol]):
 DURATION_NUMBER = {v: k for k, v in DURATION_NAMES.items()}
 
 ARTIC_MAPPING: dict[str, str] = {
-    "strongAccent": "accent",
+    "strongAccent": "accentStrong",
     "softAccent": "accent",
     "invertedTurn": "turn",
     "trillMark": "trill",
