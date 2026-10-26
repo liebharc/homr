@@ -137,6 +137,22 @@ def _strip_articulation_from_parts(
     return result
 
 
+def _notes_and_rests_only(parts: list[list[EncodedSymbol]]) -> list[list[EncodedSymbol]]:
+    """Keeps only notes, rests and chord links, without articulation and slur."""
+    result = []
+    for part in parts:
+        new_part = []
+        for s in part:
+            if s.rhythm != "chord" and not s.rhythm.startswith(("note_", "rest_")):
+                continue
+            kept = copy.copy(s)
+            kept.articulation = nonote
+            kept.slur = nonote
+            new_part.append(kept)
+        result.append(new_part)
+    return result
+
+
 def _strip_articulation_from_score(score: "m21.stream.Score") -> None:
     """musicdiff-path counterpart to _strip_articulation_from_parts above: mutates the
     music21 Score in place, removing only Staccato/Staccatissimo articulations and
@@ -175,13 +191,15 @@ def _component_dist(a: list[EncodedSymbol], b: list[EncodedSymbol], field: str) 
 def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
     """
     Split a single <part> with <staves>2</staves> into two single-staff <part>
-    elements. Returns [part] unchanged if it isn't a 2-staff grand staff (this
-    also covers the (currently unseen) 3+-staff case: splitting would silently
-    drop any staff beyond the second, so we leave those parts alone rather
-    than guess).
+    elements. <staves> may change within the part, e.g. single staff systems
+    followed by grand staves; the second part then has empty measures where
+    the page shows one staff. Returns [part] unchanged if it never has 2
+    staves (this also covers the (currently unseen) 3+-staff case: splitting
+    would silently drop any staff beyond the second, so we leave those parts
+    alone rather than guess).
     """
-    staves_el = part.find(".//staves")
-    if staves_el is None or int(staves_el.text or "1") != 2:
+    staves = [int(el.text or "1") for el in part.iter("staves")]
+    if not staves or max(staves) != 2:
         return [part]
 
     def _staff_num(el: ET.Element) -> int:
@@ -344,18 +362,23 @@ def _parse_output(
     kern_parser: str = "native",
     xml_parser: str = "native",
     ignore_unreliable_articulation: bool = False,
+    notes_and_rests_only: bool = False,
 ) -> tuple[list[list[EncodedSymbol]], list[list[EncodedSymbol]]]:
     """Parse ground truth (kern or MusicXML) and tool raw output into per-part token lists.
 
     ignore_unreliable_articulation: see "Known ground-truth reliability exceptions"
     above - opt-in only, set by callers benchmarking datasets with confirmed-unreliable
     articulation ground truth.
+    notes_and_rests_only: compare only notes and rests by rhythm, pitch and lift.
     """
     gt_parts = _score_parts(kern_text, kern_parser, xml_parser)
     pred_parts = _score_parts(raw_output, kern_parser, xml_parser)
     if ignore_unreliable_articulation:
         gt_parts = _strip_articulation_from_parts(gt_parts)
         pred_parts = _strip_articulation_from_parts(pred_parts)
+    if notes_and_rests_only:
+        gt_parts = _notes_and_rests_only(gt_parts)
+        pred_parts = _notes_and_rests_only(pred_parts)
     return gt_parts, pred_parts
 
 

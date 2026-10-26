@@ -7,7 +7,8 @@ Tool:        selectable via --tool (default: homr).
 Check:       ned_benchmark.run_benchmark
 
 Ground truth is page.musicxml (verified) if present, else reference.musicxml (homr's
-reading of the clean scan). Results are mean NEDs against these transcriptions.
+reading of the clean scan). Results are mean NEDs against these transcriptions, counting
+only notes and rests.
 """
 
 import argparse
@@ -113,7 +114,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--xml-parser",
-        choices=["native", "music21", "musicdiff", "musicdiff_detailed"],
+        choices=["native", "music21"],
         default="native",
         dest="xml_parser",
         help="Parser/method for the NED comparison, see validation.smb.",
@@ -123,7 +124,11 @@ def main() -> None:
 
     if args.update:
         update_ned_scores(
-            output_db, verbose=args.verbose, xml_parser=args.xml_parser, limit=args.limit
+            output_db,
+            verbose=args.verbose,
+            xml_parser=args.xml_parser,
+            limit=args.limit,
+            notes_and_rests_only=True,
         )
         return
 
@@ -140,6 +145,7 @@ def main() -> None:
             continue_run=args.continue_run,
             batch_size=args.batch_size,
             xml_parser=args.xml_parser,
+            notes_and_rests_only=True,
         )
 
 

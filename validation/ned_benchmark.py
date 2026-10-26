@@ -106,6 +106,7 @@ def _record_success(
     kern_parser: str = "native",
     xml_parser: str = "native",
     ignore_unreliable_articulation: bool = False,
+    notes_and_rests_only: bool = False,
 ) -> None:
     kern_parts: list[list[EncodedSymbol]] = []
     xml_parts: list[list[EncodedSymbol]] = []
@@ -117,7 +118,12 @@ def _record_success(
         )
     else:
         kern_parts, xml_parts = _parse_output(
-            kern_text, raw_output, kern_parser, xml_parser, ignore_unreliable_articulation
+            kern_text,
+            raw_output,
+            kern_parser,
+            xml_parser,
+            ignore_unreliable_articulation,
+            notes_and_rests_only,
         )
         result = _ned_from_parts(kern_parts, xml_parts)
     results.append(result)
@@ -157,6 +163,11 @@ def _record_failure(
         db.write_failure(sample_id, kern_text, error, actual_text)
 
 
+def _check_notes_and_rests_only(xml_parser: str, notes_and_rests_only: bool) -> None:
+    if notes_and_rests_only and xml_parser in ("musicdiff", "musicdiff_detailed"):
+        raise ValueError("notes_and_rests_only needs the native or music21 xml_parser")
+
+
 def update_ned_scores(
     output_db: str,
     verbose: bool = False,
@@ -164,6 +175,7 @@ def update_ned_scores(
     xml_parser: str = "native",
     limit: int | None = None,
     ignore_unreliable_articulation: bool = False,
+    notes_and_rests_only: bool = False,
 ) -> None:
     """Recompute NED for all samples with stored actual_text using the current parsers.
 
@@ -171,6 +183,7 @@ def update_ned_scores(
     since there is no output to re-parse.
     limit: if set, process at most this many samples.
     """
+    _check_notes_and_rests_only(xml_parser, notes_and_rests_only)
     db = BenchmarkDB(output_db)
     query = (
         "SELECT sample_id, kern_text, actual_text FROM samples"
@@ -202,7 +215,12 @@ def update_ned_scores(
                 events = []
             else:
                 kern_parts, xml_parts = _parse_output(
-                    kern_text, actual_text, kern_parser, xml_parser, ignore_unreliable_articulation
+                    kern_text,
+                    actual_text,
+                    kern_parser,
+                    xml_parser,
+                    ignore_unreliable_articulation,
+                    notes_and_rests_only,
                 )
                 result = _ned_from_parts(kern_parts, xml_parts)
                 events = _events_for_parts(kern_parts, xml_parts)
@@ -296,6 +314,7 @@ def run_benchmark(
     kern_parser: str = "native",
     xml_parser: str = "native",
     ignore_unreliable_articulation: bool = False,
+    notes_and_rests_only: bool = False,
 ) -> None:
     """
     Wire data source, tool, and check together.
@@ -311,7 +330,9 @@ def run_benchmark(
     batch_size:   number of samples per batch_run() call (default 10)
     ignore_unreliable_articulation: see ned_score.py's "Known ground-truth reliability
                   exceptions" - only ever set True by validation/polish-scores.py.
+    notes_and_rests_only: compare only notes and rests, needs a native xml_parser.
     """
+    _check_notes_and_rests_only(xml_parser, notes_and_rests_only)
     db: BenchmarkDB | None = None
     skip_ids: set[str] = set()
 
@@ -394,6 +415,7 @@ def run_benchmark(
                                 kern_parser,
                                 xml_parser,
                                 ignore_unreliable_articulation,
+                                notes_and_rests_only,
                             )
                     except Exception as e:  # noqa: BLE001
                         _record_failure(
@@ -426,6 +448,7 @@ def run_benchmark(
                         kern_parser,
                         xml_parser,
                         ignore_unreliable_articulation,
+                        notes_and_rests_only,
                     )
             except Exception as e:  # noqa: BLE001
                 _record_failure(
