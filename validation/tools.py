@@ -37,6 +37,9 @@ _TRANSCODA_SCRIPT = _TRANSCODA_ROOT / "scripts" / "inference.py"
 _TRANSCODA_WEIGHTS = _TRANSCODA_ROOT / "weights" / "transcoda-59M-zeroshot-v1.ckpt"
 _SMT_ROOT = _REPO_ROOT.parent / "SMT"
 _SMT_WEIGHTS = _SMT_ROOT / "weights" / "model.safetensors"
+_COPISTERIA_ROOT = _REPO_ROOT.parent / "copisteria"
+_COPISTERIA_PYTHON = _COPISTERIA_ROOT / ".venv" / "bin" / "python"
+_COPISTERIA_EVIDENCE = _COPISTERIA_ROOT / "models" / "evidence-2m.pt"
 
 # Batch inference script run inside SMT's uv environment.
 # Reads a JSON list of image paths from sys.argv[1] (a temp file), loads the model
@@ -68,6 +71,28 @@ _SMT_BATCH_INFERENCE = "\n".join(
         "        results.append({'ok': True, 'kern': kern})",
         "    except Exception as e:",
         "        results.append({'ok': False, 'error': str(e)})",
+        "print(json.dumps(results))",
+    ]
+)
+
+# Batch inference script run with copisteria's Python.
+# Reads a JSON list of image paths from sys.argv[1], loads the evidence model once and
+# prints a JSON list of {ok, xml/error} objects. Detections are cached beside each image.
+_COPISTERIA_BATCH_INFERENCE = "\n".join(
+    [
+        "import sys, json",
+        "from pathlib import Path",
+        "from copisteria import read",
+        "from copisteria.paths import EVIDENCE",
+        "from copisteria.pipeline import transcribe",
+        "paths = json.loads(open(sys.argv[1]).read())",
+        "model = read.load_model(str(EVIDENCE), 'cpu')",
+        "results = []",
+        "for path in paths:",
+        "    try:",
+        "        results.append({'ok': True, 'xml': transcribe(Path(path), model)})",
+        "    except Exception as e:",
+        "        results.append({'ok': False, 'error': repr(e)})",
         "print(json.dumps(results))",
     ]
 )
@@ -381,12 +406,80 @@ def oemer(kern_text: str, image: Path | None) -> str:
     return xml
 
 
+class CopisteriaTool:
+    """
+    OMR tool wrapping copisteria (copista-28m by default, COPISTERIA_DETECTOR=2m for copista-2m).
+    Expects the copisteria repo next to this repo, installed into copisteria/.venv with
+    the weights in copisteria/models. Outputs MusicXML.
+
+    batch_run() loads the model once for all images. The images are symlinked into a
+    temp dir, so the detection caches copisteria writes don't land in the dataset.
+    """
+
+    def _check_paths(self) -> None:
+        if not _COPISTERIA_PYTHON.exists():
+            raise FileNotFoundError(
+                f"copisteria not found at {_COPISTERIA_ROOT}. Expected the copisteria repo "
+                "to be a sibling of the homr repo, installed into its .venv."
+            )
+        if not _COPISTERIA_EVIDENCE.exists():
+            raise FileNotFoundError(f"copisteria weights not found at {_COPISTERIA_EVIDENCE}.")
+
+    def __call__(self, kern_text: str, image: Path | None) -> str:
+        if image is None:
+            raise ValueError("copisteria requires an image; the dataset may not provide one.")
+        samples = [Sample("_", "", image)]
+        self.batch_run(samples)
+        output, error = samples[0].raw_output, samples[0].error
+        if error:
+            raise RuntimeError(error)
+        return output  # type: ignore[return-value]
+
+    def batch_run(
+        self,
+        samples: list[Sample],
+    ) -> None:
+        self._check_paths()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            images = []
+            for i, sample in enumerate(samples):
+                assert sample.image_path
+                dst = tmp / f"{i}{sample.image_path.suffix}"
+                dst.symlink_to(sample.image_path.resolve())
+                images.append(str(dst))
+            paths_file = tmp / "paths.json"
+            paths_file.write_text(json.dumps(images))
+
+            proc = subprocess.run(  # noqa: S603
+                [str(_COPISTERIA_PYTHON), "-c", _COPISTERIA_BATCH_INFERENCE, str(paths_file)],
+                cwd=str(_COPISTERIA_ROOT),
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode != 0:
+                stderr = proc.stderr.decode("utf-8", errors="replace")
+                error = f"copisteria exited with code {proc.returncode}\n{stderr[-1000:]}"
+                for sample in samples:
+                    sample.set_failure(error)
+                return
+
+            batch_results: list[dict] = json.loads(proc.stdout.decode("utf-8"))
+            for sample, br in zip(samples, batch_results, strict=True):
+                if br["ok"]:
+                    sample.set_success(br["xml"])
+                else:
+                    sample.set_failure(br["error"])
+
+
 # ---------------------------------------------------------------------------
 # Tool registry
 # ---------------------------------------------------------------------------
 
 _homr_tool = HomrTool()
 _smt_tool = SmtTool()
+_copisteria_tool = CopisteriaTool()
 
 TOOLS: dict[str, ToolFn] = {
     "music21": music21,
@@ -395,4 +488,5 @@ TOOLS: dict[str, ToolFn] = {
     "oemer": oemer,
     "smt": _smt_tool,
     "transcoda": transcoda,
+    "copisteria": _copisteria_tool,
 }

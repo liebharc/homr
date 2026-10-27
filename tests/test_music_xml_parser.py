@@ -1015,3 +1015,32 @@ dynamic_pp _ _ _ _ upper&dynamic_f _ _ _ _ upper&dynamic_empty _ _ dynamic_piu _
 note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
+
+    def test_octave_shift_is_only_allowed_for_benchmarks(self) -> None:
+        example = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>1</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction><direction-type><octave-shift type="down" size="8"/></direction-type></direction>
+      <note>
+        <pitch><step>C</step><octave>6</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+        with self.assertRaises(ValueError):
+            music_xml_string_to_tokens(example)
+        tokens = music_xml_string_to_tokens(example, allow_octave_shifts=True)
+        flat_list = [x for xxs in tokens for xs in xxs for x in xs]
+        expected = """clef_G2 _ _ _ _ upper
+timeSignature/4 . . . . .
+note_4 C6 _ _ _ upper
+barline . . . . ."""
+        self.assertEqual(token_lines_to_str(flat_list), expected)

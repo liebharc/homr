@@ -383,7 +383,10 @@ def _measure_rest_rhythm(duration: int, divisions: int) -> str:
 
 
 class TokensPart:
-    def __init__(self) -> None:
+    def __init__(self, allow_octave_shifts: bool = False) -> None:
+        # Octave shifts and octave clefs are rejected for training. The benchmarks
+        # allow them: MusicXML pitches are sounding pitches, so they can be ignored.
+        self.allow_octave_shifts = allow_octave_shifts
         self.current_measure: TokensMeasure | None = None
         self.measures: list[Measure] = []
         self.tuplets = TupletState()
@@ -537,7 +540,7 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> int:
             sign = _text(_child(clef, "sign"))
             line = _text(_child(clef, "line"))
             has_octave_change = _child(clef, "clef-octave-change") is not None
-            if has_octave_change:
+            if has_octave_change and not part.allow_octave_shifts:
                 raise ValueError("Octave change isn't supported")
             clef_number = int(clef.get("number", "1")) - 1
             token = (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
@@ -822,7 +825,7 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
     staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
         has_octave_shift = _child(direction_type, "octave-shift") is not None
-        if has_octave_shift:
+        if has_octave_shift and not part.allow_octave_shifts:
             raise ValueError("Octave shift isn't supported")
         for dynamics in _children(direction_type, "dynamics"):
             print_object = dynamics.get("print-object", None)
@@ -874,8 +877,8 @@ def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> int:
     return rest_duration
 
 
-def _music_part_to_tokens(part: ET.Element) -> list[Measure]:
-    tokens = TokensPart()
+def _music_part_to_tokens(part: ET.Element, allow_octave_shifts: bool) -> list[Measure]:
+    tokens = TokensPart(allow_octave_shifts)
     measures_to_skip = 0
     for measure in _children(part, "measure"):
         if measures_to_skip > 0:
@@ -938,30 +941,34 @@ def normalize_barlines_and_repeats(
 
 
 def _music_xml_element_to_symbols(
-    root: ET.Element,
+    root: ET.Element, allow_octave_shifts: bool
 ) -> list[list[Measure]]:
     # Support both <score-partwise> as the root and as a wrapped document.
     score_root = root
     result: list[list[Measure]] = []
     for part in _children(score_root, "part"):
-        tokens = _music_part_to_tokens(part)
+        tokens = _music_part_to_tokens(part, allow_octave_shifts)
         result.append(tokens)
     return result
 
 
-def music_xml_string_to_tokens(content: str) -> list[list[Measure]]:
+def music_xml_string_to_tokens(
+    content: str, allow_octave_shifts: bool = False
+) -> list[list[Measure]]:
     """
     Returns a list of voices.
     Each voice is a list of measures.
     """
     xml = ET.fromstring(content)  # noqa: S314
-    return _music_xml_element_to_symbols(xml)
+    return _music_xml_element_to_symbols(xml, allow_octave_shifts)
 
 
-def music_xml_file_to_tokens(file_path: str) -> list[list[Measure]]:
+def music_xml_file_to_tokens(
+    file_path: str, allow_octave_shifts: bool = False
+) -> list[list[Measure]]:
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
-    return _music_xml_element_to_symbols(xml.getroot())
+    return _music_xml_element_to_symbols(xml.getroot(), allow_octave_shifts)
 
 
 if __name__ == "__main__":

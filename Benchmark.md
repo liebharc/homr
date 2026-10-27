@@ -77,6 +77,12 @@ The transcoda paper reports an OMR-NED on the same `btrkeks/polish-scores` datas
 
 Both approaches also pay a conversion cost before comparison. Our parsers convert everything to `EncodedSymbol` sequences; musicdiff converts everything to music21 object graphs via converter21. Neither is free of artefacts. The native parser's conversion errors are at least directly measurable — running hum2xml or music21 as a baseline tool surfaces them as NED above zero. musicdiff's conversion errors are harder to audit because they are inherited from a third-party library with no equivalent baseline.
 
+### Comparison with the copisteria benchmark
+
+[copisteria](https://github.com/kobimusic/copisteria) publishes results in which it is ahead of homr. The difference is likely because homr doesn't write note beams. Beams were never a priority for homr; they only matter because musicdiff scores them.
+
+PRs that add beams to homr are welcome. Until then, decide based on your needs which benchmark fits your use better.
+
 ## Setup
 
 ### HuggingFace Authentication (SMB dataset)
@@ -90,6 +96,19 @@ The SMB dataset (`PRAIG/SMB`) is access-restricted. Before running any SMB bench
 ```
 HF_TOKEN=your_token_here
 ```
+
+### copisteria
+
+`--tool copisteria` expects [copisteria](https://github.com/kobimusic/copisteria) next to the homr repo, installed into its own `.venv` (Python 3.12), with the copista-28m weights:
+
+```bash
+git clone https://github.com/kobimusic/copisteria ../copisteria
+cd ../copisteria
+uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python -e . "huggingface_hub[cli]"
+.venv/bin/hf download kobimusic/copista-28m --include "*.pt" --local-dir models
+```
+
+`COPISTERIA_DETECTOR=2m` runs copista-2m instead (download `kobimusic/copista-2m` the same way).
 
 ## How to Run
 
@@ -167,20 +186,20 @@ poetry run python -m validation.staff_structure compare before.jsonl after.jsonl
 
 ## Benchmark results
 
-All results are mean OMR-NED in % over the samples where the tool produced output. Means are only comparable between tools when coverage is similar. For performance on latest homr model, refer to `Training.md` for details.
+All results are mean OMR-NED in % over the samples where the tool produced output. Means are only comparable between tools when coverage is similar. The benchmarks accept octave lines (8va) and octave clefs; the parser rejects them for training. MusicXML pitches are sounding pitches, so they are scored as written in `<pitch>`. For performance on latest homr model, refer to `Training.md` for details.
 
 ## native parser
 
-| dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights |
-| ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- |
-| polish-scores                   | 24.8 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       |
-| smb                             | 23.4 (661/685) |               |              |                                    |
-| smb, just the first 10 examples | 24.2 (10/10)   | 50.1 (9/10)   | 38.0 (13/15) | 75.6 (11/20)                       |
+| dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
+| ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- | ------------------------ |
+| polish-scores                   | 15.3 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       | 20.8 (109/112)           |
+| smb                             | 12.8 (679/685) |               |              |                                    | 17.2 (681/685)           |
+| smb, just the first 10 examples | 24.2 (10/10)   | 50.1 (9/10)   | 38.0 (13/15) | 75.6 (11/20)                       |                          |
 
 ## musicdiff
 
-| dataset                         | homr           | transcoda     | oemer       | SMT with smt-fp-grandstaff weights |
-| ------------------------------- | -------------- | ------------- | ----------- | ---------------------------------- |
-| polish-scores                   | 44.2 (110/112) | 52.6 (98/112) |             | musicdiff crashes                  |
-| smb                             | 77.7 (661/685) |               |             |                                    |
-| smb, just the first 10 examples | 75.5 (10/10)   | 101.9 (9/10)  | 90.8(13/15) | 104.8 (11/20)                      |
+| dataset                         | homr           | transcoda     | oemer       | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
+| ------------------------------- | -------------- | ------------- | ----------- | ---------------------------------- | ------------------------ |
+| polish-scores                   | 30.7 (112/112) | 52.6 (98/112) |             | musicdiff crashes                  | 26.4 (112/112)           |
+| smb                             | 74.3 (681/685) |               |             |                                    | 72.3 (684/685)           |
+| smb, just the first 10 examples | 75.5 (10/10)   | 101.9 (9/10)  | 90.8(13/15) | 104.8 (11/20)                      |                          |
