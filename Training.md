@@ -78,9 +78,10 @@ This validation provides a **more representative indication of overall system pe
 Implementation: `rate_validation_result.py`
 
 # Run 512
+
 Commit: 2293bba14bfea47d9d28411339362af15fce4c31
 Day: 26 October 2026
-System Level: ?
+System Level: 6.1 diffs, SER: 4.4%
 Polish scores: 15.33%
 SMB scores: 13.31% with staff detection improvements but without triplet restoration
 
