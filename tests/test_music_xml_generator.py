@@ -971,3 +971,28 @@ barline . . . . ."""
             for t in (joined, separate)
         ]
         self.assertEqual(written[0], written[1])
+
+    def test_time_signature_change_gets_its_own_numerator(self) -> None:
+        """Each time signature is estimated from its own measures, not from the whole staff."""
+        tokens = """clef_G2 _ _ _ _ upper
+timeSignature/4 . . . . .
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+barline . . . . .
+timeSignature/4 . . . . .
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+barline . . . . .
+timeSignature/4 . . . . .
+newline . . . . .
+timeSignature/4 . . . . .
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+note_4 C4 _ _ _ upper
+barline . . . . ."""
+        xml = generate_xml(XmlGeneratorArguments(), [read_token_lines(tokens.splitlines())], "")
+        beats = [t.findtext("beats") for t in xml.iter("time")]
+        self.assertEqual(beats, ["4", "2", "4", "4"])

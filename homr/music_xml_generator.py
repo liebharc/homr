@@ -155,8 +155,9 @@ def build_measures(
 
     measure_number = 1
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
-    division, nominator = find_division_and_time_signature_nominator(groups)
-    state = ConversionState(division, nominator)
+    division, nominators = find_division_and_time_signature_nominators(groups)
+    state = ConversionState(division, nominators[0])
+    time_signature_no = 0
     measures: list[ET.Element] = []
     current_measure = ET.Element("measure", number=str(measure_number))
     first_attributes = build_or_get_attributes(current_measure, None)
@@ -207,6 +208,8 @@ def build_measures(
             build_key(symbol, attributes)
         elif rhythm.startswith("timeSignature"):
             attributes = build_or_get_attributes(current_measure, last_attributes)
+            state.nominator = nominators[min(time_signature_no, len(nominators) - 1)]
+            time_signature_no += 1
             build_time_signature(symbol, attributes, state)
         elif "barline" in rhythm:
             if rhythm != "barline":
@@ -903,13 +906,27 @@ def find_common_division(durations: list[Fraction]) -> int:
     return common
 
 
-def find_division_and_time_signature_nominator(voice: list[SymbolChord]) -> tuple[int, Fraction]:
+def find_division_and_time_signature_nominators(
+    voice: list[SymbolChord],
+) -> tuple[int, list[Fraction]]:
+    """
+    Returns the division and one measure length per time signature, estimated from the
+    measures up to the next time signature. Measures before the first one count towards it.
+    """
     durations = [Fraction(1, 4)]
     duration_in_measure = Fraction(0)
-    measure_duration = []
+    segments: list[list[Fraction]] = [[]]
+    has_time_signature = False
     for chord in voice:
-        if chord.is_barline() and duration_in_measure > Fraction(0):
-            measure_duration.append(duration_in_measure)
+        if chord.symbols and chord.symbols[0].rhythm.startswith("timeSignature"):
+            if duration_in_measure > Fraction(0):
+                segments[-1].append(duration_in_measure)
+                duration_in_measure = Fraction(0)
+            if has_time_signature:
+                segments.append([])
+            has_time_signature = True
+        elif chord.is_barline() and duration_in_measure > Fraction(0):
+            segments[-1].append(duration_in_measure)
             duration_in_measure = Fraction(0)
         else:
             for symbol in chord.symbols:
@@ -922,14 +939,23 @@ def find_division_and_time_signature_nominator(voice: list[SymbolChord]) -> tupl
                 duration_in_measure += duration
 
     if duration_in_measure > Fraction(0):
-        measure_duration.append(duration_in_measure)
+        segments[-1].append(duration_in_measure)
 
-    if len(measure_duration) == 0:
-        return find_common_division(durations), Fraction(1)
+    all_measures = [d for segment in segments for d in segment]
+    if len(all_measures) == 0:
+        return find_common_division(durations), [Fraction(1)] * len(segments)
 
-    nominator: Fraction = np.median(measure_duration)  # type: ignore
+    # A time signature without measures after it, e.g. a courtesy one at the end of a
+    # system, belongs to the measures of the next one
+    nominators: list[Fraction] = []
+    following: Fraction = np.median(all_measures)  # type: ignore
+    for segment in reversed(segments):
+        if segment:
+            following = np.median(segment)  # type: ignore
+        nominators.append(following)
+    nominators.reverse()
 
-    return find_common_division(durations), nominator
+    return find_common_division(durations), nominators
 
 
 _BEFORE_NOTES_ORDER = ["clef", "keySignature", "timeSignature"]
