@@ -89,7 +89,7 @@ To add new symbols, you should first understand the [TrOMR architecture as descr
 | Symbol                                  | Status                             | How to Improve                                                                        |
 | --------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | Staffs                                  | ✓                                  | -                                                                                     |
-| Clefs                                   | ✓                                  | -                                                                                     |
+| Clefs                                   | ✓, except octave clefs             | Add clef tokens with an octave change (e.g. treble with 8 below for tenor voices); today the notes come out an octave off |
 | Key Signatures                          | ✓                                  | -                                                                                     |
 | Time Signatures                         | ✓                                  | -                                                                                     |
 | Bars                                    | ✓                                  | -                                                                                     |
@@ -106,6 +106,7 @@ To add new symbols, you should first understand the [TrOMR architecture as descr
 | Repeats, codas, da capo, volta brackets | ✓                                  | -                                                                                     |
 | Glissando                               | ✗                                  | Add `glis_start`, `glis_end` to articulation vocabulary                               |
 | Ornaments (trill, turns)                | ✓                                  | -                                                                                     |
+| Beams                                   | ✗                                  | Not in the vocabulary. Could be derived from the rhythm in the MusicXML writer, or added to the vocabulary |
 
 ### MusicXML Generation
 

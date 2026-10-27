@@ -58,8 +58,7 @@ Depending on the input, preprocessing the image can improve the results. A commo
 
 ## Limitations
 
-The current implementation focuses on pitch and rhythm information on the bass or treble clef, neglecting dynamics,
-articulation, double sharps/flats, and other musical symbols.
+See the symbol table in [Ideas for Contributors](IDEAS_FOR_CONTRIBUTORS.md#support-more-symbols) for what homr reads and what it doesn't, e.g. octave lines, octave clefs, beams and glissandos.
 
 ## Technical Details
 
