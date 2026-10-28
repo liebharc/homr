@@ -136,6 +136,27 @@ class TestStaffParsing(unittest.TestCase):
 
         self.assertEqual([[True]] * 3 + [[False]] * 6, _layouts(result))
 
+    def test_ensure_same_number_of_staffs_keeps_single_staffs_above_grand_staffs(self) -> None:
+        # A violin part whose last systems add a second voice
+        staffs = [make_row(i) for i in range(5)]
+        staffs += [make_grandstaff_row(i) for i in (5, 7, 9)]
+
+        result = _ensure_same_number_of_staffs(staffs)
+
+        self.assertEqual([[False]] * 5 + [[True]] * 3, _layouts(result))
+
+    def test_ensure_same_number_of_staffs_completes_system_with_single_staff(self) -> None:
+        # The first grand staff of the second system lost its brace
+        system = [make_grandstaff_row(0).staffs[0], make_staff(2), make_staff(3)]
+        staffs = [MultiStaff([*system, make_grandstaff_row(4).staffs[0]], [])]
+        staffs += [make_row(6)]
+        staffs += [MultiStaff([make_staff(7), make_staff(8), make_staff(9)], [])]
+        staffs[-1].staffs.append(make_grandstaff_row(10).staffs[0])
+
+        result = _ensure_same_number_of_staffs(staffs)
+
+        self.assertEqual([[True, False, False, True]] * 2, _layouts(result))
+
     def test_ensure_same_number_of_staffs_splits_wrongly_connected_systems(self) -> None:
         # A crease connected the staffs of several systems
         connected = [make_staff(i, is_grandstaff=i % 2 == 1) for i in range(7)]
