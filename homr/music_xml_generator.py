@@ -146,14 +146,32 @@ def build_measures(
     # so track the end times of sounding notes instead of only the last group's shortest note.
     clock = Fraction(0)
     sounding: list[Fraction] = []
+    measure_number = 1
+    # Measures a multi-measure rest still covers after the current one
+    rest_measures = 0
+
+    def measure_rests(measure: ET.Element) -> None:
+        positions = ["upper", "lower"] if has_two_staves else ["upper"]
+        for staff_no, position in enumerate(positions):
+            if staff_no > 0:
+                measure.append(build_backup(state.nominator, state))
+            measure.append(
+                build_measure_rest(EncodedSymbol("measureRest", position=position), state)
+            )
 
     def close_current_measure() -> None:
-        nonlocal clock, sounding
+        nonlocal clock, sounding, measure_number, rest_measures
         rebalance_measure_voices(current_measure)
         measures.append(current_measure)
         clock, sounding = Fraction(0), []
+        # MusicXML writes a multi-measure rest as that many measures
+        for _ in range(rest_measures):
+            measure_number += 1
+            measure = ET.Element("measure", number=str(measure_number))
+            measure_rests(measure)
+            measures.append(measure)
+        rest_measures = 0
 
-    measure_number = 1
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
     division, nominators = find_division_and_time_signature_nominators(groups)
     state = ConversionState(division, nominators[0])
@@ -178,7 +196,10 @@ def build_measures(
         if rhythm.startswith(("note", "rest")):
             if len(group.symbols) == 1 and rhythm.endswith("m"):
                 attributes = build_or_get_attributes(current_measure, last_attributes)
-                build_multi_measure_rest(symbol, attributes)
+                duration = build_multi_measure_rest(symbol, attributes)
+                if duration > 0:
+                    measure_rests(current_measure)
+                    rest_measures = duration - 1
             else:
                 staff_positions = group.into_positions()
                 advance = _advance_to_next_group(group, clock, sounding)
@@ -800,13 +821,15 @@ def build_image_position(xml: ET.Element, symbol: EncodedSymbol) -> None:
     xml.append(ET.Comment(f" imgpos: {round(x)}, {round(y)} "))
 
 
-def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> None:
+def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> int:
+    """Returns the number of measures of the rest, 0 if the measure already has one."""
     if attributes.find("measure-style") is not None:
         eprint("Measure already has a multi rest")
-        return
+        return 0
     duration = int(symbol.rhythm.split("_")[1].replace("m", ""))
     style = ET.SubElement(attributes, "measure-style")
     ET.SubElement(style, "multiple-rest").text = str(duration)
+    return duration
 
 
 def build_measure_rest(symbol: EncodedSymbol, state: ConversionState) -> ET.Element:

@@ -302,7 +302,12 @@ def detect_staffs_in_image(
         "anchor_input", symbols.staff_fragments + bar_line_boxes + symbols.clefs_keys
     )
     staffs = detect_staff(
-        debug, predictions.staff, symbols.staff_fragments, symbols.clefs_keys, bar_line_boxes
+        debug,
+        predictions.staff,
+        symbols.staff_fragments,
+        symbols.clefs_keys,
+        bar_line_boxes,
+        predictions.symbols,
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")

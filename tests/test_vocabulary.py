@@ -195,6 +195,29 @@ barline . . . . ."""
 
         self.assertEqual(token_lines_to_str(result), token_lines_to_str(expected))
 
+    def test_only_keep_lower_staff_if_there_is_a_clef_per_line(self) -> None:
+        tokens = [
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("note_4", "E4", "_", "_", "_", "lower"),
+            *[EncodedSymbol("note_4", "C5", "_", "_", "_", "upper")] * 4,
+            EncodedSymbol("newline"),
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("chord"),
+            EncodedSymbol("clef_F4", "_", "_", "_", "_", "lower"),
+            EncodedSymbol("note_4", "G2", "_", "_", "_", "lower"),
+        ]
+        result = remove_duplicated_symbols(tokens)
+        expected = [
+            EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
+            EncodedSymbol("note_4", "E4", "_", "_", "_", "upper"),
+            *[EncodedSymbol("note_4", "C5", "_", "_", "_", "upper")] * 4,
+            EncodedSymbol("newline"),
+            EncodedSymbol("clef_F4", "_", "_", "_", "_", "lower"),
+            EncodedSymbol("note_4", "G2", "_", "_", "_", "lower"),
+        ]
+
+        self.assertEqual(token_lines_to_str(result), token_lines_to_str(expected))
+
     def test_tuplet_duration(self) -> None:
         for kern in ["6", "12"]:
             duration = kern_to_symbol_duration(kern)
