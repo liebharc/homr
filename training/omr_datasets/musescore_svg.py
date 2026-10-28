@@ -65,6 +65,10 @@ class BarLine(SvgRectangle):
 class SvgStaff(SvgRectangle):
     def __init__(self, x: int, y: int, width: int, height: int):
         super().__init__(x, y, width, height)
+        # The box of the staff lines, extend_y_range grows only the staff box around it
+        self.line_top = y
+        self.line_bottom = y + height
+        self.staff_space = height / (constants.number_of_lines_on_a_staff - 1)
         self.bar_line_x_positions = set()
 
         # Add the starting and ending barline
@@ -96,6 +100,9 @@ class SvgStaff(SvgRectangle):
         x_max = max(self.x + self.width, other.x + other.width)
         y_max = max(self.y + self.height, other.y + other.height)
         result = SvgStaff(x_min, y_min, x_max - x_min, y_max - y_min)
+        result.line_top = min(self.line_top, other.line_top)
+        result.line_bottom = max(self.line_bottom, other.line_bottom)
+        result.staff_space = self.staff_space
         for pos in self.bar_line_x_positions:
             result.bar_line_x_positions.add(pos)
         return result
