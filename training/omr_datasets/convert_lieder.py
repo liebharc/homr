@@ -565,6 +565,7 @@ def _split_file_into_staffs(
         if not just_token_files:
             # Stores more than the model sees, the data loader draws the margin
             # (image_utils.random_staff_crop) with the positions in the JSON file.
+            # "stems" is the box of the staff with its stems and dynamics.
             y_offset = STORED_MARGIN_IN_STAFF_SPACES * total_staff_area.staff_space
             x_offset_right = 10
             x_offset_left = 40
