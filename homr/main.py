@@ -28,7 +28,7 @@ from homr.brace_dot_detection import (
     prepare_brace_dot_image,
 )
 from homr.debug import Debug
-from homr.model import InputPredictions, MultiStaff
+from homr.model import InputPredictions, MultiStaff, Note, Staff
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
@@ -260,9 +260,19 @@ def process_image(
     return xml_file
 
 
-def detect_staffs_in_image(
-    image_path: str, config: ProcessingConfig
-) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
+@dataclass
+class SingleStaffs:
+    """The staffs of a page before they are grouped into systems."""
+
+    predictions: InputPredictions
+    debug: Debug
+    to_input_image: PointMapping
+    staffs: list[Staff]
+    brace_dot: list[RotatedBoundingBox]
+    notes: list[Note]
+
+
+def detect_single_staffs(image_path: str, config: ProcessingConfig) -> SingleStaffs:
     predictions, debug, to_input_image = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache, config.segnet_use_gpu
     )
@@ -311,11 +321,6 @@ def detect_staffs_in_image(
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")
-    if config.title_detection:
-        title_future = detect_title(debug, staffs[0])
-    else:
-        title_future = Future()
-        title_future.set_result("")
 
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
@@ -326,8 +331,39 @@ def detect_staffs_in_image(
     notes = add_notes_to_staffs(
         staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
     )
+    return SingleStaffs(predictions, debug, to_input_image, staffs, brace_dot, notes)
 
-    multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
+
+# Experimental, the model is trained with training.staff_relations
+use_staff_relation_model = os.environ.get("HOMR_STAFF_RELATIONS") == "1"
+
+
+def group_staffs_with_model(predictions: InputPredictions, staffs: list[Staff]) -> list[MultiStaff]:
+    from homr import staff_relations  # noqa: PLC0415
+
+    staffs = staff_relations.join_pieces_with_model(predictions, staffs)
+    pairs, crops, feats = staff_relations.page_inputs(predictions, staffs)
+    probabilities = staff_relations.get_model().predict(crops, feats)
+    for (i, j), p in zip(pairs, probabilities, strict=True):
+        eprint(f"Staffs {i} and {j}:", ", ".join(f"{p_class:.2f}" for p_class in p))
+    return staff_relations.group_staffs(staffs, pairs, probabilities)
+
+
+def detect_staffs_in_image(
+    image_path: str, config: ProcessingConfig
+) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
+    single = detect_single_staffs(image_path, config)
+    debug, staffs, brace_dot = single.debug, single.staffs, single.brace_dot
+    if config.title_detection:
+        title_future = detect_title(debug, staffs[0])
+    else:
+        title_future = Future()
+        title_future.set_result("")
+
+    if use_staff_relation_model:
+        multi_staffs = group_staffs_with_model(single.predictions, staffs)
+    else:
+        multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
     eprint(
         "Found",
         len(multi_staffs),
@@ -335,9 +371,16 @@ def detect_staffs_in_image(
         [len(staff.staffs) for staff in multi_staffs],
     )
 
-    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
+    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, single.notes)
 
-    return multi_staffs, predictions.preprocessed, debug, title_future, len(staffs), to_input_image
+    return (
+        multi_staffs,
+        single.predictions.preprocessed,
+        debug,
+        title_future,
+        len(staffs),
+        single.to_input_image,
+    )
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
