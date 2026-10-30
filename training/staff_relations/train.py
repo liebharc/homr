@@ -19,15 +19,17 @@ from homr.staff_relations import (
     channels,
     crop_height,
     crop_width,
-    features,
     horizontal_crop_height,
     horizontal_crop_width,
     horizontal_features,
     horizontal_model_path,
     model_path,
+    pixels_per_unit,
 )
 from homr.type_definitions import NDArray
 from training.staff_relations.create_dataset import default_directory, is_validation
+
+IMAGE, STAFF, SYMBOLS, STEMS_RESTS, CLEFS_KEYS = range(channels)
 
 
 class StaffRelationNet(nn.Module):
@@ -56,9 +58,11 @@ class StaffRelationNet(nn.Module):
             nn.Linear(128, n_classes),
         )
 
-    def forward(self, crop: torch.Tensor, feats: torch.Tensor) -> torch.Tensor:
+    def forward(self, crop: torch.Tensor, feats: torch.Tensor | None = None) -> torch.Tensor:
         x = self.convolutions(crop).flatten(1)
-        return self.head(torch.cat([x, feats], dim=1))
+        if feats is not None:
+            x = torch.cat([x, feats], dim=1)
+        return self.head(x)
 
 
 def load(
@@ -66,8 +70,9 @@ def load(
 ) -> dict[str, tuple[NDArray, NDArray, NDArray]]:
     """
     Reads the pairs by split. The crops don't fit into memory, they are written once to
-    memory mapped files in the cache directory.
+    memory mapped files in the cache directory. Vertical pairs have no features.
     """
+    height, width, n_features, _ = shapes[kind]
     folders = ["pairs", "pairs_truncated"] if kind == "vertical" else ["pairs_horizontal"]
     files = [
         file
@@ -86,23 +91,25 @@ def load(
         feats, labels = [], []
         for file in split_files:
             with np.load(file) as d:
-                feats.append(d["features"])
                 labels.append(d["labels"])
+                feats.append(d["features"] if n_features > 0 else np.zeros((len(d["labels"]), 0)))
         count = sum(len(label) for label in labels)
-        with np.load(split_files[0]) as d:
-            shape = (count, *d["crops"].shape[1:])
         crops = np.lib.format.open_memmap(
-            cache / f"{kind}_{split}.npy", mode="w+", dtype=np.uint8, shape=shape
+            cache / f"{kind}_{split}.npy",
+            mode="w+",
+            dtype=np.uint8,
+            shape=(count, channels, height, width),
         )
         start = 0
         for i, file in enumerate(split_files):
             with np.load(file) as d:
-                crops[start : start + len(d["labels"])] = d["crops"]
+                # Older datasets have wider crops, the model uses the left part
+                crops[start : start + len(d["labels"])] = d["crops"][..., :width]
                 start += len(d["labels"])
             if i % 1000 == 0:
                 print(f"Loaded {split} {i} / {len(split_files)}", flush=True)
         crops.flush()
-        result[split] = (crops, np.concatenate(feats), np.concatenate(labels))
+        result[split] = (crops, np.concatenate(feats).astype(np.float32), np.concatenate(labels))
     return result
 
 
@@ -124,7 +131,54 @@ def _augment(crop: torch.Tensor) -> torch.Tensor:
     """Changes the contrast of the image channel, the segmentation stays."""
     gain = torch.empty(crop.shape[0], 1, 1, device=crop.device).uniform_(0.6, 1.4)
     crop = crop.clone()
-    crop[:, 0] = (crop[:, 0] * gain).clamp(0, 1)
+    crop[:, IMAGE] = (crop[:, IMAGE] * gain).clamp(0, 1)
+    return crop
+
+
+def _erase_clefs(crop: torch.Tensor, probability: float) -> torch.Tensor:
+    """
+    Erases the clefs and keys of each staff of a vertical pair with the given probability,
+    old parts often print them only on the first staff. The staff lines stay.
+    """
+    crop = crop.clone()
+    clefs = nn.functional.max_pool2d(crop[:, CLEFS_KEYS : CLEFS_KEYS + 1], 7, 1, 3)[:, 0] > 0.2
+    half = crop_height // 2
+    chosen = torch.rand(crop.shape[0], 2, device=crop.device) < probability
+    rows = torch.arange(crop_height, device=crop.device)
+    upper = (rows < half)[None, :, None] & chosen[:, 0, None, None]
+    lower = (rows >= half)[None, :, None] & chosen[:, 1, None, None]
+    # Only where the staff is, so that no staff lines appear left of its start
+    staff_columns = nn.functional.max_pool2d(crop[:, STAFF : STAFF + 1], (crop_height, 1), 1)
+    has_staff = staff_columns[:, 0] > 0.3  # noqa: PLR2004
+    erase = clefs & (upper | lower) & has_staff
+    image = crop[:, IMAGE]
+    # The median of each row is the staff line on staff line rows, else the background
+    lines = image.median(2, keepdim=True).values.expand_as(image)
+    crop[:, IMAGE] = torch.where(erase, lines, image)
+    for channel in (SYMBOLS, CLEFS_KEYS):
+        crop[:, channel] = torch.where(erase, 0, crop[:, channel])
+    return crop
+
+
+def _add_edge_lines(crop: torch.Tensor, probability: float) -> torch.Tensor:
+    """
+    Draws a vertical line over the full height left of the staffs of a vertical pair with
+    the given probability, like the page edge of a scan. It connects nothing, the label
+    stays.
+    """
+    crop = crop.clone()
+    staff_columns = nn.functional.max_pool2d(crop[:, STAFF : STAFF + 1], (crop_height, 1), 1)
+    has_staff = staff_columns[:, 0, 0] > 0.3  # noqa: PLR2004
+    for i in torch.nonzero(torch.rand(crop.shape[0]) < probability)[:, 0].tolist():
+        columns = torch.nonzero(has_staff[i])[:, 0]
+        # At least two units left of the staff start, a line closer to it is a bar line
+        space = (int(columns[0]) if len(columns) > 0 else crop_width) - 2 * pixels_per_unit
+        width = int(torch.randint(1, 2 * pixels_per_unit + 1, ()))
+        if space < width:
+            continue
+        x = int(torch.randint(0, space - width + 1, ()))
+        ink = float(torch.empty(()).uniform_(0.6, 1.0))
+        crop[i, IMAGE, :, x : x + width] = crop[i, IMAGE, :, x : x + width].clamp(min=ink)
     return crop
 
 
@@ -136,24 +190,28 @@ def evaluate(
     confusion = np.zeros((n_classes, n_classes), dtype=np.int64)
     with torch.no_grad():
         for crop, feats, labels in _batches(data, 256, False, device):
-            predicted = model(crop, feats).argmax(1)
+            predicted = model(crop, feats if feats.shape[1] > 0 else None).argmax(1)
             for t, p in zip(labels.cpu().numpy(), predicted.cpu().numpy(), strict=True):
                 confusion[t, p] += 1
     return confusion
 
 
 def export(model: nn.Module, path: str, shape: tuple[int, int, int]) -> None:
+    """Exports the model, without the features input if it has no features."""
     height, width, n_features = shape
     model.eval().cpu()
-    crop = torch.zeros(1, channels, height, width)
-    feats = torch.zeros(1, n_features)
+    inputs: tuple[torch.Tensor, ...] = (torch.zeros(1, channels, height, width),)
+    names = ["crop"]
+    if n_features > 0:
+        inputs = (*inputs, torch.zeros(1, n_features))
+        names.append("features")
     torch.onnx.export(
         model,
-        (crop, feats),
+        inputs,
         path,
-        input_names=["crop", "features"],
+        input_names=names,
         output_names=["logits"],
-        dynamic_axes={"crop": {0: "batch"}, "features": {0: "batch"}, "logits": {0: "batch"}},
+        dynamic_axes={name: {0: "batch"} for name in [*names, "logits"]},
         opset_version=17,
         dynamo=False,
     )
@@ -161,7 +219,7 @@ def export(model: nn.Module, path: str, shape: tuple[int, int, int]) -> None:
 
 # Crop height, crop width, features and classes of each kind of pair
 shapes = {
-    "vertical": (crop_height, crop_width, features, len(CLASSES)),
+    "vertical": (crop_height, crop_width, 0, len(CLASSES)),
     "horizontal": (horizontal_crop_height, horizontal_crop_width, horizontal_features, 2),
 }
 model_paths = {"vertical": model_path, "horizontal": horizontal_model_path}
@@ -172,6 +230,8 @@ def main() -> None:
     parser.add_argument("--directories", type=Path, nargs="+", default=[default_directory])
     parser.add_argument("--kind", choices=list(shapes), default="vertical")
     parser.add_argument("--epochs", type=int, default=12)
+    parser.add_argument("--erase-clefs", type=float, default=0.3, help="Vertical pairs only")
+    parser.add_argument("--edge-lines", type=float, default=0.3, help="Vertical pairs only")
     parser.add_argument("--output")
     parser.add_argument("--cache", type=Path, default=Path("datasets/staff_relations_cache"))
     args = parser.parse_args()
@@ -193,7 +253,11 @@ def main() -> None:
         total = 0.0
         for crop, feats, labels in _batches(data["train"], 64, True, device):
             optimizer.zero_grad()
-            loss = loss_function(model(_augment(crop), feats), labels)
+            if args.kind == "vertical":
+                augmented = _add_edge_lines(_erase_clefs(crop, args.erase_clefs), args.edge_lines)
+                loss = loss_function(model(_augment(augmented)), labels)
+            else:
+                loss = loss_function(model(_augment(crop), feats), labels)
             loss.backward()
             optimizer.step()
             scheduler.step()

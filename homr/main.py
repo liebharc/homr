@@ -342,8 +342,8 @@ def group_staffs_with_model(predictions: InputPredictions, staffs: list[Staff]) 
     from homr import staff_relations  # noqa: PLC0415
 
     staffs = staff_relations.join_pieces_with_model(predictions, staffs)
-    pairs, crops, feats = staff_relations.page_inputs(predictions, staffs)
-    probabilities = staff_relations.get_model().predict(crops, feats)
+    pairs, crops = staff_relations.page_inputs(predictions, staffs)
+    probabilities = staff_relations.get_model().predict(crops)
     for (i, j), p in zip(pairs, probabilities, strict=True):
         eprint(f"Staffs {i} and {j}:", ", ".join(f"{p_class:.2f}" for p_class in p))
     return staff_relations.group_staffs(staffs, pairs, probabilities)

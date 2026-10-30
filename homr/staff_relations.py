@@ -1,7 +1,8 @@
 """
 Decides how neighboring staffs relate: separate systems, the same system or a grand
-staff. A small CNN looks at a crop which follows the two staffs, so that page curl and
-perspective change the crop only little.
+staff. A small CNN looks at the left margin of the two staffs, where braces, brackets
+and the bar line at the start of a system are. The crop follows the staff lines, so that
+page curl and perspective change it only little.
 """
 
 import os
@@ -17,19 +18,16 @@ CLASSES = ["separate", "same system", "grand staff"]
 
 # Resolution of the crops in pixels per unit size (distance of two staff lines)
 pixels_per_unit = 4
-# Units left of the staffs and of the start of the staffs in the left crop
+# Units left of the staffs and of the start of the staffs in the crop
 margin_units = 10
 start_units = 14
-left_width = (margin_units + start_units) * pixels_per_unit
-full_width = 320
 # Rows of the crop: 3 units above, upper staff, gap, lower staff, 3 units below
 staff_rows = 16
 outer_rows = 12
 gap_rows = 40
 crop_height = 2 * (outer_rows + staff_rows) + gap_rows
-crop_width = left_width + full_width
+crop_width = (margin_units + start_units) * pixels_per_unit
 channels = 5
-features = 6
 
 script_location = os.path.dirname(os.path.realpath(__file__))
 # HOMR_STAFF_RELATIONS_MODEL selects another model version, for comparisons
@@ -112,44 +110,16 @@ def _rows(upper: Staff, lower: Staff, x: NDArray) -> NDArray:
 
 def pair_crop(page: NDArray, scale: float, upper: Staff, lower: Staff) -> NDArray:
     """
-    The crop of two vertically neighboring staffs (channels, height, width): the left
-    margin and the start at pixels_per_unit, next to it the full width of both staffs.
+    The left margin and the start of two vertically neighboring staffs (channels, height,
+    width) at pixels_per_unit.
     """
     unit = (upper.average_unit_size + lower.average_unit_size) / 2
     left = min(upper.min_x, lower.min_x)
-    right = max(upper.max_x, lower.max_x)
-    x_left = left + (np.arange(left_width) / pixels_per_unit - margin_units) * unit
-    x_full = np.linspace(left - unit, right + unit, full_width)
-    x = np.concatenate([x_left, x_full])
+    x = left + (np.arange(crop_width) / pixels_per_unit - margin_units) * unit
     rows = _rows(upper, lower, x)
     map_x = np.broadcast_to(x, rows.shape) * scale
     crop = _remap(page, map_x, rows * scale)
     return np.ascontiguousarray(crop.transpose(2, 0, 1))
-
-
-def gap_between(upper: Staff, lower: Staff) -> float:
-    left = max(upper.min_x, lower.min_x)
-    right = min(upper.max_x, lower.max_x)
-    x = np.linspace(left, right, 9) if right > left else np.array([(left + right) / 2])
-    return float(np.median(_line_at(lower, 0, x) - _line_at(upper, -1, x)))
-
-
-def pair_features(upper: Staff, lower: Staff, median_gap: float) -> NDArray:
-    """Geometry of a pair in unit sizes, which the crop doesn't show."""
-    unit = (upper.average_unit_size + lower.average_unit_size) / 2
-    gap = gap_between(upper, lower)
-    width = max(upper.max_x, lower.max_x) - min(upper.min_x, lower.min_x)
-    return np.array(
-        [
-            gap / unit / 10,
-            gap / max(median_gap, 1),
-            (upper.min_x - lower.min_x) / unit / 10,
-            (upper.max_x - lower.max_x) / unit / 10,
-            np.log(upper.average_unit_size / lower.average_unit_size),
-            width / unit / 100,
-        ],
-        dtype=np.float32,
-    )
 
 
 def overlaps_horizontally(upper: Staff, lower: Staff) -> bool:
@@ -174,18 +144,15 @@ def vertical_pairs(staffs: list[Staff]) -> list[tuple[int, int]]:
 
 def page_inputs(
     predictions: InputPredictions, staffs: list[Staff]
-) -> tuple[list[tuple[int, int]], NDArray, NDArray]:
-    """The vertical pairs of a page with their crops and features."""
+) -> tuple[list[tuple[int, int]], NDArray]:
+    """The vertical pairs of a page with their crops."""
     pairs = vertical_pairs(staffs)
     if len(pairs) == 0:
-        empty = np.zeros((0, channels, crop_height, crop_width), dtype=np.float32)
-        return pairs, empty, np.zeros((0, features), dtype=np.float32)
+        return pairs, np.zeros((0, channels, crop_height, crop_width), dtype=np.float32)
     unit = float(np.median([staff.average_unit_size for staff in staffs]))
     page, scale = page_channels(predictions, unit)
-    median_gap = float(np.median([gap_between(staffs[i], staffs[j]) for i, j in pairs]))
     crops = np.stack([pair_crop(page, scale, staffs[i], staffs[j]) for i, j in pairs])
-    feats = np.stack([pair_features(staffs[i], staffs[j], median_gap) for i, j in pairs])
-    return pairs, crops.astype(np.float32), feats
+    return pairs, crops.astype(np.float32)
 
 
 class StaffRelationModel:
@@ -194,11 +161,12 @@ class StaffRelationModel:
 
         self.session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
 
-    def predict(self, crops: NDArray, feats: NDArray) -> NDArray:
+    def predict(self, crops: NDArray, feats: NDArray | None = None) -> NDArray:
         """Probabilities of the classes for each pair (pairs x classes)."""
         if len(crops) == 0:
             return np.zeros((0, len(CLASSES)), dtype=np.float32)
-        logits = self.session.run(None, {"crop": crops, "features": feats})[0]
+        inputs = {"crop": crops} if feats is None else {"crop": crops, "features": feats}
+        logits = self.session.run(None, inputs)[0]
         exp = np.exp(logits - logits.max(axis=1, keepdims=True))
         return exp / exp.sum(axis=1, keepdims=True)
 

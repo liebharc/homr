@@ -29,7 +29,6 @@ from homr.staff_relations import (
     GRAND_STAFF,
     SAME_SYSTEM,
     SEPARATE,
-    gap_between,
     horizontal_end_width,
     horizontal_gap_width,
     horizontal_inputs,
@@ -37,7 +36,6 @@ from homr.staff_relations import (
     page_channels,
     page_inputs,
     pair_crop,
-    pair_features,
     vertical_pairs,
 )
 from homr.type_definitions import NDArray
@@ -230,7 +228,7 @@ def _extract(directory: Path, task: dict[str, Any]) -> dict[str, Any]:
     vertical = directory / "pairs" / f"{task['name']}.npz"
     if vertical.exists():
         return status
-    pairs, crops, feats = page_inputs(single.predictions, staffs)
+    pairs, crops = page_inputs(single.predictions, staffs)
     labels = [label(task["truth"], matches[i], matches[j]) for i, j in pairs]
     keep = [i for i, value in enumerate(labels) if value is not None]
     if len(keep) == 0:
@@ -238,7 +236,6 @@ def _extract(directory: Path, task: dict[str, Any]) -> dict[str, Any]:
     np.savez_compressed(
         vertical,
         crops=(crops[keep] * 255).round().astype(np.uint8),
-        features=feats[keep],
         labels=np.array([labels[i] for i in keep], dtype=np.int64),
     )
     return {**status, "pairs": len(keep)}
@@ -273,8 +270,7 @@ def _write_truncated(
         return 0
     unit = float(np.median([staff.average_unit_size for staff in staffs]))
     page, scale = page_channels(predictions, unit)
-    median_gap = float(np.median([gap_between(staffs[i], staffs[j]) for i, j in pairs]))
-    crops, feats, kept = [], [], []
+    crops, kept = [], []
     for k in rng.sample(candidates, min(4, len(candidates))):
         upper, lower = staffs[pairs[k][0]], staffs[pairs[k][1]]
         if rng.random() < 0.5:  # noqa: PLR2004
@@ -284,7 +280,6 @@ def _write_truncated(
         if upper is None or lower is None:
             continue
         crops.append(pair_crop(page, scale, upper, lower))
-        feats.append(pair_features(upper, lower, median_gap))
         kept.append(labels[k])
     if len(kept) == 0:
         return 0
@@ -293,7 +288,6 @@ def _write_truncated(
     np.savez_compressed(
         path,
         crops=(np.stack(crops) * 255).round().astype(np.uint8),
-        features=np.stack(feats),
         labels=np.array(kept, dtype=np.int64),
     )
     return len(kept)

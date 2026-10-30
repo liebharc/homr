@@ -7,7 +7,6 @@ from homr.staff_relations import (
     channels,
     crop_height,
     crop_width,
-    features,
     group_staffs,
     horizontal_pairs,
     join_staff_pieces,
@@ -37,10 +36,9 @@ class TestStaffRelations(unittest.TestCase):
         image = np.full((500, 1000), 255, dtype=np.uint8)
         mask = np.zeros((500, 1000), dtype=np.uint8)
         predictions = InputPredictions(image, image, mask, mask, mask, mask, mask)
-        pairs, crops, feats = page_inputs(predictions, staffs)
+        pairs, crops = page_inputs(predictions, staffs)
         self.assertEqual(pairs, [(0, 1)])
         self.assertEqual(crops.shape, (1, channels, crop_height, crop_width))
-        self.assertEqual(feats.shape, (1, features))
 
     def test_group_staffs(self) -> None:
         staffs = [make_staff(0, 600, 100 * i) for i in range(6)]
