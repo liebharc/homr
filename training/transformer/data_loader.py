@@ -13,6 +13,8 @@ from training.transformer.image_utils import (
     ndarray_to_tensor,
     pad_to_3_dims,
     prepare_for_tensor,
+    random_staff_crop,
+    read_crop_info,
     read_image_to_ndarray,
 )
 from training.transformer.training_vocabulary import (
@@ -73,6 +75,9 @@ class DataLoader:
             random.seed(idx)
             np.random.seed(idx)
 
+        crop_info = read_crop_info(sample_filepath)
+        if crop_info is not None:
+            img = random_staff_crop(img, crop_info)
         img = distort_image(img, allow_occlusions=not self.is_validation)
         img = add_image_into_tr_omr_canvas(img)
 

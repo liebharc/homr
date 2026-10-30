@@ -8,7 +8,11 @@ import numpy as np
 from termcolor import colored
 
 from homr.staff_parsing import add_image_into_tr_omr_canvas
-from training.transformer.image_utils import distort_image
+from training.transformer.image_utils import (
+    distort_image,
+    random_staff_crop,
+    read_crop_info,
+)
 
 parser = argparse.ArgumentParser(description="Show examples from a dataset index")
 parser.add_argument("index", type=str, help="Index file name")
@@ -89,6 +93,9 @@ while not done:
         if image is None:
             raise ValueError("Failed to read " + image_path)
         if not args.no_augmentation:
+            crop_info = read_crop_info(image_path)
+            if crop_info is not None:
+                image = random_staff_crop(image, crop_info)
             image = distort_image(image)
             image = add_image_into_tr_omr_canvas(image)
         if images is None:

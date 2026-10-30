@@ -7,6 +7,7 @@ import zipfile
 from training.omr_datasets.convert_grandstaff import grandstaff_train_index
 from training.omr_datasets.convert_lieder import lieder_train_index
 from training.omr_datasets.convert_primus import primus_train_index
+from training.transformer.image_utils import crop_info_path
 
 # Setup paths
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -36,6 +37,8 @@ for index_file in index_files:
                     sys.exit(1)
 
                 dataset_files.append(abs_path)
+                if os.path.exists(crop_info_path(abs_path)):
+                    dataset_files.append(crop_info_path(abs_path))
 
     # Name the zip after the folder containing the index file
     dataset_name = os.path.basename(os.path.dirname(index_path))
