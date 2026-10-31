@@ -2,7 +2,10 @@
 
 import unittest
 
-from training.omr_datasets.humdrum_kern_parser import convert_kern_to_tokens
+from training.omr_datasets.humdrum_kern_parser import (
+    convert_kern_to_parts,
+    convert_kern_to_tokens,
+)
 from training.transformer.training_vocabulary import token_lines_to_str
 
 
@@ -531,3 +534,18 @@ note_16 G4 # _ beamStop upper2
 barline . . . . ."""
         self.maxDiff = None
         self.assertEqual(tokens, expected)
+
+    def test_slurs_and_articulations_are_sorted(self) -> None:
+        # Sorted like the vocabulary, e.g. a note which ends one slur and starts the next
+        kern = """**kern\t**kern
+*clefF4\t*clefG2
+4C\t4c(
+4D\t4d')^(
+4E\t4e)
+=\t=
+*-\t*-
+"""
+        # The benchmarks read references with convert_kern_to_parts
+        upper = convert_kern_to_parts(kern.splitlines())[1]
+        note = next(symbol for symbol in upper if symbol.pitch == "D4")
+        self.assertEqual((note.articulation, note.slur), ("accent_staccato", "slurStart_slurStop"))
