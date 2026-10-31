@@ -416,6 +416,10 @@ def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_enc
         else:
             models.append(default_config.filepaths.encoder_path)
         models.append(default_config.filepaths.decoder_path)
+    from homr import staff_relations  # noqa: PLC0415
+
+    models.append(staff_relations.model_path)
+    models.append(staff_relations.horizontal_model_path)
     missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:
@@ -429,6 +433,7 @@ def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_enc
             try:
                 zip_name = base_name + ".zip"
                 download_url = base_url + zip_name
+                os.makedirs(os.path.dirname(model), exist_ok=True)
                 downloaded_zip = os.path.join(os.path.dirname(model), zip_name)
                 download_utils.download_file(download_url, downloaded_zip)
 
