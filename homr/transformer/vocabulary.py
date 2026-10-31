@@ -673,14 +673,25 @@ def _fix_over_eager_tuplets(chords: list[list[EncodedSymbol]]) -> list[list[Enco
 def _only_keep_lower_staff_if_there_is_a_clef(
     chords: list[list[EncodedSymbol]],
 ) -> list[list[EncodedSymbol]]:
+    """
+    Decided per staff line, as a voice can join single staffs and grand staffs.
+    """
     has_lower_clef = False
+    line_start = 0
     all_results = []
     for i, chord in enumerate(chords):
+        if any(symbol.rhythm == "newline" for symbol in chord):
+            has_lower_clef = False
+            line_start = i + 1
         result = []
         for symbol in chord:
             if has_lower_clef:
                 result.append(symbol)
-            elif i < 5 and symbol.rhythm.startswith("clef") and is_lower_position(symbol.position):
+            elif (
+                i - line_start < 5  # noqa: PLR2004
+                and symbol.rhythm.startswith("clef")
+                and is_lower_position(symbol.position)
+            ):
                 has_lower_clef = True
                 result.append(symbol)
             else:

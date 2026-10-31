@@ -47,14 +47,29 @@ class TestStaffDetection(unittest.TestCase):
         shifted_by_a_line = make_raw_staff(600, 1500, 310)
         neighbor_page = make_raw_staff(1800, 2500, 100)
 
+        # The clef covers the gap of the first row, the second row has an empty gap
+        ink = np.zeros((400, 2600), dtype=np.uint8)
+        ink[100:141, 490:610] = 1
+
         result = merge_staffs_in_same_row(
-            [left, after_clef_change, next_row, shifted_by_a_line, neighbor_page]
+            [left, after_clef_change, next_row, shifted_by_a_line, neighbor_page], ink
         )
 
         self.assertEqual(4, len(result))
         merged = next(staff for staff in result if staff.min_y < 200 and staff.max_x < 1600)
         self.assertAlmostEqual(100, merged.min_x, delta=2)
         self.assertAlmostEqual(1500, merged.max_x, delta=2)
+
+    def test_merge_staffs_in_same_row_not_across_gutter(self) -> None:
+        left_page = make_raw_staff(100, 500, 100)
+        right_page = make_raw_staff(600, 1500, 100)
+        ink = np.zeros((200, 1600), dtype=np.uint8)
+        ink[100:141, 100:501] = 1
+        ink[100:141, 600:1501] = 1
+
+        result = merge_staffs_in_same_row([left_page, right_page], ink)
+
+        self.assertEqual(2, len(result))
 
     def test_filter_neighbor_page(self) -> None:
         page = [make_staff(500, 1500, top) for top in (100, 300, 500)]

@@ -46,12 +46,16 @@ def _vertical_gap(upper: Staff, lower: Staff) -> float | None:
     return float(np.median(gaps)) if gaps else None
 
 
-def _possible_grandstaffs(staffs: list[MultiStaff], strict: bool) -> set[tuple[int, int]]:
+def _possible_grandstaffs(
+    staffs: list[MultiStaff], strict: bool, guess_lone_staffs: bool = True
+) -> set[tuple[int, int]]:
     """
     Pairs of neighboring single staffs (by id) which can form a grand staff: they
     overlap and, in unit sizes, are not further apart than the grand staffs on the
     page. If strict, staffs of different systems must also be closer to each other
     than to single staffs right above and below, else the pairing is a guess.
+    Without guess_lone_staffs, this also applies to two staffs which are systems of
+    their own, as evenly spaced single staffs don't show which belong together.
     """
     flat_staffs = _flatten_staffs(staffs)
     system_of = {id(staff): i for i, row in enumerate(staffs) for staff in row.staffs}
@@ -84,7 +88,9 @@ def _possible_grandstaffs(staffs: list[MultiStaff], strict: bool) -> set[tuple[i
             and not flat_staffs[j + 1].is_grandstaff
         ]
         connected = system_of[id(upper)] == system_of[id(lower)]
-        if not strict or connected or all(gap < 0.8 * n for n in neighbors):  # noqa: PLR2004
+        lone = all(len(staffs[system_of[id(s)]].staffs) == 1 for s in (upper, lower))
+        guess = not strict and (guess_lone_staffs or not lone)
+        if guess or connected or all(gap < 0.8 * n for n in neighbors):  # noqa: PLR2004
             result.add((id(upper), id(lower)))
     return result
 
@@ -140,7 +146,10 @@ def _fit_neighbors(
 
 
 def _repair_systems(
-    staffs: list[MultiStaff], layout: tuple[bool, ...], strict: bool = False
+    staffs: list[MultiStaff],
+    layout: tuple[bool, ...],
+    strict: bool = False,
+    guess_lone_staffs: bool = True,
 ) -> list[MultiStaff]:
     """
     Splits systems which repeat the layout and joins neighbor systems which together
@@ -148,7 +157,7 @@ def _repair_systems(
     change on a page, e.g. a piano intro before the voice enters. Two single staffs
     become a grand staff only if they pair up, see _possible_grandstaffs.
     """
-    grandstaffs = _possible_grandstaffs(staffs, strict)
+    grandstaffs = _possible_grandstaffs(staffs, strict, guess_lone_staffs)
     result: list[MultiStaff] = []
     i = 0
     while i < len(staffs):
@@ -195,14 +204,8 @@ def _repair_score(staffs: list[MultiStaff], layout: tuple[bool, ...]) -> float:
     return score
 
 
-def _common_layout(staffs: list[MultiStaff]) -> tuple[bool, ...] | None:
-    """
-    The layout most systems share. Systems and neighbor systems which mix single and
-    grand staffs decide, if a layout of them occurs at least twice, as they show how a
-    system is built. Otherwise the layout which repairs the most staves decides, e.g.
-    two single staffs as close as a grand staff whose brace was missed. Layouts of
-    several grand staffs need to be detected twice, as a crease can connect them.
-    """
+def _mixed_layouts(staffs: list[MultiStaff]) -> Counter[tuple[bool, ...]]:
+    """Layouts of systems and neighbor systems which mix single and grand staffs."""
     mixed: Counter[tuple[bool, ...]] = Counter()
     for row in staffs:
         if len(set(_layout(row))) > 1:
@@ -211,6 +214,23 @@ def _common_layout(staffs: list[MultiStaff]) -> tuple[bool, ...] | None:
         pair = _layout(upper) + _layout(lower)
         if pair in ((False, True), (True, False)):
             mixed[pair] += 1
+    return mixed
+
+
+def _is_shown_by_mixed_systems(staffs: list[MultiStaff], layout: tuple[bool, ...]) -> bool:
+    mixed = _mixed_layouts(staffs)
+    return _most_common(mixed) == layout and mixed[layout] > 1
+
+
+def _common_layout(staffs: list[MultiStaff]) -> tuple[bool, ...] | None:
+    """
+    The layout most systems share. Systems and neighbor systems which mix single and
+    grand staffs decide, if a layout of them occurs at least twice, as they show how a
+    system is built. Otherwise the layout which repairs the most staves decides, e.g.
+    two single staffs as close as a grand staff whose brace was missed. Layouts of
+    several grand staffs need to be detected twice, as a crease can connect them.
+    """
+    mixed = _mixed_layouts(staffs)
     layout = _most_common(mixed)
     if layout is not None and mixed[layout] > 1:
         return layout
@@ -349,7 +369,12 @@ def _ensure_same_number_of_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
     if _is_uniform(staffs) and len(staffs[0].staffs) > 1:
         return staffs
     layout = _common_layout(staffs)
-    repaired = staffs if layout is None else _repair_systems(staffs, layout)
+    if layout is None:
+        repaired = staffs
+    else:
+        # Single staffs only pair up by a guess if systems show how the page is built
+        guess_lone_staffs = _is_shown_by_mixed_systems(staffs, layout)
+        repaired = _repair_systems(staffs, layout, guess_lone_staffs=guess_lone_staffs)
     if not _is_uniform(repaired):
         # Nothing grouped, or e.g. a crease connected staffs of different systems
         regrouped = _regroup_by_pattern(staffs)
