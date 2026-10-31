@@ -17,6 +17,29 @@ from homr.type_definitions import NDArray
 
 Degradation = Callable[[NDArray, np.random.Generator], NDArray]
 
+# Label points (N, 2) which the geometric degradations move with the image, if set
+_points: NDArray | None = None
+
+
+def degrade_with_points(
+    degradation: Degradation, image: NDArray, rng: np.random.Generator, points: NDArray
+) -> tuple[NDArray, NDArray]:
+    """Applies a degradation and moves the points (N, 2 as x, y) with the image."""
+    global _points  # noqa: PLW0603
+    _points = points.astype(np.float64)
+    try:
+        degraded = degradation(image, rng)
+        return degraded, _points
+    finally:
+        _points = None
+
+
+def _move_points(move: Callable[[NDArray], NDArray]) -> None:
+    global _points  # noqa: PLW0603
+    if _points is not None and len(_points) > 0:
+        _points = move(_points)
+
+
 # Used instead of the generated surroundings if set
 _background_photos: list[Path] = []
 
@@ -231,6 +254,7 @@ def perspective(image: NDArray, rng: np.random.Generator) -> NDArray:
     shift = rng.uniform(-0.09, 0.09, (4, 2)).astype(np.float32) * (width, height)
     matrix = cv2.getPerspectiveTransform(corners, (target + shift).astype(np.float32))
     size = (width, height)
+    _move_points(lambda points: cv2.perspectiveTransform(points[np.newaxis], matrix)[0])
     return _warp(image, lambda img: cv2.warpPerspective(img, matrix, size), rng)
 
 
@@ -238,6 +262,7 @@ def rotation(image: NDArray, rng: np.random.Generator) -> NDArray:
     height, width = image.shape[:2]
     angle = rng.uniform(4, 8) * rng.choice([-1, 1])
     matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 0.85)
+    _move_points(lambda points: points @ matrix[:, :2].T + matrix[:, 2])
     return _warp(image, lambda img: cv2.warpAffine(img, matrix, (width, height)), rng)
 
 
@@ -245,11 +270,22 @@ def page_curl(image: NDArray, rng: np.random.Generator) -> NDArray:
     """A book page bending towards the spine: lines converge and darken near it."""
     height, width = image.shape[:2]
     y, x = np.mgrid[0:height, 0:width].astype(np.float32)
-    distance = x / width if rng.random() < 0.5 else 1 - x / width
+    spine_on_the_left = rng.random() < 0.5
     curl_width = rng.uniform(0.3, 0.45)
-    curl = np.clip(1 - distance / curl_width, 0, 1) ** 2
+
+    def curl_at(x: NDArray) -> NDArray:
+        distance = x / width if spine_on_the_left else 1 - x / width
+        return np.clip(1 - distance / curl_width, 0, 1) ** 2
+
+    curl = curl_at(x)
     strength = rng.uniform(0.12, 0.2)
     map_y = height / 2 + (y - height / 2) * (1 + strength * curl)
+
+    def move(points: NDArray) -> NDArray:
+        stretch = 1 + strength * curl_at(points[:, 0])
+        return np.stack([points[:, 0], height / 2 + (points[:, 1] - height / 2) / stretch], axis=1)
+
+    _move_points(move)
     curled = cv2.remap(image, x, map_y, cv2.INTER_LINEAR, borderValue=(255, 255, 255))
     shading = 1 - 0.35 * curl
     curled = _to_uint8(curled.astype(np.float32) * shading[..., np.newaxis])
@@ -269,8 +305,21 @@ def wrinkles(image: NDArray, rng: np.random.Generator) -> NDArray:
 
     amplitude = 0.004 * width
     y, x = np.mgrid[0:height, 0:width].astype(np.float32)
-    map_x = x + amplitude * smooth_noise(12)
-    map_y = y + amplitude * smooth_noise(12)
+    shift_x = amplitude * smooth_noise(12)
+    shift_y = amplitude * smooth_noise(12)
+    map_x = x + shift_x
+    map_y = y + shift_y
+
+    def move(points: NDArray) -> NDArray:
+        # The maps give the source of each pixel, the points need the inverse
+        moved = points
+        for _ in range(3):
+            column = np.clip(np.round(moved[:, 0]), 0, width - 1).astype(int)
+            row = np.clip(np.round(moved[:, 1]), 0, height - 1).astype(int)
+            moved = points - np.stack([shift_x[row, column], shift_y[row, column]], axis=1)
+        return moved
+
+    _move_points(move)
     warped = cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
     # Creases are thin, dark lines where a smooth noise crosses zero
     creases = 1 - 0.2 * np.exp(-((smooth_noise(8) / 0.025) ** 2))
@@ -309,6 +358,8 @@ def low_resolution(image: NDArray, rng: np.random.Generator) -> NDArray:
     if image.shape[1] <= width:
         return image
     height = round(image.shape[0] * width / image.shape[1])
+    scale = (width / image.shape[1], height / image.shape[0])
+    _move_points(lambda points: points * scale)
     return cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
 
 
@@ -367,6 +418,7 @@ def _place_on(
     y = int(rng.uniform(0, canvas_height - height))
     canvas = background.copy()
     canvas[y : y + height, x : x + width] = image
+    _move_points(lambda points: points + (x, y))
     return canvas, (x, y)
 
 
@@ -404,6 +456,7 @@ def book_spread(image: NDArray, rng: np.random.Generator) -> NDArray:
     opposite_on_the_left = rng.random() < 0.5
     if opposite_on_the_left:
         spread, seam = np.hstack([opposite, image]), visible
+        _move_points(lambda points: points + (visible, 0))
     else:
         spread, seam = np.hstack([image, opposite]), width
     shading = np.ones(spread.shape[1], dtype=np.float32)

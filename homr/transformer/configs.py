@@ -1,4 +1,3 @@
-import json
 import os
 from typing import Any
 
@@ -51,9 +50,6 @@ class FilePaths:
             "notetokenizer": self.notetokenizer,
         }
 
-    def to_json_string(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
-
 
 class DecoderArgs:
     def __init__(self) -> None:
@@ -77,9 +73,6 @@ class DecoderArgs:
             "ff_dropout": self.ff_dropout,
             "layer_dropout": self.layer_dropout,
         }
-
-    def to_json_string(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
 
 
 class Config:
@@ -154,9 +147,6 @@ class Config:
             "decoder_heads": self.decoder_heads,
             "decoder_args": self.decoder_args.to_dict(),
         }
-
-    def to_json_string(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
 
 
 # Initialize the Config class

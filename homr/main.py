@@ -23,12 +23,8 @@ from homr.bounding_boxes import (
     create_bounding_ellipses,
     create_rotated_bounding_boxes,
 )
-from homr.brace_dot_detection import (
-    find_braces_brackets_and_grand_staff_lines,
-    prepare_brace_dot_image,
-)
 from homr.debug import Debug
-from homr.model import InputPredictions, MultiStaff
+from homr.model import InputPredictions, MultiStaff, Note, Staff
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
@@ -260,9 +256,18 @@ def process_image(
     return xml_file
 
 
-def detect_staffs_in_image(
-    image_path: str, config: ProcessingConfig
-) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
+@dataclass
+class SingleStaffs:
+    """The staffs of a page before they are grouped into systems."""
+
+    predictions: InputPredictions
+    debug: Debug
+    to_input_image: PointMapping
+    staffs: list[Staff]
+    notes: list[Note]
+
+
+def detect_single_staffs(image_path: str, config: ProcessingConfig) -> SingleStaffs:
     predictions, debug, to_input_image = load_and_preprocess_predictions(
         image_path, config.enable_debug, config.enable_cache, config.segnet_use_gpu
     )
@@ -311,23 +316,43 @@ def detect_staffs_in_image(
     )
     if len(staffs) == 0:
         raise Exception("No staffs found")
+
+    debug.write_bounding_boxes_alternating_colors("staffs", staffs)
+
+    notes = add_notes_to_staffs(
+        staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
+    )
+    return SingleStaffs(predictions, debug, to_input_image, staffs, notes)
+
+
+def group_staffs(predictions: InputPredictions, staffs: list[Staff]) -> list[MultiStaff]:
+    from homr import staff_relations  # noqa: PLC0415
+
+    staffs = staff_relations.join_pieces_with_model(predictions, staffs)
+    pairs, crops = staff_relations.page_inputs(predictions, staffs)
+    probabilities = staff_relations.get_model().predict(crops)
+    for (i, j), p in zip(pairs, probabilities, strict=True):
+        scores = ", ".join(
+            f"{name} {p_class:.2f}"
+            for name, p_class in zip(staff_relations.CLASSES, p, strict=True)
+        )
+        best = staff_relations.CLASSES[int(p.argmax())]
+        eprint(f"Staffs {i} and {j} (from the top): {best} ({scores})")
+    return staff_relations.group_staffs(staffs, pairs, probabilities)
+
+
+def detect_staffs_in_image(
+    image_path: str, config: ProcessingConfig
+) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
+    single = detect_single_staffs(image_path, config)
+    debug, staffs = single.debug, single.staffs
     if config.title_detection:
         title_future = detect_title(debug, staffs[0])
     else:
         title_future = Future()
         title_future.set_result("")
 
-    debug.write_bounding_boxes_alternating_colors("staffs", staffs)
-
-    brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
-    debug.write_threshold_image("brace_dot", brace_dot_img)
-    brace_dot = create_rotated_bounding_boxes(brace_dot_img, skip_merging=True, max_size=(100, -1))
-
-    notes = add_notes_to_staffs(
-        staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
-    )
-
-    multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
+    multi_staffs = group_staffs(single.predictions, staffs)
     eprint(
         "Found",
         len(multi_staffs),
@@ -335,9 +360,16 @@ def detect_staffs_in_image(
         [len(staff.staffs) for staff in multi_staffs],
     )
 
-    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, notes)
+    debug.write_all_bounding_boxes_alternating_colors("notes", multi_staffs, single.notes)
 
-    return multi_staffs, predictions.preprocessed, debug, title_future, len(staffs), to_input_image
+    return (
+        multi_staffs,
+        single.predictions.preprocessed,
+        debug,
+        title_future,
+        len(staffs),
+        single.to_input_image,
+    )
 
 
 def get_all_image_files_in_folder(folder: str) -> list[str]:
@@ -373,6 +405,10 @@ def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_enc
         else:
             models.append(default_config.filepaths.encoder_path)
         models.append(default_config.filepaths.decoder_path)
+    from homr import staff_relations  # noqa: PLC0415
+
+    models.append(staff_relations.model_path)
+    models.append(staff_relations.horizontal_model_path)
     missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:
@@ -386,6 +422,7 @@ def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_enc
             try:
                 zip_name = base_name + ".zip"
                 download_url = base_url + zip_name
+                os.makedirs(os.path.dirname(model), exist_ok=True)
                 downloaded_zip = os.path.join(os.path.dirname(model), zip_name)
                 download_utils.download_file(download_url, downloaded_zip)
 

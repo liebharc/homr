@@ -152,10 +152,10 @@ def _repair_systems(
     guess_lone_staffs: bool = True,
 ) -> list[MultiStaff]:
     """
-    Splits systems which repeat the layout and joins neighbor systems which together
-    have it. Other systems are kept, as the layout can
-    change on a page, e.g. a piano intro before the voice enters. Two single staffs
-    become a grand staff only if they pair up, see _possible_grandstaffs.
+    Splits systems which repeat the layout, unless the staff relation model is sure about
+    them, and joins neighbor systems which together have it. Other systems are kept, as
+    the layout can change on a page, e.g. a piano intro before the voice enters. Two single
+    staffs become a grand staff only if they pair up, see _possible_grandstaffs.
     """
     grandstaffs = _possible_grandstaffs(staffs, strict, guess_lone_staffs)
     result: list[MultiStaff] = []
@@ -167,7 +167,7 @@ def _repair_systems(
             continue
         row = staffs[i].staffs
         repeats = len(row) // len(layout)
-        if repeats > 1 and _layout(staffs[i]) == layout * repeats:
+        if repeats > 1 and _layout(staffs[i]) == layout * repeats and not staffs[i].certain:
             result.extend(
                 MultiStaff(row[k : k + len(layout)], []) for k in range(0, len(row), len(layout))
             )
@@ -337,7 +337,7 @@ def _convert_to_layout(row: MultiStaff, layout: tuple[bool, ...]) -> MultiStaff 
                 return None
             staff = staff.merge(lower)
         staffs.append(staff)
-    return MultiStaff(staffs, row.connections)
+    return MultiStaff(staffs, row.connections, row.certain)
 
 
 def _unify_grand_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
@@ -375,7 +375,7 @@ def _ensure_same_number_of_staffs(staffs: list[MultiStaff]) -> list[MultiStaff]:
         # Single staffs only pair up by a guess if systems show how the page is built
         guess_lone_staffs = _is_shown_by_mixed_systems(staffs, layout)
         repaired = _repair_systems(staffs, layout, guess_lone_staffs=guess_lone_staffs)
-    if not _is_uniform(repaired):
+    if not _is_uniform(repaired) and not any(row.certain for row in staffs):
         # Nothing grouped, or e.g. a crease connected staffs of different systems
         regrouped = _regroup_by_pattern(staffs)
         if regrouped is not None:

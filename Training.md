@@ -10,6 +10,26 @@ This log contains the major milestones of the training process, as well as faile
 
 This will download the dataset and start the training. Training takes about 1 hour.
 
+### Staff relation models
+
+```
+poetry run python -m training.staff_relations.create_dataset
+poetry run python -m training.staff_relations.render_parts
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_parts --directory datasets/staff_relations_singles
+poetry run python -m training.staff_relations.render_parts --parts melody --directory datasets/staff_relations_melody
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_melody --directory datasets/staff_relations_melody_pairs
+poetry run python -m training.staff_relations.render_parts --parts melody --start-bar-line --directory datasets/staff_relations_melody_sb
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_melody_sb --directory datasets/staff_relations_melody_sb_pairs
+poetry run python -m training.staff_relations.render_pdmx
+poetry run python -m training.staff_relations.render_pdmx --seed 2 --single-parts 1500 --directory datasets/staff_relations_pdmx_singles_scores
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_pdmx_scores --directory datasets/staff_relations_pdmx --pages 3000
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_pdmx_singles_scores --directory datasets/staff_relations_pdmx_singles --pages 3000
+poetry run python -m training.staff_relations.train --epochs 5 --directories datasets/staff_relations datasets/staff_relations_singles datasets/staff_relations_melody_pairs datasets/staff_relations_melody_sb_pairs datasets/staff_relations_pdmx datasets/staff_relations_pdmx_singles
+poetry run python -m training.staff_relations.train --kind horizontal
+```
+
+Renders MuseScore pages from Lieder and PDMX, runs homr's staff detection on degraded versions and labels the detected staff pairs from the SVG. Training takes a few minutes per epoch on a single GPU. Evaluation: `validation.staff_structure` and `training.staff_relations.evaluate_photos`.
+
 ### Transformer (TrOmr)
 
 Prerequisites:
@@ -76,6 +96,16 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+# Run 512 with staff relation models
+
+Commit: ac06fd68af6a3bc488c1e2106b92ec54c2b1e940
+Day: 31 October 2026
+System Level: 5.0 diffs, SER: 3.7%
+Polish scores: 15.32%
+SMB scores: 13.09%
+
+Two small CNNs replace the brace heuristic that groups staffs into systems and grand staffs: `staff_relations_pdmx2` for vertical neighbors, `staff_pieces_h1` joins pieces of the same staff. Trained on Lieder and PDMX. Polish is unchanged, SMB fails on 3 instead of 5 pages.
 
 # Run 512
 

@@ -115,7 +115,6 @@ class StaffAnchor(DebugDrawable):
         self.max_y = max([line.max_y for line in staff_lines])
         self.min_y = min([line.min_y for line in staff_lines])
         max_number_of_ledger_lines = 5
-        self.y_range = range(int(min(y_positions)), int(max(y_positions)))
         self.zone = range(
             int(self.min_y - max_number_of_ledger_lines * self.average_unit_size),
             int(self.max_y + max_number_of_ledger_lines * self.average_unit_size),
@@ -415,59 +414,6 @@ def begins_or_ends_on_one_staff_line(
         if abs(staff_y - line.center[1]) < unit_size:
             return True
     return False
-
-
-def _extrapolate_missing_staff_line(
-    connected_lines: list[StaffLineSegment],
-    symbol: RotatedBoundingBox,
-    estimated_unit_size: int,
-) -> list[StaffLineSegment] | None:
-    """
-    Segnet's line prediction can miss one of a staff's five lines outright, especially in
-    densely packed multi-staff systems - a real gap in the underlying detection, not a
-    logic bug. If that happens but the other four lines are still evenly spaced at the
-    estimated unit size, synthesize the missing line by extrapolation instead of discarding
-    the whole anchor attempt.
-
-    The anchor symbol (a bar line or clef stem) spans close to the full staff height by
-    construction, so comparing the found lines' own extent against the symbol's own
-    top/bottom tells us which end is short a line, rather than guessing. Returns None
-    (leaving the anchor attempt to fail as before) unless exactly one end shows a
-    unit-size-sized gap and the other end doesn't - anything less clear-cut (e.g. a real
-    3-line pattern, or noise) is left alone rather than guessed at.
-    """
-    if len(connected_lines) != constants.number_of_lines_on_a_staff - 1:
-        return None
-    ordered = sorted(connected_lines, key=lambda line: line.staff_fragments[0].center[1])
-    positions = [line.staff_fragments[0].center[1] for line in ordered]
-    gaps = [positions[i + 1] - positions[i] for i in range(len(positions) - 1)]
-    tolerance = 0.3 * estimated_unit_size
-    if any(abs(gap - estimated_unit_size) > tolerance for gap in gaps):
-        return None
-
-    symbol_top = symbol.center[1] - symbol.size[1] / 2
-    symbol_bottom = symbol.center[1] + symbol.size[1] / 2
-    gap_above = positions[0] - symbol_top
-    gap_below = symbol_bottom - positions[-1]
-    is_missing_above = abs(gap_above - estimated_unit_size) <= tolerance and gap_below <= tolerance
-    is_missing_below = abs(gap_below - estimated_unit_size) <= tolerance and gap_above <= tolerance
-    if is_missing_above == is_missing_below:
-        return None
-
-    reference = ordered[0] if is_missing_above else ordered[-1]
-    offset = -estimated_unit_size if is_missing_above else estimated_unit_size
-    synthesized_fragments = [
-        RotatedBoundingBox(
-            ((fragment.center[0], fragment.center[1] + offset), fragment.box[1], fragment.box[2]),
-            fragment.contours,
-            fragment.debug_id,
-        )
-        for fragment in reference.staff_fragments
-    ]
-    synthesized_line = StaffLineSegment(reference.debug_id, synthesized_fragments)
-    if is_missing_above:
-        return [synthesized_line, *ordered]
-    return [*ordered, synthesized_line]
 
 
 def find_staff_anchors(

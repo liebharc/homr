@@ -259,11 +259,6 @@ class StaffPoint:
         average_x = np.mean([x for x, _ in xy])
         return StaffPoint(float(average_x), [y for _, y in xy], self.angle)
 
-    def to_bounding_box(self) -> BoundingBox:
-        return BoundingBox(
-            [int(self.x), int(self.y[0]), int(self.x), int(self.y[-1])], np.array([]), -2
-        )
-
     def __str__(self) -> str:
         return "P(" + str(self.x) + "," + str(self.y[2]) + ")"
 
@@ -334,12 +329,6 @@ class Staff(DebugDrawable):
             return None
         return closest_point
 
-    def y_distance_to(self, point: tuple[float, float]) -> float:
-        staff_point = self.get_at(point[0])
-        if staff_point is None:
-            return 1e10  # Something large to mimic infinity
-        return min([abs(y - point[1]) for y in staff_point.y])
-
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
         if len(self.grid) == 0:
             return
@@ -350,20 +339,6 @@ class Staff(DebugDrawable):
                 cv2.line(
                     img, (int(p1.x), int(p1.y[i])), (int(p2.x), int(p2.y[i])), color, thickness=2
                 )
-
-    def get_bar_lines(self) -> list[BarLine]:
-        result = []
-        for symbol in self.symbols:
-            if isinstance(symbol, BarLine):
-                result.append(symbol)
-        return result
-
-    def get_clefs(self) -> list[Clef]:
-        result = []
-        for symbol in self.symbols:
-            if isinstance(symbol, Clef):
-                result.append(symbol)
-        return result
 
     def get_notes(self) -> list[Note]:
         result = []
@@ -381,20 +356,6 @@ class Staff(DebugDrawable):
             grid.append(StaffPoint(max_x, grid[-1].y, grid[-1].angle))
 
         return Staff(grid)
-
-    def get_number_of_notes(self) -> int:
-        result = 0
-        for symbol in self.symbols:
-            if isinstance(symbol, Note):
-                result += 1
-        return result
-
-    def get_all_except_notes(self) -> list[SymbolOnStaff]:
-        result = []
-        for symbol in self.symbols:
-            if not isinstance(symbol, Note):
-                result.append(symbol)
-        return result
 
     def __str__(self) -> str:
         return "Staff(" + str.join(", ", [str(s) for s in self.symbols]) + ")"
@@ -419,9 +380,13 @@ class MultiStaff(DebugDrawable):
     A grand staff or a staff with multiple voices.
     """
 
-    def __init__(self, staffs: list[Staff], connections: list[RotatedBoundingBox]) -> None:
+    def __init__(
+        self, staffs: list[Staff], connections: list[RotatedBoundingBox], certain: bool = False
+    ) -> None:
         self.staffs = sorted(staffs, key=lambda s: s.min_y)
         self.connections = connections
+        # The staff relation model is sure that the staffs of this system belong together
+        self.certain = certain
 
     def merge(self, other: "MultiStaff") -> "MultiStaff":
         unique_staffs = []
@@ -433,151 +398,6 @@ class MultiStaff(DebugDrawable):
             if connection not in unique_connections:
                 unique_connections.append(connection)
         return MultiStaff(unique_staffs, unique_connections)
-
-    """
-    rules to determain whether two staffs should be merged into a grandstaff by current brace:
-    1. x_distance: the left side of staff should be close enough
-       (within 5* the average unit size) to the brace symbol
-    2. y_overlap: the top and bottom of the brace symbol should overlap (at least 50% of) the staffs
-    return scores = y_overlap(higher the better) - x_distance(lower the better)
-    """
-
-    def _score_brace_with_staff_pair(
-        self,
-        symbol: RotatedBoundingBox,
-        upper_staff: Staff,
-        lower_staff: Staff,
-        staff_above: "Staff | None" = None,
-        staff_below: "Staff | None" = None,
-    ) -> float:
-        unit_size = float(np.median([upper_staff.average_unit_size, lower_staff.average_unit_size]))
-        x_distance_threshold = constants.grandstaff_x_distance_threshold_factor * unit_size
-        y_overlap_threshold = constants.grandstaff_y_overlap_threshold_factor * symbol.size[1]
-
-        symbol_min_y = symbol.center[1] - symbol.size[1] / 2
-        symbol_max_y = symbol.center[1] + symbol.size[1] / 2
-
-        # A real grand-staff brace hugs only the two staffs it embraces and stops
-        # short of any neighboring staff. A candidate that reaches past the
-        # midpoint towards a staff outside the pair is not a brace for this pair
-        # at all -- it's more likely a whole-system bracket or barline that
-        # happens to touch several unrelated staffs (e.g. in an a-cappella trio
-        # with no piano, where any adjacent two of the three staffs would
-        # otherwise look like a plausible grand-staff pair). Overlap-ratio checks
-        # against the pair's own span can't catch this, because for a bracket
-        # spanning N staffs, any 2 consecutive ones already cover 2/N of it --
-        # comfortably over 50% whenever N <= 4. Checking against the actual
-        # neighboring staff's position catches it directly, regardless of N.
-        if staff_above is not None:
-            midpoint_above = (staff_above.max_y + upper_staff.min_y) / 2
-            if symbol_min_y < midpoint_above:
-                return 0
-        if staff_below is not None:
-            midpoint_below = (lower_staff.max_y + staff_below.min_y) / 2
-            if symbol_max_y > midpoint_below:
-                return 0
-
-        # Distance to whichever staff's left edge is closer, not to the smaller
-        # of the two min_x values. The two staffs of a system are normally
-        # aligned at their left edge, but staff detection can occasionally let
-        # one staff's box bleed further left than the other (e.g. picking up a
-        # stray mark near a title or instrument name). Requiring closeness to
-        # the min of both mins makes the match fragile to whichever staff is
-        # noisy; requiring closeness to at least one is robust to either staff
-        # being the noisy one.
-        symbol_min_x = symbol.center[0]
-        x_distance = min(
-            abs(upper_staff.min_x - symbol_min_x), abs(lower_staff.min_x - symbol_min_x)
-        )
-
-        y_overlap = min(symbol_max_y, lower_staff.max_y) - max(symbol_min_y, upper_staff.min_y)
-
-        if not (
-            x_distance < x_distance_threshold
-            and y_overlap > y_overlap_threshold
-            and y_overlap > x_distance
-        ):
-            return 0
-
-        # Score by intersection-over-union of the symbol with this staff pair's
-        # own span, rather than by raw overlap in pixels. A brace_dot blob that
-        # also touches a third, unrelated staff (e.g. it merged with that
-        # staff's clef ink during preprocessing) spans much more than the true
-        # pair and would otherwise win purely because its absolute overlap is
-        # larger, even when it fits some other pair's span far more tightly.
-        union = max(symbol_max_y, lower_staff.max_y) - min(symbol_min_y, upper_staff.min_y)
-        iou = y_overlap / union if union > 0 else 0.0
-        return iou - x_distance / x_distance_threshold
-
-    class GrandStaffPair:
-        def __init__(self, pair_index: list[int], score: float):
-            self.pair_index = pair_index
-            self.score = score
-
-        def get_score(self) -> float:
-            return self.score
-
-        def get_index(self) -> list[int]:
-            return self.pair_index
-
-        def __repr__(self) -> str:
-            return f"staff pair: {self.pair_index} with score: {self.score})"
-
-    def _select_grandstaffs(
-        self, brace_dot: list[RotatedBoundingBox]
-    ) -> list["MultiStaff.GrandStaffPair"]:
-        pair_scores: list[MultiStaff.GrandStaffPair] = []
-        # step1: we try each two staffs combination, like (0,1), (1,2), (2,3), ...
-        for i in range(len(self.staffs) - 1):
-            staff_above = self.staffs[i - 1] if i > 0 else None
-            staff_below = self.staffs[i + 2] if i + 2 < len(self.staffs) else None
-            best_score = max(
-                (
-                    self._score_brace_with_staff_pair(
-                        symbol, self.staffs[i], self.staffs[i + 1], staff_above, staff_below
-                    )
-                    for symbol in brace_dot
-                ),
-            )
-            # step2: we try all braces for the current staff pair to see if there is a good match
-            if best_score > 0:
-                pair_scores.append(MultiStaff.GrandStaffPair([i, i + 1], best_score))
-
-        # step3: we can't simply return pair_scores, because some staff may be used more than once,
-        # like ([0,1], score=0.5), ([1,2], score=0.8)
-        # in this case, we only select highest score pair, which is ([1,2], score=0.8)
-        result: list[MultiStaff.GrandStaffPair] = []
-        used_staff_index: set[int] = set()
-        for pair in sorted(pair_scores, key=lambda pair: pair.get_score(), reverse=True):
-            if any(index in used_staff_index for index in pair.get_index()):
-                continue
-
-            result.append(pair)
-            used_staff_index.update(pair.get_index())
-
-        return result
-
-    def _merge_selected_pairs(self, pairs: list["MultiStaff.GrandStaffPair"]) -> list[Staff]:
-        result: list[Staff] = []
-        i = 0
-        while i < len(self.staffs):
-            if any(i in pair.get_index() for pair in pairs):
-                result.append(self.staffs[i].merge(self.staffs[i + 1]))
-                i += 2
-                continue
-            # not grandstaff
-            result.append(self.staffs[i])
-            i += 1
-        return result
-
-    def create_grandstaffs(self, brace_dot: list[RotatedBoundingBox]) -> "MultiStaff":
-        if len(self.staffs) < 2:
-            return self
-        pairs = self._select_grandstaffs(brace_dot)
-        if not pairs:
-            return self
-        merged_staffs = self._merge_selected_pairs(pairs)
-        return MultiStaff(merged_staffs, self.connections)
 
     def break_apart(self) -> list["MultiStaff"]:
         return [MultiStaff([staff], []) for staff in self.staffs]
