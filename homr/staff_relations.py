@@ -32,7 +32,7 @@ crop_width = (margin_units + start_units) * pixels_per_unit
 channels = 5
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-model_name = "staff_relations_pdmx2-0f30e28165f9b00c8d1432ff18b4e178451a0267.onnx"
+model_name = "staff_relations_pdmx2-cc40992a36690003f7ed2bebe197016f19242fa6.onnx"
 model_path = os.path.join(script_location, "staff_relations", model_name)
 
 
@@ -278,7 +278,7 @@ horizontal_gap_width = 64
 horizontal_crop_width = 2 * horizontal_end_width + horizontal_gap_width
 horizontal_crop_height = 2 * outer_rows + staff_rows
 horizontal_features = 5
-horizontal_model_name = "staff_pieces_h1-47e7ec9bb05fa186c0f68b09ea1758c1436ac3d0.onnx"
+horizontal_model_name = "staff_pieces_h1-165e413e0edb2d8d2486e2bface8f345e6641ec9.onnx"
 horizontal_model_path = os.path.join(script_location, "staff_relations", horizontal_model_name)
 
 
