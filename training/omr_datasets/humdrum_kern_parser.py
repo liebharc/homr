@@ -306,6 +306,9 @@ class HumdrumKernConverter:
             elif char in articulation_mapping:
                 articulations.append(articulation_mapping[char])
 
+        # Sorted like the vocabulary and the MusicXML parser
+        articulations.sort()
+        slurs.sort()
         if slurs and articulations:
             return str.join("_", articulations), str.join("_", slurs)
         elif slurs:
