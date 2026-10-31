@@ -81,11 +81,13 @@ Implementation: `rate_validation_result.py`
 
 Commit: 2293bba14bfea47d9d28411339362af15fce4c31
 Day: 26 October 2026
-System Level: 6.1 diffs, SER: 4.4% | 14.1 diffs, SER: 8.1% with the reference fixed | 13.7 diffs, SER: 7.7% after staff detection and multirest fixes
-Polish scores: 15.33% | 15.32% after staff detection and multirest fixes
+System Level: 6.1 diffs, SER: 4.4% | 14.1 diffs, SER: 8.1% with the reference fixed | 13.7 diffs, SER: 7.7% after staff detection and multirest fixes | 7.7 diffs, SER: 4.4% after MusicXML fixes
+Polish scores: 15.33% | 15.32% after staff detection and multirest fixes | 15.18% after MusicXML fixes
 SMB scores: 13.31% with staff detection improvements but without triplet restoration | 13.08% after staff detection and multirest fixes
 
 Adding dynamcis (PR 174), strong accents (PR 191) and minor fix to multirests (PR 195)
+
+MusicXML fixes with the same model: a note no longer starts before the previous note of its voice has ended, tuplets keep their tuplet marks and a second voice on a staff is written as voice 2 with stems down. On Polish 15 pages get better and 6 worse. On those 6 the model reads groups of three in 6/8 or 9/16 as triplets. Before the fix the MusicXML lacked the tuplet marks for these notes, so the benchmark read them as plain notes and didn't count the error.
 
 # Run 480
 

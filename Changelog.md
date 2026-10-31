@@ -37,6 +37,7 @@ All notable changes to this project will be documented here.
 - MusicXML export: a computed time signature written before the recognized one, slurs across
   voices, rests merged into chords and grace notes without pitch.
 - Multi-measure rests are written as that many measures.
+- MusicXML export: missing tuplet marks, notes which overlapped the previous note of their voice, and the stems of a second voice on a staff.
 - Single staffs were wrongly paired into grand staffs.
 - Staffs were joined across the gutter of a book.
 - Staffs which only contain rests.
