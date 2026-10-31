@@ -98,6 +98,15 @@ class TestStaffParsing(unittest.TestCase):
         # Connected pairs on a page of single staffs are most likely false connections
         self.assertEqual([[False]] * 8, _layouts(result))
 
+    def test_ensure_same_number_of_staffs_keeps_certain_systems(self) -> None:
+        staffs = [make_row(0), make_row(1), make_row(2)]
+        staffs += [MultiStaff([make_staff(3), make_staff(4)], [], certain=True)]
+        staffs += [MultiStaff([make_staff(5), make_staff(6)], [], certain=True)]
+
+        result = _ensure_same_number_of_staffs(staffs)
+
+        self.assertEqual([[False]] * 3 + [[False, False]] * 2, _layouts(result))
+
     def test_ensure_same_number_of_staffs_keeps_layout_change(self) -> None:
         # A system where the voice pauses, between systems with voice and piano
         staffs = [

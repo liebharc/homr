@@ -15,6 +15,8 @@ from homr.type_definitions import NDArray
 
 SEPARATE, SAME_SYSTEM, GRAND_STAFF = range(3)
 CLASSES = ["separate", "same system", "grand staff"]
+# Probability above which the model is sure that two staffs are in the same system
+certain_probability = 0.9
 
 # Resolution of the crops in pixels per unit size (distance of two staff lines)
 pixels_per_unit = 4
@@ -215,7 +217,8 @@ def group_staffs(
 ) -> list[MultiStaff]:
     """
     Joins the staffs of a pair into one system if the model doesn't see them as separate,
-    and merges the pairs which it sees as grand staffs.
+    and merges the pairs which it sees as grand staffs. A system of several staffs is certain
+    if the model is sure that all its pairs belong together.
     """
     system_of = list(range(len(staffs)))
 
@@ -236,7 +239,15 @@ def group_staffs(
         if i in grand_staffs:
             staff = _merge_grand_staff(staff, staffs[grand_staffs[i]])  # noqa: PLW2901
         systems.setdefault(find(i), []).append(staff)
-    result = [MultiStaff(system, []) for system in systems.values()]
+    uncertain = {
+        find(i)
+        for (i, j), p in zip(pairs, probabilities, strict=True)
+        if find(i) == find(j) and p[SEPARATE] > 1 - certain_probability
+    }
+    result = [
+        MultiStaff(system, [], certain=len(system) > 1 and root not in uncertain)
+        for root, system in systems.items()
+    ]
     return sorted(result, key=lambda system: system.staffs[0].min_y)
 
 

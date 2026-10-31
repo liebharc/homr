@@ -43,9 +43,29 @@ def _parts_group(parts: int) -> str:
     return "5+" if parts >= 5 else str(parts)  # noqa: PLR2004
 
 
-def select_scores(seed: int) -> list[Path]:
+def _title(row: dict[str, str]) -> str:
+    return re.sub(r"\W+", " ", row["title"] or row["song_name"]).strip().lower()
+
+
+def development_titles(directory: Path = default_directory) -> set[str]:
+    """Titles of the scores of the development set, PDMX has many copies of a score."""
+    scores = {line.strip() for line in (directory / "scores.txt").read_text().splitlines()}
+    with open(pdmx_root / "PDMX.csv", newline="", encoding="utf-8") as f:
+        return {
+            _title(row)
+            for row in csv.DictReader(f)
+            if str(pdmx_root / row["mxl"].lstrip("./")) in scores
+        }
+
+
+def select_scores(
+    seed: int,
+    counts: dict[str, int] = scores_per_parts,
+    complexity_limit: int = max_complexity,
+    excluded_titles: frozenset[str] = frozenset(),
+) -> list[Path]:
     """Random PDMX scores without license conflicts, by number of parts."""
-    by_group: dict[str, list[Path]] = {group: [] for group in scores_per_parts}
+    by_group: dict[str, list[Path]] = {group: [] for group in counts}
     with open(pdmx_root / "PDMX.csv", newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             if row["subset:no_license_conflict"] != "True" or row["subset:all_valid"] != "True":
@@ -54,18 +74,23 @@ def select_scores(seed: int) -> list[Path]:
                 parts, complexity = int(row["n_tracks"]), int(row["complexity"])
             except ValueError:
                 continue
-            if complexity <= max_complexity and parts >= 1:
-                by_group[_parts_group(parts)].append(pdmx_root / row["mxl"].lstrip("./"))
+            group = _parts_group(parts) if parts >= 1 else ""
+            if (
+                complexity <= complexity_limit
+                and group in counts
+                and _title(row) not in excluded_titles
+            ):
+                by_group[group].append(pdmx_root / row["mxl"].lstrip("./"))
     rng = random.Random(seed)
     result = []
-    for group, count in scores_per_parts.items():
+    for group, count in counts.items():
         candidates = sorted(by_group[group])
         rng.shuffle(candidates)
         result.extend(candidates[:count])
     return result
 
 
-def _render(scores: list[Path], directory: Path) -> None:
+def render(scores: list[Path], directory: Path) -> None:
     """Renders each score to SVG pages and MusicXML with MuseScore."""
     directory.mkdir(parents=True, exist_ok=True)
     jobs = []
@@ -141,7 +166,7 @@ def _select_pages(directory: Path, scores: list[Path], seed: int) -> list[dict[s
 
 def prepare(directory: Path, seed: int, variants: list[str], workers: int) -> None:
     scores = select_scores(seed)
-    _render(scores, directory / "scores")
+    render(scores, directory / "scores")
     pages = _select_pages(directory / "scores", scores, seed)
     for variant in variants:
         (directory / variant).mkdir(parents=True, exist_ok=True)

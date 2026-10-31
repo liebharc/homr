@@ -419,9 +419,13 @@ class MultiStaff(DebugDrawable):
     A grand staff or a staff with multiple voices.
     """
 
-    def __init__(self, staffs: list[Staff], connections: list[RotatedBoundingBox]) -> None:
+    def __init__(
+        self, staffs: list[Staff], connections: list[RotatedBoundingBox], certain: bool = False
+    ) -> None:
         self.staffs = sorted(staffs, key=lambda s: s.min_y)
         self.connections = connections
+        # The staff relation model is sure that the staffs of this system belong together
+        self.certain = certain
 
     def merge(self, other: "MultiStaff") -> "MultiStaff":
         unique_staffs = []

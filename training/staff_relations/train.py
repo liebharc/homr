@@ -113,6 +113,24 @@ def load(
     return result
 
 
+def _cut_image_border(crop: torch.Tensor, probability: float) -> torch.Tensor:
+    """
+    Blanks the crop left of a random column with the given probability, like a photo or
+    scan whose border cuts the brace off. The bar line at the start of the staffs stays.
+    """
+    crop = crop.clone()
+    staff_columns = nn.functional.max_pool2d(crop[:, STAFF : STAFF + 1], (crop_height, 1), 1)
+    has_staff = staff_columns[:, 0, 0] > 0.3  # noqa: PLR2004
+    for i in torch.nonzero(torch.rand(crop.shape[0]) < probability)[:, 0].tolist():
+        columns = torch.nonzero(has_staff[i])[:, 0]
+        if len(columns) == 0:
+            continue
+        end = int(columns[0]) - pixels_per_unit // 2
+        if end > 0:
+            crop[i, :, :, : int(torch.randint(0, end + 1, ()))] = 0
+    return crop
+
+
 def _batches(
     data: tuple[NDArray, NDArray, NDArray], size: int, shuffle: bool, device: str
 ) -> Iterator[tuple[torch.Tensor, ...]]:
@@ -232,6 +250,7 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=12)
     parser.add_argument("--erase-clefs", type=float, default=0.3, help="Vertical pairs only")
     parser.add_argument("--edge-lines", type=float, default=0.3, help="Vertical pairs only")
+    parser.add_argument("--image-border", type=float, default=0.2, help="Vertical pairs only")
     parser.add_argument("--output")
     parser.add_argument("--cache", type=Path, default=Path("datasets/staff_relations_cache"))
     args = parser.parse_args()
@@ -255,6 +274,7 @@ def main() -> None:
             optimizer.zero_grad()
             if args.kind == "vertical":
                 augmented = _add_edge_lines(_erase_clefs(crop, args.erase_clefs), args.edge_lines)
+                augmented = _cut_image_border(augmented, args.image_border)
                 loss = loss_function(model(_augment(augmented)), labels)
             else:
                 loss = loss_function(model(_augment(crop), feats), labels)
