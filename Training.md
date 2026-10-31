@@ -101,11 +101,13 @@ Implementation: `rate_validation_result.py`
 
 Commit: ac06fd68af6a3bc488c1e2106b92ec54c2b1e940
 Day: 31 October 2026
-System Level: 5.0 diffs, SER: 3.7%
-Polish scores: 15.32%
-SMB scores: 13.09%
+System Level: 5.0 diffs, SER: 3.7% | 5.0 diffs, SER: 3.8% after MusicXML fixes
+Polish scores: 15.32% | 15.18% after MusicXML fixes
+SMB scores: 13.09% | 13.10% after MusicXML fixes
 
 Two small CNNs replace the brace heuristic that groups staffs into systems and grand staffs: `staff_relations_pdmx2` for vertical neighbors, `staff_pieces_h1` joins pieces of the same staff. Trained on Lieder and PDMX. Polish is unchanged, SMB fails on 3 instead of 5 pages.
+
+The MusicXML fixes of Run 512 apply here as well. With them, the staff relation models give the same Polish result as the brace heuristic, and SMB differs on 14 pages by 0.02 points in total.
 
 # Run 512
 
