@@ -15,12 +15,6 @@ _texture_config: dict = {"dir": None, "paths": None}
 cv2.setNumThreads(0)
 
 
-def set_texture_dir(path: str) -> None:
-    """Configure a directory of paper texture images for background augmentation."""
-    _texture_config["dir"] = path
-    _texture_config["paths"] = None
-
-
 def _get_texture_paths() -> list[str]:
     if _texture_config["paths"] is None:
         d = _texture_config["dir"]

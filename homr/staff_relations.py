@@ -32,11 +32,8 @@ crop_width = (margin_units + start_units) * pixels_per_unit
 channels = 5
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-# HOMR_STAFF_RELATIONS_MODEL selects another model version, for comparisons
 model_name = "staff_relations_pdmx2-0f30e28165f9b00c8d1432ff18b4e178451a0267.onnx"
-model_path = os.environ.get(
-    "HOMR_STAFF_RELATIONS_MODEL", os.path.join(script_location, "staff_relations", model_name)
-)
+model_path = os.path.join(script_location, "staff_relations", model_name)
 
 
 def _line_at(staff: Staff, line: int, x: NDArray) -> NDArray:

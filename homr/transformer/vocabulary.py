@@ -380,9 +380,6 @@ class EncodedSymbol:
         self.image_coordinates: tuple[float, float] | None = None
         self._duration: SymbolDuration | None = None
 
-    def is_control_symbol(self) -> bool:
-        return self.rhythm in ("BOS", "EOS", "PAD")
-
     def is_tuplet(self) -> bool:
         no_tuplet = self.remove_tuplet()
         return no_tuplet.rhythm != self.rhythm

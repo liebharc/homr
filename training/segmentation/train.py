@@ -134,7 +134,6 @@ class SegmentationBaseDataset(BaseDataset[tuple[NDArray, NDArray]]):
 
 
 class D2DenseDataset(SegmentationBaseDataset):
-
     def _get_mask(self, image_name: str) -> str:
         return image_name.replace(".png", "_seg.png").replace("/images/", "/segmentation/")
 
@@ -157,26 +156,6 @@ class D2DenseDataset(SegmentationBaseDataset):
             else:
                 mask_remap[mask == class_value] = new_value
         return mask_remap
-
-
-class CvcMuscimaDataset(SegmentationBaseDataset):
-
-    def _get_staff_mask(self, image_name: str) -> str:
-        return image_name.replace("/image/", "/gt/")
-
-    def _get_symbol_mask(self, image_name: str) -> str:
-        return image_name.replace("/image/", "/symbol/")
-
-    def _build_label(self, image: NDArray, path: str) -> NDArray:
-        mask = np.array(Image.open(self._get_staff_mask(path))).astype(np.uint8)
-        mask = make_lines_stronger(mask, (3, 3))
-        symbol = np.array(Image.open(self._get_symbol_mask(path))).astype(np.uint8)
-        mask[symbol == 1] = 2
-        return mask
-
-    def _prepare_image(self, image: NDArray) -> NDArray:
-        # Invert colors
-        return 255 - image
 
 
 def create_horizontal_gray_gradient(width: int, height: int) -> NDArray:

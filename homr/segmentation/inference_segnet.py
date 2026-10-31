@@ -84,9 +84,6 @@ class Segnet:
         self.io_binding = self.model.io_binding()
         self.device_id = 0
 
-        self.input_name = self.model.get_inputs()[0].name  # size: [batch_size, 3, 320, 320]
-        self.output_name = self.model.get_outputs()[0].name
-
     def run(self, input_data: NDArray) -> NDArray:
         if self.fp16:
             self.io_binding.bind_cpu_input("input", input_data.astype(np.float16))

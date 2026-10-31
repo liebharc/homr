@@ -23,10 +23,6 @@ from homr.bounding_boxes import (
     create_bounding_ellipses,
     create_rotated_bounding_boxes,
 )
-from homr.brace_dot_detection import (
-    find_braces_brackets_and_grand_staff_lines,
-    prepare_brace_dot_image,
-)
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff, Note, Staff
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
@@ -268,7 +264,6 @@ class SingleStaffs:
     debug: Debug
     to_input_image: PointMapping
     staffs: list[Staff]
-    brace_dot: list[RotatedBoundingBox]
     notes: list[Note]
 
 
@@ -324,21 +319,13 @@ def detect_single_staffs(image_path: str, config: ProcessingConfig) -> SingleSta
 
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
 
-    brace_dot_img = prepare_brace_dot_image(predictions.symbols, predictions.staff)
-    debug.write_threshold_image("brace_dot", brace_dot_img)
-    brace_dot = create_rotated_bounding_boxes(brace_dot_img, skip_merging=True, max_size=(100, -1))
-
     notes = add_notes_to_staffs(
         staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
     )
-    return SingleStaffs(predictions, debug, to_input_image, staffs, brace_dot, notes)
+    return SingleStaffs(predictions, debug, to_input_image, staffs, notes)
 
 
-# Experimental, the model is trained with training.staff_relations
-use_staff_relation_model = os.environ.get("HOMR_STAFF_RELATIONS") == "1"
-
-
-def group_staffs_with_model(predictions: InputPredictions, staffs: list[Staff]) -> list[MultiStaff]:
+def group_staffs(predictions: InputPredictions, staffs: list[Staff]) -> list[MultiStaff]:
     from homr import staff_relations  # noqa: PLC0415
 
     staffs = staff_relations.join_pieces_with_model(predictions, staffs)
@@ -353,17 +340,14 @@ def detect_staffs_in_image(
     image_path: str, config: ProcessingConfig
 ) -> tuple[list[MultiStaff], NDArray, Debug, Future[str], int, PointMapping]:
     single = detect_single_staffs(image_path, config)
-    debug, staffs, brace_dot = single.debug, single.staffs, single.brace_dot
+    debug, staffs = single.debug, single.staffs
     if config.title_detection:
         title_future = detect_title(debug, staffs[0])
     else:
         title_future = Future()
         title_future.set_result("")
 
-    if use_staff_relation_model:
-        multi_staffs = group_staffs_with_model(single.predictions, staffs)
-    else:
-        multi_staffs = find_braces_brackets_and_grand_staff_lines(debug, staffs, brace_dot)
+    multi_staffs = group_staffs(single.predictions, staffs)
     eprint(
         "Found",
         len(multi_staffs),

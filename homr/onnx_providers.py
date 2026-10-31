@@ -79,11 +79,6 @@ def coreml_available() -> bool:
     return "CoreMLExecutionProvider" in ort.get_available_providers()
 
 
-def gpu_available() -> bool:
-    """True if any GPU execution provider (CUDA, ROCm, or Apple CoreML) is present."""
-    return cuda_available() or rocm_available() or coreml_available()
-
-
 def gpu_providers(cuda_options: dict[str, Any] | None = None) -> tuple[list[Any], str]:
     """Return ``(providers, io_binding_device)`` for the best available GPU.
 

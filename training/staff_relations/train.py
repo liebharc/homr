@@ -29,7 +29,7 @@ from homr.staff_relations import (
 from homr.type_definitions import NDArray
 from training.staff_relations.create_dataset import default_directory, is_validation
 
-IMAGE, STAFF, SYMBOLS, STEMS_RESTS, CLEFS_KEYS = range(channels)
+IMAGE, STAFF, SYMBOLS, _, CLEFS_KEYS = range(channels)
 
 
 class StaffRelationNet(nn.Module):

@@ -4,7 +4,6 @@
 Compares the layout of each system on the real photos in testdata, single and grand
 staffs, with the parts in each reference.musicxml. Evaluation only, nothing is tuned on
 these photos.
-Set HOMR_STAFF_RELATIONS=1 to use the staff relation model.
 Usage: poetry run python -m training.staff_relations.evaluate_photos --output result.jsonl
 """
 

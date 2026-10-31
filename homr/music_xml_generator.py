@@ -115,10 +115,6 @@ def generate_xml(
     return root
 
 
-def xml_to_string(element: ET.Element) -> str:
-    return ET.tostring(element, encoding="unicode")
-
-
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
     """True if any symbol uses the lower staff (e.g. piano left hand / bass clef)."""
     return any(is_lower_position(s.position) for s in voice)
