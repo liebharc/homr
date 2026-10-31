@@ -260,7 +260,7 @@ def get_model(path: str = model_path) -> StaffRelationModel:
 def join_pieces_with_model(predictions: InputPredictions, staffs: list[Staff]) -> list[Staff]:
     """Joins staffs which the model sees as pieces of one staff."""
     pairs = horizontal_pairs(staffs)
-    if len(pairs) == 0 or not os.path.exists(horizontal_model_path):
+    if len(pairs) == 0:
         return staffs
     unit = float(np.median([staff.average_unit_size for staff in staffs]))
     page, scale = page_channels(predictions, unit)
