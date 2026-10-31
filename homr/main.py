@@ -332,7 +332,12 @@ def group_staffs(predictions: InputPredictions, staffs: list[Staff]) -> list[Mul
     pairs, crops = staff_relations.page_inputs(predictions, staffs)
     probabilities = staff_relations.get_model().predict(crops)
     for (i, j), p in zip(pairs, probabilities, strict=True):
-        eprint(f"Staffs {i} and {j}:", ", ".join(f"{p_class:.2f}" for p_class in p))
+        scores = ", ".join(
+            f"{name} {p_class:.2f}"
+            for name, p_class in zip(staff_relations.CLASSES, p, strict=True)
+        )
+        best = staff_relations.CLASSES[int(p.argmax())]
+        eprint(f"Staffs {i} and {j} (from the top): {best} ({scores})")
     return staff_relations.group_staffs(staffs, pairs, probabilities)
 
 
