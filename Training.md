@@ -101,7 +101,7 @@ Implementation: `rate_validation_result.py`
 
 Commit: ac06fd68af6a3bc488c1e2106b92ec54c2b1e940
 Day: 31 October 2026
-System Level: 13.7 diffs, SER: 7.6%
+System Level: 5.0 diffs, SER: 3.7%
 Polish scores: 15.32%
 SMB scores: 13.09%
 
