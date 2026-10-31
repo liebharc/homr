@@ -26,11 +26,16 @@ from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
     DYNAMICS,
     DYNAMICS_MODIFIER,
+    OCTAVE_CLEFS,
+    OCTAVE_SHIFT_STOP,
     VALID_TIME_SIGNATURE_DENOMINATORS,
     EncodedSymbol,
     empty,
     has_rhythm_symbol_a_position,
     is_lower_position,
+    octaves_of_clef,
+    octaves_of_shift,
+    transpose_octaves,
 )
 from training.omr_datasets.staff_merging import (
     EncodedSymbolWithPos,
@@ -154,12 +159,16 @@ class TokensMeasure:
     using this class.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, octaves: dict[tuple[int, str], int] | None = None) -> None:
         self.symbols: list[EncodedSymbolWithPos] = []
         self.main_voice: dict[int, int] = {}  # map staff id to its main voice id
         self.graces_at: dict[tuple[int, int], int] = {}  # (staff, position) -> grace notes so far
         self.current_position = 0
         self.new_page = False
+        # Octaves between written and sounding pitch per (staff, "clef" or "shift")
+        # at the start of the measure, and the changes within the measure.
+        self.start_octaves: dict[tuple[int, str], int] = dict(octaves or {})
+        self.octave_events: list[tuple[int, tuple[int, str], int]] = []
 
     def append_symbol(self, symbol: EncodedSymbol) -> None:
         if symbol.rhythm.startswith("note"):
@@ -177,8 +186,44 @@ class TokensMeasure:
             symbol.position = self._get_staff_position(staff)
         if symbol.rhythm.startswith("note"):
             raise ValueError("Call append_note for notes")
-        else:
-            self.symbols.append(EncodedSymbolWithPos(self.current_position, symbol, True))
+        staff_no = 1 if staff > 0 else 0  # the same as _get_staff_no
+        if symbol.rhythm.startswith("clef"):
+            self.octave_events.append(
+                (self.current_position, (staff_no, "clef"), octaves_of_clef(symbol.rhythm))
+            )
+        elif symbol.rhythm.startswith("octaveShift"):
+            self.octave_events.append(
+                (self.current_position, (staff_no, "shift"), octaves_of_shift(symbol.rhythm))
+            )
+        self.symbols.append(EncodedSymbolWithPos(self.current_position, symbol, True))
+
+    def _octaves_at(self, position: float) -> dict[tuple[int, str], int]:
+        """
+        Octave clefs and shifts in effect at a position. A change at the position
+        of a note applies to it: a shift starts before its first note and stops
+        after its last one.
+        """
+        octaves = dict(self.start_octaves)
+        for event_position, key, value in sorted(self.octave_events, key=lambda e: e[0]):
+            if event_position <= position:
+                octaves[key] = value
+        return octaves
+
+    def end_octaves(self) -> dict[tuple[int, str], int]:
+        return self._octaves_at(float("inf"))
+
+    def _to_written_pitches(self) -> None:
+        """MusicXML has sounding pitches, the tokens have written pitches."""
+        if not self.octave_events and not any(self.start_octaves.values()):
+            return
+        for entry in self.symbols:
+            symbol = entry.symbol
+            if not symbol.rhythm.startswith("note"):
+                continue
+            staff = self._get_staff_no(entry)
+            octaves = self._octaves_at(entry.position)
+            change = octaves.get((staff, "clef"), 0) + octaves.get((staff, "shift"), 0)
+            symbol.pitch = transpose_octaves(symbol.pitch, -change)
 
     def append_position_change(self, duration: int) -> None:
         new_position = self.current_position + duration
@@ -291,6 +336,7 @@ class TokensMeasure:
         Empty source measures produce a single barline.
         """
         self._fill_in_arpeggiate(self.symbols)
+        self._to_written_pitches()
         result_staff: list[list[EncodedSymbolWithPos]] = [[], []]
         grouped_symbols: dict[tuple[int, int], list[EncodedSymbolWithPos]] = {}
         for symbol in self.symbols:
@@ -383,10 +429,10 @@ def _measure_rest_rhythm(duration: int, divisions: int) -> str:
 
 
 class TokensPart:
-    def __init__(self, allow_octave_shifts: bool = False) -> None:
-        # Octave shifts and octave clefs are rejected for training. The benchmarks
-        # allow them: MusicXML pitches are sounding pitches, so they can be ignored.
-        self.allow_octave_shifts = allow_octave_shifts
+    def __init__(self, sounding_pitch: bool = False) -> None:
+        # Training uses the written pitches together with octave clefs and shifts.
+        # The benchmarks compare sounding pitches and ignore octave clefs and shifts.
+        self.sounding_pitch = sounding_pitch
         self.current_measure: TokensMeasure | None = None
         self.measures: list[Measure] = []
         self.tuplets = TupletState()
@@ -435,6 +481,10 @@ class TokensPart:
         current_measure = self._ensure_current_measure()
         dynamic.position = current_measure._get_staff_position(staff)
         current_measure.append_symbol_to_staff(staff, dynamic)
+
+    def append_octave_shift(self, shift: EncodedSymbol, staff: int) -> None:
+        self._flush_pending_clefs()
+        self._ensure_current_measure().append_symbol_to_staff(staff, shift)
 
     def queue_clefs_for_next_measure(self, clefs: list[tuple[EncodedSymbol, int]]) -> None:
         """
@@ -489,8 +539,9 @@ class TokensPart:
         self._ensure_current_measure().main_voice = main_voices
 
     def on_end_of_measure(self) -> None:
-        self.measures.append(self._ensure_current_measure().complete_measure())
-        self.current_measure = TokensMeasure()
+        measure = self._ensure_current_measure()
+        self.measures.append(measure.complete_measure())
+        self.current_measure = TokensMeasure(measure.end_octaves())
         self.pending_clefs.update(self.queued_clefs)
         self.queued_clefs = {}
         self.tuplets.on_end_of_measure()
@@ -539,11 +590,9 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> int:
         for clef in clefs:
             sign = _text(_child(clef, "sign"))
             line = _text(_child(clef, "line"))
-            has_octave_change = _child(clef, "clef-octave-change") is not None
-            if has_octave_change and not part.allow_octave_shifts:
-                raise ValueError("Octave change isn't supported")
+            name = _clef_name(sign, line, _int_text(_child(clef, "clef-octave-change")), part)
             clef_number = int(clef.get("number", "1")) - 1
-            token = (EncodedSymbol(f"clef_{sign}{line}", empty, empty, empty, empty), clef_number)
+            token = (EncodedSymbol(name, empty, empty, empty, empty), clef_number)
             if clef.get("after-barline") == "yes":
                 deferred_clefs_tokens.append(token)
             else:
@@ -568,6 +617,16 @@ def _process_attributes(part: TokensPart, attribute: ET.Element) -> int:
     if len(style) > 0:
         multiple_rest_duration = _process_multi_rests(part, style[0])
     return multiple_rest_duration
+
+
+def _clef_name(sign: str, line: str, octave_change: int, part: TokensPart) -> str:
+    name = f"clef_{sign}{line}"
+    if octave_change == 0 or part.sounding_pitch:
+        return name
+    name += {1: "_8va", -1: "_8vb"}.get(octave_change, f"_{octave_change}")
+    if name not in OCTAVE_CLEFS:
+        raise ValueError(f"Unsupported octave clef {name}")
+    return name
 
 
 def _alter_to_lifts(alter: int) -> str:
@@ -824,9 +883,8 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
     # Get the number of the staff the dynamic is on
     staff = _int_text(_child(xmldirection, "staff"), 1) - 1
     for direction_type in _children(xmldirection, "direction-type"):
-        has_octave_shift = _child(direction_type, "octave-shift") is not None
-        if has_octave_shift and not part.allow_octave_shifts:
-            raise ValueError("Octave shift isn't supported")
+        for octave_shift in _children(direction_type, "octave-shift"):
+            _process_octave_shift(part, octave_shift, staff)
         for dynamics in _children(direction_type, "dynamics"):
             print_object = dynamics.get("print-object", None)
             invisible = print_object == "no"
@@ -861,6 +919,22 @@ def _process_direction(part: TokensPart, xmldirection: ET.Element) -> None:
                 )
 
 
+def _process_octave_shift(part: TokensPart, octave_shift: ET.Element, staff: int) -> None:
+    if part.sounding_pitch:
+        return
+    shift_type = octave_shift.get("type", "")
+    if shift_type == "stop":
+        name = OCTAVE_SHIFT_STOP
+    elif shift_type in ("down", "up"):
+        if octave_shift.get("size", "8") != "8":
+            raise ValueError("Only octave shifts by one octave are supported")
+        # MusicXML names the direction in which the notes are printed: down is 8va
+        name = "octaveShift_8va" if shift_type == "down" else "octaveShift_8vb"
+    else:
+        return
+    part.append_octave_shift(EncodedSymbol(name, empty, empty, empty, empty), staff)
+
+
 def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> int:
     rests = _children(measure_style, "multiple-rest")
     if len(rests) == 0:
@@ -877,8 +951,8 @@ def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> int:
     return rest_duration
 
 
-def _music_part_to_tokens(part: ET.Element, allow_octave_shifts: bool) -> list[Measure]:
-    tokens = TokensPart(allow_octave_shifts)
+def _music_part_to_tokens(part: ET.Element, sounding_pitch: bool) -> list[Measure]:
+    tokens = TokensPart(sounding_pitch)
     measures_to_skip = 0
     for measure in _children(part, "measure"):
         if measures_to_skip > 0:
@@ -940,35 +1014,29 @@ def normalize_barlines_and_repeats(
     return result
 
 
-def _music_xml_element_to_symbols(
-    root: ET.Element, allow_octave_shifts: bool
-) -> list[list[Measure]]:
+def _music_xml_element_to_symbols(root: ET.Element, sounding_pitch: bool) -> list[list[Measure]]:
     # Support both <score-partwise> as the root and as a wrapped document.
     score_root = root
     result: list[list[Measure]] = []
     for part in _children(score_root, "part"):
-        tokens = _music_part_to_tokens(part, allow_octave_shifts)
+        tokens = _music_part_to_tokens(part, sounding_pitch)
         result.append(tokens)
     return result
 
 
-def music_xml_string_to_tokens(
-    content: str, allow_octave_shifts: bool = False
-) -> list[list[Measure]]:
+def music_xml_string_to_tokens(content: str, sounding_pitch: bool = False) -> list[list[Measure]]:
     """
     Returns a list of voices.
     Each voice is a list of measures.
     """
     xml = ET.fromstring(content)  # noqa: S314
-    return _music_xml_element_to_symbols(xml, allow_octave_shifts)
+    return _music_xml_element_to_symbols(xml, sounding_pitch)
 
 
-def music_xml_file_to_tokens(
-    file_path: str, allow_octave_shifts: bool = False
-) -> list[list[Measure]]:
+def music_xml_file_to_tokens(file_path: str, sounding_pitch: bool = False) -> list[list[Measure]]:
     with open(file_path, "rb") as f:
         xml = ET.parse(f)  # noqa: S314
-    return _music_xml_element_to_symbols(xml.getroot(), allow_octave_shifts)
+    return _music_xml_element_to_symbols(xml.getroot(), sounding_pitch)
 
 
 if __name__ == "__main__":

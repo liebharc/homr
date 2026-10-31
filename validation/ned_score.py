@@ -331,7 +331,7 @@ def _xml_parts_from_text(xml_text: str, xml_parser: str) -> list[list[EncodedSym
         f.write(xml_text)
         xml_path = f.name
     try:
-        xml_voices = music_xml_file_to_tokens(xml_path, allow_octave_shifts=True)
+        xml_voices = music_xml_file_to_tokens(xml_path, sounding_pitch=True)
     finally:
         os.remove(xml_path)
     return [_flatten_part(p) for p in xml_voices]

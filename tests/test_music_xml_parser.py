@@ -1016,7 +1016,7 @@ note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
 
-    def test_octave_shift_is_only_allowed_for_benchmarks(self) -> None:
+    def test_benchmarks_ignore_octave_shifts(self) -> None:
         example = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
   <part id="P1">
@@ -1035,9 +1035,7 @@ barline . . . . ."""
   </part>
 </score-partwise>
 """
-        with self.assertRaises(ValueError):
-            music_xml_string_to_tokens(example)
-        tokens = music_xml_string_to_tokens(example, allow_octave_shifts=True)
+        tokens = music_xml_string_to_tokens(example, sounding_pitch=True)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         expected = """clef_G2 _ _ _ _ upper
 timeSignature/4 . . . . .
