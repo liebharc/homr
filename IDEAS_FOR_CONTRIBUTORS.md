@@ -98,7 +98,7 @@ To add new symbols, you should first understand the [TrOMR architecture as descr
 | Accidentals                             | ✓                                  | -                                                                                     |
 | Grace notes                             | ✓                                  | -                                                                                     |
 | Dotted notes                            | ✓                                  | -                                                                                     |
-| Tuplets                                 | ✓                                  | -                                                                                     |
+| Tuplets                                 | ✓                                  | Tuplets whose kern duration isn't a whole number, e.g. duplets in 6/8, can't be encoded. Training skips scores with them |
 | Rests                                   | ✓, multirests with max 10 measures | Consider alternative encoding to handle larger values without bloating the vocabulary |
 | Slurs / Ties                            | ✓                                  |
 -                                                                                     |
@@ -106,7 +106,7 @@ To add new symbols, you should first understand the [TrOMR architecture as descr
 | Repeats, codas, da capo, volta brackets | ✓                                  | -                                                                                     |
 | Glissando                               | ✗                                  | Add `glis_start`, `glis_end` to articulation vocabulary                               |
 | Ornaments (trill, turns)                | ✓                                  | -                                                                                     |
-| Beams                                   | ✗                                  | Not in the vocabulary. Could be derived from the rhythm in the MusicXML writer, or added to the vocabulary |
+| Beams                                   | ✓                                  | Primary beam per note, secondary beams follow from the durations. Two beams at the same time in one position, e.g. with three voices on a staff, can't be represented |
 
 ### MusicXML Generation
 

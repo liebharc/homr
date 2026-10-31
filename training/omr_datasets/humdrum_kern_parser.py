@@ -255,7 +255,10 @@ def _fix_final_repeat_start(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]
 class HumdrumKernConverter:
     def __init__(self, position: StaffPosition) -> None:
         # Grandstaff definitions: https://link.springer.com/article/10.1007/s10032-023-00432-z#Tab1
+        # Beams (L, J) are counted in _beam_state, partial beams (K, k) follow from the durations
         self.ignore_beams = ("L", "J", "K", "k")
+        # Number of open beams per voice
+        self.open_beams: dict[int, int] = {}
         self.ignore_alteration_displays = ("x", "X", "i", "I", "j", "Z", "y", "Y")
         self.ignore_tie_continue = "_"
         # According to the grandstaff paper angleBracketOpen & Close stands for tieStart and tieEnd
@@ -445,6 +448,7 @@ class HumdrumKernConverter:
                     position = s.position.value + "2"
                 chord_dur = "4"
                 first = True
+                chord: list[EncodedSymbol] = []
                 for token in voice.split():
                     if token == nonote:
                         continue
@@ -453,7 +457,37 @@ class HumdrumKernConverter:
                         if extracted:
                             chord_dur = extracted
                         first = False
-                    s.add_note(self.parse_note_or_rest(token, position, chord_dur))
+                    chord.append(self.parse_note_or_rest(token, position, chord_dur))
+                self._add_beam(chord, i, voice)
+                for symbol in chord:
+                    s.add_note(symbol)
+
+    def _add_beam(self, chord: list[EncodedSymbol], voice_index: int, voice: str) -> None:
+        """
+        Kern opens a beam with L and closes it with J, one letter per beam level,
+        usually on the last note of a chord. The primary beam is open while any is.
+        """
+        tokens = [t for t in voice.split() if t != nonote]
+        opened = sum(t.count("L") for t in tokens)
+        closed = sum(t.count("J") for t in tokens)
+        before = self.open_beams.get(voice_index, 0)
+        after = max(before + opened - closed, 0)
+        self.open_beams[voice_index] = after
+        if before == 0 and after == 0:
+            return
+        if before == 0:
+            beam = "beamStart"
+        elif before > 0 and after == 0:
+            beam = "beamStop"
+        elif before > 0:
+            beam = "beamContinue"
+        else:
+            return
+        notes = [n for n in chord if n.rhythm.startswith("note")]
+        if notes:
+            note = notes[0]
+            slurs = [] if note.slur == empty else note.slur.split("_")
+            note.slur = str.join("_", sorted([*slurs, beam]))
 
 
 if __name__ == "__main__":

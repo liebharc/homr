@@ -66,7 +66,6 @@ if __name__ == "__main__":
     from training.omr_datasets.convert_lieder import lieder_train_index
     from training.omr_datasets.convert_musetrainer import musetrainer_train_index
     from training.omr_datasets.convert_pdmx import pdmx_train_index
-    from training.omr_datasets.convert_primus import primus_train_index
 
     remove_tokens(
         [
@@ -74,6 +73,5 @@ if __name__ == "__main__":
             musetrainer_train_index,
             pdmx_train_index,
             grandstaff_train_index,
-            primus_train_index,
         ],
     )

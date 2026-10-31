@@ -26,10 +26,6 @@ from training.omr_datasets.convert_musetrainer import (
     musetrainer_train_index,
 )
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
-from training.omr_datasets.convert_primus import (
-    convert_primus_dataset,
-    primus_train_index,
-)
 from training.omr_datasets.filter_from_index import remove_tokens
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
@@ -110,9 +106,6 @@ git_root = os.path.join(script_location, "..", "..")
 
 def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
     for dataset in selected_datasets:
-        if dataset == primus_train_index and not os.path.exists(primus_train_index):
-            convert_primus_dataset()
-
         if dataset == grandstaff_train_index and not os.path.exists(grandstaff_train_index):
             convert_grandstaff()
 
@@ -147,14 +140,14 @@ def train_transformer(
         if distribute.is_rank0():
             shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
+    # PrIMuS isn't used: it has no beams and its Hugging Face copy is CC BY-NC (non-commercial)
     dataset_index = [
         lieder_train_index,
         grandstaff_train_index,
-        primus_train_index,
         pdmx_train_index,
         musetrainer_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+    dataset_weights = [1.0, 1.0, 1.0, 1.0]
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index)
     distribute.barrier()

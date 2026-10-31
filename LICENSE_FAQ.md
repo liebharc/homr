@@ -30,9 +30,15 @@ Older checkpoints, e.g. 396, were trained on Lieder, StringQuartets, GrandStaff 
 
 This reflects our reading of the sources and may be incomplete or out of date. The licenses of the underlying music can differ from those of the datasets. Check the sources yourself.
 
+## PrIMuS and commercial use
+
+PrIMuS is the only training dataset with a non-commercial license: its copy on Hugging Face is CC BY-NC 4.0, the download source states no license. If that license carries over to the weights, which is an open legal question, then the transformer weights released so far can't be used commercially.
+
+The training no longer uses PrIMuS. The first transformer checkpoint trained without it will be marked in the [Changelog](Changelog.md). The remaining training datasets have no non-commercial terms, but two of them don't state a license at their source: GrandStaff (MIT on Hugging Face) and the MuseTrainer library (no license file, described as public domain).
+
 ## Can homr be trained only on datasets that allow commercial use?
 
-Possibly. We welcome PRs that replace training datasets with ones under permissive licenses, as long as accuracy doesn't regress. Such a PR needs to include a full training run and benchmark results, e.g. the system level validation and the SMB and polish scores. Weights released before such a change keep their current training data.
+Possibly. Without PrIMuS, the open questions are GrandStaff and the MuseTrainer library, see above. We welcome PRs that replace training datasets with ones under permissive licenses, as long as accuracy doesn't regress. Such a PR needs to include a full training run and benchmark results, e.g. the system level validation and the SMB and polish scores. Weights released before such a change keep their current training data.
 
 ## Title detection
 

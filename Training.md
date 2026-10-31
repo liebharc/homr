@@ -22,7 +22,6 @@ Prerequisites:
 
 Download the datasets and convert them to the format required for training:
 
-- `training/omr_datasets/convert_primus.py`
 - `training/omr_datasets/convert_grandstaff.py`
 - `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
@@ -35,7 +34,7 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
-You can check the log and see number of training files to be 190k: `Total number of training files to choose from 190722`
+The log shows the number of training files: `Total number of training files to choose from ...`. PrIMuS isn't used anymore, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
 This takes around 2–4 days.
 
 Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:

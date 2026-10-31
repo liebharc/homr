@@ -670,6 +670,18 @@ def _collect_articulation(note: ET.Element, part: TokensPart, staff: int) -> tup
     return str.join("_", sorted(articulations)), str.join("_", sorted(slurs))
 
 
+_BEAM_STATES = {"begin": "beamStart", "continue": "beamContinue", "end": "beamStop"}
+
+
+def _add_beam(slur: str, note: ET.Element) -> str:
+    """Adds the state of the primary beam, MuseScore writes it on the first note of a chord."""
+    for beam in _children(note, "beam"):
+        if beam.get("number", "1") == "1" and _text(beam) in _BEAM_STATES:
+            slurs = [] if slur == empty else slur.split("_")
+            return str.join("_", sorted([*slurs, _BEAM_STATES[_text(beam)]]))
+    return slur
+
+
 def _is_hidden_note(note: ET.Element) -> bool:
     return note.get("print-object", None) == "no" or any(
         _text(note_head) == "none" for note_head in _children(note, "notehead")
@@ -764,7 +776,12 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
     dots = _count_dots(note)
     dur_nodes = _children(note, "type")
     duration_type = _text(dur_nodes[0]) if dur_nodes else "eighth"
-    base_duration = round(DURATION_NUMBER[duration_type] * triplet_factor)
+    exact_duration = DURATION_NUMBER[duration_type] * triplet_factor
+    base_duration = round(exact_duration)
+    if abs(exact_duration - base_duration) > 1e-6 and not part.allow_octave_shifts:
+        # E.g. a duplet in 6/8: rounded it reads as a different tuplet. Training skips it,
+        # the benchmarks (which allow octave shifts) keep the rounded value.
+        raise ValueError(f"Tuplet can't be encoded: {duration_type} * {triplet_factor:.3f}")
     art, slur = _collect_articulation(note, part, staff)
     if len(rest) > 0:
         if rest[0] is not None and rest[0].get("measure", None):
@@ -786,7 +803,7 @@ def _process_note(part: TokensPart, note: ET.Element) -> None:
         pitch_name = _pitch_name(pitch[0])
         lift = _lift_from_pitch_or_accidental(pitch[0], note)
         rhythm = _rhythm_token("note", base_duration, dots, is_grace)
-        sym = EncodedSymbol(rhythm, pitch_name, lift, art, slur)
+        sym = EncodedSymbol(rhythm, pitch_name, lift, art, _add_beam(slur, note))
 
         # Grace notes have no duration and take no time
         duration = 0 if is_grace else max(duration, 1)

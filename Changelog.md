@@ -15,6 +15,7 @@ All notable changes to this project will be documented here.
 - Ties are recovered from slurs between notes of the same pitch.
   Thanks to [@pschuegr](https://github.com/pschuegr)!
 - The positions of notes in the input image are written as MusicXML comments.
+- Beams in the transformer vocabulary and the MusicXML output. They appear in the output with the first model trained on them.
 
 ### Changed
 
@@ -26,6 +27,7 @@ All notable changes to this project will be documented here.
   Thanks to [@geofft](https://github.com/geofft)!
 - Repeat signs stay paired with their images in the training data.
   Thanks to [@aleksey-golovanov](https://github.com/aleksey-golovanov)!
+- The training no longer uses PrIMuS. It has no beams and its license doesn't allow commercial use, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
 
 ### Fixed
 
