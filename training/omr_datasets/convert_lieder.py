@@ -19,7 +19,12 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty, is_lower_position
+from homr.transformer.vocabulary import (
+    OCTAVE_SHIFT_STOP,
+    EncodedSymbol,
+    empty,
+    is_lower_position,
+)
 from training.omr_datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
@@ -449,6 +454,8 @@ class MeasureCutter:
             ]
         self.key = EncodedSymbol("keySignature_0")
         self.time = EncodedSymbol("timeSignature/4")
+        # Octave shifts which are active, by staff
+        self.octave_shifts: dict[int, EncodedSymbol] = {}
 
     def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
         if is_lower_position(symbol.position):
@@ -467,6 +474,7 @@ class MeasureCutter:
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
+        carried_shifts = dict(self.octave_shifts)
         result: list[list[EncodedSymbol]] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
@@ -497,6 +505,10 @@ class MeasureCutter:
                         has_time = True
                         time = symbol
                 else:
+                    if symbol.rhythm == OCTAVE_SHIFT_STOP:
+                        self.octave_shifts.pop(self._position_to_staff_no(symbol), None)
+                    elif symbol.rhythm.startswith("octaveShift"):
+                        self.octave_shifts[self._position_to_staff_no(symbol)] = symbol
                     # A leading repeat can precede attributes in MusicXML. It
                     # must not prevent those attributes replacing inherited ones.
                     if symbol.rhythm != "repeatStart":
@@ -504,6 +516,7 @@ class MeasureCutter:
                     measure_result.append(symbol)
 
             if is_first_measure:
+                self._continue_octave_shifts(measure_result, carried_shifts)
                 if has_time:
                     measure_result.insert(0, time)
                 measure_result.insert(0, key)
@@ -513,6 +526,50 @@ class MeasureCutter:
                     measure_result.insert(0, clef)
             result.append(measure_result)
         return normalize_barlines_and_repeats(result)
+
+    def _continue_octave_shifts(
+        self, measure: list[EncodedSymbol], carried_shifts: dict[int, EncodedSymbol]
+    ) -> None:
+        """
+        A staff repeats the octave shifts which continue from the previous staff,
+        the image shows them again at the start of the line. A shift which stops
+        before the first note of the line ended with the previous line.
+        """
+        first_note = _index_of_first_note(measure)
+        removed: list[EncodedSymbol] = []
+        for symbol in measure[:first_note]:
+            staff = self._position_to_staff_no(symbol)
+            if symbol.rhythm.startswith("octaveShift") and staff in carried_shifts:
+                del carried_shifts[staff]
+                if symbol.rhythm == OCTAVE_SHIFT_STOP:
+                    removed.append(symbol)
+        for symbol in removed:
+            _remove_from_chord(measure, symbol)
+        first_note = _index_of_first_note(measure)
+        continued: list[EncodedSymbol] = []
+        for staff in sorted(carried_shifts):
+            if continued:
+                continued.append(EncodedSymbol("chord"))
+            continued.append(carried_shifts[staff])
+        measure[first_note:first_note] = continued
+
+
+def _index_of_first_note(symbols: list[EncodedSymbol]) -> int:
+    return next(
+        (i for i, s in enumerate(symbols) if s.rhythm.startswith(("note", "rest"))),
+        len(symbols),
+    )
+
+
+def _remove_from_chord(symbols: list[EncodedSymbol], symbol: EncodedSymbol) -> None:
+    """Removes a symbol together with the chord marker which joins it to its neighbour."""
+    index = next(i for i, s in enumerate(symbols) if s is symbol)
+    if index > 0 and symbols[index - 1].rhythm == "chord":
+        del symbols[index - 1 : index + 1]
+    elif index + 1 < len(symbols) and symbols[index + 1].rhythm == "chord":
+        del symbols[index : index + 2]
+    else:
+        del symbols[index]
 
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:

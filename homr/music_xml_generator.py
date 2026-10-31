@@ -11,12 +11,16 @@ import numpy as np
 from homr import constants
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    OCTAVE_SHIFT_STOP,
     EncodedSymbol,
     SymbolDuration,
     empty,
     is_lower_position,
     nonote,
+    octaves_of_clef,
+    octaves_of_shift,
     sort_token_chords,
+    transpose_octaves,
 )
 
 
@@ -28,6 +32,13 @@ class ConversionState:
         self.tremolo_state = "stop"
         self.volta_number = 1
         self.last_volta_measure = -10
+        # Octaves between written and sounding pitch per staff, from octave clefs and shifts
+        self.clef_octaves: dict[int, int] = {}
+        self.shift_octaves: dict[int, int] = {}
+
+    def sounding_pitch(self, written_pitch: str, staff: int) -> str:
+        octaves = self.clef_octaves.get(staff, 0) + self.shift_octaves.get(staff, 0)
+        return transpose_octaves(written_pitch, octaves)
 
     def start_volta(self, measure_no: int) -> int:
         if measure_no == self.last_volta_measure + 1:
@@ -195,6 +206,8 @@ def build_measures(
                     current_measure.append(build_backup(state.nominator, state))
                 current_measure.append(build_measure_rest(rest, state))
         elif rhythm == "newline":
+            # An octave shift ends with its staff, the next staff repeats it if it continues
+            stop_octave_shifts(current_measure, state)
             is_last_measure = group_no == len(groups) - 1
             if not is_last_measure:
                 ET.SubElement(current_measure, "print", attrib={"new-system": "yes"})
@@ -203,6 +216,9 @@ def build_measures(
             for should_be_clef in group.symbols:
                 if should_be_clef.rhythm.startswith("clef"):
                     build_clef(should_be_clef, attributes)
+                    state.clef_octaves[get_staff(should_be_clef)] = octaves_of_clef(
+                        should_be_clef.rhythm
+                    )
         elif rhythm.startswith("keySignature"):
             attributes = build_or_get_attributes(current_measure, last_attributes)
             build_key(symbol, attributes)
@@ -251,14 +267,22 @@ def build_measures(
             barline = build_or_get_barline(current_measure, "right")
             build_barline_ending(symbol, barline, volta_number)
 
-        elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
-            for dynamic in group.symbols:
-                build_dynamic(dynamic, current_measure)
+        elif rhythm.startswith(("dynamic", "octaveShift")) or symbol.articulation.startswith(
+            "dynamic"
+        ):
+            for marking in group.symbols:
+                if marking.rhythm.startswith("octaveShift"):
+                    build_octave_shift(marking, current_measure, state)
+                else:
+                    build_dynamic(marking, current_measure)
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
     if len(list(current_measure)) > 0:
+        stop_octave_shifts(current_measure, state)
         close_current_measure()
+    elif measures:
+        stop_octave_shifts(measures[-1], state)
     # A clef opens a second attributes element, so look at the whole first measure
     if measures[0].find("attributes/time") is None:
         time_el = ET.SubElement(first_attributes, "time")
@@ -371,6 +395,47 @@ def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
     dynamics.extend(marks)
 
     ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
+
+
+def build_octave_shift(
+    model_shift: EncodedSymbol, measure: ET.Element, state: ConversionState
+) -> None:
+    staff = get_staff(model_shift)
+    if state.shift_octaves.get(staff, 0) != 0:
+        _build_octave_shift_direction(measure, staff, "stop", "above")
+        state.shift_octaves[staff] = 0
+    if model_shift.rhythm == OCTAVE_SHIFT_STOP:
+        return
+    octaves = octaves_of_shift(model_shift.rhythm)
+    if octaves == 0:
+        eprint("Unknown octave shift", model_shift)
+        return
+    # MusicXML names the direction in which the notes are printed: 8va is down
+    shift_type, placement = ("down", "above") if octaves > 0 else ("up", "below")
+    _build_octave_shift_direction(measure, staff, shift_type, placement)
+    state.shift_octaves[staff] = octaves
+
+
+def stop_octave_shifts(measure: ET.Element, state: ConversionState) -> None:
+    for staff, octaves in state.shift_octaves.items():
+        if octaves != 0:
+            _build_octave_shift_direction(measure, staff, "stop", "above")
+    state.shift_octaves = {}
+
+
+def _build_octave_shift_direction(
+    measure: ET.Element, staff: int, shift_type: str, placement: str
+) -> None:
+    direction = ET.Element("direction", placement=placement)
+    direction_type = ET.SubElement(direction, "direction-type")
+    ET.SubElement(direction_type, "octave-shift", type=shift_type, size="8", number=str(staff))
+    ET.SubElement(direction, "staff").text = str(staff)
+    children = list(measure)
+    # Stop after the last note: a trailing backup would move it before that note
+    if shift_type == "stop" and children and children[-1].tag == "backup":
+        measure.insert(len(children) - 1, direction)
+    else:
+        measure.append(direction)
 
 
 def build_key(model_key: EncodedSymbol, attributes: ET.Element) -> None:
@@ -576,6 +641,9 @@ def build_clef(model_clef: EncodedSymbol, attributes: ET.Element) -> None:
     clef = ET.SubElement(attributes, "clef", number=str(get_staff(model_clef)))
     ET.SubElement(clef, "sign").text = sign_and_line[0]
     ET.SubElement(clef, "line").text = sign_and_line[1]
+    octaves = octaves_of_clef(model_clef.rhythm)
+    if octaves != 0:
+        ET.SubElement(clef, "clef-octave-change").text = str(octaves)
 
 
 def build_time_signature(
@@ -748,9 +816,10 @@ def build_note_or_rest(
         eprint("WARNING note without pitch", model_note)
         ET.SubElement(note, "rest")
     else:
+        sounding_pitch = state.sounding_pitch(model_pitch, get_staff(model_note))
         pitch = ET.SubElement(note, "pitch")
-        ET.SubElement(pitch, "step").text = model_pitch[0]
-        ET.SubElement(pitch, "octave").text = model_pitch[1]
+        ET.SubElement(pitch, "step").text = sounding_pitch[0]
+        ET.SubElement(pitch, "octave").text = sounding_pitch[1:]
         if model_note.lift == nonote:
             eprint("WARNING note with invalid lift", model_note)
         elif model_note.lift != empty:
