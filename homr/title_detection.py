@@ -76,6 +76,9 @@ def _merge_texts(texts: list[TextBox]) -> list[TextBox]:
 def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     assert _reader, "reader is not initialized"
 
+    if top_staff.min_y < 30:
+        return ""
+
     image = debug.original_image
     above_staff = image[: int(top_staff.min_y), :]
     ocr_results = _reader(above_staff)
