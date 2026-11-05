@@ -65,6 +65,10 @@ class BarLine(SvgRectangle):
 class SvgStaff(SvgRectangle):
     def __init__(self, x: int, y: int, width: int, height: int):
         super().__init__(x, y, width, height)
+        # The box of the staff lines, extend_y_range grows only the staff box around it
+        self.line_top = y
+        self.line_bottom = y + height
+        self.staff_space = height / (constants.number_of_lines_on_a_staff - 1)
         self.bar_line_x_positions = set()
 
         # Add the starting and ending barline
@@ -96,6 +100,9 @@ class SvgStaff(SvgRectangle):
         x_max = max(self.x + self.width, other.x + other.width)
         y_max = max(self.y + self.height, other.y + other.height)
         result = SvgStaff(x_min, y_min, x_max - x_min, y_max - y_min)
+        result.line_top = min(self.line_top, other.line_top)
+        result.line_bottom = max(self.line_bottom, other.line_bottom)
+        result.staff_space = self.staff_space
         for pos in self.bar_line_x_positions:
             result.bar_line_x_positions.add(pos)
         return result
@@ -312,6 +319,41 @@ def _extend_staffs_with_stems(staffs: list[SvgStaff], stems: list[SvgRectangle])
             best_staff.extend_y_range(stem.y + stem.height)
 
 
+def _parse_path_box(d: str) -> SvgRectangle:
+    """The bounding box of the points of an SVG path with absolute coordinates."""
+    numbers = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", d)]
+    xs, ys = numbers[0::2], numbers[1::2]
+    return SvgRectangle(
+        math.floor(min(xs)),
+        math.floor(min(ys)),
+        math.ceil(max(xs) - min(xs)),
+        math.ceil(max(ys) - min(ys)),
+    )
+
+
+def _extend_staffs_with_dynamics(staffs: list[SvgStaff], dynamics: list[SvgRectangle]) -> None:
+    """
+    Extends each staff to the dynamics next to it, they are part of the labels and the
+    staff image must show them.
+    """
+    max_distance_in_staff_spaces = 8
+
+    def distance_to_lines(staff: SvgStaff, y: float) -> float:
+        return max(staff.line_top - y, y - staff.line_bottom, 0)
+
+    for dynamic in dynamics:
+        center_x = dynamic.x + dynamic.width // 2
+        center_y = dynamic.y + dynamic.height // 2
+        candidates = [staff for staff in staffs if staff.contains_x_position(center_x)]
+        if not candidates:
+            continue
+        staff = min(candidates, key=lambda staff: distance_to_lines(staff, center_y))
+        if distance_to_lines(staff, center_y) > max_distance_in_staff_spaces * staff.staff_space:
+            continue
+        staff.extend_y_range(dynamic.y)
+        staff.extend_y_range(dynamic.y + dynamic.height)
+
+
 def _staff_has_content_between(
     staff: SvgStaff, notes: list[tuple[float, float]], start: float, end: float
 ) -> bool:
@@ -379,10 +421,13 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
                 stems.append(_parse_paths(line.getAttribute("points")))
 
         notes: list[tuple[float, float]] = []
+        dynamics: list[SvgRectangle] = []
         for path in doc.getElementsByTagName("path"):
             class_name = path.getAttribute("class")
             if class_name in ("Note", "Rest", "MMRest"):
                 notes.append(_parse_note_position(path))
+            if class_name == "Dynamic" and not path.getAttribute("transform"):
+                dynamics.append(_parse_path_box(path.getAttribute("d")))
 
         combined = _combine_staff_lines_and_bar_lines(staff_lines, bar_lines)
 
@@ -390,6 +435,7 @@ def get_position_information_from_svg(svg_file: str) -> SvgMusicFile:
         _extend_staffs_with_stems(combined, stems)
 
         _remove_empty_measures(svg_file, combined, notes)
+        _extend_staffs_with_dynamics(combined, dynamics)
 
         return SvgMusicFile(svg_file, width, height, combined)
     finally:

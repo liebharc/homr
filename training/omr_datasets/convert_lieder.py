@@ -30,6 +30,7 @@ from training.omr_datasets.music_xml_parser import (
     music_xml_file_to_tokens,
     normalize_barlines_and_repeats,
 )
+from training.transformer.image_utils import crop_info_path
 from training.transformer.training_vocabulary import token_lines_to_str
 
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -40,6 +41,7 @@ quartets = os.path.join(dataset_root, "StringQuartets-main")
 lieder_train_index = os.path.join(lieder, "index.txt")
 musescore_path = os.path.join(dataset_root, "MuseScore")
 flat_data = os.path.join(lieder, "flat")
+STORED_MARGIN_IN_STAFF_SPACES = 6
 
 
 class MusicXmlPage:
@@ -561,21 +563,31 @@ def _split_file_into_staffs(
         measures = splitter[current_voice]
         staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
         if not just_token_files:
-            # Before y_offset was 50 which sometimes cut off dynamics
-            y_offset = 65
+            # Stores more than the model sees, the data loader draws the margin
+            # (image_utils.random_staff_crop) with the positions in the JSON file.
+            # "stems" is the box of the staff with its stems and dynamics.
+            y_offset = STORED_MARGIN_IN_STAFF_SPACES * total_staff_area.staff_space
             x_offset_right = 10
             x_offset_left = 40
-            x = total_staff_area.x - x_offset_left
-            y = total_staff_area.y - y_offset
-            width = total_staff_area.width + x_offset_right + x_offset_left
-            height = total_staff_area.height + 2 * y_offset
-            x = int(x * scale)
-            y = int(y * scale)
-            width = int(width * scale)
-            height = int(height * scale)
+            x_min = max(0, int((total_staff_area.x - x_offset_left) * scale))
+            x_max = int((total_staff_area.x + total_staff_area.width + x_offset_right) * scale)
+            y_min = max(0, int((total_staff_area.y - y_offset) * scale))
+            y_max = int((total_staff_area.y + total_staff_area.height + y_offset) * scale)
 
-            staff_image = image[y : y + height, x : x + width]  # type: ignore
+            staff_image = image[y_min:y_max, x_min:x_max]  # type: ignore
             cv2.imwrite(staff_image_file_name, staff_image)
+            crop_info = {
+                "stems": [
+                    total_staff_area.y * scale - y_min,
+                    (total_staff_area.y + total_staff_area.height) * scale - y_min,
+                ],
+                "lines": [
+                    total_staff_area.line_top * scale - y_min,
+                    total_staff_area.line_bottom * scale - y_min,
+                ],
+                "staff_space": total_staff_area.staff_space * scale,
+            }
+            write_text_to_file(json.dumps(crop_info), crop_info_path(staff_image_file_name))
         elif not os.path.exists(staff_image_file_name) and fail_if_image_is_missing:
             raise ValueError(f"File {staff_image_file_name} not found")
 
