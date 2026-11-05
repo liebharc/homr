@@ -616,13 +616,36 @@ def _share_in_column(left: float, right: float, column: tuple[float, float]) -> 
     return inside / (right - left) if right > left else 0.0
 
 
+def _left_page(staffs: list[Staff]) -> list[Staff]:
+    """
+    The staffs of the left page, if the photo shows two pages side by side: two columns
+    of at least two staffs each, with an empty gutter between them and of similar width.
+    """
+    min_staffs_per_page = 2
+    unit = float(np.median([s.average_unit_size for s in staffs]))
+    for split in sorted({s.max_x for s in staffs}):
+        left = [s for s in staffs if s.max_x <= split]
+        right = [s for s in staffs if s.max_x > split]
+        if len(left) < min_staffs_per_page or len(right) < min_staffs_per_page:
+            continue
+        if min(s.min_x for s in right) - split < 2 * unit:
+            continue
+        left_width = np.median([s.max_x - s.min_x for s in left])
+        right_width = np.median([s.max_x - s.min_x for s in right])
+        if left_width >= right_width / 2:
+            return left
+    return staffs
+
+
 def filter_neighbor_page(staffs: list[Staff]) -> list[Staff]:
     """
-    Removes staffs of a partly visible neighbor page, e.g. in a photo of a book:
+    Removes staffs of a neighbor page, e.g. in a photo of a book. If two pages are
+    fully visible, only the left one is kept. Staffs of a partly visible page are
     much shorter than the staffs of the page and mostly beside them.
     """
     if len(staffs) == 0:
         return staffs
+    staffs = _left_page(staffs)
     column = _main_column([(s.min_x, s.max_x) for s in staffs])
     min_width = (column[1] - column[0]) / 2
     return [
