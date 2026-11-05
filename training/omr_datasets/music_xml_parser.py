@@ -164,6 +164,9 @@ class TokensMeasure:
         self.main_voice: dict[int, int] = {}  # map staff id to its main voice id
         self.graces_at: dict[tuple[int, int], int] = {}  # (staff, position) -> grace notes so far
         self.current_position = 0
+        # Start and grace index of the last note, chord members start with it
+        self.last_note_start = 0
+        self.last_grace_index = 0
         self.new_page = False
         # Octaves between written and sounding pitch per (staff, "clef" or "shift")
         # at the start of the measure, and the changes within the measure.
@@ -259,23 +262,25 @@ class TokensMeasure:
             if voice != self.main_voice[staff]:
                 symbol.position += "2"
         if is_chord:
-            previous_symbol = self.symbols[-1]
+            # The chord's first note can be invisible, so it isn't always the last symbol
             if not invisible:
                 self.symbols.append(
                     EncodedSymbolWithPos(
-                        previous_symbol.position,
+                        self.last_note_start,
                         symbol,
                         insert_before=is_grace,
-                        grace_index=previous_symbol.grace_index,
+                        grace_index=self.last_grace_index,
                     )
                 )
-            self.current_position = previous_symbol.position + duration
+            self.current_position = self.last_note_start + duration
         else:
             grace_index = 0
             if is_grace:
                 key = (staff, self.current_position)
                 grace_index = self.graces_at.get(key, 0)
                 self.graces_at[key] = grace_index + 1
+            self.last_note_start = self.current_position
+            self.last_grace_index = grace_index
             if not invisible:
                 self.symbols.append(
                     EncodedSymbolWithPos(
@@ -370,27 +375,32 @@ class TokensMeasure:
 
 
 class TupletState:
+    """
+    Counts the open tuplets, as tuplets of different voices can overlap. Counting
+    rather than tracking voices keeps it independent of how voices are numbered.
+    """
+
     def __init__(self) -> None:
-        self.started = False
+        self.open_tuplets = 0
         self.last_stop_position = -1
 
     def get_tuplet_factor(self, note: ET.Element, position: int) -> float:
         # A tuplet counts whether or not its number is printed: many editions only print the
         # "3" on the first groups. Notes with a <time-modification> outside of a <tuplet>
         # (e.g. a two-note tremolo) keep their written length.
+        in_tuplet = self.open_tuplets > 0 or self.last_stop_position == position
         notations = _children(note, "notations")
-        was_started = self.started or self.last_stop_position == position
         if len(notations) > 0:
-            tuplets = _children(notations[0], "tuplet")
-            for t in tuplets:
+            for t in _children(notations[0], "tuplet"):
                 t_type = t.get("type", None)
                 if t_type == "start":
-                    self.started = True
+                    self.open_tuplets += 1
+                    in_tuplet = True
                 if t_type == "stop":
-                    self.started = False
+                    self.open_tuplets = max(self.open_tuplets - 1, 0)
                     self.last_stop_position = position
 
-        if not self.started and not was_started:
+        if not in_tuplet:
             return 1.0
         time_modification = _children(note, "time-modification")
         if len(time_modification) == 0:
@@ -406,6 +416,7 @@ class TupletState:
         return float(actual) / float(normal)
 
     def on_end_of_measure(self) -> None:
+        self.open_tuplets = 0
         self.last_stop_position = -1
 
 
@@ -741,25 +752,44 @@ def _find_main_voices(measure: ET.Element) -> dict[int, int]:
     first_voice: dict[int, int] = {}
     # map (staff, voice) to its score
     stem_score: dict[tuple[int, int], int] = defaultdict(int)
-    for note in _children(measure, "note"):
-        if _is_hidden_note(note):
-            continue
+    visible = [note for note in _children(measure, "note") if not _is_hidden_note(note)]
+    # A voice belongs to the staff with most of its notes. Notes of a cross-staff beam
+    # on the other staff don't make it the main voice there.
+    notes_per_staff: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    for note in visible:
+        voice = _int_text(_child(note, "voice"), 0)
+        notes_per_staff[voice][_int_text(_child(note, "staff"), 1) - 1] += 1
+    home_staff = {
+        voice: max(counts, key=lambda staff: counts[staff])
+        for voice, counts in notes_per_staff.items()
+    }
+    for note in visible:
         # in MusicXML, staff index starts at 1, but in our internal representation,
         # it starts at 0 (the same as _process_note())
         staff = _int_text(_child(note, "staff"), 1) - 1
         voice = _int_text(_child(note, "voice"), 0)
-        first_voice.setdefault(staff, voice)
+        if home_staff[voice] == staff:
+            first_voice.setdefault(staff, voice)
         stem = _text(_child(note, "stem"))
         if stem == "up":
             stem_score[(staff, voice)] += 1
         elif stem == "down":
             stem_score[(staff, voice)] -= 1
 
+    for note in visible:
+        # A staff with only notes of voices from the other staff
+        first_voice.setdefault(
+            _int_text(_child(note, "staff"), 1) - 1, _int_text(_child(note, "voice"), 0)
+        )
     result: dict[int, int] = {}
     for staff, voice in first_voice.items():
         if stem_score[(staff, voice)] < 0:
             # first voice isn't the main voice, look for another one
-            alternatives = [v for (s, v), score in stem_score.items() if s == staff and score > 0]
+            alternatives = [
+                v
+                for (s, v), score in stem_score.items()
+                if s == staff and score > 0 and home_staff[v] == staff
+            ]
             if len(alternatives) == 1:
                 result[staff] = alternatives[0]
                 continue
@@ -769,14 +799,9 @@ def _find_main_voices(measure: ET.Element) -> dict[int, int]:
 
 def _process_note(part: TokensPart, note: ET.Element) -> None:
     staff = 0
-    note_heads = _children(note, "notehead")
-    for note_head in note_heads:
-        if _text(note_head) == "none":
-            # Notehead is not printed
-            return
     staff_nodes = _children(note, "staff")
-    print_object = note.get("print-object", None)
-    invisible = print_object == "no"
+    # A note without a notehead isn't printed, but it takes time like an invisible one
+    invisible = _is_hidden_note(note)
     if len(staff_nodes) > 0:
         staff = _int_text(staff_nodes[0], 1) - 1
     voice_nodes = _children(note, "voice")

@@ -236,6 +236,20 @@ def remove_duplicate_staffs(staffs: list[RawStaff]) -> list[RawStaff]:
     return result
 
 
+def _gap_has_ink(left: RawStaff, right: RawStaff, ink: NDArray) -> bool:
+    """
+    True if most columns between the staffs have ink: the lines or symbols on them. The
+    gutter between the pages of a book is empty, even if the staffs of both pages line up.
+    """
+    x0, x1 = max(int(left.max_x), 0), int(right.min_x)
+    y0 = max(int(min(left.min_y, right.min_y)), 0)
+    y1 = int(max(left.max_y, right.max_y))
+    if x1 <= x0:
+        return True
+    columns_with_ink = (ink[y0:y1, x0:x1] > 0).any(axis=0)
+    return float(columns_with_ink.mean()) >= 0.5  # noqa: PLR2004
+
+
 def _continues(left: RawStaff, right: RawStaff) -> bool:
     """
     True if right continues left in the same row: a short gap and the lines line up.
@@ -258,15 +272,24 @@ def _continues(left: RawStaff, right: RawStaff) -> bool:
     return lines_which_line_up >= constants.number_of_lines_on_a_staff - 1
 
 
-def merge_staffs_in_same_row(staffs: list[RawStaff]) -> list[RawStaff]:
+def merge_staffs_in_same_row(staffs: list[RawStaff], ink: NDArray | None = None) -> list[RawStaff]:
     """
     The line tracking breaks a staff in two if symbols cover its lines over a long
-    distance, e.g. at a clef change. This merges the two parts again.
+    distance, e.g. at a clef change. This merges the two parts again, if the gap between
+    them has ink, see _gap_has_ink.
     """
     result = sorted(staffs, key=lambda staff: staff.min_x)
     i = 0
     while i < len(result):
-        right = next((other for other in result[i + 1 :] if _continues(result[i], other)), None)
+        right = next(
+            (
+                other
+                for other in result[i + 1 :]
+                if _continues(result[i], other)
+                and (ink is None or _gap_has_ink(result[i], other, ink))
+            ),
+            None,
+        )
         if right is None:
             i += 1
             continue
@@ -922,6 +945,7 @@ def detect_staff(
     staff_fragments: list[RotatedBoundingBox],
     clefs_keys: list[RotatedBoundingBox],
     likely_bar_or_rests_lines: list[RotatedBoundingBox],
+    symbols: NDArray | None = None,
 ) -> list[Staff]:
     """
     Detect staffs on the image. Staffs can be warped, have gaps and can be interrupted by symbols.
@@ -954,7 +978,8 @@ def detect_staff(
             + " duplicate staffs"
         )
     number_of_staffs = len(raw_staffs)
-    raw_staffs = merge_staffs_in_same_row(raw_staffs)
+    ink = image if symbols is None else (image > 0) | (symbols > 0)
+    raw_staffs = merge_staffs_in_same_row(raw_staffs, ink)
     if len(raw_staffs) != number_of_staffs:
         eprint("Merged " + str(number_of_staffs - len(raw_staffs)) + " staffs split in a row")
     staffs_without_clef = find_staffs_without_clef(raw_staffs, clef_anchors, staff_fragments, image)
