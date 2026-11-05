@@ -80,6 +80,14 @@ class TestStaffDetection(unittest.TestCase):
 
         self.assertEqual([*page, indented], result)
 
+    def test_filter_neighbor_page_keeps_left_of_two_pages(self) -> None:
+        left_page = [make_staff(100, 900, top) for top in (100, 300, 500)]
+        right_page = [make_staff(1000, 1800, top) for top in (150, 350, 550)]
+
+        result = filter_neighbor_page(left_page + right_page)
+
+        self.assertEqual(left_page, result)
+
     def test_connect_staff_lines(self) -> None:
         lines = [makeBoundingBox(100, 100), makeBoundingBox(50, 100), makeBoundingBox(150, 100)]
         result = connect_staff_lines(lines, 5)

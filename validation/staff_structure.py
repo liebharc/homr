@@ -27,6 +27,7 @@ from typing import Any
 import cv2
 import numpy as np
 
+from homr.type_definitions import NDArray
 from validation.degradations import GROUPS, VARIANTS, set_background_photos
 
 default_directory = Path("datasets/staff_structure_lieder")
@@ -70,25 +71,31 @@ def _polylines(svg: str, class_name: str) -> list[list[tuple[float, float]]]:
     ]
 
 
-def staffs_per_system(svg: str) -> list[int]:
+def _systems(svg: str) -> list[list[NDArray]]:
     """
-    Reads the staffs per system from a MuseScore SVG. MuseScore draws each staff line as
-    a polyline and the bar line at the start of a system from each staff to the next.
+    Reads the systems of a MuseScore SVG, each a list of staffs. A staff is given by its
+    corners: top left, top right, bottom right, bottom left. MuseScore draws each staff
+    line as a polyline and the bar line at the start of a system from each staff to the
+    next.
     """
     lines = _polylines(svg, "StaffLines")
     if len(lines) == 0 or len(lines) % 5 != 0:
         return []
-    # Left end, top and bottom of each staff
     staffs = sorted(
-        ((lines[i][0][0], lines[i][0][1], lines[i + 4][0][1]) for i in range(0, len(lines), 5)),
-        key=lambda staff: staff[1],
+        (
+            np.array([lines[i][0], lines[i][-1], lines[i + 4][-1], lines[i + 4][0]])
+            for i in range(0, len(lines), 5)
+        ),
+        key=lambda staff: staff[0][1],
     )
     bar_lines = [
         (line[0][0], min(y for _, y in line), max(y for _, y in line))
         for line in _polylines(svg, "BarLine")
     ]
-    systems = [1]
-    for (x, top, bottom), (next_x, next_top, _) in itertools.pairwise(staffs):
+    systems = [[staffs[0]]]
+    for staff, next_staff in itertools.pairwise(staffs):
+        (x, top), bottom = staff[0], staff[3][1]
+        next_x, next_top = next_staff[0]
         tolerance = (bottom - top) / 4
         joined = abs(x - next_x) < tolerance and any(
             abs(bar_x - x) < tolerance
@@ -97,10 +104,62 @@ def staffs_per_system(svg: str) -> list[int]:
             for bar_x, bar_top, bar_bottom in bar_lines
         )
         if joined:
-            systems[-1] += 1
+            systems[-1].append(next_staff)
         else:
-            systems.append(1)
+            systems.append([next_staff])
     return systems
+
+
+def staffs_per_system(svg: str) -> list[int]:
+    return [len(system) for system in _systems(svg)]
+
+
+def _braces(svg: str) -> list[tuple[float, float]]:
+    """Top and bottom of each brace or hook of a bracket, MuseScore draws both as paths."""
+    pattern = r'<path class="Bracket"(?: transform="matrix\(([^)]+)\)")?[^>]*? d="([^"]+)"'
+    braces = []
+    for m in re.finditer(pattern, svg):
+        _, x_to_y, _, y_scale, _, y_offset = (
+            (float(v) for v in m.group(1).split(",")) if m.group(1) else (1, 0, 0, 1, 0, 0)
+        )
+        ys = [
+            x_to_y * float(x) + y_scale * float(y) + y_offset
+            for x, y in re.findall(r"(-?[\d.]+),(-?[\d.]+)", m.group(2))
+        ]
+        braces.append((min(ys), max(ys)))
+    return braces
+
+
+def page_layout(svg: str) -> list[list[NDArray]]:
+    """
+    Reads the systems of a MuseScore SVG, each a list of single and grand staffs. Both are
+    arrays of staffs x corners x (x, y): one staff or the two staffs joined by a brace.
+    Returns an empty list if a brace joins more than two staffs.
+    """
+    braces = _braces(svg)
+    layout = []
+    for system in _systems(svg):
+        tolerance = (system[0][3][1] - system[0][0][1]) / 4
+        upper_staffs = set()
+        for top, bottom in braces:
+            joined = [
+                i
+                for i, staff in enumerate(system)
+                if top < staff[0][1] + tolerance and bottom > staff[3][1] - tolerance
+            ]
+            if len(joined) < 2:  # noqa: PLR2004
+                continue
+            if len(joined) > 2 or joined[0] - 1 in upper_staffs:  # noqa: PLR2004
+                return []
+            upper_staffs.add(joined[0])
+        groups: list[NDArray] = []
+        for i, staff in enumerate(system):
+            if i - 1 in upper_staffs:
+                groups[-1] = np.stack([groups[-1][0], staff])
+            else:
+                groups.append(staff[np.newaxis])
+        layout.append(groups)
+    return layout
 
 
 def resolve_variants(names: list[str] | None) -> list[str]:
@@ -212,7 +271,7 @@ def _select_pages(seed: int) -> list[dict[str, Any]]:
     return sorted(pages, key=lambda page: page["id"])
 
 
-def _render(svg: Path, png: Path) -> None:
+def render_svg(svg: Path, png: Path) -> None:
     command = ["rsvg-convert", "-w", str(page_width), "-b", "white", "-o", str(png), str(svg)]
     subprocess.run(command, check=True)  # noqa: S603
 
@@ -223,7 +282,7 @@ def _write_variants(
     page_id = page["id"]
     clean = directory / "clean" / f"{page_id}.png"
     if not clean.exists():
-        _render(Path(page["svg"]), clean)
+        render_svg(Path(page["svg"]), clean)
     image = cv2.imread(str(clean), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError(f"Failed to read {clean}")
@@ -281,6 +340,7 @@ def _detect_staffs_per_system(image_path: str) -> dict[str, Any]:
     return {
         "detected_staffs": sum(staffs_per_system(detected)),
         "systems": staffs_per_system(final),
+        "layout": [[s.is_grandstaff for s in m.staffs] for m in final],
     }
 
 
@@ -363,6 +423,9 @@ def _run_one(task: tuple[str, dict[str, Any], str]) -> tuple[str, str, dict[str,
     result = _detect_staffs_per_system(image_path)
     result["expected"] = page["systems"]
     result["category"] = classify(result, page["systems"])
+    if result["category"] == CORRECT and "layout" in page:
+        if any(layout != page["layout"] for layout in result["layout"]):
+            result["category"] = "grand staffs wrong"
     page_id = page["id"]
     return variant, page_id, result
 

@@ -115,7 +115,6 @@ class StaffAnchor(DebugDrawable):
         self.max_y = max([line.max_y for line in staff_lines])
         self.min_y = min([line.min_y for line in staff_lines])
         max_number_of_ledger_lines = 5
-        self.y_range = range(int(min(y_positions)), int(max(y_positions)))
         self.zone = range(
             int(self.min_y - max_number_of_ledger_lines * self.average_unit_size),
             int(self.max_y + max_number_of_ledger_lines * self.average_unit_size),
@@ -417,59 +416,6 @@ def begins_or_ends_on_one_staff_line(
     return False
 
 
-def _extrapolate_missing_staff_line(
-    connected_lines: list[StaffLineSegment],
-    symbol: RotatedBoundingBox,
-    estimated_unit_size: int,
-) -> list[StaffLineSegment] | None:
-    """
-    Segnet's line prediction can miss one of a staff's five lines outright, especially in
-    densely packed multi-staff systems - a real gap in the underlying detection, not a
-    logic bug. If that happens but the other four lines are still evenly spaced at the
-    estimated unit size, synthesize the missing line by extrapolation instead of discarding
-    the whole anchor attempt.
-
-    The anchor symbol (a bar line or clef stem) spans close to the full staff height by
-    construction, so comparing the found lines' own extent against the symbol's own
-    top/bottom tells us which end is short a line, rather than guessing. Returns None
-    (leaving the anchor attempt to fail as before) unless exactly one end shows a
-    unit-size-sized gap and the other end doesn't - anything less clear-cut (e.g. a real
-    3-line pattern, or noise) is left alone rather than guessed at.
-    """
-    if len(connected_lines) != constants.number_of_lines_on_a_staff - 1:
-        return None
-    ordered = sorted(connected_lines, key=lambda line: line.staff_fragments[0].center[1])
-    positions = [line.staff_fragments[0].center[1] for line in ordered]
-    gaps = [positions[i + 1] - positions[i] for i in range(len(positions) - 1)]
-    tolerance = 0.3 * estimated_unit_size
-    if any(abs(gap - estimated_unit_size) > tolerance for gap in gaps):
-        return None
-
-    symbol_top = symbol.center[1] - symbol.size[1] / 2
-    symbol_bottom = symbol.center[1] + symbol.size[1] / 2
-    gap_above = positions[0] - symbol_top
-    gap_below = symbol_bottom - positions[-1]
-    is_missing_above = abs(gap_above - estimated_unit_size) <= tolerance and gap_below <= tolerance
-    is_missing_below = abs(gap_below - estimated_unit_size) <= tolerance and gap_above <= tolerance
-    if is_missing_above == is_missing_below:
-        return None
-
-    reference = ordered[0] if is_missing_above else ordered[-1]
-    offset = -estimated_unit_size if is_missing_above else estimated_unit_size
-    synthesized_fragments = [
-        RotatedBoundingBox(
-            ((fragment.center[0], fragment.center[1] + offset), fragment.box[1], fragment.box[2]),
-            fragment.contours,
-            fragment.debug_id,
-        )
-        for fragment in reference.staff_fragments
-    ]
-    synthesized_line = StaffLineSegment(reference.debug_id, synthesized_fragments)
-    if is_missing_above:
-        return [synthesized_line, *ordered]
-    return [*ordered, synthesized_line]
-
-
 def find_staff_anchors(
     staff_lines: list[RotatedBoundingBox],
     anchor_symbols: list[RotatedBoundingBox],
@@ -670,13 +616,36 @@ def _share_in_column(left: float, right: float, column: tuple[float, float]) -> 
     return inside / (right - left) if right > left else 0.0
 
 
+def _left_page(staffs: list[Staff]) -> list[Staff]:
+    """
+    The staffs of the left page, if the photo shows two pages side by side: two columns
+    of at least two staffs each, with an empty gutter between them and of similar width.
+    """
+    min_staffs_per_page = 2
+    unit = float(np.median([s.average_unit_size for s in staffs]))
+    for split in sorted({s.max_x for s in staffs}):
+        left = [s for s in staffs if s.max_x <= split]
+        right = [s for s in staffs if s.max_x > split]
+        if len(left) < min_staffs_per_page or len(right) < min_staffs_per_page:
+            continue
+        if min(s.min_x for s in right) - split < 2 * unit:
+            continue
+        left_width = np.median([s.max_x - s.min_x for s in left])
+        right_width = np.median([s.max_x - s.min_x for s in right])
+        if left_width >= right_width / 2:
+            return left
+    return staffs
+
+
 def filter_neighbor_page(staffs: list[Staff]) -> list[Staff]:
     """
-    Removes staffs of a partly visible neighbor page, e.g. in a photo of a book:
+    Removes staffs of a neighbor page, e.g. in a photo of a book. If two pages are
+    fully visible, only the left one is kept. Staffs of a partly visible page are
     much shorter than the staffs of the page and mostly beside them.
     """
     if len(staffs) == 0:
         return staffs
+    staffs = _left_page(staffs)
     column = _main_column([(s.min_x, s.max_x) for s in staffs])
     min_width = (column[1] - column[0]) / 2
     return [
