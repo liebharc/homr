@@ -39,6 +39,11 @@ CLEF_ANCHORS = {
     "clef_C3": "C4",
     "clef_C4": "A3",
     "clef_C5": "F3",
+    # Pitches are written pitches, so an octave clef has the anchor of its base clef
+    "clef_G2_8vb": "B4",
+    "clef_G2_8va": "B4",
+    "clef_F4_8vb": "D3",
+    "clef_F4_8va": "D3",
 }
 
 

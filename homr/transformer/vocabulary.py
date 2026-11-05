@@ -44,6 +44,39 @@ DYNAMICS_MODIFIER = [
 ]
 
 
+# Clefs with a small 8 above (8va) or below (8vb). Pitches are always the written
+# pitches, music_xml_generator converts them into sounding pitches.
+OCTAVE_CLEFS = ["clef_G2_8vb", "clef_G2_8va", "clef_F4_8vb", "clef_F4_8va"]
+# An octave shift lasts until octaveShiftStop or the end of the staff.
+OCTAVE_SHIFTS = ["octaveShift_8va", "octaveShift_8vb"]
+OCTAVE_SHIFT_STOP = "octaveShiftStop"
+
+
+def octaves_of_clef(clef: str) -> int:
+    """Octaves between written and sounding pitch, e.g. -1 for clef_G2_8vb."""
+    if clef.endswith("_8vb"):
+        return -1
+    if clef.endswith("_8va"):
+        return 1
+    return 0
+
+
+def octaves_of_shift(shift: str) -> int:
+    """Octaves between written and sounding pitch, e.g. 1 for octaveShift_8va."""
+    if shift == "octaveShift_8va":
+        return 1
+    if shift == "octaveShift_8vb":
+        return -1
+    return 0
+
+
+def transpose_octaves(pitch: str, octaves: int) -> str:
+    """Moves a pitch like C4 by whole octaves."""
+    if octaves == 0 or len(pitch) != 2 or not pitch[1].isdigit():
+        return pitch
+    return pitch[0] + str(int(pitch[1]) + octaves)
+
+
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:
     result = {}
     for i, t in enumerate(tokens):
@@ -102,6 +135,12 @@ def build_rhythm() -> dict[str, int]:
 
     # Dynamics
     rhythm.extend([f"dynamic_{d}" for d in DYNAMICS])
+
+    # Octave clefs and octave shifts. Appended last so the indices of the
+    # tokens above stay the same and existing weights can be fine-tuned.
+    rhythm.extend(OCTAVE_CLEFS)
+    rhythm.extend(OCTAVE_SHIFTS)
+    rhythm.append(OCTAVE_SHIFT_STOP)
 
     return build_dict(rhythm)
 
@@ -258,7 +297,7 @@ def build_pitch() -> dict[str, int]:
 
 
 def has_rhythm_symbol_a_position(rhythm: str) -> bool:
-    return rhythm.startswith(("note", "rest", "clef", "dynamic"))
+    return rhythm.startswith(("note", "rest", "clef", "dynamic", "octaveShift"))
 
 
 class Vocabulary:

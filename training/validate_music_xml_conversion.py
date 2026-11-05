@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.simple_logging import eprint
+from homr.transformer.vocabulary import OCTAVE_SHIFT_STOP, EncodedSymbol, empty
 from training.omr_datasets.music_xml_parser import (
     music_xml_file_to_tokens,
     normalize_barlines_and_repeats,
@@ -10,8 +11,28 @@ from training.omr_datasets.music_xml_parser import (
 from training.transformer.training_vocabulary import read_tokens, token_lines_to_str
 
 
+def close_octave_shifts(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
+    """
+    An octave shift lasts until the end of the staff, the generator closes it there
+    with a stop before the final barline.
+    """
+    open_shifts: dict[str, bool] = {}
+    for symbol in symbols:
+        if symbol.rhythm.startswith("octaveShift"):
+            open_shifts[symbol.position] = symbol.rhythm != OCTAVE_SHIFT_STOP
+    stops: list[EncodedSymbol] = []
+    for position in sorted(p for p, is_open in open_shifts.items() if is_open):
+        if stops:
+            stops.append(EncodedSymbol("chord"))
+        stops.append(EncodedSymbol(OCTAVE_SHIFT_STOP, empty, empty, empty, empty, position))
+    end = len(symbols)
+    if end > 0 and ("barline" in symbols[-1].rhythm or "repeat" in symbols[-1].rhythm):
+        end -= 1
+    return symbols[:end] + stops + symbols[end:]
+
+
 def validate_conversion(file: str) -> bool:
-    expected = read_tokens(file)
+    expected = close_octave_shifts(read_tokens(file))
     tmp = file.replace(".tokens", ".musicxml.tmp")
 
     xml = generate_xml(XmlGeneratorArguments(None, None, None), [expected], "")

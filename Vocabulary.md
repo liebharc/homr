@@ -36,6 +36,16 @@ The position branch can be `upper`, `upper2`, `lower` or `lower2`:
 
 This was introduced in [#156](https://github.com/liebharc/homr/pull/156).
 
+## Octave clefs and shifts
+
+Pitches are always written pitches, as they appear on the staff. `homr/music_xml_generator.py` converts them into sounding pitches.
+
+- `clef_G2_8vb`, `clef_G2_8va`, `clef_F4_8vb` and `clef_F4_8va` are clefs with a small 8 below or above.
+- `octaveShift_8va` and `octaveShift_8vb` start an octave shift before its first note, `octaveShiftStop` ends it after its last note. Both have a position.
+- A shift lasts until `octaveShiftStop` or the end of the staff. If it continues on the next staff, that staff starts with `octaveShift_8va` or `octaveShift_8vb` again, as the image shows the 8 again.
+
+Shifts by two octaves (15ma, 15mb) aren't supported.
+
 ## Full example
 
 ```
