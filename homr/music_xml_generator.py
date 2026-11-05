@@ -3,6 +3,7 @@
 import math
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -49,9 +50,15 @@ class ConversionState:
 
 
 class SymbolChord:
-    def __init__(self, symbols: list[EncodedSymbol], tuplet_mark: str = "") -> None:
+    def __init__(
+        self, symbols: list[EncodedSymbol], tuplet_marks: dict[str, str] | None = None
+    ) -> None:
         self.symbols = symbols
-        self.tuplet_mark = tuplet_mark
+        # Tuplet start or stop by position (e.g. upper2), voices have their own tuplets
+        self.tuplet_marks: dict[str, str] = tuplet_marks if tuplet_marks is not None else {}
+
+    def mark_for(self, symbol: EncodedSymbol) -> str:
+        return self.tuplet_marks.get(symbol.position, "")
 
     def __str__(self) -> str:
         return str.join("&", [str(s) for s in self.symbols])
@@ -77,7 +84,7 @@ class SymbolChord:
         buckets: dict[str, list[EncodedSymbol]] = defaultdict(list)
         for symbol in self.symbols:
             buckets[symbol.position].append(symbol)
-        chords = [SymbolChord(symbols, self.tuplet_mark) for symbols in buckets.values()]
+        chords = [SymbolChord(symbols, self.tuplet_marks) for symbols in buckets.values()]
         # Voices of only rests go first, the last chord is the one which advances time.
         chords.sort(
             key=lambda chord: all(s.rhythm.startswith("rest") for s in chord.symbols), reverse=True
@@ -132,6 +139,8 @@ def build_part(
     for measure in build_measures(args, voice, is_first_part, has_two_staves):
         part.append(measure)
     convert_ties(part)
+    add_stems(part)
+    _remove_position_attributes(part)
     return part
 
 
@@ -141,19 +150,33 @@ def build_measures(
     is_first_part: bool,
     has_two_staves: bool = False,
 ) -> list[ET.Element]:
-    # Tokens say which notes start together, not when each group starts. A group starts
-    # when the earliest still-sounding note ends (that is how training data is grouped),
-    # so track the end times of sounding notes instead of only the last group's shortest note.
-    clock = Fraction(0)
-    sounding: list[Fraction] = []
+    clock = GroupClock()
+    measure_number = 1
+    # Measures a multi-measure rest still covers after the current one
+    rest_measures = 0
+
+    def measure_rests(measure: ET.Element) -> None:
+        positions = ["upper", "lower"] if has_two_staves else ["upper"]
+        for staff_no, position in enumerate(positions):
+            if staff_no > 0:
+                measure.append(build_backup(state.nominator, state))
+            measure.append(
+                build_measure_rest(EncodedSymbol("measureRest", position=position), state)
+            )
 
     def close_current_measure() -> None:
-        nonlocal clock, sounding
+        nonlocal clock, measure_number, rest_measures
         rebalance_measure_voices(current_measure)
         measures.append(current_measure)
-        clock, sounding = Fraction(0), []
+        clock = GroupClock()
+        # MusicXML writes a multi-measure rest as that many measures
+        for _ in range(rest_measures):
+            measure_number += 1
+            measure = ET.Element("measure", number=str(measure_number))
+            measure_rests(measure)
+            measures.append(measure)
+        rest_measures = 0
 
-    measure_number = 1
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
     division, nominators = find_division_and_time_signature_nominators(groups)
     state = ConversionState(division, nominators[0])
@@ -178,12 +201,16 @@ def build_measures(
         if rhythm.startswith(("note", "rest")):
             if len(group.symbols) == 1 and rhythm.endswith("m"):
                 attributes = build_or_get_attributes(current_measure, last_attributes)
-                build_multi_measure_rest(symbol, attributes)
+                duration = build_multi_measure_rest(symbol, attributes)
+                if duration > 0:
+                    measure_rests(current_measure)
+                    rest_measures = duration - 1
             else:
                 staff_positions = group.into_positions()
-                advance = _advance_to_next_group(group, clock, sounding)
-                clock += advance
-                sounding = [end for end in sounding if end > clock]
+                gap = clock.wait_for_voices(group)
+                if gap > 0:
+                    current_measure.append(build_forward(gap, state))
+                advance = clock.advance(group)
                 for pos_no, staff_pos in enumerate(staff_positions):
                     chord_duration = advance if pos_no == len(staff_positions) - 1 else Fraction(0)
                     for note_xml in build_note_chord(staff_pos, state, chord_duration):
@@ -266,6 +293,54 @@ def build_measures(
         ET.SubElement(time_el, "beats").text = str(beats)
         ET.SubElement(time_el, "beat-type").text = "4"
     return measures
+
+
+class GroupClock:
+    """
+    When the groups of a measure start. Tokens say which notes start together, not
+    when each group starts. A group starts when the earliest still-sounding note ends
+    (that is how training data is grouped), but not before the earlier notes of its
+    own positions (voices) have ended.
+    """
+
+    def __init__(self) -> None:
+        self.time = Fraction(0)
+        self.sounding: list[Fraction] = []
+        self.voice_free: dict[str, Fraction] = {}
+
+    @staticmethod
+    def _timed(group: SymbolChord) -> list[EncodedSymbol]:
+        # Grace notes have no duration and take no time
+        return [
+            s
+            for s in group.symbols
+            if s.rhythm.startswith(("note", "rest")) and s.get_duration().fraction > 0
+        ]
+
+    def wait_for_voices(self, group: SymbolChord) -> Fraction:
+        """Moves the time to when the positions of the group are free, returns the gap."""
+        free = max(
+            (self.voice_free.get(s.position, Fraction(0)) for s in self._timed(group)),
+            default=Fraction(0),
+        )
+        gap = max(free - self.time, Fraction(0))
+        self.time += gap
+        self.sounding = [end for end in self.sounding if end > self.time]
+        return gap
+
+    def advance(self, group: SymbolChord) -> Fraction:
+        """Moves the time to the start of the next group and returns how far."""
+        # A position can hold notes of different lengths, the shortest one frees it
+        shortest: dict[str, Fraction] = {}
+        for symbol in self._timed(group):
+            duration = symbol.get_duration().fraction
+            shortest[symbol.position] = min(duration, shortest.get(symbol.position, duration))
+        for position, duration in shortest.items():
+            self.voice_free[position] = self.time + duration
+        advance = _advance_to_next_group(group, self.time, self.sounding)
+        self.time += advance
+        self.sounding = [end for end in self.sounding if end > self.time]
+        return advance
 
 
 def _advance_to_next_group(
@@ -454,15 +529,51 @@ def rebalance_measure_voices(measure: ET.Element) -> None:
                 if active_end > event.start
             ]
             used_voices = {voice_no for _, voice_no in active}
-            voice_no = 1
-            while voice_no in used_voices:
-                voice_no += 1
+            # The second voice of the model (e.g. upper2) prefers the second voice
+            voice_no = 2 if _is_second_voice(event.notes[0]) else 1
+            if voice_no in used_voices:
+                voice_no = 1
+                while voice_no in used_voices:
+                    voice_no += 1
             active.append((event.end, voice_no))
             xml_voice = str(get_xml_voice(staff_num, voice_no - 1))
             for note in event.notes:
                 voice_el = note.find("voice")
                 if voice_el is not None:
                     voice_el.text = xml_voice
+
+
+# The position of the model (e.g. upper2) of a note while the part is built
+_POSITION_ATTRIBUTE = "homr-position"
+
+
+def _is_second_voice(note: ET.Element) -> bool:
+    return note.get(_POSITION_ATTRIBUTE, "").endswith("2")
+
+
+def _remove_position_attributes(part: ET.Element) -> None:
+    for note in part.iter("note"):
+        note.attrib.pop(_POSITION_ATTRIBUTE, None)
+
+
+def add_stems(part: ET.Element) -> None:
+    """
+    Where a staff has two voices in a measure, the first voice has its stems up
+    and the second one down. Other stems are left to the reader.
+    """
+    for measure in part.findall("measure"):
+        notes = [n for n in measure.findall("note") if n.find("rest") is None]
+        for staff in {n.findtext("staff", "1") for n in notes}:
+            on_staff = [n for n in notes if n.findtext("staff", "1") == staff]
+            voices = {_is_second_voice(n) for n in on_staff if n.get(_POSITION_ATTRIBUTE)}
+            if len(voices) < 2:
+                continue
+            for note in on_staff:
+                stem = ET.Element("stem")
+                stem.text = "down" if _is_second_voice(note) else "up"
+                staff_el = note.find("staff")
+                position = list(note).index(staff_el) if staff_el is not None else len(note)
+                note.insert(position, stem)
 
 
 def get_note_pitch(note: ET.Element) -> str | None:
@@ -689,8 +800,9 @@ def build_articulations(
             else:
                 raise ValueError("Unsupported articulation " + articulation)
 
-    if tuplet_mark != "":
-        ET.SubElement(notation, "tuplet", type=tuplet_mark)
+    for mark in tuplet_mark.split("_"):
+        if mark:
+            ET.SubElement(notation, "tuplet", type=mark)
 
     if xml_articulations:
         parent = ET.SubElement(notation, "articulations")
@@ -781,8 +893,12 @@ def build_note_or_rest(
     slur_number = staff_num
     ET.SubElement(note, "voice").text = str(get_xml_voice(staff_num, rhythmic_layer))
     ET.SubElement(note, "staff").text = str(staff_num)
+    # Used for voices and stems, removed at the end of build_part
+    note.set(_POSITION_ATTRIBUTE, model_note.position)
 
-    build_articulations(note, model_note.articulation, tuplet_mark, state)
+    # The other notes of a group, e.g. in the other staff, aren't part of the tuplet
+    is_tuplet = model_duration.actual_notes != model_duration.normal_notes
+    build_articulations(note, model_note.articulation, tuplet_mark if is_tuplet else "", state)
     build_slurs(note, model_note.slur, slur_number)
     build_image_position(note, model_note)
 
@@ -800,13 +916,15 @@ def build_image_position(xml: ET.Element, symbol: EncodedSymbol) -> None:
     xml.append(ET.Comment(f" imgpos: {round(x)}, {round(y)} "))
 
 
-def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> None:
+def build_multi_measure_rest(symbol: EncodedSymbol, attributes: ET.Element) -> int:
+    """Returns the number of measures of the rest, 0 if the measure already has one."""
     if attributes.find("measure-style") is not None:
         eprint("Measure already has a multi rest")
-        return
+        return 0
     duration = int(symbol.rhythm.split("_")[1].replace("m", ""))
     style = ET.SubElement(attributes, "measure-style")
     ET.SubElement(style, "multiple-rest").text = str(duration)
+    return duration
 
 
 def build_measure_rest(symbol: EncodedSymbol, state: ConversionState) -> ET.Element:
@@ -818,6 +936,12 @@ def build_measure_rest(symbol: EncodedSymbol, state: ConversionState) -> ET.Elem
     ET.SubElement(note, "voice").text = "1"
     ET.SubElement(note, "staff").text = str(get_staff(symbol))
     return note
+
+
+def build_forward(duration: Fraction, state: ConversionState) -> ET.Element:
+    forward = ET.Element("forward")
+    ET.SubElement(forward, "duration").text = str(max(1, int(duration * state.division)))
+    return forward
 
 
 def build_backup(duration: Fraction, state: ConversionState) -> ET.Element:
@@ -838,7 +962,9 @@ def build_note_chord(
 
         is_first = True
         for note in notes:
-            result.append(build_note_or_rest(note, i, not is_first, state, note_chord.tuplet_mark))
+            result.append(
+                build_note_or_rest(note, i, not is_first, state, note_chord.mark_for(note))
+            )
             is_first = False
 
         # A grace note without pitch would be a rest which takes no time
@@ -848,7 +974,9 @@ def build_note_chord(
                 result.append(build_backup(group_duration, state))
             # Ideally we expect len(rests) == 1, but in dataset we see cases where
             # there are multiple rests. So here we just take the first rest
-            result.append(build_note_or_rest(rests[0], i, False, state, note_chord.tuplet_mark))
+            result.append(
+                build_note_or_rest(rests[0], i, False, state, note_chord.mark_for(rests[0]))
+            )
 
         if i != len(by_duration) - 1 and group_duration > Fraction(0):
             result.append(build_backup(group_duration, state))
@@ -1002,7 +1130,7 @@ def split_mixed_chords(groups: list[SymbolChord]) -> list[SymbolChord]:
             result.pop()
         for part in parts:
             is_notes = part[0].rhythm.startswith(("note", "rest"))
-            result.append(SymbolChord(part, group.tuplet_mark if is_notes else ""))
+            result.append(SymbolChord(part, group.tuplet_marks if is_notes else {}))
         split_barline = len(parts) > 1 and result[-1].is_barline()
     return result
 
@@ -1012,23 +1140,53 @@ def group_into_chords(voice: list[EncodedSymbol]) -> list[SymbolChord]:
 
 
 class TupletParser:
+    """
+    Marks the start and stop of tuplets, per measure and position. A tuplet ends
+    with the note which ends on the beat grid again, e.g. after three eighth
+    triplets or a quarter and an eighth triplet. Counting by time rather than by
+    notes keeps a voice in phase whose tuplet begins with a rest in another voice.
+    Groups without a tuplet note at the position, e.g. a duplet in the other
+    staff, are skipped.
+    """
+
     @staticmethod
     def parse(groups: list[SymbolChord]) -> list[SymbolChord]:
         for measure_groups in TupletParser.split_into_measures(groups):
-            saved_marks = [group.tuplet_mark for group in measure_groups]
-            if TupletParser.add_tuplets(measure_groups):
-                continue
-            for group, mark in zip(measure_groups, saved_marks, strict=True):
-                group.tuplet_mark = mark
+            positions = {
+                symbol.position
+                for group in measure_groups
+                for symbol in group.symbols
+                if TupletParser._is_tuplet(symbol)
+            }
+            for position in sorted(positions):
+                TupletParser.add_tuplets(measure_groups, position)
         return groups
 
     @staticmethod
-    def get_tuplet_duration(group: SymbolChord) -> SymbolDuration | None:
-        for symbol in group.symbols:
-            if symbol.rhythm.startswith(("note", "rest")):
-                duration = symbol.get_duration()
-                if duration.normal_notes != duration.actual_notes:
-                    return duration
+    def _is_tuplet(symbol: EncodedSymbol) -> bool:
+        if not symbol.rhythm.startswith(("note", "rest")) or "G" in symbol.rhythm:
+            return False
+        duration = symbol.get_duration()
+        return duration.normal_notes != duration.actual_notes
+
+    @staticmethod
+    def get_duration_at(group: SymbolChord, position: str) -> SymbolDuration | None:
+        """
+        The duration of the first tuplet note or rest at the position, otherwise of the
+        first timed one. None if the position has no timed symbol.
+        """
+        timed = [
+            s
+            for s in group.symbols
+            if s.position == position
+            and s.rhythm.startswith(("note", "rest"))
+            and "G" not in s.rhythm
+        ]
+        tuplets = [s for s in timed if TupletParser._is_tuplet(s)]
+        if tuplets:
+            return tuplets[0].get_duration()
+        if timed:
+            return timed[0].get_duration()
         return None
 
     @staticmethod
@@ -1045,34 +1203,84 @@ class TupletParser:
         return measures
 
     @staticmethod
-    def add_tuplets(groups: list[SymbolChord]) -> bool:
-        cursor = 0
-        while cursor < len(groups):
-            duration = TupletParser.get_tuplet_duration(groups[cursor])
+    def start_times(groups: list[SymbolChord]) -> list[Fraction]:
+        """When each group of a measure starts, the same way as build_measures counts."""
+        clock = GroupClock()
+        result: list[Fraction] = []
+        for group in groups:
+            if any(s.rhythm.startswith(("note", "rest")) for s in group.symbols):
+                clock.wait_for_voices(group)
+                result.append(clock.time)
+                clock.advance(group)
+            else:
+                result.append(clock.time)
+        return result
 
+    @staticmethod
+    def add_tuplets(groups: list[SymbolChord], position: str) -> None:
+        times = TupletParser.start_times(groups)
+        run: list[tuple[int, Fraction, Fraction]] = []  # group, start time and duration
+        tuplet_format = (1, 1)
+        for index, group in enumerate(groups):
+            duration = TupletParser.get_duration_at(group, position)
             if duration is None:
-                cursor += 1
                 continue
+            current_format = (duration.actual_notes, duration.normal_notes)
+            if current_format != tuplet_format and run:
+                TupletParser._mark_run(groups, position, run)
+                run = []
+            tuplet_format = current_format
+            if current_format[0] != current_format[1]:
+                run.append((index, times[index], duration.fraction))
+        if run:
+            TupletParser._mark_run(groups, position, run)
 
-            start = cursor
-            tuplet_format = (duration.actual_notes, duration.normal_notes)
-            tuplet_size = duration.actual_notes
+    @staticmethod
+    def _mark_run(
+        groups: list[SymbolChord], position: str, run: list[tuple[int, Fraction, Fraction]]
+    ) -> None:
+        """
+        Splits consecutive tuplet notes of one position into tuplets. A tuplet ends once
+        its own notes add up to a duration without a tuplet, e.g. three eighth triplets or
+        a quarter and an eighth triplet. That keeps working if an earlier note has a wrong
+        length. If that leaves notes over, e.g. if the tuplet starts with a rest in another
+        voice, a tuplet ends where it reaches the beat grid instead. Notes which are
+        left over form an incomplete tuplet.
+        """
+        by_length = TupletParser._split(run, lambda start, total, end: total)
+        by_grid = TupletParser._split(run, lambda start, total, end: end)
+        tuplets, left_over = by_length if len(by_length[1]) <= len(by_grid[1]) else by_grid
+        if left_over:
+            # An incomplete tuplet, e.g. one note too many, still has tuplet durations
+            tuplets.append((left_over[0], left_over[-1]))
+        for first, last in tuplets:
+            if first == last:
+                groups[first].tuplet_marks[position] = "start_stop"
+            else:
+                groups[first].tuplet_marks[position] = "start"
+                groups[last].tuplet_marks[position] = "stop"
 
-            while cursor - start < tuplet_size:
-                if cursor >= len(groups):
-                    return False
-                current_duration = TupletParser.get_tuplet_duration(groups[cursor])
-                if current_duration is None:
-                    return False
-                current_format = (current_duration.actual_notes, current_duration.normal_notes)
-                if current_format != tuplet_format:
-                    return False
-                cursor += 1
+    @staticmethod
+    def _split(
+        run: list[tuple[int, Fraction, Fraction]],
+        measure: Callable[[Fraction, Fraction, Fraction], Fraction],
+    ) -> tuple[list[tuple[int, int]], list[int]]:
+        """The complete tuplets as (first, last) group and the groups left over."""
+        tuplets: list[tuple[int, int]] = []
+        pending: list[int] = []
+        total = Fraction(0)
+        for index, start, duration in run:
+            pending.append(index)
+            total += duration
+            if _is_power_of_two(measure(start, total, start + duration).denominator):
+                tuplets.append((pending[0], index))
+                pending = []
+                total = Fraction(0)
+        return tuplets, pending
 
-            groups[start].tuplet_mark = "start"
-            groups[cursor - 1].tuplet_mark = "stop"
 
-        return True
+def _is_power_of_two(value: int) -> bool:
+    return value > 0 and value & (value - 1) == 0
 
 
 def add_tuplet_start_stop(groups: list[SymbolChord]) -> list[SymbolChord]:

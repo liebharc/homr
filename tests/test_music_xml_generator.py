@@ -12,6 +12,7 @@ from homr.music_xml_generator import (
     rebalance_measure_voices,
 )
 from homr.transformer.vocabulary import EncodedSymbol
+from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import (
     read_token_lines,
 )
@@ -153,6 +154,29 @@ barline . . . . ."""
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
         self.assertEqual(_times(xml), [("6", "8")])
+
+    def test_multi_measure_rest_is_written_as_that_many_measures(self) -> None:
+        rest_then_note = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+rest_3m _ _ _ _ upper
+barline . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(rest_then_note.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        measures = xml.findall("part/measure")
+        self.assertEqual(len(measures), 4)
+        self.assertEqual(measures[0].findtext("attributes/measure-style/multiple-rest"), "3")
+        for measure in measures[:3]:
+            self.assertIsNotNone(measure.find("note/rest"))
+        self.assertEqual(_pitch(_notes(measures[3])[0]), "C")
+
+        parsed = music_xml_string_to_tokens(ET.tostring(xml, encoding="unicode"))[0]
+        rhythms = [s.rhythm for measure in parsed for s in measure]
+        self.assertIn("rest_3m", rhythms)
+        self.assertIn("note_1", rhythms)
 
     def test_time_signature_is_computed_if_none_was_recognized(self) -> None:
         no_time_signature = """clef_G2 . . . . upper
