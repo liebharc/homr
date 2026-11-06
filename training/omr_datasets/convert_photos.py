@@ -51,7 +51,8 @@ from training.omr_datasets.photo_staves import cut_page
 
 dataset_root = git_root / "datasets"
 PHOTOS_URL = "https://github.com/slobaspeed/homr-photo-pages/archive/refs/heads/main.zip"
-UVDOC_URL = "https://github.com/tanguymagne/UVDoc/archive/refs/heads/main.zip"
+UVDOC_COMMIT = "4c9b82b537057aff2526e6dd118a847cdd072e82"  # pinned: its model.py is run
+UVDOC_URL = f"https://github.com/tanguymagne/UVDoc/archive/{UVDOC_COMMIT}.zip"
 FIRST_TRAINING_PAGE, LAST_PAGE = 23, 124  # 8 * 124 + 7 = 999, the last id of the marks
 FORBIDDEN_PAGES = [*range(1, 23), *range(43, 51)]  # homr's test music; the test photos
 SONGS_PER_PHOTO = 100
@@ -281,7 +282,7 @@ def convert_photos() -> None:
     download_weights(segnet_use_gpu=True, transformer_use_gpu=True, coreml_encoder=False)
 
     dataset = _downloaded(PHOTOS_URL, "homr-photo-pages-main", "PHOTO_DATASET_DIR")
-    uvdoc_dir = _downloaded(UVDOC_URL, "UVDoc-main", "UVDOC_DIR")
+    uvdoc_dir = _downloaded(UVDOC_URL, f"UVDoc-{UVDOC_COMMIT}", "UVDOC_DIR")
     song_dir = Path(os.environ.get("PHOTO_SONGS_DIR") or Path(lieder) / "rendered_scores")
     if not song_dir.exists():
         convert_lieder()
