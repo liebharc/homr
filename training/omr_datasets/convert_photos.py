@@ -258,6 +258,7 @@ def convert_photos() -> None:
         songs(song_dir, template_song_ids(templates.values())),
         photos_root,
         mapper=lambda: Uvdoc(uvdoc_dir),
+        songs_per_photo=SONGS_PER_PHOTO,
         config=config,
     )
     eprint(f"Photo pages: {kept} staves in {photos_train_index}")
