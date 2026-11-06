@@ -26,6 +26,7 @@ from training.omr_datasets.convert_musetrainer import (
     musetrainer_train_index,
 )
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
+from training.omr_datasets.convert_photos import convert_photos, photos_train_index
 from training.omr_datasets.convert_primus import (
     convert_primus_dataset,
     primus_train_index,
@@ -124,6 +125,9 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
+
+        if dataset == photos_train_index and not os.path.exists(photos_train_index):
+            convert_photos()
     remove_tokens(selected_datasets)
     return selected_datasets
 
@@ -153,8 +157,9 @@ def train_transformer(
         primus_train_index,
         pdmx_train_index,
         musetrainer_train_index,
+        photos_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+    dataset_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index)
     distribute.barrier()

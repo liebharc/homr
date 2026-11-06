@@ -51,7 +51,9 @@ class TestPhotoStaves(unittest.TestCase):
         assert tokens is not None  # noqa: S101
         self.assertEqual(set(tokens), {(0, 0), (1, 0)})
         self.assertEqual([bar_count(tokens[0, 0] or ""), bar_count(tokens[1, 0] or "")], [5, 3])
-        self.assertTrue((tokens[1, 0] or "").startswith("clef_G2"))  # each staff starts with its clef
+        self.assertTrue(
+            (tokens[1, 0] or "").startswith("clef_G2")
+        )  # each staff starts with its clef
 
     def test_answers_that_dont_fill_the_staves_are_none(self) -> None:
         tokens, _ = answers(self.write(one_part(8)), [{"bars": 4, "staffs": [BOX]}])

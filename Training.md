@@ -27,6 +27,8 @@ Download the datasets and convert them to the format required for training:
 - `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
+- `training/omr_datasets/convert_photos.py`
+  - Pastes Lieder songs onto real phone photos of printed template pages ([homr-photo-pages](https://github.com/slobaspeed/homr-photo-pages)). Run it after `convert_lieder.py`; it downloads the photos and [UVDoc](https://github.com/tanguymagne/UVDoc).
 
 Some checks:
 

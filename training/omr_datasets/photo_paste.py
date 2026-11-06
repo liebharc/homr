@@ -14,7 +14,13 @@ import numpy as np
 import verovio
 from numpy.typing import NDArray
 
-from training.omr_datasets.photo_maps import FH, FLAT_MM, FW, PhotoConditions, edge_sharpness
+from training.omr_datasets.photo_maps import (
+    FH,
+    FLAT_MM,
+    FW,
+    PhotoConditions,
+    edge_sharpness,
+)
 
 FONTS = ["Leipzig", "Bravura", "Gootville", "Leland", "Petaluma"]
 SIZES = [30, 40, 55]  # Verovio scale: small, normal, large staves
@@ -79,7 +85,12 @@ def layout(svg: str, zoom: float, f: float, x0: float, y0: float) -> list[dict[s
                 left, top = flat(min(a[0] for a in lines), min(a[1] for a in lines))
                 right, bottom = flat(max(a[2] for a in lines), max(a[1] for a in lines))
                 box = boxes.get(n, [left, top, right, bottom])
-                boxes[n] = [min(box[0], left), min(box[1], top), max(box[2], right), max(box[3], bottom)]
+                boxes[n] = [
+                    min(box[0], left),
+                    min(box[1], top),
+                    max(box[2], right),
+                    max(box[3], bottom),
+                ]
         systems.append({"bars": len(measures), "staffs": [boxes[n] for n in sorted(boxes)]})
     return systems
 
@@ -118,6 +129,8 @@ def engrave_on_template(xml: str, font: str, size: int) -> EngravedPage | None:
     svg = toolkit(low).renderToSVG(1)
     png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=ZOOM)
     music = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if music is None:
+        return None
     f = min(SCALE * FW / music.shape[1], (FH - 2 * (MARK_CENTER + MARK)) / music.shape[0])
     small = cv2.resize(
         music,
@@ -154,26 +167,30 @@ def put_on_photo(
             (
                 flat
                 if r == 0
-                else cv2.erode(flat, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1)))
+                else cv2.erode(
+                    flat, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+                )
             )
             for r in (low, low + 1)
         ]
         part = bleed - low
-        flat = wide[0] if part == 0 else cv2.addWeighted(wide[0], 1 - part, wide[1], part, 0)
+        flat = np.asarray(
+            wide[0] if part == 0 else cv2.addWeighted(wide[0], 1 - part, wide[1], part, 0)
+        )
     h, w = cond.map_x.shape
     big = (w * SUPER, h * SUPER)
     big_x = cv2.resize(cond.map_x, big, interpolation=cv2.INTER_LINEAR)
     big_y = cv2.resize(cond.map_y, big, interpolation=cv2.INTER_LINEAR)
     lit = cv2.remap(flat, big_x, big_y, cv2.INTER_LINEAR, borderValue=255)
     darkness = 1 - cv2.resize(lit, (w, h), interpolation=cv2.INTER_AREA).astype(np.float32) / 255
-    tried = []
+    tried: list[tuple[float, float, NDArray, float]] = []
     for s in BLURS:
-        d = cv2.GaussianBlur(darkness, (0, 0), s) if s else darkness
+        d = np.asarray(cv2.GaussianBlur(darkness, (0, 0), s) if s else darkness)
         strength = ink_strength(d, cond.on_page, cond.ink_level)
         off = abs(edge_sharpness(1 - d * strength, cond.on_page) - cond.sharp)
         tried.append((off, s, d, strength))
-    _, _, darkness, strength = min(tried, key=lambda t: t[:2])
-    made = cond.paper * (1 - darkness[..., None] * strength)
+    _, _, blurred, strength = min(tried, key=lambda t: t[:2])
+    made = cond.paper * (1 - blurred[..., None] * strength)
     result = photo.copy()
     result[cond.on_page] = np.clip(made, 0, 255).astype(np.uint8)[cond.on_page]
     return result

@@ -16,7 +16,7 @@ from unittest import mock
 import cv2
 from numpy.typing import NDArray
 
-import homr.staff_parsing as staff_parsing
+from homr import staff_parsing
 from homr.circle_of_fifths import strip_naturals
 from homr.debug import Debug
 from homr.staff_regions import StaffRegions
@@ -33,7 +33,7 @@ from training.transformer.training_vocabulary import token_lines_to_str
 if TYPE_CHECKING:
     from homr.main import ProcessingConfig
 
-END_SLACK = 0.04  # how far (share of the staff's width) a found staff's ends may land from the drawn ends
+END_SLACK = 0.04  # share of a staff's width its found ends may land from the drawn ends
 
 Target = tuple[tuple[int, int], list[float]]
 Point = tuple[float, float]
@@ -114,7 +114,9 @@ def cut_page(
     """Cuts one generated photo (its answer beside it as .musicxml) into staves. Writes
     <photo>-<n>.png, .tokens and .where (which system and part it is) to out_dir. Returns the
     index lines (image,tokens relative to the git root) and why staves were dropped."""
-    from homr.main import detect_staffs_in_image  # imports the whole reader, OCR included
+    from homr.main import (  # noqa: PLC0415  (the reader, OCR included)
+        detect_staffs_in_image,
+    )
 
     dropped: Counter[str] = Counter()
     tokens, staves = answers(str(image_path.with_suffix(".musicxml")), page["systems"])
@@ -144,7 +146,9 @@ def cut_page(
         for staff in row.staffs:
             n += 1
             try:
-                with mock.patch.object(staff_parsing, "center_image_on_canvas", side_effect=capture):
+                with mock.patch.object(
+                    staff_parsing, "center_image_on_canvas", side_effect=capture
+                ):
                     staff_parsing.prepare_staff_image(
                         Debug(image, str(image_path), False), n, staff, image, regions
                     )
@@ -158,7 +162,9 @@ def cut_page(
             for x in (staff.min_x, (staff.min_x + staff.max_x) / 2, staff.max_x):
                 px, py = to_input((x, mid_y))
                 xi, yi = round(px), round(py)
-                inside = 0 <= yi < map_x.shape[0] and 0 <= xi < map_x.shape[1] and map_x[yi, xi] >= 0
+                inside = (
+                    0 <= yi < map_x.shape[0] and 0 <= xi < map_x.shape[1] and map_x[yi, xi] >= 0
+                )
                 ends.append((float(map_x[yi, xi]), float(map_y[yi, xi])) if inside else None)
             if None in ends:
                 dropped["an end off the page"] += 1

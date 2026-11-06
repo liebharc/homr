@@ -37,7 +37,7 @@ class Uvdoc:
     """UVDoc (github.com/tanguymagne/UVDoc, MIT): model.py and model/best_model.pkl in uvdoc_dir."""
 
     def __init__(self, uvdoc_dir: Path) -> None:
-        import torch
+        import torch  # noqa: PLC0415  (only training needs torch)
 
         spec = importlib.util.spec_from_file_location("uvdoc_model", uvdoc_dir / "model.py")
         if spec is None or spec.loader is None:
@@ -53,7 +53,7 @@ class Uvdoc:
 
     def page_maps(self, photo: NDArray) -> tuple[NDArray, NDArray]:
         """UVDoc's guess of where each photo pixel lies on the flat page (NaN off the page)."""
-        import torch
+        import torch  # noqa: PLC0415
 
         ph, pw = photo.shape[:2]
         rgb = cv2.cvtColor(photo, cv2.COLOR_BGR2RGB).astype(np.float32) / 255
@@ -92,7 +92,7 @@ def find_marks(photo: NDArray) -> dict[int, NDArray]:
     corners, ids, _ = DETECTOR.detectMarkers(np.ascontiguousarray(gray))
     if ids is None:
         return {}
-    return {i: c[0] for i, c in zip(ids.ravel().tolist(), corners, strict=True)}
+    return {int(i): c[0] for i, c in zip(ids.ravel(), corners, strict=True)}
 
 
 def page_number(ids: Iterable[int]) -> int | None:
@@ -113,7 +113,7 @@ def upright(photo: NDArray, marks: dict[int, NDArray]) -> NDArray:
 def mark_fit(guess: NDArray, truth: NDArray) -> NDArray:
     """The 3x3 transform moving guessed flat positions of mark corners onto their true positions:
     shift, turn and scale for one or two marks, affine for three, a homography for four or more."""
-    guess, truth = np.float32(guess), np.float32(truth)
+    guess, truth = np.asarray(guess, np.float32), np.asarray(truth, np.float32)
     if len(guess) >= 16:  # three marks often sit in a row, where a homography swings wildly
         return cv2.findHomography(guess, truth, 0)[0]
     if len(guess) >= 12:
@@ -169,6 +169,7 @@ def erased(
     photo: NDArray,
     gray: NDArray,
     around: NDArray,
+    *,
     inside: NDArray,
     where: NDArray,
     solid: NDArray,
@@ -255,7 +256,7 @@ def conditions(
     edge = 6 * FLAT_MM  # 6 mm: further in than the map is off
     inside = on_page & (map_x >= edge) & (map_x <= FW - 1 - edge)
     inside &= (map_y >= edge) & (map_y <= FH - 1 - edge)
-    paper = erased(photo, gray, around, inside, where, solid, known[0])
+    paper = erased(photo, gray, around, inside=inside, where=where, solid=solid, marks=known[0])
     n = gray.astype(np.float32) / np.maximum(around, 1)
     ink_level = float(np.median(n[(n < 0.6) & on_page]))  # the ink's core, as a share of the paper
     sharp = edge_sharpness(n, on_page)

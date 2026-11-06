@@ -48,7 +48,9 @@ TEMPLATE_T23 = {
 
 class TestPhotoMaps(unittest.TestCase):
     def test_mark_fit_recovers_a_known_homography(self) -> None:
-        truth = np.random.default_rng(0).uniform([100, 100], [2300, 3300], (20, 2)).astype(np.float32)
+        truth = (
+            np.random.default_rng(0).uniform([100, 100], [2300, 3300], (20, 2)).astype(np.float32)
+        )
         m = np.array([[1.02, 0.01, 5], [-0.02, 0.98, -3], [1e-6, 2e-6, 1]])
         gx, gy = apply_fit(np.linalg.inv(m), truth[:, 0], truth[:, 1])
         guess = np.stack([gx, gy], axis=1)
@@ -56,9 +58,9 @@ class TestPhotoMaps(unittest.TestCase):
         self.assertTrue(np.allclose(np.stack([x, y], axis=1), truth, atol=0.5))
 
     def test_two_marks_use_a_shift_turn_and_scale(self) -> None:
-        truth = np.float32([[100, 100], [200, 100], [200, 200], [100, 200]])
-        truth = np.concatenate([truth, truth + [1500, 2000]])
-        guess = truth * [1.05, 0.95] + [10, -20]  # stretched differently in x and y
+        square = np.array([[100, 100], [200, 100], [200, 200], [100, 200]], np.float32)
+        truth = np.concatenate([square, square + np.array([1500, 2000], np.float32)])
+        guess = truth * np.array([1.05, 0.95]) + np.array([10, -20])  # stretched unevenly
         m = mark_fit(guess.astype(np.float32), truth)
         a, b = m[:2, 0], m[:2, 1]
         self.assertAlmostEqual(float(np.linalg.norm(a)), float(np.linalg.norm(b)), places=6)
