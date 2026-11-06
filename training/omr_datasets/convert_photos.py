@@ -5,8 +5,9 @@ pasted onto the same real paper, then cut into staves the way homr reads them, e
 exact answer.
 
 Downloads the photos and UVDoc (github.com/tanguymagne/UVDoc, MIT), and uses the Lieder songs
-rendered by convert_lieder.py. Only photos of pages T23-T42 are used: T01-T22 carry the music of
-homr's photo test set, and photos of T43-T50 are a test set.
+rendered by convert_lieder.py. Photos of pages T23 and up are used, except T43-T50, which are a
+test set; T01-T22 carry the music of homr's photo test set. A photo showing any mark of those
+pages is left out.
 
 For development, three environment variables point at local copies instead:
 PHOTO_DATASET_DIR (the photo repo), UVDOC_DIR (UVDoc) and PHOTO_SONGS_DIR (MusicXML or .mxl songs).
@@ -30,6 +31,7 @@ from numpy.typing import NDArray
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from training.omr_datasets.convert_lieder import convert_lieder, git_root, lieder
+from training.omr_datasets.photo_index import photos_root, photos_train_index
 from training.omr_datasets.photo_maps import (
     PHOTO_SIZE,
     PageMapper,
@@ -48,11 +50,10 @@ from training.omr_datasets.photo_paste import (
 from training.omr_datasets.photo_staves import cut_page
 
 dataset_root = git_root / "datasets"
-photos_root = dataset_root / "photo_pages"
-photos_train_index = str(photos_root / "index.txt")
 PHOTOS_URL = "https://github.com/slobaspeed/homr-photo-pages/archive/refs/heads/main.zip"
 UVDOC_URL = "https://github.com/tanguymagne/UVDoc/archive/refs/heads/main.zip"
-FIRST_TRAINING_PAGE, LAST_TRAINING_PAGE = 23, 42
+FIRST_TRAINING_PAGE, LAST_PAGE = 23, 124  # 8 * 124 + 7 = 999, the last id of the marks
+FORBIDDEN_PAGES = [*range(1, 23), *range(43, 51)]  # homr's test music; the test photos
 SONGS_PER_PHOTO = 100
 SEED = 31
 
@@ -60,8 +61,23 @@ Cut = Callable[..., tuple[list[str], Counter[str]]]
 
 
 def training_page(number: int | None) -> bool:
-    """Only pages T23-T42 train: T01-T22 carry homr's test music, T43-T50 are a test set."""
-    return number is not None and FIRST_TRAINING_PAGE <= number <= LAST_TRAINING_PAGE
+    """Pages T23 and up train, except T43-T50: T01-T22 carry homr's test music, T43-T50 are a
+    test set."""
+    return (
+        number is not None
+        and FIRST_TRAINING_PAGE <= number <= LAST_PAGE
+        and number not in FORBIDDEN_PAGES
+    )
+
+
+def training_photo(ids: Iterable[int]) -> int | None:
+    """The training page a photo's marks show, or None. A single mark of a forbidden page leaves
+    the photo out, so neither a stray detection nor two pages in one shot let it in."""
+    ids = list(ids)
+    if any(i // 8 in FORBIDDEN_PAGES for i in ids):
+        return None
+    number = page_number(ids)
+    return number if training_page(number) else None
 
 
 def template_song_ids(templates: Iterable[dict[str, Any]]) -> set[str]:
@@ -89,8 +105,12 @@ def songs(song_dir: Path, excluded: set[str]) -> Iterator[tuple[str, str]]:
     for path in paths:
         if set(re.findall(r"lc\d+", path.stem)) & excluded:
             continue
-        xml = _read_song(path)
-        parts = ET.fromstring(xml.encode("utf-8")).findall("part")  # noqa: S314
+        try:
+            xml = _read_song(path)
+            parts = ET.fromstring(xml.encode("utf-8")).findall("part")  # noqa: S314
+        except (OSError, UnicodeDecodeError, ET.ParseError, StopIteration, zipfile.BadZipFile):
+            eprint(f"{path.name}: can't be read, left out")
+            continue
         if "<tremolo" in xml or len(parts) > 2:
             continue
         yield path.stem, xml
@@ -127,19 +147,26 @@ def photo_conditions(
     (root / "maps").mkdir(parents=True, exist_ok=True)
     cached = CachedMaps(mapper)
     found = {}
-    for path in sorted(photo_dir.glob("*.jpg")):
+    paths = sorted(p for p in photo_dir.iterdir() if p.suffix.lower() in (".jpg", ".jpeg"))
+    for path in paths:
         photo = cv2.imread(str(path))
         if photo is None:
             eprint(f"{path.name}: not an image, left out")
             continue
         scale = PHOTO_SIZE / max(photo.shape[:2])
         small = cv2.resize(photo, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-        number = page_number(find_marks(small))
-        if not training_page(number):
-            eprint(f"{path.name}: page {number} is not a training page, left out")
+        ids = list(find_marks(small))
+        number = training_photo(ids)
+        if number is None or f"T{number:02d}" not in templates:
+            pages = sorted({f"T{i // 8:02d}" for i in ids}) or ["no marks"]
+            eprint(f"{path.name}: {', '.join(pages)}, not a training page, left out")
             continue
         cached.cache = root / "maps" / f"{path.stem}.npz"
-        cond = prepare_photo(path, templates[f"T{number:02d}"], cached)
+        try:
+            cond = prepare_photo(path, templates[f"T{number:02d}"], cached)
+        except Exception as e:  # e.g. a degenerate fit of the marks
+            eprint(f"{path.name}: no map ({e}), left out")
+            continue
         if cond is not None:
             found[path.stem] = cond
     return found
@@ -152,31 +179,40 @@ def make_pages(
     songs_per_photo: int,
 ) -> None:
     """songs_per_photo songs onto every photo, round the photos in turn: <photo>__<n>.jpg, its
-    answer (.musicxml) and where its staves are (.page.json). Skipped when already done."""
-    done = pages_dir / "done"
-    if done.exists():
+    answer (.musicxml) and where its staves are (.page.json). Skipped when done for the same
+    photos and number of songs; made afresh when photos were added or taken away."""
+    names = sorted(conds)
+    done = pages_dir / "done.json"
+    wanted = {"photos": names, "songs_per_photo": songs_per_photo}
+    if done.exists() and json.loads(done.read_text(encoding="utf-8")) == wanted:
         return
     pages_dir.mkdir(parents=True, exist_ok=True)
+    for old in pages_dir.iterdir():
+        old.unlink()
     rng = random.Random(SEED)
-    names = sorted(conds)
-    want, made = songs_per_photo * len(names), 0
+    want, made, broken = songs_per_photo * len(names), 0, 0
     for song, xml in song_list:
         if made == want:
             break
-        page = engrave_on_template(xml, rng.choice(FONTS), rng.choice(SIZES))
+        try:
+            page = engrave_on_template(xml, rng.choice(FONTS), rng.choice(SIZES))
+        except Exception:  # a song Verovio or the layout can't take
+            broken += 1
+            continue
         if page is None:
             continue
         name = names[made % len(names)]
         cond = conds[name]
-        stem = pages_dir / f"{name}__{made // len(names):03d}"
+        stem = f"{name}__{made // len(names):03d}"
         image = put_on_photo(cond.photo, cond, page.flat)
-        cv2.imwrite(str(stem.with_suffix(".jpg")), image, [cv2.IMWRITE_JPEG_QUALITY, 92])
-        stem.with_suffix(".musicxml").write_text(page.musicxml, encoding="utf-8")
+        cv2.imwrite(str(pages_dir / f"{stem}.jpg"), image, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        (pages_dir / f"{stem}.musicxml").write_text(page.musicxml, encoding="utf-8")
         info = {"photo": name, "song": song, "systems": page.systems}
-        stem.with_suffix(".page.json").write_text(json.dumps(info), encoding="utf-8")
+        (pages_dir / f"{stem}.page.json").write_text(json.dumps(info), encoding="utf-8")
         made += 1
-    eprint(f"{made} photo pages made")
-    done.write_text(str(made))
+    eprint(f"{made} photo pages made, {broken} songs couldn't be engraved")
+    if made:
+        done.write_text(json.dumps(wanted), encoding="utf-8")
 
 
 def cut_pages(
@@ -191,7 +227,9 @@ def cut_pages(
     lines, dropped = [], Counter[str]()
     for image_path in sorted(pages_dir.glob("*.jpg")):
         page = json.loads(image_path.with_suffix(".page.json").read_text(encoding="utf-8"))
-        cond = conds[page["photo"]]
+        cond = conds.get(page["photo"])
+        if cond is None:  # its photo is gone
+            continue
         found, why = cut(image_path, (cond.map_x, cond.map_y), page, config, staves_dir)
         lines += found
         dropped += why
@@ -211,10 +249,13 @@ def run(
     config: Any = None,
 ) -> int:
     """Maps, then pages, then staves, each finished before the next starts (UVDoc runs on the CPU,
-    homr's segmentation on the GPU). Writes root/index.txt afresh; returns its number of lines."""
+    homr's segmentation on the GPU). Writes root/index.txt afresh; returns its number of lines.
+    Raises when no staff is kept, so training doesn't quietly run without the photos."""
     conds = photo_conditions(photo_dir, templates, root, mapper)
     make_pages(conds, song_list, root / "pages", songs_per_photo)
     lines = cut_pages(conds, root / "pages", root / "staves", cut, config)
+    if not lines:
+        raise RuntimeError(f"no photo staves kept from {photo_dir}: see the reasons above")
     (root / "index.txt").write_text("".join(f"{line}\n" for line in lines))
     return len(lines)
 
@@ -232,7 +273,12 @@ def _downloaded(url: str, folder: str, variable: str) -> Path:
 
 
 def convert_photos() -> None:
-    from homr.main import ProcessingConfig  # noqa: PLC0415  (the reader, OCR included)
+    from homr.main import (  # noqa: PLC0415  (the reader, OCR included)
+        ProcessingConfig,
+        download_weights,
+    )
+
+    download_weights(segnet_use_gpu=True, transformer_use_gpu=True, coreml_encoder=False)
 
     dataset = _downloaded(PHOTOS_URL, "homr-photo-pages-main", "PHOTO_DATASET_DIR")
     uvdoc_dir = _downloaded(UVDOC_URL, "UVDoc-main", "UVDOC_DIR")

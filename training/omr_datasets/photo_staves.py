@@ -177,10 +177,10 @@ def cut_page(
             if text is None:
                 dropped["unsupported clef"] += 1
                 continue
-            name = out_dir / f"{image_path.stem}-{n}"
-            cv2.imwrite(str(name.with_suffix(".png")), captured["image"])
-            name.with_suffix(".tokens").write_text(text, encoding="utf-8")
-            name.with_suffix(".where").write_text(json.dumps(match), encoding="utf-8")
-            png, token_file = name.with_suffix(".png"), name.with_suffix(".tokens")
+            name = f"{image_path.stem}-{n}"  # photo names can hold dots: no with_suffix here
+            png, token_file = out_dir / f"{name}.png", out_dir / f"{name}.tokens"
+            cv2.imwrite(str(png), captured["image"])
+            token_file.write_text(text, encoding="utf-8")
+            (out_dir / f"{name}.where").write_text(json.dumps(match), encoding="utf-8")
             lines.append(f"{png.relative_to(git_root)},{token_file.relative_to(git_root)}")
     return lines, dropped

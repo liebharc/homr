@@ -72,6 +72,16 @@ class TestPhotoMaps(unittest.TestCase):
             turned = np.ascontiguousarray(np.rot90(page, k))
             self.assertTrue(np.array_equal(upright(turned, find_marks(turned)), page))
 
+    def test_an_upside_down_page_is_turned_although_its_angles_wrap_round(self) -> None:
+        photo = np.arange(24, dtype=np.uint8).reshape(4, 6)
+        marks = {}
+        for n, angle in enumerate((174.7, -176.0)):
+            a = np.radians(angle)
+            c0 = np.array([100.0 * n, 0.0], np.float32)
+            c1 = c0 + 10 * np.array([np.cos(a), np.sin(a)], np.float32)
+            marks[184 + n] = np.stack([c0, c1, c0, c0])
+        self.assertTrue(np.array_equal(upright(photo, marks), np.rot90(photo, 2)))
+
     def test_photo_without_marks_is_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             blank = Path(folder) / "blank.jpg"

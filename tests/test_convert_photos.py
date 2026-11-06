@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import tempfile
 import unittest
 from collections import Counter
@@ -15,6 +17,7 @@ from training.omr_datasets.convert_photos import (
     songs,
     template_song_ids,
     training_page,
+    training_photo,
 )
 from training.omr_datasets.photo_maps import FH, FW
 
@@ -59,9 +62,26 @@ def fake_cut(image_path: Path, *_: Any) -> tuple[list[str], Counter[str]]:
 
 
 class TestConvertPhotos(unittest.TestCase):
-    def test_only_pages_23_to_42_train(self) -> None:
-        numbers = (None, 1, 22, 23, 42, 43, 50, 51)
-        self.assertEqual([n for n in numbers if training_page(n)], [23, 42])
+    def test_training_pages_are_t23_up_without_the_test_pages(self) -> None:
+        numbers = (None, 1, 22, 23, 42, 43, 50, 51, 124, 125)
+        self.assertEqual([n for n in numbers if training_page(n)], [23, 42, 51, 124])
+
+    def test_one_mark_of_a_forbidden_page_refuses_the_photo(self) -> None:
+        self.assertEqual(training_photo([184, 185, 186]), 23)
+        self.assertIsNone(training_photo([184, 185, 186, 8 * 45]))  # a mark of test page T45
+        self.assertIsNone(training_photo([184, 8 * 12]))  # a mark of T12, homr's test music
+        self.assertIsNone(training_photo([]))
+
+    def test_the_index_and_its_import_need_no_engraving_libraries(self) -> None:
+        code = (
+            "import sys; import training.omr_datasets.photo_index as p; "
+            "assert p.photos_train_index.endswith('index.txt'); "
+            "assert not {'cairosvg', 'verovio', 'scipy'} & set(sys.modules), sys.modules.keys()"
+        )
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, "-c", code], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_template_songs_are_left_out(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
@@ -106,3 +126,88 @@ class TestConvertPhotos(unittest.TestCase):
             self.assertEqual(len(lines), 4)
             self.assertEqual(len(set(lines)), 4)
             self.assertFalse(any(line.startswith("T45") for line in lines))
+
+
+def no_cut(image_path: Path, *_: Any) -> tuple[list[str], Counter[str]]:
+    return [], Counter({"homr found no staves": 1})
+
+
+class TestConvertPhotosRuns(unittest.TestCase):
+    def setUp(self) -> None:
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.root = Path(self.folder.name) / "out"
+        self.photos = Path(self.folder.name) / "photos"
+        self.photos.mkdir()
+        self.templates = {t["name"]: t for t in (template(23), template(24))}
+        self.songs = [(f"song{i}", piano_score(8)) for i in range(6)]
+
+    def photo(self, number: int, name: str) -> None:
+        page = page_with_marks(number, size=(FH, FW), mark=280)
+        cv2.imwrite(str(self.photos / name), page)
+
+    def run_it(self, cut: Any = fake_cut) -> int:
+        return run(
+            self.photos,
+            self.templates,
+            self.songs,
+            self.root,
+            mapper=CountingMapper,
+            cut=cut,
+            songs_per_photo=1,
+        )
+
+    def test_a_photo_added_later_is_used(self) -> None:
+        self.photo(23, "a.jpg")
+        self.assertEqual(self.run_it(), 1)
+        self.photo(24, "b.jpg")
+        self.assertEqual(self.run_it(), 2)
+
+    def test_a_photo_taken_away_later_is_no_error(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        self.assertEqual(self.run_it(), 2)
+        (self.photos / "b.jpg").unlink()
+        self.assertEqual(self.run_it(), 1)
+
+    def test_names_with_dots_and_capital_extensions_keep_their_pages(self) -> None:
+        self.photo(23, "PXL_20261101_083726.MP.JPG")
+        self.photo(24, "b.jpeg")
+        self.assertEqual(self.run_it(), 2)
+        pages = sorted(p.name for p in (self.root / "pages").glob("*.jpg"))
+        self.assertEqual(pages, ["PXL_20261101_083726.MP__000.jpg", "b__000.jpg"])
+
+    def test_no_staves_at_all_is_an_error_not_an_empty_index(self) -> None:
+        self.photo(23, "a.jpg")
+        with self.assertRaises(RuntimeError):
+            self.run_it(cut=no_cut)
+        self.assertFalse((self.root / "index.txt").exists())
+
+    def test_a_broken_photo_is_skipped(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+
+        class Failing(CountingMapper):
+            def page_maps(self, photo: NDArray) -> tuple[NDArray, NDArray]:
+                if CountingMapper.calls == 0:
+                    CountingMapper.calls += 1
+                    raise ValueError("a degenerate fit")
+                return super().page_maps(photo)
+
+        CountingMapper.calls = 0
+        kept = run(
+            self.photos,
+            self.templates,
+            self.songs,
+            self.root,
+            mapper=Failing,
+            cut=fake_cut,
+            songs_per_photo=1,
+        )
+        self.assertEqual(kept, 1)
+
+    def test_a_song_that_breaks_the_engraver_is_skipped(self) -> None:
+        self.photo(23, "a.jpg")
+        broken = [("broken", "<score-partwise><part id='P1'><measure/>")]
+        self.songs = broken + self.songs
+        self.assertEqual(self.run_it(), 1)

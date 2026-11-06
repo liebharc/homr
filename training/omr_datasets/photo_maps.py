@@ -7,7 +7,6 @@ music is then painted over, so other music can be drawn onto the same paper (pho
 """
 
 import importlib.util
-import statistics
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -104,10 +103,11 @@ def page_number(ids: Iterable[int]) -> int | None:
 def upright(photo: NDArray, marks: dict[int, NDArray]) -> NDArray:
     """The photo turned by quarter turns so the page's top is up. UVDoc takes the photo's top as
     the page's top. A mark's first edge runs along its top, from left to right."""
-    angle = statistics.median(
-        float(np.degrees(np.arctan2(c[1][1] - c[0][1], c[1][0] - c[0][0]))) for c in marks.values()
+    votes = Counter(  # one vote per mark: the angles wrap round at 180 degrees
+        round(float(np.degrees(np.arctan2(c[1][1] - c[0][1], c[1][0] - c[0][0]))) / 90) % 4
+        for c in marks.values()
     )
-    return np.ascontiguousarray(np.rot90(photo, round(angle / 90) % 4))
+    return np.ascontiguousarray(np.rot90(photo, votes.most_common(1)[0][0]))
 
 
 def mark_fit(guess: NDArray, truth: NDArray) -> NDArray:

@@ -26,12 +26,12 @@ from training.omr_datasets.convert_musetrainer import (
     musetrainer_train_index,
 )
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
-from training.omr_datasets.convert_photos import convert_photos, photos_train_index
 from training.omr_datasets.convert_primus import (
     convert_primus_dataset,
     primus_train_index,
 )
 from training.omr_datasets.filter_from_index import remove_tokens
+from training.omr_datasets.photo_index import photos_train_index
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.distribute import Distribute
@@ -127,6 +127,11 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
             convert_pdmx()
 
         if dataset == photos_train_index and not os.path.exists(photos_train_index):
+            # imported here: it needs the engraving libraries, which only this converter uses
+            from training.omr_datasets.convert_photos import (  # noqa: PLC0415
+                convert_photos,
+            )
+
             convert_photos()
     remove_tokens(selected_datasets)
     return selected_datasets
