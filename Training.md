@@ -77,7 +77,17 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
-# Run 512
+# Run 520 - Epoch 14 - discarded
+Commit: c0a84a090eb2afb7282d1272df0e661aad42a7fc
+Day: 7 November
+System Level: ?
+Polish scores: 17.4%
+SMB scores: ?
+
+Experiment: Using text-only pretraining for the decoder. Stopped training because eval_accuracy was worse than previous runs. The code can be found here https://github.com/aicelen/homr/tree/exp/pretraining
+
+
+# Run 509
 
 Commit: 2293bba14bfea47d9d28411339362af15fce4c31
 Day: 26 October 2026
