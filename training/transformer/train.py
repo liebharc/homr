@@ -26,7 +26,11 @@ from training.omr_datasets.convert_musetrainer import (
     musetrainer_train_index,
 )
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
-from training.omr_datasets.filter_from_index import remove_tokens
+from training.omr_datasets.filter_from_index import (
+    read_invalid_tokens,
+    without_invalid_tokens,
+    write_invalid_tokens,
+)
 from training.run_id import get_run_id
 from training.transformer.data_loader import label_names, load_dataset
 from training.transformer.distribute import Distribute
@@ -84,12 +88,18 @@ def check_data_source(all_file_paths: list[str]) -> bool:
 
 
 def load_and_mix_training_sets(
-    index_paths: list[str], weights: list[float], number_of_files: int
+    index_paths: list[str],
+    weights: list[float],
+    number_of_files: int,
+    invalid_tokens: set[str] | None = None,
 ) -> list[str]:
     if len(index_paths) != len(weights):
         eprint("Error: Number of index paths and weights do not match")
         sys.exit(1)
-    data_sources = [load_training_index(index) for index in index_paths]
+    data_sources = [
+        without_invalid_tokens(load_training_index(index), invalid_tokens or set())
+        for index in index_paths
+    ]
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
         sys.exit(1)
@@ -104,7 +114,7 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = os.path.join(script_location, "..", "..")
 
 
-def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
+def _check_datasets_are_present(selected_datasets: list[str], invalid_tokens_file: str) -> None:
     for dataset in selected_datasets:
         if dataset == grandstaff_train_index and not os.path.exists(grandstaff_train_index):
             convert_grandstaff()
@@ -117,8 +127,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
-    remove_tokens(selected_datasets)
-    return selected_datasets
+    write_invalid_tokens(invalid_tokens_file)
 
 
 def train_transformer(
@@ -148,8 +157,9 @@ def train_transformer(
         musetrainer_train_index,
     ]
     dataset_weights = [1.0, 1.0, 1.0, 1.0]
+    invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
-        _check_datasets_are_present(dataset_index)
+        _check_datasets_are_present(dataset_index, invalid_tokens_file)
     distribute.barrier()
 
     number_of_files = -1
@@ -157,6 +167,7 @@ def train_transformer(
         dataset_index,
         dataset_weights,
         number_of_files,
+        read_invalid_tokens(invalid_tokens_file),
     )
 
     config = Config()
