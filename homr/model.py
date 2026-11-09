@@ -145,7 +145,6 @@ class Note(SymbolOnStaff):
         self.position = position
         self.has_dot = False
         self.stem = stem
-        self.circle_of_fifth = 0
         self.stem_direction = stem_direction
         self.beams: list[RotatedBoundingBox] = []
         self.flags: list[RotatedBoundingBox] = []

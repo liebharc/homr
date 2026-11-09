@@ -27,7 +27,7 @@ All notable changes to this project will be documented here.
   Thanks to [@geofft](https://github.com/geofft)!
 - Repeat signs stay paired with their images in the training data.
   Thanks to [@aleksey-golovanov](https://github.com/aleksey-golovanov)!
-- The training no longer uses PrIMuS. It has no beams and its license doesn't allow commercial use, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
+- The training no longer uses PrIMuS. It has no beams and its license doesn't allow commercial use.
 
 ### Fixed
 
