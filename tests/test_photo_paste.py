@@ -1,9 +1,15 @@
 import unittest
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
 from training.omr_datasets.photo_maps import FH, FW, PhotoConditions
-from training.omr_datasets.photo_paste import engrave_on_template, put_on_photo
+from training.omr_datasets.photo_paste import (
+    bar_count,
+    engrave_on_template,
+    measures_from,
+    put_on_photo,
+)
 
 
 def piano_score(bars: int) -> str:
@@ -36,7 +42,56 @@ def piano_score(bars: int) -> str:
     )
 
 
+def changing_score() -> str:
+    """One part, 8 bars: G clef and C major, then from bar 3 on F clef and D major."""
+    note = (
+        "<note><pitch><step>D</step><octave>3</octave></pitch><duration>4</duration>"
+        "<type>whole</type></note>"
+    )
+    first = (
+        "<attributes><divisions>1</divisions><key><fifths>0</fifths></key>"
+        "<time><beats>4</beats><beat-type>4</beat-type></time>"
+        "<clef><sign>G</sign><line>2</line></clef></attributes>"
+    )
+    change = (
+        "<attributes><key><fifths>2</fifths></key>"
+        "<clef><sign>F</sign><line>4</line></clef></attributes>"
+    )
+    measures = "".join(
+        f'<measure number="{n}">{first if n == 1 else change if n == 3 else ""}{note}</measure>'
+        for n in range(1, 9)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><part-list>'
+        '<score-part id="P1"><part-name>Cello</part-name></score-part></part-list>'
+        f'<part id="P1">{measures}</part></score-partwise>'
+    )
+
+
 class TestPhotoPaste(unittest.TestCase):
+    def test_bars_from_the_middle_keep_the_clef_key_and_time_in_force(self) -> None:
+        part = ET.fromstring(measures_from(changing_score(), 4, 3)).find("part")  # noqa: S314
+        assert part is not None  # noqa: S101
+        measures = part.findall("measure")
+        self.assertEqual([m.get("number") for m in measures], ["5", "6", "7"])
+        attributes = measures[0].find("attributes")
+        assert attributes is not None  # noqa: S101
+        self.assertEqual(attributes.findtext("divisions"), "1")
+        self.assertEqual(attributes.findtext("key/fifths"), "2")
+        self.assertEqual(attributes.findtext("time/beats"), "4")
+        self.assertEqual(attributes.findtext("clef/sign"), "F")
+
+    def test_bar_count_is_the_first_parts_bars(self) -> None:
+        self.assertEqual(bar_count(piano_score(12)), 12)
+
+    def test_a_page_can_start_at_a_later_bar(self) -> None:
+        page = engrave_on_template(piano_score(12), "Leipzig", 40, start=5)
+        assert page is not None  # noqa: S101
+        part = ET.fromstring(page.musicxml).find("part")  # noqa: S314
+        assert part is not None  # noqa: S101
+        self.assertEqual(part.findall("measure")[0].get("number"), "6")
+        self.assertEqual(sum(s["bars"] for s in page.systems), 7)
+
     def test_engraved_page_lists_its_bars_and_staves(self) -> None:
         page = engrave_on_template(piano_score(8), "Leipzig", 40)
         self.assertIsNotNone(page)

@@ -3,6 +3,7 @@ Songs engraved by Verovio and drawn onto phone photos of template pages, through
 to the flat page (photo_maps.py), as dark and as blurred as the photo's own ink.
 """
 
+import copy
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -31,6 +32,8 @@ ZOOM = 1.5  # Verovio's page drawn at this zoom
 SCALE = 0.86  # the music's share of the template page width, leaving room for the marks
 MARK = round(10 * FLAT_MM)
 MARK_CENTER = 10 * FLAT_MM
+# what an <attributes> element carries on to later bars, in the order MusicXML wants them
+CARRIED = ["divisions", "key", "time", "staves", "part-symbol", "instruments", "clef", "transpose"]
 
 
 @dataclass
@@ -43,11 +46,32 @@ class EngravedPage:
     systems: list[dict[str, Any]]
 
 
-def first_measures(xml: str, count: int) -> str:
-    """The score with only its first `count` measures in every part."""
+def bar_count(xml: str) -> int:
+    """The number of bars of the score's first part."""
+    part = ET.fromstring(xml.encode("utf-8")).find("part")  # noqa: S314
+    return len(part.findall("measure")) if part is not None else 0
+
+
+def measures_from(xml: str, start: int, count: int) -> str:
+    """The score with only `count` bars from bar `start` (0 = the first) in every part. The clef,
+    key, time and the rest in force at `start` are put at the front of its first bar, so the
+    excerpt reads as it sounds there."""
     root = ET.fromstring(xml.encode("utf-8"))  # noqa: S314
     for part in root.findall("part"):
-        for measure in part.findall("measure")[count:]:
+        measures = part.findall("measure")
+        if 0 < start < len(measures):
+            in_force: dict[tuple[str, str | None], ET.Element] = {}
+            for measure in measures[:start]:
+                for attributes in measure.findall("attributes"):
+                    for child in attributes:
+                        in_force[child.tag, child.get("number")] = child
+            carried = ET.Element("attributes")
+            for tag in CARRIED:
+                for (name, _), child in sorted(in_force.items(), key=lambda kv: str(kv[0][1])):
+                    if name == tag:
+                        carried.append(copy.deepcopy(child))
+            measures[start].insert(0, carried)
+        for measure in measures[:start] + measures[start + count :]:
             part.remove(measure)
     return ET.tostring(root, encoding="unicode")
 
@@ -95,9 +119,10 @@ def layout(svg: str, zoom: float, f: float, x0: float, y0: float) -> list[dict[s
     return systems
 
 
-def engrave_on_template(xml: str, font: str, size: int) -> EngravedPage | None:
-    """The most bars from the start that fit on one page, placed as on a template page (without
-    the marks: the photo's map is in template pixels). None when fewer than 4 bars fit."""
+def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> EngravedPage | None:
+    """The most bars from bar `start` (0 = the first) that fit on one page, placed as on a
+    template page (without the marks: the photo's map is in template pixels). None when fewer
+    than 4 bars fit."""
     options = {
         "pageWidth": 2100,
         "pageHeight": 2970,
@@ -113,11 +138,10 @@ def engrave_on_template(xml: str, font: str, size: int) -> EngravedPage | None:
     def toolkit(count: int) -> verovio.toolkit:
         tk = verovio.toolkit()
         tk.setOptions(options)
-        tk.loadData(first_measures(xml, count))
+        tk.loadData(measures_from(xml, start, count))
         return tk
 
-    first_part = ET.fromstring(xml.encode("utf-8")).find("part")  # noqa: S314
-    low, high = 1, len(first_part.findall("measure")) if first_part is not None else 0
+    low, high = 1, bar_count(xml) - start
     while low < high:
         mid = (low + high + 1) // 2
         if toolkit(mid).getPageCount() == 1:
@@ -140,7 +164,7 @@ def engrave_on_template(xml: str, font: str, size: int) -> EngravedPage | None:
     flat = np.full((FH, FW), 255, np.uint8)
     y0, x0 = (FH - small.shape[0]) // 2, (FW - small.shape[1]) // 2
     flat[y0 : y0 + small.shape[0], x0 : x0 + small.shape[1]] = small
-    return EngravedPage(flat, first_measures(xml, low), layout(svg, ZOOM, f, x0, y0))
+    return EngravedPage(flat, measures_from(xml, start, low), layout(svg, ZOOM, f, x0, y0))
 
 
 def ink_strength(darkness: NDArray, page: NDArray, level: float) -> float:

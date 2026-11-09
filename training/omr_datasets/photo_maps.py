@@ -25,6 +25,9 @@ DETECTOR = cv2.aruco.ArucoDetector(ARUCO)
 FW, FH = 2480, 3508  # the flat template page: A4 at 300 dpi
 FLAT_MM = 300 / 25.4  # flat page pixels per mm
 PHOTO_SIZE = 2000  # long side every photo is brought to
+# With fewer marks they all sat on one side of the page, and the map was guessed for the rest:
+# the new music landed off the paper's bends and the old print showed through
+MIN_MARKS = 4
 UVDOC_INPUT = (488, 712)
 
 
@@ -267,8 +270,8 @@ def prepare_photo(
     path: Path, template: dict[str, Any], uvdoc: PageMapper | None
 ) -> PhotoConditions | None:
     """The conditions of a photo of `template`, upright at PHOTO_SIZE. None, with the reason
-    printed, when the photo's marks are missing or belong to another page, or too few land on
-    the page UVDoc sees."""
+    printed, when fewer than MIN_MARKS of the template's marks are found, or too few land on the
+    page UVDoc sees."""
     photo = cv2.imread(str(path))
     if photo is None:
         eprint(f"{path.name}: not an image, skipped")
@@ -282,8 +285,11 @@ def prepare_photo(
         return None
     photo = upright(photo, found)
     found = {i: c for i, c in find_marks(photo).items() if i // 8 == number}
+    if len(found) < MIN_MARKS:
+        eprint(f"{path.name}: {len(found)} marks found, {MIN_MARKS} needed for a map, skipped")
+        return None
     truth = dict(zip(template["marks"]["ids"], template["marks"]["corners"], strict=True))
-    if uvdoc is None or len(found) == 0:
+    if uvdoc is None:
         eprint(f"{path.name}: no page map, skipped")
         return None
     known = (

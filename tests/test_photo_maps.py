@@ -16,8 +16,11 @@ from training.omr_datasets.photo_maps import (
 )
 
 
-def page_with_marks(number: int, size: tuple[int, int] = (1000, 700), mark: int = 80) -> NDArray:
-    """A white page with the eight marks of template `number` at its corners and edge middles."""
+def page_with_marks(
+    number: int, size: tuple[int, int] = (1000, 700), mark: int = 80, marks: int = 8
+) -> NDArray:
+    """A white page with the first `marks` of the eight marks of template `number`, at its corners
+    and edge middles."""
     h, w = size
     page = np.full((h, w, 3), 255, np.uint8)
     spots = [
@@ -30,7 +33,7 @@ def page_with_marks(number: int, size: tuple[int, int] = (1000, 700), mark: int 
         (20, h - 20 - mark),
         (20, h // 2 - mark // 2),
     ]
-    for spot, (x, y) in enumerate(spots):
+    for spot, (x, y) in enumerate(spots[:marks]):
         marker = cv2.aruco.generateImageMarker(ARUCO, 8 * number + spot, mark)
         page[y : y + mark, x : x + mark] = marker[..., None]
     return page

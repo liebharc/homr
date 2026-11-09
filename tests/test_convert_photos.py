@@ -19,7 +19,7 @@ from training.omr_datasets.convert_photos import (
     training_page,
     training_photo,
 )
-from training.omr_datasets.photo_maps import FH, FW
+from training.omr_datasets.photo_maps import FH, FW, prepare_photo
 
 
 def template(number: int) -> dict[str, Any]:
@@ -205,6 +205,51 @@ class TestConvertPhotosRuns(unittest.TestCase):
             songs_per_photo=1,
         )
         self.assertEqual(kept, 1)
+
+    def test_a_photo_with_fewer_than_4_marks_is_left_out(self) -> None:
+        for marks, usable in ((3, False), (4, True)):
+            page = page_with_marks(23, size=(FH, FW), mark=280, marks=marks)
+            cv2.imwrite(str(self.photos / f"m{marks}.jpg"), page)
+            cond = prepare_photo(self.photos / f"m{marks}.jpg", template(23), CountingMapper())
+            self.assertEqual(cond is not None, usable)
+
+    def test_pages_start_at_random_bars(self) -> None:
+        self.photo(23, "a.jpg")
+        self.songs = [(f"song{i}", piano_score(40)) for i in range(6)]
+        run(
+            self.photos,
+            self.templates,
+            self.songs,
+            self.root,
+            mapper=CountingMapper,
+            cut=fake_cut,
+            songs_per_photo=6,
+        )
+        firsts = set()
+        for answer in (self.root / "pages").glob("*.musicxml"):
+            text = answer.read_text(encoding="utf-8")
+            firsts.add(text.split('<measure number="')[1].split('"')[0])
+        self.assertGreater(len(firsts), 1)
+
+    def test_more_workers_make_the_same_pages_and_staves(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        found = []
+        for workers in (1, 2):
+            root = Path(self.folder.name) / f"w{workers}"
+            run(
+                self.photos,
+                self.templates,
+                self.songs,
+                root,
+                mapper=CountingMapper,
+                cut=fake_cut,
+                songs_per_photo=2,
+                workers=workers,
+            )
+            pages = {p.name: p.read_text(encoding="utf-8") for p in (root / "pages").glob("*.json")}
+            found.append((pages, (root / "index.txt").read_text()))
+        self.assertEqual(found[0], found[1])
 
     def test_a_song_that_breaks_the_engraver_is_skipped(self) -> None:
         self.photo(23, "a.jpg")
