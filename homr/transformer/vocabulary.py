@@ -279,6 +279,20 @@ def build_articulation() -> dict[str, int]:
     articulation.extend(articulations_lieder)
     articulation.extend([f"dynamic_{d}" for d in DYNAMICS_MODIFIER])
 
+    # Combinations found in PDMX and Lieder. Appended last so the indices
+    # of the tokens above stay the same.
+    articulation.extend(
+        [
+            "accent_accentStrong_tremolo",
+            "accent_arpeggiate_staccatissimo",
+            "accent_fermata_trill",
+            "fermata_mordent_staccato_trill",
+            "fermata_staccatissimo",
+            "mordent_staccato",
+            "mordent_trill",
+        ]
+    )
+
     return build_dict(articulation)
 
 

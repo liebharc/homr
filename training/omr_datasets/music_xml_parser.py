@@ -132,6 +132,9 @@ ARTIC_MAPPING: dict[str, str] = {
     "accidentalMark": "",  # ignore this value
     "scoop": "",
     "doit": "",
+    "falloff": "",
+    "schleifer": "",
+    "spiccato": "staccatissimo",
     "caesura": "",
     "otherOrnament": "",
     "otherArticulation": "",
