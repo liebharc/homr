@@ -124,4 +124,4 @@ def test_tuplets_which_cant_be_encoded_are_rejected_for_training() -> None:
     xml = _score(duplet)
     with pytest.raises(ValueError):
         music_xml_string_to_tokens(xml)
-    music_xml_string_to_tokens(xml, allow_octave_shifts=True)
+    music_xml_string_to_tokens(xml, sounding_pitch=True)

@@ -1,4 +1,5 @@
 import functools
+import json
 from pathlib import Path
 
 import albumentations as A
@@ -108,6 +109,43 @@ def apply_text_injection(image: NDArray) -> NDArray:
 
     result_bgr: NDArray = cv2.cvtColor(np.array(pil_img.convert("RGB")), cv2.COLOR_RGB2BGR)
     return result_bgr
+
+
+# Inference crops a fixed distance from the staff lines (staff_parsing._calculate_region),
+# conversion crops around the stems and dynamics. Training draws both kinds of crop in
+# staff spaces, so the model doesn't depend on one of them. Neither cuts off the stems and
+# dynamics, they are part of the labels.
+_MARGIN_FROM_STEMS = (1.5, 5.0)
+_MARGIN_FROM_LINES = (4.0, 6.0)
+_P_MARGIN_FROM_LINES = 0.3
+
+
+def crop_info_path(image_path: str) -> str:
+    """Path of the JSON file with the staff positions inside a stored staff image."""
+    return str(Path(image_path).with_suffix(".json"))
+
+
+def read_crop_info(image_path: str) -> dict | None:
+    path = crop_info_path(image_path)
+    if not Path(path).exists():
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def random_staff_crop(image: NDArray, crop_info: dict) -> NDArray:
+    """Crops a stored staff image to a random vertical margin, see convert_lieder."""
+    if np.random.random() < _P_MARGIN_FROM_LINES:
+        top, bottom = crop_info["lines"]
+        margin = _MARGIN_FROM_LINES
+    else:
+        top, bottom = crop_info["stems"]
+        margin = _MARGIN_FROM_STEMS
+    staff_space = crop_info["staff_space"]
+    content_top, content_bottom = crop_info["stems"]
+    y_min = min(top - np.random.uniform(*margin) * staff_space, content_top)
+    y_max = max(bottom + np.random.uniform(*margin) * staff_space, content_bottom)
+    return image[max(0, int(y_min)) : min(image.shape[0], int(np.ceil(y_max)))]
 
 
 def read_image_to_ndarray(path: str) -> NDArray:
