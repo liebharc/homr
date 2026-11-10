@@ -33,6 +33,11 @@ from training.omr_datasets.music_xml_parser import (
     music_xml_file_to_tokens,
     normalize_barlines_and_repeats,
 )
+from training.omr_datasets.verovio_staffs import (
+    choose_parts,
+    has_multi_measure_rests,
+    split_into_staffs,
+)
 from training.transformer.image_utils import crop_info_path
 from training.transformer.training_vocabulary import token_lines_to_str
 
@@ -579,13 +584,14 @@ def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
     return True
 
 
-def _split_file_into_staffs(
+def _split_file_into_staffs(  # noqa: PLR0913
     number_of_voices: int,
     svg_file: SvgMusicFile,
     splitter: list[MeasureCutter],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
     flat_folder: str,
+    skipped_voices: set[int],
 ) -> list[str]:
     result: list[str] = []
     file_name = os.path.basename(svg_file.filename.replace(".svg", ".png"))
@@ -616,6 +622,10 @@ def _split_file_into_staffs(
         staff_number += 1
         total_staff_area = staffs.pop(0)
         measures = splitter[current_voice]
+        if current_voice in skipped_voices:
+            measures.extract_measures(total_staff_area.number_of_measures)
+            current_voice = (current_voice + 1) % number_of_voices
+            continue
         staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
         if not just_token_files:
             # Stores more than the model sees, the data loader draws the margin
@@ -653,20 +663,44 @@ def _split_file_into_staffs(
 
         if contains_only_supported_clefs(selected_measures):
             selected_measures = strip_naturals(selected_measures)
-            tokens_content = token_lines_to_str(selected_measures)
-            write_text_to_file(tokens_content, token_file_name)
-            result.append(
-                str(Path(staff_image_file_name).relative_to(git_root))
-                + ","
-                + str(Path(token_file_name).relative_to(git_root))
-                + "\n"
-            )
+            result.append(_write_tokens(staff_image_file_name, token_file_name, selected_measures))
         current_voice = (current_voice + 1) % number_of_voices
 
     if image is not None:
         del image
 
     return result
+
+
+def _write_tokens(image_file: str, token_file: str, symbols: list[EncodedSymbol]) -> str:
+    """Writes the tokens and returns the index line."""
+    write_text_to_file(token_lines_to_str(symbols), token_file)
+    return (
+        str(Path(image_file).relative_to(git_root))
+        + ","
+        + str(Path(token_file).relative_to(git_root))
+        + "\n"
+    )
+
+
+def _verovio_staffs(
+    file: Path, voices: list[list[Measure]], just_token_files: bool, flat_folder: str
+) -> tuple[set[int], list[str]]:
+    """The parts which Verovio renders and their index lines, see verovio_staffs.py."""
+    staves_per_part = [get_svg_voice_count(voice) for voice in voices]
+    parts = choose_parts(file.stem, staves_per_part)
+    if not parts or not voices or has_multi_measure_rests(str(file)):
+        return set(), []
+    try:
+        staffs = split_into_staffs(
+            str(file), voices, staves_per_part, parts, just_token_files, flat_folder
+        )
+    except Exception as e:
+        eprint("Verovio failed, using MuseScore for", file, e)
+        return set(), []
+    rendered_parts = {part for part, _image, _tokens, _symbols in staffs}
+    lines = [_write_tokens(image, tokens, symbols) for _part, image, tokens, symbols in staffs]
+    return rendered_parts, lines
 
 
 def _leading_clefs(measure: Measure) -> list[EncodedSymbol]:
@@ -713,6 +747,7 @@ def convert_xml_and_svg_file(
 ) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
+        verovio_parts, result = _verovio_staffs(file, voices, just_token_files, flat_folder)
         splitter = [MeasureCutter(v) for v in voices]
         pages = split_into_pages(voices)
         svg_files = get_position_from_multiple_svg_files(str(file))
@@ -723,7 +758,6 @@ def convert_xml_and_svg_file(
                     svg_file.merge_voice_with_next_one(voice_idx, number_of_voices)
                 number_of_voices -= 1
 
-        result: list[str] = []
         assert len(pages) == len(svg_files)  # noqa: S101
 
         for i, page in enumerate(pages):
@@ -751,6 +785,7 @@ def convert_xml_and_svg_file(
                     just_token_files,
                     fail_if_image_is_missing,
                     flat_folder,
+                    verovio_parts,
                 )
             )
         return result

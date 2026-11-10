@@ -29,6 +29,7 @@ All notable changes to this project will be documented here.
   Thanks to [@aleksey-golovanov](https://github.com/aleksey-golovanov)!
 - The training no longer uses PrIMuS. It has no beams and its license doesn't allow commercial use.
 - The training no longer uses the MuseTrainer library. It adds about 1k samples and has no license file.
+- Training images of Lieder and PDMX come from two renderers: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore.
 
 ### Fixed
 

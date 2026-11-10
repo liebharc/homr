@@ -26,6 +26,7 @@ Download the datasets and convert them to the format required for training:
 - `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
+  - Lieder and PDMX: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore, with a random font and size. See `training/omr_datasets/verovio_staffs.py`.
 
 Some checks:
 
