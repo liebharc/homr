@@ -26,11 +26,12 @@ cpu = [
 cuda = [
   "onnxruntime-gpu[cuda,cudnn] >= 1.24.1, < 2",
 ]
+
+[dependency-groups]
+# PyPI rejects direct URL dependencies in extras, so ROCm is a group: `poetry install --with rocm`
 rocm = [
   "onnxruntime-rocm @ https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
 ]
-
-[dependency-groups]
 dev = [
   "pytest >= 9.0.2, < 10",
   "mypy >= 1.19.1, < 2",
@@ -72,6 +73,9 @@ docs = [
 
 [tool.poetry]
 version = "0.0.0"
+
+[tool.poetry.group.rocm]
+optional = true
 
 [tool.poetry.requires-plugins]
 poetry-dynamic-versioning = { version = "*", extras = ["plugin"] }

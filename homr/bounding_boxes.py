@@ -309,18 +309,6 @@ class RotatedBoundingBox(AngledBoundingBox):
 
         return abs(left_y - right_y) <= tolerance
 
-    def to_bounding_box(self) -> BoundingBox:
-        return BoundingBox(
-            (
-                int(self.top_left[0]),
-                int(self.top_left[1]),
-                int(self.bottom_right[0]),
-                int(self.bottom_right[1]),
-            ),
-            self.contours,
-            self.debug_id,
-        )
-
 
 class BoundingEllipse(AngledBoundingBox):
     def __init__(self, box: cvt.RotatedRect, contours: cvt.MatLike, debug_id: int = 0):

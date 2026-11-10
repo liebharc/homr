@@ -286,13 +286,6 @@ class PiecewiseAffineTransform:
         area = abs(v1[0] * v2[1] - v1[1] * v2[0]) / 2.0
         return area < 1e-6
 
-    @staticmethod
-    def _triangle_area(triangle: NDArray) -> float:
-        """Calculate area of a triangle"""
-        v1 = triangle[1] - triangle[0]
-        v2 = triangle[2] - triangle[0]
-        return abs(v1[0] * v2[1] - v1[1] * v2[0]) / 2.0
-
 
 class StaffDewarping:
     def __init__(self, tform: PiecewiseAffineTransform | None) -> None:
