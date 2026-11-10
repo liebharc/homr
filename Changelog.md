@@ -4,6 +4,21 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+
+### Added
+
+-
+
+### Changed
+
+-
+
+### Fixed
+
+-
+
+## [0.7.1]
+
 ### Added
 
 - **Improved accuracy**
