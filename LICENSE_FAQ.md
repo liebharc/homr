@@ -23,13 +23,12 @@ The weights are published under the AGPL as well. However, the AGPL can't grant 
 | | [OpenScore StringQuartets](https://github.com/OpenScore/StringQuartets), merged into Lieder | CC0 | LICENSE file |
 | | GrandStaff, downloaded from [grfia](https://sites.google.com/view/multiscore-project/datasets) | Not stated at the download source; MIT for the [copy on Hugging Face](https://huggingface.co/datasets/PRAIG/grandstaff) | Hugging Face metadata |
 | | [PDMX](https://zenodo.org/records/15571083), `no_license_conflict` subset | CC BY 4.0 for the dataset; the subset contains scores whose MuseScore metadata consistently marks them as public domain | Zenodo record |
-| | [MuseTrainer library](https://github.com/musetrainer/library) | No license file; the repo describes itself as public domain | Repo description |
 
 This reflects our reading of the sources and may be incomplete or out of date. The licenses of the underlying music can differ from those of the datasets. Check the sources yourself.
 
 ## Can homr be trained only on datasets that allow commercial use?
 
-Possibly. None of the training datasets has non-commercial terms, but two of them don't state a license at their source: GrandStaff (MIT on Hugging Face) and the MuseTrainer library (no license file, described as public domain). We welcome PRs that replace training datasets with ones under permissive licenses, as long as accuracy doesn't regress. Such a PR needs to include a full training run and benchmark results, e.g. the system level validation and the SMB and polish scores. Weights released before such a change keep their current training data.
+Possibly. None of the training datasets has non-commercial terms, but GrandStaff doesn't state a license at its download source (MIT on Hugging Face). We welcome PRs that replace training datasets with ones under permissive licenses, as long as accuracy doesn't regress. Such a PR needs to include a full training run and benchmark results, e.g. the system level validation and the SMB and polish scores. Weights released before such a change keep their current training data.
 
 ## Title detection
 

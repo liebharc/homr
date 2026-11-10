@@ -1,5 +1,3 @@
-# ruff: noqa: E402
-
 import hashlib
 import json
 import multiprocessing
@@ -471,8 +469,8 @@ class MeasureCutter:
         key = self.key
         time = self.time
         # Lieder pages are crops of one continuously rendered score, so a courtesy time
-        # signature is only visible where the source XML actually redeclares it. pdmx and
-        # musetrainer windows are each re-rendered standalone (see generate_xml), and that
+        # signature is only visible where the source XML actually redeclares it. pdmx
+        # windows are each re-rendered standalone (see generate_xml), and that
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
@@ -771,22 +769,6 @@ def _convert_token_and_image(path: Path) -> list[str]:
     return convert_xml_and_svg_file(path, False, flat_data)
 
 
-def convert_file_only_token_pdmx(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, True, flat_pdmx)
-
-
-def convert_token_and_image_pdmx(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, False, flat_pdmx)
-
-
-def convert_file_only_token_musetrainer(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, True, flat_musetrainer)
-
-
-def convert_token_and_image_musetrainer(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, False, flat_musetrainer)
-
-
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
     if platform.system() == "Windows":
         eprint("Transformer training is only implemented for Linux")
@@ -863,9 +845,6 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
                     )
     eprint("Done indexing")
 
-
-from training.omr_datasets.convert_musetrainer import flat_musetrainer
-from training.omr_datasets.convert_pdmx import flat_pdmx
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")

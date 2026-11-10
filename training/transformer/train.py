@@ -21,10 +21,6 @@ from training.omr_datasets.convert_grandstaff import (
     grandstaff_train_index,
 )
 from training.omr_datasets.convert_lieder import convert_lieder, lieder_train_index
-from training.omr_datasets.convert_musetrainer import (
-    convert_musetrainer,
-    musetrainer_train_index,
-)
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
 from training.omr_datasets.filter_from_index import (
     read_invalid_tokens,
@@ -122,9 +118,6 @@ def _check_datasets_are_present(selected_datasets: list[str], invalid_tokens_fil
         if dataset == lieder_train_index and not os.path.exists(lieder_train_index):
             convert_lieder()
 
-        if dataset == musetrainer_train_index and not os.path.exists(musetrainer_train_index):
-            convert_musetrainer()
-
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
     write_invalid_tokens(invalid_tokens_file)
@@ -150,13 +143,13 @@ def train_transformer(
             shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
     # PrIMuS isn't used: it has no beams and its Hugging Face copy is CC BY-NC (non-commercial)
+    # MuseTrainer isn't used: 1k samples, it adds little next to PDMX and has no license file
     dataset_index = [
         lieder_train_index,
         grandstaff_train_index,
         pdmx_train_index,
-        musetrainer_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0, 1.0]
+    dataset_weights = [1.0, 1.0, 1.0]
     invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index, invalid_tokens_file)

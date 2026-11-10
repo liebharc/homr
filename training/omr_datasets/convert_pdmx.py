@@ -9,8 +9,7 @@ from pathlib import Path
 from homr.download_utils import download_file, untar_file
 from homr.simple_logging import eprint
 from training.omr_datasets.convert_lieder import (
-    convert_file_only_token_pdmx,
-    convert_token_and_image_pdmx,
+    convert_xml_and_svg_file,
     create_musicxml_and_svg_files_from_mxl,
 )
 
@@ -72,6 +71,14 @@ def _load_filtered_paths() -> list[Path]:
             if len(result) >= _TARGET_FILES:
                 return result
     return result
+
+
+def convert_file_only_token_pdmx(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, True, flat_pdmx)
+
+
+def convert_token_and_image_pdmx(path: Path) -> list[str]:
+    return convert_xml_and_svg_file(path, False, flat_pdmx)
 
 
 def convert_pdmx(only_recreate_token_files: bool = False) -> None:
