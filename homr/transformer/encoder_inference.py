@@ -68,9 +68,6 @@ class Encoder:
         self.io_binding = self.encoder.io_binding()
         self.device_id = 0
 
-        self.input_name = self.encoder.get_inputs()[0].name
-        self.output_name = self.encoder.get_outputs()[0].name
-
     def generate(self, x: NDArray) -> NDArray:
         if self.fp16:
             self.io_binding.bind_cpu_input("input", x.astype(np.float16))
