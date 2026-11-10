@@ -15,7 +15,6 @@ from training.transformer.image_utils import (
     ndarray_to_tensor,
     pad_to_3_dims,
     prepare_for_tensor,
-    read_image_to_ndarray,
 )
 from training.transformer.training_vocabulary import token_lines_to_str
 
@@ -62,13 +61,6 @@ class Staff2Score:
         return self.model.generate(
             imgs_tensor,
         )
-
-
-def readimg(config: Config, path: str) -> torch.Tensor:
-    img = read_image_to_ndarray(path)
-    img = prepare_for_tensor(img)
-    tensor = ndarray_to_tensor(img)
-    return pad_to_3_dims(tensor)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,7 @@
 # ruff: noqa: E501
 
-import re
 import unittest
 import xml.etree.ElementTree as ET
-from typing import Any
 
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
@@ -768,59 +766,6 @@ barline . . . . ."""
         grace = [t for t in tokens.replace("&", "\n").splitlines() if t.startswith("note_8G")]
         self.assertEqual(grace, ["note_8G G2 _ _ _ lower"])
         self.assertIn("arpeggiate", tokens)
-
-    def _norm_expected(self, expected: str) -> str:
-        norm = expected.replace("\n", "")
-        norm = re.sub(r",\s+", ",", norm)
-        norm = re.sub(r"\[\s+", "[", norm)
-        return norm
-
-    def _xml_to_str(self, xml: Any) -> str:
-        def recurse(node_or_list: Any) -> str:
-            if isinstance(node_or_list, list):
-                return (
-                    "["
-                    + ",".join(recurse(child) for child in node_or_list if child is not None)
-                    + "]"
-                )
-
-            node = node_or_list
-            name = node.__class__.__name__
-
-            ignore_nodes = (
-                "XMLAlter",
-                "XMLOctave",
-                "XMLType",
-                "XMLPartList",
-                "XMLDefaults",
-            )
-
-            if name in ignore_nodes:
-                return ""
-            value = getattr(node, "value_", None)
-
-            if hasattr(node, "children"):
-                children = node.children
-            elif hasattr(node, "get_children"):
-                children = node.get_children()
-            else:
-                children = []
-
-            child_strs = [recurse(child) for child in children if child is not None]
-            child_strs = [child for child in child_strs if child != ""]
-
-            parts = []
-            if value is not None and value != "":
-                parts.append(f"value: {value}")
-            if child_strs:
-                parts.append(f"[{','.join(child_strs)}]")
-
-            if parts:
-                return f"{name}({','.join(parts)})"
-            else:
-                return f"{name}()"
-
-        return recurse(xml)
 
     def _rhythms_per_measure(self, measures_xml: str) -> list[list[str]]:
         attributes = (

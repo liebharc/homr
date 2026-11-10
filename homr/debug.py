@@ -100,16 +100,3 @@ class Debug:
             box.draw_onto_image(img, color)
         self._remember_file_name(filename)
         cv2.imwrite(filename, img)
-
-    def write_model_input_image(self, suffix: str, staff_image: NDArray) -> str:
-        """
-        These files aren't really debug files, but it's convenient to handle them here
-        so that they are cleaned up together with the debug files.
-
-        Model input images are the input to the transformer or OCR images.
-        """
-        filename = self.base_filename + suffix
-        if self.debug:
-            self._remember_file_name(filename)
-        cv2.imwrite(filename, staff_image)
-        return filename
