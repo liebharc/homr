@@ -11,6 +11,7 @@ from homr.simple_logging import eprint
 from training.omr_datasets.convert_lieder import (
     convert_xml_and_svg_file,
     create_musicxml_and_svg_files_from_mxl,
+    write_index,
 )
 
 script_location = os.path.dirname(os.path.realpath(__file__))
@@ -108,30 +109,11 @@ def convert_pdmx(only_recreate_token_files: bool = False) -> None:
 
     create_musicxml_and_svg_files_from_mxl(mxl_paths, rendered_scores)
     music_xml_files = list(Path(rendered_scores).rglob("*.musicxml"))
-    with open(pdmx_train_index, "w") as f:
-        file_number = 0
-        skipped_files = 0
-        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
-            for result in p.imap_unordered(
-                (
-                    convert_file_only_token_pdmx
-                    if only_recreate_token_files
-                    else convert_token_and_image_pdmx
-                ),
-                music_xml_files,
-            ):
-                if len(result) > 0:
-                    for line in result:
-                        f.write(line)
-                    f.flush()
-                else:
-                    skipped_files += 1
-                file_number += 1
-                if file_number % 10 == 0:
-                    eprint(
-                        f"Processed {file_number}/{len(music_xml_files)} files,",
-                        f"skipped {skipped_files} files",
-                    )
+    write_index(
+        pdmx_train_index,
+        music_xml_files,
+        convert_file_only_token_pdmx if only_recreate_token_files else convert_token_and_image_pdmx,
+    )
     eprint("Done indexing")
 
 

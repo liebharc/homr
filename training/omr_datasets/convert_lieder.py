@@ -8,6 +8,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -804,6 +805,46 @@ def _convert_token_and_image(path: Path) -> list[str]:
     return convert_xml_and_svg_file(path, False, flat_data)
 
 
+_RESULT_TIMEOUT_S = 15 * 60
+
+
+def write_index(
+    index_path: str, music_xml_files: list[Path], convert: Callable[[Path], list[str]]
+) -> None:
+    """
+    Converts the files in parallel and writes the index lines.
+
+    A worker that crashes (e.g. a segfault in Verovio) loses its result and the pool
+    would wait forever, so we stop once no result arrives within the timeout.
+    """
+    with open(index_path, "w") as f:
+        file_number = 0
+        skipped_files = 0
+        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
+            results = p.imap_unordered(convert, music_xml_files)
+            while True:
+                try:
+                    result = results.next(timeout=_RESULT_TIMEOUT_S)
+                except StopIteration:
+                    break
+                except multiprocessing.TimeoutError:
+                    missing = len(music_xml_files) - file_number
+                    eprint(f"No result for {_RESULT_TIMEOUT_S}s, giving up on {missing} files")
+                    break
+                if len(result) > 0:
+                    for line in result:
+                        f.write(line)
+                    f.flush()
+                else:
+                    skipped_files += 1
+                file_number += 1
+                if file_number % 10 == 0:
+                    eprint(
+                        f"Processed {file_number}/{len(music_xml_files)} files,",
+                        f"skipped {skipped_files} files",
+                    )
+
+
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
     if platform.system() == "Windows":
         eprint("Transformer training is only implemented for Linux")
@@ -854,30 +895,11 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
-    with open(lieder_train_index, "w") as f:
-        file_number = 0
-        skipped_files = 0
-        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
-            for result in p.imap_unordered(
-                (
-                    _convert_file_only_token
-                    if only_recreate_token_files
-                    else _convert_token_and_image
-                ),
-                music_xml_files,
-            ):
-                if len(result) > 0:
-                    for line in result:
-                        f.write(line)
-                    f.flush()
-                else:
-                    skipped_files += 1
-                file_number += 1
-                if file_number % 10 == 0:
-                    eprint(
-                        f"Processed {file_number}/{len(music_xml_files)} files,",
-                        f"skipped {skipped_files} files",
-                    )
+    write_index(
+        lieder_train_index,
+        music_xml_files,
+        _convert_file_only_token if only_recreate_token_files else _convert_token_and_image,
+    )
     eprint("Done indexing")
 
 
