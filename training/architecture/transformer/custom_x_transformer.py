@@ -12,9 +12,7 @@ I had issues with 2.9.2
 
 # flake8: noqa: S101
 
-from random import random
-
-from torch import Tensor, arange, long, nn
+from torch import Tensor, arange, long, nn, rand, where
 from x_transformers.x_transformers import (  # noqa: F401
     AbsolutePositionalEmbedding,
     AttentionLayers,
@@ -178,7 +176,7 @@ class CustomAttentionLayers(AttentionLayers):
 
         next_cache_length = x.shape[1]
 
-        iter_attn_cache = iter(attn_cache)
+        attn_cache_index = 0
 
         # handle deep embeds if needed
 
@@ -189,7 +187,7 @@ class CustomAttentionLayers(AttentionLayers):
             deep_embeds_across_depth = deep_embeds[token_ids]
             deep_embeds = rearrange(deep_embeds_across_depth, "b n l d -> l b n d")
 
-        deep_embeds_iter = iter(deep_embeds)
+        deep_embeds_index = 0
 
         # setup multistreams if needed
 
@@ -265,10 +263,13 @@ class CustomAttentionLayers(AttentionLayers):
             if exists(skip_combine):
                 x = skip_combine(x, skip_hiddens)
 
-            # layer dropout
+            # layer dropout: drawn on the device and applied with where(),
+            # because a Python random() branch breaks the torch.compile graph
 
-            if self.training and layer_dropout > 0.0 and random() < layer_dropout:
-                continue
+            drop_layer = None
+            if self.training and layer_dropout > 0.0:
+                drop_layer = rand((), device=x.device) < layer_dropout
+                x_before_layer = x
 
             if layer_type == "a":
                 if return_hiddens:
@@ -323,7 +324,9 @@ class CustomAttentionLayers(AttentionLayers):
             # forward depending on layer type
             layer_cache = None
             if layer_type in ("a", "c"):
-                layer_cache = next(iter_attn_cache, None)
+                if attn_cache_index < len(attn_cache):
+                    layer_cache = attn_cache[attn_cache_index]
+                attn_cache_index += 1
 
             if layer_type == "a":
                 out, inter = block(
@@ -355,7 +358,12 @@ class CustomAttentionLayers(AttentionLayers):
                     return_intermediates=True,
                 )
             elif layer_type == "f":
-                out = block(x, deep_embed=next(deep_embeds_iter, None))
+                # Index instead of next(iterator, None), which breaks the torch.compile graph
+                deep_embed = None
+                if deep_embeds_index < len(deep_embeds):
+                    deep_embed = deep_embeds[deep_embeds_index]
+                deep_embeds_index += 1
+                out = block(x, deep_embed=deep_embed)
 
             # store first self or cross attention intermediate for value residual
 
@@ -381,6 +389,9 @@ class CustomAttentionLayers(AttentionLayers):
 
             if exists(post_main_norm):
                 x = post_main_norm(x)
+
+            if drop_layer is not None:
+                x = where(drop_layer, x_before_layer, x)
 
         if return_hiddens:
             layer_hiddens.append(x)

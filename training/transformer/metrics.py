@@ -33,8 +33,8 @@ class HomrTrainer(Trainer):
 
         self._distribute = distribute
 
-        # Training loss accumulators
-        self._loss_sum: dict[str, float] = defaultdict(float)
+        # Training loss accumulators, kept on the device to avoid a sync per step
+        self._loss_sum: dict[str, Tensor | float] = defaultdict(float)
         self._loss_count: dict[str, int] = defaultdict(int)
 
         # Evaluation accumulators
@@ -70,7 +70,7 @@ class HomrTrainer(Trainer):
 
         if model.training:
             for component in LOSS_COMPONENTS:
-                self._loss_sum[component] += outputs[component].detach().item()
+                self._loss_sum[component] += outputs[component].detach()
                 self._loss_count[component] += 1
 
         if return_outputs:
@@ -220,7 +220,8 @@ class HomrTrainer(Trainer):
         if self._loss_count and "loss" in logs:
             for component in LOSS_COMPONENTS:
                 if self._loss_count[component] > 0:
-                    logs[component] = self._loss_sum[component] / self._loss_count[component]
+                    loss_sum = float(self._loss_sum[component])
+                    logs[component] = loss_sum / self._loss_count[component]
             self._loss_sum.clear()
             self._loss_count.clear()
 

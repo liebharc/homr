@@ -28,12 +28,17 @@ from training.omr_datasets.filter_from_index import (
     write_invalid_tokens,
 )
 from training.run_id import get_run_id
-from training.transformer.data_loader import label_names, load_dataset
+from training.transformer.data_loader import collate_trimmed, label_names, load_dataset
 from training.transformer.distribute import Distribute
 from training.transformer.metrics import HomrTrainer
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
+# Batches are padded to multiples of 64 tokens. Compile each length statically: Inductor
+# fails on a dynamic sequence length and then falls back to eager mode.
+# Up to 10 lengths, each for training, the no-grad pass and evaluation.
+torch._dynamo.config.automatic_dynamic_shapes = False
+torch._dynamo.config.recompile_limit = 64
 
 
 class FreezeCallback(TrainerCallback):
@@ -164,7 +169,12 @@ def train_transformer(
     )
 
     config = Config()
-    datasets = load_dataset(train_index, config, val_split=0.1)
+    datasets = load_dataset(
+        train_index,
+        config,
+        val_split=0.1,
+        validation_cache_dir=os.path.join(git_root, checkpoint_folder, "validation_cache"),
+    )
 
     compile_threshold = 50000
     compile_model = (
@@ -175,7 +185,8 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 8  # 8gb vram
+    batch_size = 16  # 16gb vram
+    eval_batch_size = 32
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -184,9 +195,9 @@ def train_transformer(
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
-        gradient_accumulation_steps=max(1, 4 // distribute.get_world_size()),
+        gradient_accumulation_steps=max(1, 2 // distribute.get_world_size()),
         per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size // 2,
+        per_device_eval_batch_size=eval_batch_size,
         num_train_epochs=number_of_epochs,
         weight_decay=0.05,
         warmup_ratio=0.1,
@@ -198,6 +209,7 @@ def train_transformer(
         logging_dir=os.path.join("logs", f"run{run_id}"),
         label_names=label_names,
         bf16=not fp32,
+        logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
     )
@@ -231,6 +243,7 @@ def train_transformer(
             model,
             train_args,
             train_dataset=datasets["train"],
+            data_collator=collate_trimmed,
             eval_dataset=datasets["validation"],
             callbacks=callbacks,
             distribute=distribute,
