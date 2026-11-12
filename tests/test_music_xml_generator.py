@@ -104,6 +104,30 @@ class TestMusicXmlGenerator(unittest.TestCase):
     the data sets to check that back and forth conversion works.
     """
 
+    def test_measure_rest_in_a_pickup_is_as_long_as_the_pickup(self) -> None:
+        # The first part is hidden in the first system and gets a measure rest; the
+        # second part starts with a pickup of one quarter note
+        hidden = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+measureRest . . . . upper
+barline . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . .""".splitlines())
+        pickup = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 G4 _ _ _ upper
+barline . . . . .
+note_1 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [hidden, pickup], "")
+        parts = xml.findall("part")
+        lengths = []
+        for part in parts:
+            divisions = int(part.findtext("measure/attributes/divisions", "0"))
+            rest = part.find("measure").find("note")  # type: ignore
+            lengths.append(int(rest.findtext("duration", "0")) / divisions)  # type: ignore
+        self.assertEqual(lengths, [1.0, 1.0])
+
     def test_chord_with_different_duratons(self) -> None:
         tabi_measure_18_upper = """clef_G2 . . . . upper
 keySignature_4 . . . . .

@@ -292,13 +292,37 @@ def _assign_parts(staffs: list[MultiStaff]) -> list[tuple[int, ...]] | None:
     return result
 
 
-def _measure_rests_like(symbols: list[EncodedSymbol], is_grandstaff: bool) -> list[EncodedSymbol]:
+def _leading_signs(symbols: list[EncodedSymbol], prefixes: tuple[str, ...]) -> list[EncodedSymbol]:
+    """
+    The clefs, keys or time signatures (by prefix) before the first note or rest,
+    with the chord tokens which join them.
+    """
+    result: list[EncodedSymbol] = []
+    for symbol in symbols:
+        if symbol.rhythm.startswith(("note", "rest", "measureRest")) or "barline" in symbol.rhythm:
+            break
+        if symbol.rhythm.startswith(prefixes):
+            if result and result[-1].rhythm.startswith(prefixes):
+                if any(r.rhythm.startswith("clef") for r in (result[-1], symbol)):
+                    result.append(EncodedSymbol("chord"))
+            result.append(symbol)
+    return result
+
+
+def _measure_rests_like(
+    symbols: list[EncodedSymbol], is_grandstaff: bool, clefs: list[EncodedSymbol] | None = None
+) -> list[EncodedSymbol]:
     """
     Rests for a staff which is hidden in a system: one per measure of the symbols
-    another staff of the system has, with the same barlines.
+    another staff of the system has, with the same barlines. It starts with the clefs
+    of the hidden staff, if known, and the key and time signature of the shown staff,
+    so the hidden part has them from its first measure on.
     """
     positions = ["upper", "lower"] if is_grandstaff else ["upper"]
-    result: list[EncodedSymbol] = []
+    result: list[EncodedSymbol] = list(clefs or [])
+    result.extend(
+        s for s in _leading_signs(symbols, ("keySignature", "timeSignature")) if s.rhythm != "chord"
+    )
     in_measure = False
     for symbol in symbols:
         if symbol.rhythm.startswith(("note", "rest")) and not in_measure:
@@ -375,7 +399,15 @@ def parse_staffs(
             symbols = results.get((staff_index, voice))
             shown = [results[(staff_index, v)] for v in slots if (staff_index, v) in results]
             if voice not in slots and len(shown) > 0:
-                symbols = _measure_rests_like(shown[0], layout[voice])
+                clefs = next(
+                    (
+                        _leading_signs(results[key], ("clef",))
+                        for key in sorted(results)
+                        if key[1] == voice
+                    ),
+                    None,
+                )
+                symbols = _measure_rests_like(shown[0], layout[voice], clefs)
             if symbols is None:
                 continue
             result_for_voice.extend(symbols)

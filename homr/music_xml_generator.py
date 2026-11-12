@@ -117,9 +117,65 @@ def generate_xml(
     root.append(build_defaults(args))
     has_two_staves_by_part = [_voice_has_two_staves(staff) for staff in staffs]
     root.append(build_part_list(has_two_staves_by_part))
-    for index, staff in enumerate(staffs):
-        root.append(build_part(args, staff, index, has_two_staves_by_part[index]))
+    parts = [
+        build_part(args, staff, index, has_two_staves_by_part[index])
+        for index, staff in enumerate(staffs)
+    ]
+    shorten_measure_rests_in_pickup(parts)
+    root.extend(parts)
     return root
+
+
+def _measure_length(measure: ET.Element, divisions: int) -> Fraction:
+    """The length of a measure in quarter notes: where its last note ends."""
+    position = 0
+    end = 0
+    for child in measure:
+        duration = int(child.findtext("duration", "0") or 0)
+        if child.tag == "note" and child.find("chord") is None:
+            position += duration
+        elif child.tag == "forward":
+            position += duration
+        elif child.tag == "backup":
+            position -= duration
+        end = max(end, position)
+    return Fraction(end, max(divisions, 1))
+
+
+def shorten_measure_rests_in_pickup(parts: list[ET.Element]) -> None:
+    """
+    A part which has nothing in the first measure gets a whole-measure rest there, which
+    fills a full measure. If another part has a shorter first measure, it's a pickup, and
+    the measure rest has to be as short, otherwise the parts get out of step.
+    """
+    firsts = []
+    for part in parts:
+        measure = part.find("measure")
+        divisions = int(part.findtext("measure/attributes/divisions", "0") or 0)
+        if measure is None or divisions <= 0:
+            return
+        firsts.append((measure, divisions))
+    lengths = [_measure_length(m, d) for m, d in firsts]
+    played = [
+        length
+        for (measure, _), length in zip(firsts, lengths, strict=True)
+        if any(n.find("rest") is None for n in measure.findall("note"))
+    ]
+    if not played:
+        return
+    pickup = max(played)
+    for (measure, divisions), length in zip(firsts, lengths, strict=True):
+        notes = measure.findall("note")
+        only_measure_rests = notes and all(
+            n.find("rest") is not None and n.find("rest").get("measure") == "yes"  # type: ignore
+            for n in notes
+        )
+        if not only_measure_rests or length <= pickup:
+            continue
+        duration = str(max(1, int(pickup * divisions)))
+        for child in measure:
+            if child.tag in ("note", "backup"):
+                child.find("duration").text = duration  # type: ignore
 
 
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
