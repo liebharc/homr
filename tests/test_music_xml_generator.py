@@ -128,6 +128,27 @@ barline . . . . .""".splitlines())
             lengths.append(int(rest.findtext("duration", "0")) / divisions)  # type: ignore
         self.assertEqual(lengths, [1.0, 1.0])
 
+    def test_empty_first_measure_gets_a_rest_as_long_as_the_pickup(self) -> None:
+        # The model saw an empty pickup measure in the voice; the piano has a quarter
+        empty = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+barline . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . .""".splitlines())
+        pickup = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 G4 _ _ _ upper
+barline . . . . .
+note_1 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [empty, pickup], "")
+        part = xml.findall("part")[0]
+        divisions = int(part.findtext("measure/attributes/divisions", "0"))
+        rest = part.find("measure/note")
+        assert rest is not None
+        self.assertIsNotNone(rest.find("rest"))
+        self.assertEqual(int(rest.findtext("duration", "0")) / divisions, 1.0)
+
     def test_chord_with_different_duratons(self) -> None:
         tabi_measure_18_upper = """clef_G2 . . . . upper
 keySignature_4 . . . . .

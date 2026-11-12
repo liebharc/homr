@@ -146,7 +146,8 @@ def shorten_measure_rests_in_pickup(parts: list[ET.Element]) -> None:
     """
     A part which has nothing in the first measure gets a whole-measure rest there, which
     fills a full measure. If another part has a shorter first measure, it's a pickup, and
-    the measure rest has to be as short, otherwise the parts get out of step.
+    the measure rest has to be as short, otherwise the parts get out of step. A first
+    measure without any notes or rests gets such a rest too.
     """
     firsts = []
     for part in parts:
@@ -166,7 +167,12 @@ def shorten_measure_rests_in_pickup(parts: list[ET.Element]) -> None:
     pickup = max(played)
     for (measure, divisions), length in zip(firsts, lengths, strict=True):
         notes = measure.findall("note")
-        only_measure_rests = notes and all(
+        if not notes:
+            # Nothing at all in the part's first measure, e.g. the model saw an empty
+            # pickup measure: players fill it to a full measure, so give it rests
+            _add_pickup_rests(measure, pickup, divisions)
+            continue
+        only_measure_rests = all(
             n.find("rest") is not None and n.find("rest").get("measure") == "yes"  # type: ignore
             for n in notes
         )
@@ -176,6 +182,21 @@ def shorten_measure_rests_in_pickup(parts: list[ET.Element]) -> None:
         for child in measure:
             if child.tag in ("note", "backup"):
                 child.find("duration").text = duration  # type: ignore
+
+
+def _add_pickup_rests(measure: ET.Element, pickup: Fraction, divisions: int) -> None:
+    """A rest of the pickup's length on each staff of an empty first measure."""
+    staves = int(measure.findtext("attributes/staves", "1") or 1)
+    duration = str(max(1, int(pickup * divisions)))
+    for staff in range(1, staves + 1):
+        if staff > 1:
+            backup = ET.SubElement(measure, "backup")
+            ET.SubElement(backup, "duration").text = duration
+        note = ET.SubElement(measure, "note")
+        ET.SubElement(note, "rest", measure="yes")
+        ET.SubElement(note, "duration").text = duration
+        ET.SubElement(note, "voice").text = "1" if staff == 1 else "5"
+        ET.SubElement(note, "staff").text = str(staff)
 
 
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
