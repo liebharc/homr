@@ -2,6 +2,10 @@
 
 This is not legal advice. homr is a non-commercial volunteer project. If you use it commercially, the legal questions and risks are yours.
 
+## Important: Do not send emails
+
+Do not send emails with license questions. The workload really gets too much. We are not able to provide legal advice. This FAQ is meant to help with the main questions. If it doesn't then ask your lawyer for advice, and not us as open source contributors.
+
 ## Code
 
 The code is licensed under [AGPL-3.0](LICENSE). The AGPL allows commercial use as long as you meet its terms, including publishing the source of your changes when you distribute homr or offer it as a network service. We chose the AGPL so that improvements make their way back to the community.
