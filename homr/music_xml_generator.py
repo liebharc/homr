@@ -160,6 +160,9 @@ def build_measures(
                 build_measure_rest(EncodedSymbol("measureRest", position=position), state)
             )
 
+    def last_measure() -> ET.Element | None:
+        return measures[-1] if measures else None
+
     def close_current_measure() -> None:
         nonlocal clock, measure_number, rest_measures
         rebalance_measure_voices(current_measure)
@@ -235,44 +238,62 @@ def build_measures(
             time_signature_no += 1
             build_time_signature(symbol, attributes, state)
         elif "barline" in rhythm:
-            if rhythm != "barline":
-                barline = build_or_get_barline(current_measure, "right")
+            # A barline right after another one (e.g. at the start of a line, or after a
+            # repeat that already ended the measure) doesn't start a new measure. The
+            # first measure of a part is kept even without notes: it's a pickup measure
+            # in which this part has nothing, and dropping it would shift the part.
+            is_empty_pickup = not measures and not has_notes(current_measure)
+            ending_measure = (
+                current_measure if has_notes(current_measure) or is_empty_pickup else last_measure()
+            )
+            if rhythm != "barline" and ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
                 build_barline_style(symbol, barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
         elif rhythm == "repeatStart":
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            # The repeated section starts with the next measure. If the current one has no
+            # notes yet (the repeat sign is at the start of a line), that's this one.
+            if has_notes(current_measure):
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
 
-            barline = build_or_get_barline(current_measure, "right")
+            barline = build_or_get_barline(current_measure, "left")
             build_repeat(symbol, barline)
         elif rhythm == "repeatEnd":
-            barline = build_or_get_barline(current_measure, "right")
-            build_repeat(symbol, barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            ending_measure = current_measure if has_notes(current_measure) else last_measure()
+            if ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
+                build_repeat(symbol, barline)
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
         elif rhythm == "repeatEndStart":
-            barline = build_or_get_barline(current_measure, "right")
-            build_repeat(EncodedSymbol("repeatEnd"), barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
-            barline = build_or_get_barline(current_measure, "right")
+            ending_measure = current_measure if has_notes(current_measure) else last_measure()
+            if ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
+                build_repeat(EncodedSymbol("repeatEnd"), barline)
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
+            barline = build_or_get_barline(current_measure, "left")
             build_repeat(EncodedSymbol("repeatStart"), barline)
         elif rhythm.startswith("voltaStart"):
             volta_number = state.start_volta(measure_number)
             barline = build_or_get_barline(current_measure, "left")
             build_barline_ending(symbol, barline, volta_number)
         elif rhythm.startswith(("voltaStop", "voltaDiscontinue")):
-            volta_number = state.stop_volta(measure_number)
-            barline = build_or_get_barline(current_measure, "right")
-            build_barline_ending(symbol, barline, volta_number)
+            # Comes after the barline that ended the volta's last measure
+            stopped_measure = current_measure if has_notes(current_measure) else last_measure()
+            if stopped_measure is not None:
+                volta_number = state.stop_volta(int(stopped_measure.get("number", "0")))
+                barline = build_or_get_barline(stopped_measure, "right")
+                build_barline_ending(symbol, barline, volta_number)
 
         elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
             for dynamic in group.symbols:
@@ -280,7 +301,7 @@ def build_measures(
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
-    if len(list(current_measure)) > 0:
+    if has_notes(current_measure) or not measures:
         close_current_measure()
     # A clef opens a second attributes element, so look at the whole first measure
     if measures[0].find("attributes/time") is None:
@@ -411,6 +432,14 @@ def build_or_get_attributes(
     if last_attributes is not None and not force_new:
         return last_attributes
     return ET.SubElement(measure, "attributes")
+
+
+def has_notes(measure: ET.Element) -> bool:
+    """
+    Whether a measure has notes or rests. A measure without them only holds what
+    precedes the first note of a line: clef, key, time signature or a new-system mark.
+    """
+    return measure.find("note") is not None
 
 
 def build_or_get_barline(measure: ET.Element, location: str) -> ET.Element:

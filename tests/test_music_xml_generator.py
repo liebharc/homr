@@ -104,6 +104,64 @@ class TestMusicXmlGenerator(unittest.TestCase):
     the data sets to check that back and forth conversion works.
     """
 
+    def _measures(self, tokens_str: str) -> list[ET.Element]:
+        tokens = read_token_lines(tokens_str.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        return list(xml.iter("measure"))
+
+    def test_repeat_start_at_the_start_of_a_line_adds_no_empty_measure(self) -> None:
+        # The repeat sign follows the barline that ended the previous line
+        measures = self._measures("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . .
+newline . . . . .
+clef_G2 . . . . upper
+repeatStart . . . . .
+note_1 D4 _ _ _ upper
+repeatEnd . . . . .""")
+        self.assertEqual(len(measures), 2)
+        self.assertEqual(
+            [b.get("location") for b in measures[1].iter("barline")], ["left", "right"]
+        )
+        self.assertEqual(
+            [r.get("direction") for r in measures[1].iter("repeat")], ["forward", "backward"]
+        )
+
+    def test_barline_after_volta_stop_adds_no_empty_measure(self) -> None:
+        # First ending, repeat, then the second ending
+        measures = self._measures("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+voltaStart_1 . . . . .
+note_1 C4 _ _ _ upper
+repeatEnd . . . . .
+voltaStop . . . . .
+barline . . . . .
+voltaStart_2 . . . . .
+note_1 D4 _ _ _ upper
+bolddoublebarline . . . . .
+voltaStop . . . . .
+barline . . . . .""")
+        self.assertEqual(len(measures), 2)
+        endings = [
+            (m.get("number"), e.get("number"), e.get("type"))
+            for m in measures
+            for e in m.iter("ending")
+        ]
+        self.assertEqual(
+            endings,
+            [("1", "1", "start"), ("1", "1", "stop"), ("2", "2", "start"), ("2", "2", "stop")],
+        )
+
+    def test_empty_pickup_measure_is_kept(self) -> None:
+        # A part with nothing in the pickup measure still has the measure
+        measures = self._measures("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+barline . . . . .
+rest_1 _ _ _ _ upper
+barline . . . . .""")
+        self.assertEqual(len(measures), 2)
+
     def test_chord_with_different_duratons(self) -> None:
         tabi_measure_18_upper = """clef_G2 . . . . upper
 keySignature_4 . . . . .
