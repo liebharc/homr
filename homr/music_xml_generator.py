@@ -656,6 +656,7 @@ def tie_event(before: list[ET.Element], after: list[ET.Element]) -> None:
     some members only. So each slurred note looks for its own pitch in the
     next event rather than the chord being taken as a whole.
     """
+    is_tied = False
     for start_note in before:
         begins = get_slur(start_note, "start")
         if begins is None:
@@ -675,7 +676,43 @@ def tie_event(before: list[ET.Element], after: list[ET.Element]) -> None:
             end_notation.remove(end_slur)
             add_tie(start_note, "start", begin_notation)
             add_tie(stop_note, "stop", end_notation)
+            is_tied = True
             break
+    if is_tied:
+        tie_rest_of_chord(before, after)
+
+
+def tie_rest_of_chord(before: list[ET.Element], after: list[ET.Element]) -> None:
+    """Tie the other notes of a chord which continue into the next chord.
+
+    A tied chord is engraved with a tie on every held notehead, but the model
+    marks only the one its curve touches. So once a slur between two chords has
+    been found to be a tie, the other pitches which both chords share are held
+    too: without this, they are played again on the second chord.
+    """
+    if len(before) < 2 or len(after) < 2:
+        return
+    after_by_pitch = {get_note_pitch(n): n for n in after if get_note_pitch(n) is not None}
+    for start_note in before:
+        pitch = get_note_pitch(start_note)
+        stop_note = after_by_pitch.get(pitch)
+        if pitch is None or stop_note is None:
+            continue
+        if _has_tie(start_note, "start") or _has_tie(stop_note, "stop"):
+            continue
+        add_tie(start_note, "start", _notations(start_note))
+        add_tie(stop_note, "stop", _notations(stop_note))
+
+
+def _has_tie(note: ET.Element, type_: str) -> bool:
+    return any(tie.get("type") == type_ for tie in note.findall("tie"))
+
+
+def _notations(note: ET.Element) -> ET.Element:
+    notations = note.find("notations")
+    if notations is None:
+        notations = ET.SubElement(note, "notations")
+    return notations
 
 
 def build_clef(model_clef: EncodedSymbol, attributes: ET.Element) -> None:

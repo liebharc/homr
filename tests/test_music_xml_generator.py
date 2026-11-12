@@ -360,8 +360,8 @@ barline . . . . ."""
         """The model marks the notehead the curve touches, not the whole chord.
 
         On real output almost every slurred chord carries the slur on some of
-        its members only, so a tie has to be found for that pitch alone and
-        leave the rest of the chord as it is.
+        its members only. Once one note is found to be tied into the next chord,
+        the other pitches the two chords share are held too.
         """
         chords = """clef_G2 . . . . upper
 timeSignature/4 . . . . .
@@ -371,10 +371,10 @@ barline . . . . ."""
         tokens = read_token_lines(chords.splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
-        self.assertEqual(_ties(xml), ["start", "stop"])
+        self.assertEqual(sorted(_ties(xml)), ["start", "start", "stop", "stop"])
         self.assertEqual(_slurs(xml), [])
         tied = [n for n in xml.iter("note") if n.find("tie") is not None]
-        self.assertEqual([_pitch(n) for n in tied], ["E", "E"])
+        self.assertEqual(sorted(_pitch(n) for n in tied), ["C", "C", "E", "E"])
 
     def test_slur_from_a_chord_to_a_different_pitch_stays_a_slur(self) -> None:
         chords = """clef_G2 . . . . upper
