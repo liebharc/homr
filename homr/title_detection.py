@@ -4,6 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 import numpy as np
 from rapidocr import RapidOCR
+from rapidocr.utils.output import RapidOCROutput
 
 from homr.debug import Debug
 from homr.model import Staff
@@ -82,7 +83,11 @@ def _detect_title_task(debug: Debug, top_staff: Staff) -> str:
     image = debug.original_image
     above_staff = image[: int(top_staff.min_y), :]
     ocr_results = _reader(above_staff)
-    if not ocr_results:
+    if (
+        not isinstance(ocr_results, RapidOCROutput)
+        or ocr_results.boxes is None
+        or ocr_results.txts is None
+    ):
         return ""
 
     texts = [

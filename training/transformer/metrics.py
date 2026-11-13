@@ -61,9 +61,11 @@ class HomrTrainer(Trainer):
                 decay = config.scheduled_sampling_decay_steps
                 step = self.state.global_step
                 sampling_prob = max(end_p, start_p - (start_p - end_p) * (step / decay))
-                inputs["sampling_prob"] = sampling_prob
-            else:
-                inputs["sampling_prob"] = 1.0
+                if sampling_prob < 1.0:
+                    # A tensor, so torch.compile doesn't recompile for every new value
+                    inputs["sampling_prob"] = torch.tensor(
+                        sampling_prob, device=inputs["rhythms"].device
+                    )
 
         outputs = model(**inputs)
         loss = outputs["loss"]
