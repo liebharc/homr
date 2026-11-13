@@ -108,9 +108,20 @@ def build_identification() -> ET.Element:
     return ident
 
 
+TimeSignature = tuple[str, str]
+
+
 def generate_xml(
-    args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
+    args: XmlGeneratorArguments,
+    staffs: list[list[EncodedSymbol]],
+    title: str,
+    inherited_times: list[TimeSignature | None] | None = None,
 ) -> ET.Element:
+    """
+    inherited_times: the time signature in force at the end of the previous page, per
+    part, for a page that continues a score. A part that doesn't start with a time
+    signature continues in it, instead of one inferred from its measure lengths.
+    """
     root = ET.Element("score-partwise", version="4.0")
     root.append(build_work(title))
     root.append(build_identification())
@@ -118,8 +129,25 @@ def generate_xml(
     has_two_staves_by_part = [_voice_has_two_staves(staff) for staff in staffs]
     root.append(build_part_list(has_two_staves_by_part))
     for index, staff in enumerate(staffs):
-        root.append(build_part(args, staff, index, has_two_staves_by_part[index]))
+        inherited = (
+            inherited_times[index] if inherited_times and index < len(inherited_times) else None
+        )
+        root.append(build_part(args, staff, index, has_two_staves_by_part[index], inherited))
     return root
+
+
+def last_time_signatures(root: ET.Element) -> list[TimeSignature | None]:
+    """The last time signature of each part, e.g. to continue a score on the next page."""
+    result: list[TimeSignature | None] = []
+    for part in root.iter("part"):
+        times = list(part.iter("time"))
+        last = times[-1] if times else None
+        result.append(
+            (last.findtext("beats", ""), last.findtext("beat-type", ""))
+            if last is not None
+            else None
+        )
+    return result
 
 
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
@@ -128,11 +156,15 @@ def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
 
 
 def build_part(
-    args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int, has_two_staves: bool
+    args: XmlGeneratorArguments,
+    voice: list[EncodedSymbol],
+    index: int,
+    has_two_staves: bool,
+    inherited_time: TimeSignature | None = None,
 ) -> ET.Element:
     part = ET.Element("part", id=get_part_id(index))
     is_first_part = index == 0
-    for measure in build_measures(args, voice, is_first_part, has_two_staves):
+    for measure in build_measures(args, voice, is_first_part, has_two_staves, inherited_time):
         part.append(measure)
     convert_ties(part)
     add_stems(part)
@@ -145,6 +177,7 @@ def build_measures(
     voice: list[EncodedSymbol],
     is_first_part: bool,
     has_two_staves: bool = False,
+    inherited_time: TimeSignature | None = None,
 ) -> list[ET.Element]:
     clock = GroupClock()
     measure_number = 1
@@ -176,6 +209,14 @@ def build_measures(
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
     division, nominators = find_division_and_time_signature_nominators(groups)
     state = ConversionState(division, nominators[0])
+    # Without a printed time signature at its start, a page continues in the previous
+    # page's one: the model reads only the beat type, so an estimate from the measure
+    # lengths can't tell 2/2 from 4/4, and would bring a time change at every page.
+    inherited_length = _measure_length(inherited_time)
+    if inherited_length is not None and not _starts_with_time_signature(groups):
+        state.nominator = inherited_length
+    else:
+        inherited_time = None
     time_signature_no = 0
     measures: list[ET.Element] = []
     current_measure = ET.Element("measure", number=str(measure_number))
@@ -285,10 +326,34 @@ def build_measures(
     # A clef opens a second attributes element, so look at the whole first measure
     if measures[0].find("attributes/time") is None:
         time_el = ET.SubElement(first_attributes, "time")
-        beats = max(int(state.nominator * 4), 1)
-        ET.SubElement(time_el, "beats").text = str(beats)
-        ET.SubElement(time_el, "beat-type").text = "4"
+        if inherited_time is not None:
+            beats_text, beat_type = inherited_time
+        else:
+            beats_text, beat_type = str(max(int(state.nominator * 4), 1)), "4"
+        ET.SubElement(time_el, "beats").text = beats_text
+        ET.SubElement(time_el, "beat-type").text = beat_type
     return measures
+
+
+def _measure_length(time: TimeSignature | None) -> Fraction | None:
+    if time is None:
+        return None
+    try:
+        length = Fraction(int(time[0]), int(time[1]))
+    except (ValueError, ZeroDivisionError):
+        return None
+    return length if length > 0 else None
+
+
+def _starts_with_time_signature(groups: list[SymbolChord]) -> bool:
+    """Whether a time signature comes before the first note, rest or barline."""
+    for group in groups:
+        rhythm = group.symbols[0].rhythm if group.symbols else ""
+        if rhythm.startswith("timeSignature"):
+            return True
+        if rhythm.startswith(("note", "rest", "measureRest")) or group.is_barline():
+            return False
+    return False
 
 
 class GroupClock:

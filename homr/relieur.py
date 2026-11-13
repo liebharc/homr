@@ -6,7 +6,6 @@ We thank Papoteur (https://github.com/papoteur-mga) and contributors for their w
 
 import os
 import xml.etree.ElementTree as ET
-from fractions import Fraction
 from glob import glob
 from pathlib import Path
 
@@ -53,25 +52,6 @@ def key_attributes(key) -> dict[str]:  # type ignore
     for a in get_children_of_type(key, "mode"):
         attributes["Mode"] = a.text
     return attributes
-
-
-def same_measure_length(a: dict | None, b: dict) -> bool:
-    """
-    Whether two time signatures give the same measure length, e.g. 2/2 and 4/4.
-
-    The model reads only the beat type of a time signature, so on a page which
-    doesn't print one, the generator infers it from the measure lengths and
-    always writes it in quarters. A later page then brings 4/4 where the score
-    is in 2/2. This isn't a time change, so it mustn't be kept as one.
-    """
-    if a is None or a == b:
-        return a == b
-    try:
-        return Fraction(int(a["Beats"]), int(a["BeatType"])) == Fraction(
-            int(b["Beats"]), int(b["BeatType"])
-        )
-    except (KeyError, ValueError, ZeroDivisionError):
-        return False
 
 
 def update_attributes_in_force(part_attributes: dict, measure) -> None:  # type: ignore
@@ -142,9 +122,7 @@ def process_concat(
                                             )
                                         attrib.remove(key)
                                 for xtime in get_children_of_type(attrib, "time"):
-                                    if same_measure_length(
-                                        in_force.get("Time"), time_attributes(xtime)
-                                    ):
+                                    if in_force.get("Time") == time_attributes(xtime):
                                         attrib.remove(xtime)
                                         if debug:
                                             eprint(

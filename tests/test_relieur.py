@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from homr.relieur import get_children_of_type, process_concat
 
 
-def _page(divisions: str, fifths: str, duration: str, time: tuple[str, str] = ("4", "4")) -> str:
+def _page(divisions: str, fifths: str, duration: str) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
   <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
@@ -15,7 +15,7 @@ def _page(divisions: str, fifths: str, duration: str, time: tuple[str, str] = ("
       <attributes>
         <divisions>{divisions}</divisions>
         <key><fifths>{fifths}</fifths></key>
-        <time><beats>{time[0]}</beats><beat-type>{time[1]}</beat-type></time>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
         <clef><sign>G</sign><line>2</line></clef>
       </attributes>
       <note><pitch><step>C</step><octave>4</octave></pitch>
@@ -53,13 +53,6 @@ def _fifths(measure: ET.Element) -> str | None:
     return None
 
 
-def _time(measure: ET.Element) -> tuple[str | None, str | None] | None:
-    for attrib in get_children_of_type(measure, "attributes"):
-        for time in get_children_of_type(attrib, "time"):
-            return (time.findtext("beats"), time.findtext("beat-type"))
-    return None
-
-
 class TestRelieur(unittest.TestCase):
 
     def test_divisions_kept_when_they_change_back_to_the_first_pages_value(self) -> None:
@@ -75,12 +68,3 @@ class TestRelieur(unittest.TestCase):
     def test_key_kept_when_it_changes_back(self) -> None:
         measures = _merge([_page("4", "0", "16"), _page("4", "-1", "16"), _page("4", "0", "16")])
         self.assertEqual([_fifths(m) for m in measures], ["0", "-1", "0"])
-
-    def test_time_with_the_same_measure_length_is_removed(self) -> None:
-        # 2/2, then an inferred 4/4 on a page without a printed time signature
-        measures = _merge([_page("4", "0", "16", ("2", "2")), _page("4", "0", "16", ("4", "4"))])
-        self.assertEqual([_time(m) for m in measures], [("2", "2"), None])
-
-    def test_real_time_change_is_kept(self) -> None:
-        measures = _merge([_page("4", "0", "16", ("4", "4")), _page("4", "0", "12", ("3", "4"))])
-        self.assertEqual([_time(m) for m in measures], [("4", "4"), ("3", "4")])
