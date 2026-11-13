@@ -114,3 +114,14 @@ def test_cross_staff_notes_dont_make_a_main_voice() -> None:
     tokens = _tokens(xml)
     assert "note_4 C3 _ _ _ lower" in tokens
     assert "note_8 C4 _ _ _ lower2" in tokens
+
+
+def test_tuplets_which_cant_be_encoded_are_rejected_for_training() -> None:
+    duplet = """<note><pitch><step>C</step><octave>5</octave></pitch><duration>3</duration>
+      <voice>1</voice><type>eighth</type>
+      <time-modification><actual-notes>2</actual-notes><normal-notes>3</normal-notes></time-modification>
+      <staff>1</staff><notations><tuplet type="start"/></notations></note>"""
+    xml = _score(duplet)
+    with pytest.raises(ValueError):
+        music_xml_string_to_tokens(xml)
+    music_xml_string_to_tokens(xml, sounding_pitch=True)

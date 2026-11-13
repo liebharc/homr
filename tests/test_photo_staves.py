@@ -13,9 +13,6 @@ ATTRIBUTES = (
     "<time><beats>4</beats><beat-type>4</beat-type></time>"
     "<clef><sign>G</sign><line>2</line></clef></attributes>"
 )
-OCTAVE_SHIFT = (
-    '<direction><direction-type><octave-shift type="down" size="8"/></direction-type></direction>'
-)
 BOX = [100.0, 200.0, 2100.0, 260.0]
 
 
@@ -60,7 +57,7 @@ class TestPhotoStaves(unittest.TestCase):
         self.assertIsNone(tokens)
 
     def test_unreadable_song_is_skipped_not_raised(self) -> None:
-        path = self.write(one_part(4, first=OCTAVE_SHIFT))
+        path = self.write(one_part(4)[:-40])  # cut off: not valid MusicXML
         self.assertEqual(answers(path, [{"bars": 4, "staffs": [BOX]}]), (None, []))
 
     def test_a_grand_staff_is_one_target(self) -> None:

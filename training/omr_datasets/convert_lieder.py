@@ -1,5 +1,3 @@
-# ruff: noqa: E402
-
 import hashlib
 import json
 import multiprocessing
@@ -10,6 +8,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -19,7 +18,12 @@ from PIL import Image
 from homr.circle_of_fifths import strip_naturals
 from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
-from homr.transformer.vocabulary import EncodedSymbol, empty, is_lower_position
+from homr.transformer.vocabulary import (
+    OCTAVE_SHIFT_STOP,
+    EncodedSymbol,
+    empty,
+    is_lower_position,
+)
 from training.omr_datasets.musescore_svg import (
     SvgMusicFile,
     SvgStaff,
@@ -29,6 +33,11 @@ from training.omr_datasets.music_xml_parser import (
     Measure,
     music_xml_file_to_tokens,
     normalize_barlines_and_repeats,
+)
+from training.omr_datasets.verovio_staffs import (
+    choose_parts,
+    has_multi_measure_rests,
+    split_into_staffs,
 )
 from training.transformer.image_utils import crop_info_path
 from training.transformer.training_vocabulary import token_lines_to_str
@@ -451,6 +460,8 @@ class MeasureCutter:
             ]
         self.key = EncodedSymbol("keySignature_0")
         self.time = EncodedSymbol("timeSignature/4")
+        # Octave shifts which are active, by staff
+        self.octave_shifts: dict[int, EncodedSymbol] = {}
 
     def _position_to_staff_no(self, symbol: EncodedSymbol) -> int:
         if is_lower_position(symbol.position):
@@ -464,11 +475,12 @@ class MeasureCutter:
         key = self.key
         time = self.time
         # Lieder pages are crops of one continuously rendered score, so a courtesy time
-        # signature is only visible where the source XML actually redeclares it. pdmx and
-        # musetrainer windows are each re-rendered standalone (see generate_xml), and that
+        # signature is only visible where the source XML actually redeclares it. pdmx
+        # windows are each re-rendered standalone (see generate_xml), and that
         # renderer always draws a time signature on a fresh score - so those callers pass
         # always_include_time=True to keep the label in sync with the image.
         has_time = always_include_time
+        carried_shifts = dict(self.octave_shifts)
         result: list[list[EncodedSymbol]] = []
         for i in range(count):
             selected_measure = self.voice.pop(0)
@@ -499,6 +511,10 @@ class MeasureCutter:
                         has_time = True
                         time = symbol
                 else:
+                    if symbol.rhythm == OCTAVE_SHIFT_STOP:
+                        self.octave_shifts.pop(self._position_to_staff_no(symbol), None)
+                    elif symbol.rhythm.startswith("octaveShift"):
+                        self.octave_shifts[self._position_to_staff_no(symbol)] = symbol
                     # A leading repeat can precede attributes in MusicXML. It
                     # must not prevent those attributes replacing inherited ones.
                     if symbol.rhythm != "repeatStart":
@@ -506,6 +522,7 @@ class MeasureCutter:
                     measure_result.append(symbol)
 
             if is_first_measure:
+                self._continue_octave_shifts(measure_result, carried_shifts)
                 if has_time:
                     measure_result.insert(0, time)
                 measure_result.insert(0, key)
@@ -516,6 +533,50 @@ class MeasureCutter:
             result.append(measure_result)
         return normalize_barlines_and_repeats(result)
 
+    def _continue_octave_shifts(
+        self, measure: list[EncodedSymbol], carried_shifts: dict[int, EncodedSymbol]
+    ) -> None:
+        """
+        A staff repeats the octave shifts which continue from the previous staff,
+        the image shows them again at the start of the line. A shift which stops
+        before the first note of the line ended with the previous line.
+        """
+        first_note = _index_of_first_note(measure)
+        removed: list[EncodedSymbol] = []
+        for symbol in measure[:first_note]:
+            staff = self._position_to_staff_no(symbol)
+            if symbol.rhythm.startswith("octaveShift") and staff in carried_shifts:
+                del carried_shifts[staff]
+                if symbol.rhythm == OCTAVE_SHIFT_STOP:
+                    removed.append(symbol)
+        for symbol in removed:
+            _remove_from_chord(measure, symbol)
+        first_note = _index_of_first_note(measure)
+        continued: list[EncodedSymbol] = []
+        for staff in sorted(carried_shifts):
+            if continued:
+                continued.append(EncodedSymbol("chord"))
+            continued.append(carried_shifts[staff])
+        measure[first_note:first_note] = continued
+
+
+def _index_of_first_note(symbols: list[EncodedSymbol]) -> int:
+    return next(
+        (i for i, s in enumerate(symbols) if s.rhythm.startswith(("note", "rest"))),
+        len(symbols),
+    )
+
+
+def _remove_from_chord(symbols: list[EncodedSymbol], symbol: EncodedSymbol) -> None:
+    """Removes a symbol together with the chord marker which joins it to its neighbour."""
+    index = next(i for i, s in enumerate(symbols) if s is symbol)
+    if index > 0 and symbols[index - 1].rhythm == "chord":
+        del symbols[index - 1 : index + 1]
+    elif index + 1 < len(symbols) and symbols[index + 1].rhythm == "chord":
+        del symbols[index : index + 2]
+    else:
+        del symbols[index]
+
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
     for symbol in symbols:
@@ -524,13 +585,14 @@ def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
     return True
 
 
-def _split_file_into_staffs(
+def _split_file_into_staffs(  # noqa: PLR0913
     number_of_voices: int,
     svg_file: SvgMusicFile,
     splitter: list[MeasureCutter],
     just_token_files: bool,
     fail_if_image_is_missing: bool,
     flat_folder: str,
+    skipped_voices: set[int],
 ) -> list[str]:
     result: list[str] = []
     file_name = os.path.basename(svg_file.filename.replace(".svg", ".png"))
@@ -561,6 +623,10 @@ def _split_file_into_staffs(
         staff_number += 1
         total_staff_area = staffs.pop(0)
         measures = splitter[current_voice]
+        if current_voice in skipped_voices:
+            measures.extract_measures(total_staff_area.number_of_measures)
+            current_voice = (current_voice + 1) % number_of_voices
+            continue
         staff_image_file_name = png_file.replace(".png", f"-{staff_number}.png")
         if not just_token_files:
             # Stores more than the model sees, the data loader draws the margin
@@ -598,20 +664,44 @@ def _split_file_into_staffs(
 
         if contains_only_supported_clefs(selected_measures):
             selected_measures = strip_naturals(selected_measures)
-            tokens_content = token_lines_to_str(selected_measures)
-            write_text_to_file(tokens_content, token_file_name)
-            result.append(
-                str(Path(staff_image_file_name).relative_to(git_root))
-                + ","
-                + str(Path(token_file_name).relative_to(git_root))
-                + "\n"
-            )
+            result.append(_write_tokens(staff_image_file_name, token_file_name, selected_measures))
         current_voice = (current_voice + 1) % number_of_voices
 
     if image is not None:
         del image
 
     return result
+
+
+def _write_tokens(image_file: str, token_file: str, symbols: list[EncodedSymbol]) -> str:
+    """Writes the tokens and returns the index line."""
+    write_text_to_file(token_lines_to_str(symbols), token_file)
+    return (
+        str(Path(image_file).relative_to(git_root))
+        + ","
+        + str(Path(token_file).relative_to(git_root))
+        + "\n"
+    )
+
+
+def _verovio_staffs(
+    file: Path, voices: list[list[Measure]], just_token_files: bool, flat_folder: str
+) -> tuple[set[int], list[str]]:
+    """The parts which Verovio renders and their index lines, see verovio_staffs.py."""
+    staves_per_part = [get_svg_voice_count(voice) for voice in voices]
+    parts = choose_parts(file.stem, staves_per_part)
+    if not parts or not voices or has_multi_measure_rests(str(file)):
+        return set(), []
+    try:
+        staffs = split_into_staffs(
+            str(file), voices, staves_per_part, parts, just_token_files, flat_folder
+        )
+    except Exception as e:
+        eprint("Verovio failed, using MuseScore for", file, e)
+        return set(), []
+    rendered_parts = {part for part, _image, _tokens, _symbols in staffs}
+    lines = [_write_tokens(image, tokens, symbols) for _part, image, tokens, symbols in staffs]
+    return rendered_parts, lines
 
 
 def _leading_clefs(measure: Measure) -> list[EncodedSymbol]:
@@ -658,6 +748,7 @@ def convert_xml_and_svg_file(
 ) -> list[str]:
     try:
         voices = music_xml_file_to_tokens(str(file))
+        verovio_parts, result = _verovio_staffs(file, voices, just_token_files, flat_folder)
         splitter = [MeasureCutter(v) for v in voices]
         pages = split_into_pages(voices)
         svg_files = get_position_from_multiple_svg_files(str(file))
@@ -668,7 +759,6 @@ def convert_xml_and_svg_file(
                     svg_file.merge_voice_with_next_one(voice_idx, number_of_voices)
                 number_of_voices -= 1
 
-        result: list[str] = []
         assert len(pages) == len(svg_files)  # noqa: S101
 
         for i, page in enumerate(pages):
@@ -696,6 +786,7 @@ def convert_xml_and_svg_file(
                     just_token_files,
                     fail_if_image_is_missing,
                     flat_folder,
+                    verovio_parts,
                 )
             )
         return result
@@ -714,20 +805,44 @@ def _convert_token_and_image(path: Path) -> list[str]:
     return convert_xml_and_svg_file(path, False, flat_data)
 
 
-def convert_file_only_token_pdmx(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, True, flat_pdmx)
+_RESULT_TIMEOUT_S = 15 * 60
 
 
-def convert_token_and_image_pdmx(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, False, flat_pdmx)
+def write_index(
+    index_path: str, music_xml_files: list[Path], convert: Callable[[Path], list[str]]
+) -> None:
+    """
+    Converts the files in parallel and writes the index lines.
 
-
-def convert_file_only_token_musetrainer(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, True, flat_musetrainer)
-
-
-def convert_token_and_image_musetrainer(path: Path) -> list[str]:
-    return convert_xml_and_svg_file(path, False, flat_musetrainer)
+    A worker that crashes (e.g. a segfault in Verovio) loses its result and the pool
+    would wait forever, so we stop once no result arrives within the timeout.
+    """
+    with open(index_path, "w") as f:
+        file_number = 0
+        skipped_files = 0
+        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
+            results = p.imap_unordered(convert, music_xml_files)
+            while True:
+                try:
+                    result = results.next(timeout=_RESULT_TIMEOUT_S)
+                except StopIteration:
+                    break
+                except multiprocessing.TimeoutError:
+                    missing = len(music_xml_files) - file_number
+                    eprint(f"No result for {_RESULT_TIMEOUT_S}s, giving up on {missing} files")
+                    break
+                if len(result) > 0:
+                    for line in result:
+                        f.write(line)
+                    f.flush()
+                else:
+                    skipped_files += 1
+                file_number += 1
+                if file_number % 10 == 0:
+                    eprint(
+                        f"Processed {file_number}/{len(music_xml_files)} files,",
+                        f"skipped {skipped_files} files",
+                    )
 
 
 def convert_lieder(only_recreate_token_files: bool = False) -> None:
@@ -780,35 +895,13 @@ def convert_lieder(only_recreate_token_files: bool = False) -> None:
     eprint("Indexing Lieder dataset, this can up to several hours.")
     _create_musicxml_and_svg_files()
     music_xml_files = list(Path(os.path.join(lieder, "rendered_scores")).rglob("*.musicxml"))
-    with open(lieder_train_index, "w") as f:
-        file_number = 0
-        skipped_files = 0
-        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
-            for result in p.imap_unordered(
-                (
-                    _convert_file_only_token
-                    if only_recreate_token_files
-                    else _convert_token_and_image
-                ),
-                music_xml_files,
-            ):
-                if len(result) > 0:
-                    for line in result:
-                        f.write(line)
-                    f.flush()
-                else:
-                    skipped_files += 1
-                file_number += 1
-                if file_number % 10 == 0:
-                    eprint(
-                        f"Processed {file_number}/{len(music_xml_files)} files,",
-                        f"skipped {skipped_files} files",
-                    )
+    write_index(
+        lieder_train_index,
+        music_xml_files,
+        _convert_file_only_token if only_recreate_token_files else _convert_token_and_image,
+    )
     eprint("Done indexing")
 
-
-from training.omr_datasets.convert_musetrainer import flat_musetrainer
-from training.omr_datasets.convert_pdmx import flat_pdmx
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")

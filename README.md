@@ -21,7 +21,7 @@ You might also want to check out [Andromr](https://github.com/aicelen/Andromr), 
 The easiest way to get started is using `uvx` (`uv` must be installed). Select an inference backend:
 - CPU: `uvx --from 'homr[cpu]' homr <image>`
 - NVIDIA CUDA: `uvx --from 'homr[cuda]' homr <image>`
-- AMD ROCm: `uvx --python 3.12 --from 'homr[rocm]' homr <image>`
+- AMD ROCm: `uvx --python 3.12 --from homr --with https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl homr <image>`
 
 - The resulting MusicXML file will be saved in the same directory as the input image
 
@@ -31,7 +31,7 @@ The easiest way to get started is using `uvx` (`uv` must be installed). Select a
 - Install dependencies for:
   - Inference: `poetry install --only main --extras cpu`
   - Development: `poetry install --extras cpu`
-  - If using GPU, replace `--extras cpu` to `--extras cuda` / `--extras rocm`
+  - If using GPU, replace `--extras cpu` with `--extras cuda` (NVIDIA) or `--with rocm` (AMD)
 - Run the program using `poetry run homr <image>`
 - The resulting MusicXML file will be saved in the same directory as the input image
 
@@ -108,10 +108,6 @@ The transformer model generates these predictions in sequence, processing the de
 ### Stage 4: MusicXML Output
 
 The symbol sequence is converted into MusicXML format and saved to disk. The resulting file can be processed with tools like [musescore](https://musescore.com/) or [relieur](https://github.com/papoteur-mga/relieur) (for multi-image combinations).
-
-## Related Projects
-
-- [AEU-OMR](https://github.com/mtalhabalci/aeu-omr): an OMR model for printed Turkish makam music notation, based on homr.
 
 ## License
 

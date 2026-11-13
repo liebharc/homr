@@ -44,6 +44,39 @@ DYNAMICS_MODIFIER = [
 ]
 
 
+# Clefs with a small 8 above (8va) or below (8vb). Pitches are always the written
+# pitches, music_xml_generator converts them into sounding pitches.
+OCTAVE_CLEFS = ["clef_G2_8vb", "clef_G2_8va", "clef_F4_8vb", "clef_F4_8va"]
+# An octave shift lasts until octaveShiftStop or the end of the staff.
+OCTAVE_SHIFTS = ["octaveShift_8va", "octaveShift_8vb"]
+OCTAVE_SHIFT_STOP = "octaveShiftStop"
+
+
+def octaves_of_clef(clef: str) -> int:
+    """Octaves between written and sounding pitch, e.g. -1 for clef_G2_8vb."""
+    if clef.endswith("_8vb"):
+        return -1
+    if clef.endswith("_8va"):
+        return 1
+    return 0
+
+
+def octaves_of_shift(shift: str) -> int:
+    """Octaves between written and sounding pitch, e.g. 1 for octaveShift_8va."""
+    if shift == "octaveShift_8va":
+        return 1
+    if shift == "octaveShift_8vb":
+        return -1
+    return 0
+
+
+def transpose_octaves(pitch: str, octaves: int) -> str:
+    """Moves a pitch like C4 by whole octaves."""
+    if octaves == 0 or len(pitch) != 2 or not pitch[1].isdigit():
+        return pitch
+    return pitch[0] + str(int(pitch[1]) + octaves)
+
+
 def build_dict(tokens: Iterable[str]) -> dict[str, int]:
     result = {}
     for i, t in enumerate(tokens):
@@ -102,6 +135,12 @@ def build_rhythm() -> dict[str, int]:
 
     # Dynamics
     rhythm.extend([f"dynamic_{d}" for d in DYNAMICS])
+
+    # Octave clefs and octave shifts. Appended last so the indices of the
+    # tokens above stay the same and existing weights can be fine-tuned.
+    rhythm.extend(OCTAVE_CLEFS)
+    rhythm.extend(OCTAVE_SHIFTS)
+    rhythm.append(OCTAVE_SHIFT_STOP)
 
     return build_dict(rhythm)
 
@@ -240,13 +279,54 @@ def build_articulation() -> dict[str, int]:
     articulation.extend(articulations_lieder)
     articulation.extend([f"dynamic_{d}" for d in DYNAMICS_MODIFIER])
 
+    # Combinations found in PDMX and Lieder. Appended last so the indices
+    # of the tokens above stay the same.
+    articulation.extend(
+        [
+            "accent_accentStrong_tremolo",
+            "accent_arpeggiate_staccatissimo",
+            "accent_fermata_trill",
+            "fermata_mordent_staccato_trill",
+            "fermata_staccatissimo",
+            "mordent_staccato",
+            "mordent_trill",
+        ]
+    )
+
     return build_dict(articulation)
 
 
+SLURS = ["slurStart_slurStop", "slurStart", "slurStop"]
+# State of the primary beam of a note. Secondary beams follow from the durations.
+BEAMS = ["beamStart", "beamContinue", "beamStop"]
+
+
 def build_slur() -> dict[str, int]:
+    """
+    Slurs and beams share a branch. Beams are appended last so the indices
+    of the slurs stay the same.
+    """
     slur = [nonote, empty]
-    slur.extend(["slurStart_slurStop", "slurStart", "slurStop"])
+    slur.extend(SLURS)
+    for beam in BEAMS:
+        slur.append(beam)
+        slur.extend(f"{beam}_{s}" for s in SLURS)
     return build_dict(slur)
+
+
+def is_beamable(symbol: "EncodedSymbol") -> bool:
+    """Notes of an eighth or shorter can have a beam."""
+    return symbol.rhythm.startswith("note") and symbol.get_duration().kern >= 8
+
+
+def split_slur_and_beam(value: str) -> tuple[str, str]:
+    """Splits the value of the slur branch, e.g. into ("slurStart", "beamStop")."""
+    if value in (nonote, empty):
+        return value, empty
+    parts = value.split("_")
+    beams = [p for p in parts if p in BEAMS]
+    slurs = [p for p in parts if p not in BEAMS]
+    return str.join("_", slurs) or empty, beams[0] if beams else empty
 
 
 def build_pitch() -> dict[str, int]:
@@ -258,7 +338,7 @@ def build_pitch() -> dict[str, int]:
 
 
 def has_rhythm_symbol_a_position(rhythm: str) -> bool:
-    return rhythm.startswith(("note", "rest", "clef", "dynamic"))
+    return rhythm.startswith(("note", "rest", "clef", "dynamic", "octaveShift"))
 
 
 class Vocabulary:
@@ -379,9 +459,6 @@ class EncodedSymbol:
         # The coordinates mapped back to the image which was given to homr as input
         self.image_coordinates: tuple[float, float] | None = None
         self._duration: SymbolDuration | None = None
-
-    def is_control_symbol(self) -> bool:
-        return self.rhythm in ("BOS", "EOS", "PAD")
 
     def is_tuplet(self) -> bool:
         no_tuplet = self.remove_tuplet()

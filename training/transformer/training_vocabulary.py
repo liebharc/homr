@@ -6,10 +6,12 @@ import torch
 
 from homr.transformer.configs import default_config
 from homr.transformer.vocabulary import (
+    BEAMS,
     EncodedSymbol,
     Vocabulary,
     empty,
     has_rhythm_symbol_a_position,
+    is_beamable,
     is_lower_position,
     is_upper_or_has_no_position,
     nonote,
@@ -39,6 +41,11 @@ CLEF_ANCHORS = {
     "clef_C3": "C4",
     "clef_C4": "A3",
     "clef_C5": "F3",
+    # Pitches are written pitches, so an octave clef has the anchor of its base clef
+    "clef_G2_8vb": "B4",
+    "clef_G2_8va": "B4",
+    "clef_F4_8vb": "D3",
+    "clef_F4_8va": "D3",
 }
 
 
@@ -71,6 +78,18 @@ def _symbol_to_sortable(symbol: EncodedSymbol) -> int:
     if "rest" in symbol.rhythm:
         return 100000 + vocab.rhythm[symbol.rhythm] + position
     return 1000000 + position
+
+
+_BEAM_PRIORITY = ["beamContinue", "beamStart", "beamStop"]
+
+
+def _single_beam(slurs: set[str]) -> set[str]:
+    """
+    A voice has one beam state per chord. Two voices which share a position
+    can disagree, then the beam which continues wins.
+    """
+    beams = [b for b in _BEAM_PRIORITY if b in slurs]
+    return {s for s in slurs if s not in BEAMS or s == beams[0]}
 
 
 def _chord_to_str(chord: list[EncodedSymbol]) -> str:
@@ -109,13 +128,18 @@ def _chord_to_str(chord: list[EncodedSymbol]) -> str:
     upper_artics = _remove_item_helper(upper_artics, ".")
     lower_artics = _remove_item_helper(lower_artics, ".")
     for position, slurs in slurs_by_position.items():
-        voice_slurs = _remove_item_helper(slurs, ".")
-        first_in_voice = next(
-            idx for idx, s in enumerate(annotation_resorted) if s.position == position
-        )
-        annotation_resorted[first_in_voice] = annotation_resorted[first_in_voice].add_slurs(
-            list(voice_slurs)
-        )
+        voice_slurs = _single_beam(_remove_item_helper(slurs, "."))
+        in_voice = [idx for idx, s in enumerate(annotation_resorted) if s.position == position]
+        # Two voices can share a position, the beam belongs to a note which can have one
+        beamed = next((idx for idx in in_voice if is_beamable(annotation_resorted[idx])), None)
+        beams = [s for s in voice_slurs if s in BEAMS]
+        if beamed is not None and beamed != in_voice[0] and beams:
+            voice_slurs = voice_slurs - set(beams)
+            annotation_resorted[beamed] = annotation_resorted[beamed].add_slurs(beams)
+        if voice_slurs:
+            annotation_resorted[in_voice[0]] = annotation_resorted[in_voice[0]].add_slurs(
+                list(voice_slurs)
+            )
 
     if len(upper_artics) > 0:
         first_upper = next(

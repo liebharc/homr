@@ -12,12 +12,17 @@ import numpy as np
 from homr import constants
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
+    OCTAVE_SHIFT_STOP,
     EncodedSymbol,
     SymbolDuration,
     empty,
     is_lower_position,
     nonote,
+    octaves_of_clef,
+    octaves_of_shift,
     sort_token_chords,
+    split_slur_and_beam,
+    transpose_octaves,
 )
 
 
@@ -29,6 +34,13 @@ class ConversionState:
         self.tremolo_state = "stop"
         self.volta_number = 1
         self.last_volta_measure = -10
+        # Octaves between written and sounding pitch per staff, from octave clefs and shifts
+        self.clef_octaves: dict[int, int] = {}
+        self.shift_octaves: dict[int, int] = {}
+
+    def sounding_pitch(self, written_pitch: str, staff: int) -> str:
+        octaves = self.clef_octaves.get(staff, 0) + self.shift_octaves.get(staff, 0)
+        return transpose_octaves(written_pitch, octaves)
 
     def start_volta(self, measure_no: int) -> int:
         if measure_no == self.last_volta_measure + 1:
@@ -122,10 +134,6 @@ def generate_xml(
     return root
 
 
-def xml_to_string(element: ET.Element) -> str:
-    return ET.tostring(element, encoding="unicode")
-
-
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
     """True if any symbol uses the lower staff (e.g. piano left hand / bass clef)."""
     return any(is_lower_position(s.position) for s in voice)
@@ -140,6 +148,7 @@ def build_part(
         part.append(measure)
     convert_ties(part)
     add_stems(part)
+    convert_beams(part)
     _remove_position_attributes(part)
     return part
 
@@ -222,6 +231,8 @@ def build_measures(
                     current_measure.append(build_backup(state.nominator, state))
                 current_measure.append(build_measure_rest(rest, state))
         elif rhythm == "newline":
+            # An octave shift ends with its staff, the next staff repeats it if it continues
+            stop_octave_shifts(current_measure, state)
             is_last_measure = group_no == len(groups) - 1
             if not is_last_measure:
                 ET.SubElement(current_measure, "print", attrib={"new-system": "yes"})
@@ -230,6 +241,9 @@ def build_measures(
             for should_be_clef in group.symbols:
                 if should_be_clef.rhythm.startswith("clef"):
                     build_clef(should_be_clef, attributes)
+                    state.clef_octaves[get_staff(should_be_clef)] = octaves_of_clef(
+                        should_be_clef.rhythm
+                    )
         elif rhythm.startswith("keySignature"):
             attributes = build_or_get_attributes(current_measure, last_attributes)
             build_key(symbol, attributes)
@@ -278,14 +292,22 @@ def build_measures(
             barline = build_or_get_barline(current_measure, "right")
             build_barline_ending(symbol, barline, volta_number)
 
-        elif rhythm.startswith("dynamic") or symbol.articulation.startswith("dynamic"):
-            for dynamic in group.symbols:
-                build_dynamic(dynamic, current_measure)
+        elif rhythm.startswith(("dynamic", "octaveShift")) or symbol.articulation.startswith(
+            "dynamic"
+        ):
+            for marking in group.symbols:
+                if marking.rhythm.startswith("octaveShift"):
+                    build_octave_shift(marking, current_measure, state)
+                else:
+                    build_dynamic(marking, current_measure)
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
     if len(list(current_measure)) > 0:
+        stop_octave_shifts(current_measure, state)
         close_current_measure()
+    elif measures:
+        stop_octave_shifts(measures[-1], state)
     # A clef opens a second attributes element, so look at the whole first measure
     if measures[0].find("attributes/time") is None:
         time_el = ET.SubElement(first_attributes, "time")
@@ -446,6 +468,47 @@ def build_dynamic(model_dynamic: EncodedSymbol, measure: ET.Element) -> None:
     dynamics.extend(marks)
 
     ET.SubElement(direction, "staff").text = str(get_staff(model_dynamic))
+
+
+def build_octave_shift(
+    model_shift: EncodedSymbol, measure: ET.Element, state: ConversionState
+) -> None:
+    staff = get_staff(model_shift)
+    if state.shift_octaves.get(staff, 0) != 0:
+        _build_octave_shift_direction(measure, staff, "stop", "above")
+        state.shift_octaves[staff] = 0
+    if model_shift.rhythm == OCTAVE_SHIFT_STOP:
+        return
+    octaves = octaves_of_shift(model_shift.rhythm)
+    if octaves == 0:
+        eprint("Unknown octave shift", model_shift)
+        return
+    # MusicXML names the direction in which the notes are printed: 8va is down
+    shift_type, placement = ("down", "above") if octaves > 0 else ("up", "below")
+    _build_octave_shift_direction(measure, staff, shift_type, placement)
+    state.shift_octaves[staff] = octaves
+
+
+def stop_octave_shifts(measure: ET.Element, state: ConversionState) -> None:
+    for staff, octaves in state.shift_octaves.items():
+        if octaves != 0:
+            _build_octave_shift_direction(measure, staff, "stop", "above")
+    state.shift_octaves = {}
+
+
+def _build_octave_shift_direction(
+    measure: ET.Element, staff: int, shift_type: str, placement: str
+) -> None:
+    direction = ET.Element("direction", placement=placement)
+    direction_type = ET.SubElement(direction, "direction-type")
+    ET.SubElement(direction_type, "octave-shift", type=shift_type, size="8", number=str(staff))
+    ET.SubElement(direction, "staff").text = str(staff)
+    children = list(measure)
+    # Stop after the last note: a trailing backup would move it before that note
+    if shift_type == "stop" and children and children[-1].tag == "backup":
+        measure.insert(len(children) - 1, direction)
+    else:
+        measure.append(direction)
 
 
 def build_key(model_key: EncodedSymbol, attributes: ET.Element) -> None:
@@ -634,6 +697,166 @@ def convert_ties(part: ET.Element) -> None:
             tie_event(before, event)
 
 
+_BEAM_TYPES = {"beamStart": "begin", "beamContinue": "continue", "beamStop": "end"}
+_BEAMS_PER_TYPE = {"eighth": 1, "16th": 2, "32nd": 3, "64th": 4, "128th": 5}
+
+
+@dataclass
+class _BeamEvent:
+    """A chord of one position of the model, with the state of its primary beam."""
+
+    notes: list[ET.Element]
+    position: str
+    is_grace: bool
+    state: str | None
+    start: tuple[int, int]  # measure and time within it
+    end: tuple[int, int]
+
+
+def convert_beams(part: ET.Element) -> None:
+    """Turn the primary beam states of the model into complete beams.
+
+    The model predicts for each chord whether its primary beam starts, continues
+    or stops. Groups are formed per position of the model (e.g. upper2) rather
+    than per MusicXML voice, as voices can swap between chords. Rests don't
+    interrupt a group and it can cross a barline. A beam which continues on the
+    other staff joins the open group there, the notes then move into its voice.
+    A group with only one note, or a state which doesn't fit, is repaired rather
+    than written as it is. Secondary beams and hooks follow from the durations.
+    """
+    open_groups: dict[tuple[str, bool], list[_BeamEvent]] = {}
+    groups: list[list[_BeamEvent]] = []
+
+    def close(key: tuple[str, bool]) -> None:
+        group = open_groups.pop(key, [])
+        if len(group) >= 2:
+            groups.append(group)
+
+    for event in _beam_events(part):
+        key = (event.position, event.is_grace)
+        if event.state is None or _beam_count(event.notes[0]) == 0:
+            close(key)
+            continue
+        if event.state == "begin":
+            close(key)
+        elif key not in open_groups:
+            other = _cross_staff_group(open_groups, event)
+            if other is not None:
+                _join_voice(open_groups[other], event)
+                open_groups[other].append(event)
+                if event.state == "end":
+                    close(other)
+                continue
+        open_groups.setdefault(key, []).append(event)
+        if event.state == "end":
+            close(key)
+    for key in list(open_groups):
+        close(key)
+    for group in groups:
+        _write_beams([event.notes for event in group])
+
+
+def _beam_events(part: ET.Element) -> list[_BeamEvent]:
+    """The chords with notes of a part in the order of time, beams are removed."""
+    events: list[tuple[int, _BeamEvent]] = []
+    for measure_no, measure in enumerate(part.findall("measure")):
+        times = _note_times(measure)
+        for event in group_into_events(measure):
+            first = event[0]
+            position = first.get(_POSITION_ATTRIBUTE)
+            state = None
+            for note in event:
+                for beam in note.findall("beam"):
+                    if beam.get("number") == "1" and state is None:
+                        state = beam.text
+                    note.remove(beam)
+            if position is None or first.find("rest") is not None:
+                continue
+            start, end = times[id(first)]
+            beam_event = _BeamEvent(
+                event,
+                position,
+                first.find("grace") is not None,
+                state,
+                (measure_no, start),
+                (measure_no, end),
+            )
+            events.append((len(events), beam_event))
+    events.sort(key=lambda e: (e[1].start, e[0]))
+    return [event for _, event in events]
+
+
+def _note_times(measure: ET.Element) -> dict[int, tuple[int, int]]:
+    """Start and end of each note in a measure, in divisions."""
+    result: dict[int, tuple[int, int]] = {}
+    time = 0
+    last_start = 0
+    for child in measure:
+        if child.tag in ("backup", "forward"):
+            duration = int(child.findtext("duration", "0"))
+            time += -duration if child.tag == "backup" else duration
+        elif child.tag == "note":
+            duration = int(child.findtext("duration", "0"))
+            if child.find("chord") is not None:
+                result[id(child)] = (last_start, last_start + duration)
+                continue
+            last_start = time
+            result[id(child)] = (time, time + duration)
+            time += duration
+    return result
+
+
+def _cross_staff_group(
+    open_groups: dict[tuple[str, bool], list[_BeamEvent]], event: _BeamEvent
+) -> tuple[str, bool] | None:
+    """The open group on the other staff which the event can continue, if there is one."""
+    staff = event.notes[0].findtext("staff", "1")
+    candidates = [
+        key
+        for key, group in open_groups.items()
+        if key[1] == event.is_grace
+        and group[-1].notes[0].findtext("staff", "1") != staff
+        and group[-1].end <= event.start
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _join_voice(group: list[_BeamEvent], event: _BeamEvent) -> None:
+    """A beam is drawn within a voice, so the notes move into the voice of the group."""
+    voice = group[0].notes[0].findtext("voice", "1")
+    for note in event.notes:
+        voice_el = note.find("voice")
+        if voice_el is not None:
+            voice_el.text = voice
+
+
+def _beam_count(note: ET.Element) -> int:
+    return _BEAMS_PER_TYPE.get(note.findtext("type", ""), 0)
+
+
+def _write_beams(group: list[list[ET.Element]]) -> None:
+    counts = [_beam_count(event[0]) for event in group]
+    for index, event in enumerate(group):
+        note = event[0]
+        staff = note.find("staff")
+        position = list(note).index(staff) + 1 if staff is not None else len(note)
+        for level in range(1, counts[index] + 1):
+            has_previous = index > 0 and counts[index - 1] >= level
+            has_next = index < len(group) - 1 and counts[index + 1] >= level
+            if has_previous and has_next:
+                beam_type = "continue"
+            elif has_previous:
+                beam_type = "end"
+            elif has_next:
+                beam_type = "begin"
+            else:
+                beam_type = "forward hook" if index == 0 else "backward hook"
+            beam = ET.Element("beam", number=str(level))
+            beam.text = beam_type
+            note.insert(position, beam)
+            position += 1
+
+
 def group_into_events(measure: ET.Element) -> list[list[ET.Element]]:
     """The measure's notes, with each chord kept together as one event.
 
@@ -687,6 +910,9 @@ def build_clef(model_clef: EncodedSymbol, attributes: ET.Element) -> None:
     clef = ET.SubElement(attributes, "clef", number=str(get_staff(model_clef)))
     ET.SubElement(clef, "sign").text = sign_and_line[0]
     ET.SubElement(clef, "line").text = sign_and_line[1]
+    octaves = octaves_of_clef(model_clef.rhythm)
+    if octaves != 0:
+        ET.SubElement(clef, "clef-octave-change").text = str(octaves)
 
 
 def build_time_signature(
@@ -860,9 +1086,10 @@ def build_note_or_rest(
         eprint("WARNING note without pitch", model_note)
         ET.SubElement(note, "rest")
     else:
+        sounding_pitch = state.sounding_pitch(model_pitch, get_staff(model_note))
         pitch = ET.SubElement(note, "pitch")
-        ET.SubElement(pitch, "step").text = model_pitch[0]
-        ET.SubElement(pitch, "octave").text = model_pitch[1]
+        ET.SubElement(pitch, "step").text = sounding_pitch[0]
+        ET.SubElement(pitch, "octave").text = sounding_pitch[1:]
         if model_note.lift == nonote:
             eprint("WARNING note with invalid lift", model_note)
         elif model_note.lift != empty:
@@ -893,13 +1120,17 @@ def build_note_or_rest(
     slur_number = staff_num
     ET.SubElement(note, "voice").text = str(get_xml_voice(staff_num, rhythmic_layer))
     ET.SubElement(note, "staff").text = str(staff_num)
-    # Used for voices and stems, removed at the end of build_part
+    slurs, beam = split_slur_and_beam(model_note.slur)
+    # Used for voices, stems and beams, removed at the end of build_part
     note.set(_POSITION_ATTRIBUTE, model_note.position)
+    if beam in _BEAM_TYPES and model_pitch not in (empty, nonote):
+        # Completed by convert_beams
+        ET.SubElement(note, "beam", number="1").text = _BEAM_TYPES[beam]
 
     # The other notes of a group, e.g. in the other staff, aren't part of the tuplet
     is_tuplet = model_duration.actual_notes != model_duration.normal_notes
     build_articulations(note, model_note.articulation, tuplet_mark if is_tuplet else "", state)
-    build_slurs(note, model_note.slur, slur_number)
+    build_slurs(note, slurs, slur_number)
     build_image_position(note, model_note)
 
     return note

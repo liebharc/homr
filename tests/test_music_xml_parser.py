@@ -1,9 +1,7 @@
 # ruff: noqa: E501
 
-import re
 import unittest
 import xml.etree.ElementTree as ET
-from typing import Any
 
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
@@ -448,9 +446,9 @@ barline . . . . ."""
         expected = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 keySignature_1 . . . . .
 timeSignature/4 . . . . .
-note_12 B5 _ _ slurStart_slurStop upper&note_12 G5 _ _ _ upper&note_4 B1 _ _ _ lower
-note_12 G5 _ staccato _ upper&note_12 D5 # _ _ upper
-note_12 D5 # staccato _ upper&note_12 B4 _ _ _ upper
+note_12 B5 _ _ beamStart_slurStart_slurStop upper&note_12 G5 _ _ _ upper&note_4 B1 _ _ _ lower
+note_12 G5 _ staccato beamContinue upper&note_12 D5 # _ _ upper
+note_12 D5 # staccato beamStop upper&note_12 B4 _ _ _ upper
 note_2 B4 _ _ slurStart_slurStop upper&note_4 G4 _ _ _ upper2&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
 note_4 A4 _ _ slurStop upper2&note_4 F4 # _ _ upper2&note_4 B3 _ _ _ lower&note_4 D3 # _ _ lower
 barline . . . . ."""
@@ -769,59 +767,6 @@ barline . . . . ."""
         self.assertEqual(grace, ["note_8G G2 _ _ _ lower"])
         self.assertIn("arpeggiate", tokens)
 
-    def _norm_expected(self, expected: str) -> str:
-        norm = expected.replace("\n", "")
-        norm = re.sub(r",\s+", ",", norm)
-        norm = re.sub(r"\[\s+", "[", norm)
-        return norm
-
-    def _xml_to_str(self, xml: Any) -> str:
-        def recurse(node_or_list: Any) -> str:
-            if isinstance(node_or_list, list):
-                return (
-                    "["
-                    + ",".join(recurse(child) for child in node_or_list if child is not None)
-                    + "]"
-                )
-
-            node = node_or_list
-            name = node.__class__.__name__
-
-            ignore_nodes = (
-                "XMLAlter",
-                "XMLOctave",
-                "XMLType",
-                "XMLPartList",
-                "XMLDefaults",
-            )
-
-            if name in ignore_nodes:
-                return ""
-            value = getattr(node, "value_", None)
-
-            if hasattr(node, "children"):
-                children = node.children
-            elif hasattr(node, "get_children"):
-                children = node.get_children()
-            else:
-                children = []
-
-            child_strs = [recurse(child) for child in children if child is not None]
-            child_strs = [child for child in child_strs if child != ""]
-
-            parts = []
-            if value is not None and value != "":
-                parts.append(f"value: {value}")
-            if child_strs:
-                parts.append(f"[{','.join(child_strs)}]")
-
-            if parts:
-                return f"{name}({','.join(parts)})"
-            else:
-                return f"{name}()"
-
-        return recurse(xml)
-
     def _rhythms_per_measure(self, measures_xml: str) -> list[list[str]]:
         attributes = (
             "<attributes><divisions>6</divisions><key><fifths>0</fifths></key>"
@@ -1016,7 +961,7 @@ note_2 D5 _ _ _ upper&note_2 D3 _ _ _ lower
 barline . . . . ."""
         self.assertEqual(token_str, expected)
 
-    def test_octave_shift_is_only_allowed_for_benchmarks(self) -> None:
+    def test_benchmarks_ignore_octave_shifts(self) -> None:
         example = """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
   <part id="P1">
@@ -1035,9 +980,7 @@ barline . . . . ."""
   </part>
 </score-partwise>
 """
-        with self.assertRaises(ValueError):
-            music_xml_string_to_tokens(example)
-        tokens = music_xml_string_to_tokens(example, allow_octave_shifts=True)
+        tokens = music_xml_string_to_tokens(example, sounding_pitch=True)
         flat_list = [x for xxs in tokens for xs in xxs for x in xs]
         expected = """clef_G2 _ _ _ _ upper
 timeSignature/4 . . . . .

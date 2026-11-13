@@ -21,24 +21,25 @@ from training.omr_datasets.convert_grandstaff import (
     grandstaff_train_index,
 )
 from training.omr_datasets.convert_lieder import convert_lieder, lieder_train_index
-from training.omr_datasets.convert_musetrainer import (
-    convert_musetrainer,
-    musetrainer_train_index,
-)
 from training.omr_datasets.convert_pdmx import convert_pdmx, pdmx_train_index
-from training.omr_datasets.convert_primus import (
-    convert_primus_dataset,
-    primus_train_index,
+from training.omr_datasets.filter_from_index import (
+    read_invalid_tokens,
+    without_invalid_tokens,
+    write_invalid_tokens,
 )
-from training.omr_datasets.filter_from_index import remove_tokens
 from training.omr_datasets.photo_index import photos_train_index
 from training.run_id import get_run_id
-from training.transformer.data_loader import label_names, load_dataset
+from training.transformer.data_loader import collate_trimmed, label_names, load_dataset
 from training.transformer.distribute import Distribute
 from training.transformer.metrics import HomrTrainer
 from training.transformer.mix_datasets import mix_training_sets
 
 torch._dynamo.config.suppress_errors = True
+# Batches are padded to multiples of 64 tokens. Compile each length statically: Inductor
+# fails on a dynamic sequence length and then falls back to eager mode.
+# Up to 10 lengths, each for training, the no-grad pass and evaluation.
+torch._dynamo.config.automatic_dynamic_shapes = False
+torch._dynamo.config.recompile_limit = 64
 
 
 class FreezeCallback(TrainerCallback):
@@ -89,12 +90,18 @@ def check_data_source(all_file_paths: list[str]) -> bool:
 
 
 def load_and_mix_training_sets(
-    index_paths: list[str], weights: list[float], number_of_files: int
+    index_paths: list[str],
+    weights: list[float],
+    number_of_files: int,
+    invalid_tokens: set[str] | None = None,
 ) -> list[str]:
     if len(index_paths) != len(weights):
         eprint("Error: Number of index paths and weights do not match")
         sys.exit(1)
-    data_sources = [load_training_index(index) for index in index_paths]
+    data_sources = [
+        without_invalid_tokens(load_training_index(index), invalid_tokens or set())
+        for index in index_paths
+    ]
     if not all(check_data_source(data) for data in data_sources):
         eprint("Error in datasets found")
         sys.exit(1)
@@ -109,19 +116,13 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = os.path.join(script_location, "..", "..")
 
 
-def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
+def _check_datasets_are_present(selected_datasets: list[str], invalid_tokens_file: str) -> None:
     for dataset in selected_datasets:
-        if dataset == primus_train_index and not os.path.exists(primus_train_index):
-            convert_primus_dataset()
-
         if dataset == grandstaff_train_index and not os.path.exists(grandstaff_train_index):
             convert_grandstaff()
 
         if dataset == lieder_train_index and not os.path.exists(lieder_train_index):
             convert_lieder()
-
-        if dataset == musetrainer_train_index and not os.path.exists(musetrainer_train_index):
-            convert_musetrainer()
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
@@ -133,8 +134,7 @@ def _check_datasets_are_present(selected_datasets: list[str]) -> list[str]:
             )
 
             convert_photos()
-    remove_tokens(selected_datasets)
-    return selected_datasets
+    write_invalid_tokens(invalid_tokens_file)
 
 
 def train_transformer(
@@ -156,17 +156,18 @@ def train_transformer(
         if distribute.is_rank0():
             shutil.rmtree(os.path.join(git_root, checkpoint_folder))
 
+    # PrIMuS isn't used: it has no beams and its Hugging Face copy is CC BY-NC (non-commercial)
+    # MuseTrainer isn't used: 1k samples, it adds little next to PDMX and has no license file
     dataset_index = [
         lieder_train_index,
         grandstaff_train_index,
-        primus_train_index,
         pdmx_train_index,
-        musetrainer_train_index,
         photos_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    dataset_weights = [1.0, 1.0, 1.0, 1.0]
+    invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
-        _check_datasets_are_present(dataset_index)
+        _check_datasets_are_present(dataset_index, invalid_tokens_file)
     distribute.barrier()
 
     number_of_files = -1
@@ -174,10 +175,16 @@ def train_transformer(
         dataset_index,
         dataset_weights,
         number_of_files,
+        read_invalid_tokens(invalid_tokens_file),
     )
 
     config = Config()
-    datasets = load_dataset(train_index, config, val_split=0.1)
+    datasets = load_dataset(
+        train_index,
+        config,
+        val_split=0.1,
+        validation_cache_dir=os.path.join(git_root, checkpoint_folder, "validation_cache"),
+    )
 
     compile_threshold = 50000
     compile_model = (
@@ -188,7 +195,8 @@ def train_transformer(
 
     run_id = get_run_id()
 
-    batch_size = 8  # 8gb vram
+    batch_size = 16  # 16gb vram
+    eval_batch_size = 32
 
     train_args = TrainingArguments(
         checkpoint_folder,
@@ -197,9 +205,9 @@ def train_transformer(
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
         optim="adamw_torch_fused",
-        gradient_accumulation_steps=max(1, 4 // distribute.get_world_size()),
+        gradient_accumulation_steps=max(1, 2 // distribute.get_world_size()),
         per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size // 2,
+        per_device_eval_batch_size=eval_batch_size,
         num_train_epochs=number_of_epochs,
         weight_decay=0.05,
         warmup_ratio=0.1,
@@ -211,6 +219,7 @@ def train_transformer(
         logging_dir=os.path.join("logs", f"run{run_id}"),
         label_names=label_names,
         bf16=not fp32,
+        logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
         dataloader_pin_memory=True,
         dataloader_num_workers=12,
     )
@@ -244,6 +253,7 @@ def train_transformer(
             model,
             train_args,
             train_dataset=datasets["train"],
+            data_collator=collate_trimmed,
             eval_dataset=datasets["validation"],
             callbacks=callbacks,
             distribute=distribute,

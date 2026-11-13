@@ -10,6 +10,26 @@ This log contains the major milestones of the training process, as well as faile
 
 This will download the dataset and start the training. Training takes about 1 hour.
 
+### Staff relation models
+
+```
+poetry run python -m training.staff_relations.create_dataset
+poetry run python -m training.staff_relations.render_parts
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_parts --directory datasets/staff_relations_singles
+poetry run python -m training.staff_relations.render_parts --parts melody --directory datasets/staff_relations_melody
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_melody --directory datasets/staff_relations_melody_pairs
+poetry run python -m training.staff_relations.render_parts --parts melody --start-bar-line --directory datasets/staff_relations_melody_sb
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_melody_sb --directory datasets/staff_relations_melody_sb_pairs
+poetry run python -m training.staff_relations.render_pdmx
+poetry run python -m training.staff_relations.render_pdmx --seed 2 --single-parts 1500 --directory datasets/staff_relations_pdmx_singles_scores
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_pdmx_scores --directory datasets/staff_relations_pdmx --pages 3000
+poetry run python -m training.staff_relations.create_dataset --sources datasets/staff_relations_pdmx_singles_scores --directory datasets/staff_relations_pdmx_singles --pages 3000
+poetry run python -m training.staff_relations.train --epochs 5 --directories datasets/staff_relations datasets/staff_relations_singles datasets/staff_relations_melody_pairs datasets/staff_relations_melody_sb_pairs datasets/staff_relations_pdmx datasets/staff_relations_pdmx_singles
+poetry run python -m training.staff_relations.train --kind horizontal
+```
+
+Renders MuseScore pages from Lieder and PDMX, runs homr's staff detection on degraded versions and labels the detected staff pairs from the SVG. Training takes a few minutes per epoch on a single GPU. Evaluation: `validation.staff_structure` and `training.staff_relations.evaluate_photos`.
+
 ### Transformer (TrOmr)
 
 Prerequisites:
@@ -22,11 +42,11 @@ Prerequisites:
 
 Download the datasets and convert them to the format required for training:
 
-- `training/omr_datasets/convert_primus.py`
 - `training/omr_datasets/convert_grandstaff.py`
 - `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
+  - Lieder and PDMX: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore, with a random font and size. See `training/omr_datasets/verovio_staffs.py`.
 - `training/omr_datasets/convert_photos.py`
   - Pastes Lieder songs onto real phone photos of printed template pages ([homr-photo-pages](https://github.com/slobaspeed/homr-photo-pages)). Run it after `convert_lieder.py`; it downloads the photos and [UVDoc](https://github.com/tanguymagne/UVDoc).
 
@@ -37,7 +57,7 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
-You can check the log and see number of training files to be 190k: `Total number of training files to choose from 190722`
+The log shows the number of training files: `Total number of training files to choose from ...`. PrIMuS isn't used anymore, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
 This takes around 2–4 days.
 
 Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:
@@ -78,6 +98,45 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+# Run 566 - Epoch 30
+Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
+Day: 13 November
+Transformer Smoke Test: 5%
+System Level: 5.7 diffs, SER: 3.7%
+Polish scores: 14.6%
+SMB scores: 13.0%
+
+https://github.com/liebharc/homr/pull/211 
+
+- Added support for beams
+- Faster training (model compilation takes longer but then the training itself is about twice as fast)
+- Removed PrIMuS and Musetrainer datasets as PrIMuS carries no beam info and Musetrainer is very small
+- Verovio is now used also for Lieder and PDMX as second renderer
+
+Only 30 epochs as an agent harness terminated the training ...
+
+# Run 520 - Epoch 14 - discarded
+Commit: c0a84a090eb2afb7282d1272df0e661aad42a7fc
+Day: 7 November
+System Level: ?
+Polish scores: 17.4%
+SMB scores: ?
+
+Experiment: Using text-only pretraining for the decoder. Stopped training because eval_accuracy was worse than previous runs. The code can be found here https://github.com/aicelen/homr/tree/exp/pretraining
+
+
+# Run 512 with staff relation models
+
+Commit: ac06fd68af6a3bc488c1e2106b92ec54c2b1e940
+Day: 31 October 2026
+System Level: 5.0 diffs, SER: 3.7% | 5.0 diffs, SER: 3.8% after MusicXML fixes
+Polish scores: 15.32% | 15.18% after MusicXML fixes
+SMB scores: 13.09% | 13.10% after MusicXML fixes
+
+Two small CNNs replace the brace heuristic that groups staffs into systems and grand staffs: `staff_relations_pdmx2` for vertical neighbors, `staff_pieces_h1` joins pieces of the same staff. Trained on Lieder and PDMX. Polish is unchanged, SMB fails on 3 instead of 5 pages.
+
+The MusicXML fixes of Run 512 apply here as well. With them, the staff relation models give the same Polish result as the brace heuristic, and SMB differs on 14 pages by 0.02 points in total.
 
 # Run 512
 

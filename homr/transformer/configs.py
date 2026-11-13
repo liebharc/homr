@@ -10,7 +10,7 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
-        model_name = "pytorch_model_509-2293bba14bfea47d9d28411339362af15fce4c31"
+        model_name = "pytorch_model_566-ccd1cb311c368b5711dd238d2464c615397a3f2b"
         self.encoder_path = os.path.join(
             workspace,
             f"encoder_{model_name}.onnx",
@@ -51,9 +51,6 @@ class FilePaths:
             "notetokenizer": self.notetokenizer,
         }
 
-    def to_json_string(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
-
 
 class DecoderArgs:
     def __init__(self) -> None:
@@ -77,9 +74,6 @@ class DecoderArgs:
             "ff_dropout": self.ff_dropout,
             "layer_dropout": self.layer_dropout,
         }
-
-    def to_json_string(self) -> str:
-        return json.dumps(self.to_dict(), indent=2)
 
 
 class Config:

@@ -32,48 +32,24 @@ def find_tokens() -> tuple[VocabularyStats, set[str]]:
     return stats, errors
 
 
-def remove_entry_from_train_index(file_path: str, files: set[str]) -> None:
-    for file in files:
-        if os.path.exists(file):
-            os.remove(file)
-            eprint(f"removing {file}")
+def write_invalid_tokens(file_path: str) -> None:
+    """Writes the token files which fail the vocabulary check, one per line."""
+    _, errors = find_tokens()
+    eprint(f"Skipping {len(errors)} token files with invalid tokens")
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w") as f:
+        f.writelines(os.path.normpath(e) + "\n" for e in sorted(errors))
 
-    temp_filename = file_path + ".tmp"
 
-    with open(file_path, "r") as f:
-        lines = f.readlines()
+def read_invalid_tokens(file_path: str) -> set[str]:
+    with open(file_path) as f:
+        return {line.strip() for line in f if line.strip()}
 
-    kept_lines = [
+
+def without_invalid_tokens(index_lines: list[str], invalid: set[str]) -> list[str]:
+    """Drops index lines which reference a file from invalid."""
+    return [
         line
-        for line in lines
-        if not any(os.path.normpath(item) in os.path.normpath(line) for item in files)
+        for line in index_lines
+        if not any(os.path.normpath(p) in invalid for p in line.strip().split(","))
     ]
-
-    with open(temp_filename, "w") as f:
-        f.writelines(kept_lines)
-
-    os.replace(temp_filename, file_path)
-
-
-def remove_tokens(indexes: list[str]) -> None:
-    stats, errors = find_tokens()
-    for index in indexes:
-        remove_entry_from_train_index(index, errors)
-
-
-if __name__ == "__main__":
-    from training.omr_datasets.convert_grandstaff import grandstaff_train_index
-    from training.omr_datasets.convert_lieder import lieder_train_index
-    from training.omr_datasets.convert_musetrainer import musetrainer_train_index
-    from training.omr_datasets.convert_pdmx import pdmx_train_index
-    from training.omr_datasets.convert_primus import primus_train_index
-
-    remove_tokens(
-        [
-            lieder_train_index,
-            musetrainer_train_index,
-            pdmx_train_index,
-            grandstaff_train_index,
-            primus_train_index,
-        ],
-    )

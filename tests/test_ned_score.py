@@ -1,11 +1,15 @@
 import unittest
 import xml.etree.ElementTree as ET
 
+import music21 as m21
+
 from homr.transformer.vocabulary import EncodedSymbol
 from validation.ned_score import (
     _align_parts,
     _ned_from_parts,
+    _parse_kern_documents,
     _split_grand_staff,
+    _split_kern_documents,
     _strip_articulation_from_parts,
     _without_unreliable_articulation,
     compute_ned,
@@ -228,3 +232,25 @@ class TestUnreliableArticulation(unittest.TestCase):
         with_flag = compute_ned(kern, pred, ignore_unreliable_articulation=True)
 
         self.assertGreater(with_flag.articulation_ned, 0.0)
+
+
+_TWO_DOCUMENTS = (
+    "**kern\n*clefG2\n*k[]\n*M4/4\n=1\n4c\n4d\n4e\n4f\n=2\n*-\n"
+    "\n"
+    "**kern\n*clefG2\n*k[]\n*M4/4\n=\n1g\n=\n*-\n"
+)
+
+
+class TestKernDocuments(unittest.TestCase):
+    def test_split_at_each_exordium(self) -> None:
+        docs = _split_kern_documents(_TWO_DOCUMENTS)
+        self.assertEqual(len(docs), 2)
+        self.assertTrue(docs[1].lstrip().startswith("**kern"))
+
+    def test_merge_keeps_all_documents_and_drops_repeated_attributes(self) -> None:
+        score = _parse_kern_documents(_TWO_DOCUMENTS)
+        part = score.parts[0]
+        notes = [n.name for n in part.recurse().notes]
+        self.assertEqual(notes, ["C", "D", "E", "F", "G"])
+        self.assertEqual(len(part.recurse().getElementsByClass(m21.clef.Clef)), 1)
+        self.assertEqual(len(part.recurse().getElementsByClass(m21.meter.TimeSignature)), 1)

@@ -53,7 +53,6 @@ class ScoreTransformerWrapper(nn.Module):
         self.pos_emb = AbsolutePositionalEmbedding(
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
-        self.attention_dim = config.max_width * config.max_height // config.patch_size**2 + 1
         self.attention_width = config.max_width // config.patch_size
         self.attention_height = config.max_height // config.patch_size
         self.patch_size = config.patch_size
@@ -398,6 +397,12 @@ class ScoreDecoder(nn.Module):
             mask = mask[:, :-1]
         mask = mask.bool()
 
+        # Padding is only at the end, so causal attention never lets a real token see it.
+        # Without a padding mask, attention can use the fast causal kernel and
+        # torch.compile doesn't break the graph. Outputs at padding positions change,
+        # but all losses ignore them.
+        attention_mask = None
+
         # Scheduled Sampling: Two-pass approach
         if self.training and sampling_prob < 1.0:
             with torch.no_grad():
@@ -409,7 +414,7 @@ class ScoreDecoder(nn.Module):
                     lifts=liftsi,
                     articulations=articulationsi,
                     slurs=slursi,
-                    mask=mask,
+                    mask=attention_mask,
                     cache=None,
                     return_center_of_attention=False,
                     **kwargs,
@@ -458,7 +463,7 @@ class ScoreDecoder(nn.Module):
                 lifts=liftsi,
                 articulations=articulationsi,
                 slurs=slursi,
-                mask=mask,
+                mask=attention_mask,
                 cache=None,
                 return_center_of_attention=False,
                 **kwargs,
