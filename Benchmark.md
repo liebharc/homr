@@ -198,8 +198,10 @@ All results are mean OMR-NED in % over the samples where the tool produced outpu
 
 ## musicdiff
 
-| dataset                         | homr           | transcoda     | oemer       | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
-| ------------------------------- | -------------- | ------------- | ----------- | ---------------------------------- | ------------------------ |
-| polish-scores                   | 23.0 (112/112) | 52.6 (98/112) |             | musicdiff crashes                  | 26.4 (112/112)           |
-| smb                             | 71.3 (683/685) |               |             |                                    | 72.3 (684/685)           |
-| smb, just the first 10 examples | 75.5 (10/10)   | 101.9 (9/10)  | 90.8(13/15) | 104.8 (11/20)                      |                          |
+SMB references hold one kern document per system. They are parsed one by one and appended into one score; converter21 alone keeps only the first. References converter21 can't parse count as failed.
+
+| dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
+| ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- | ------------------------ |
+| polish-scores                   | 23.0 (112/112) | 52.6 (98/112) |              | musicdiff crashes                  | 26.4 (112/112)           |
+| smb                             | 13.8 (681/685) |               |              |                                    | 16.8 (681/685)           |
+| smb, just the first 10 examples | 16.0 (10/10)   | 78.8 (10/10)  | 77.3 (13/15) | 101.4 (11/20)                      |                          |
