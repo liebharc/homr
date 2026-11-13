@@ -97,6 +97,23 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 566 - Epoch 30
+Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
+Day: 13 November
+Transformer Smoke Test: 5%
+System Level: 5.7 diffs, SER: 3.7%
+Polish scores: 14.6%
+SMB scores: 13.0%
+
+https://github.com/liebharc/homr/pull/211 
+
+- Added support for beams
+- Faster training (model compilation takes longer but then the training itself is about twice as fast)
+- Removed PrIMuS and Musetrainer datasets as PrIMuS carries no beam info and Musetrainer is very small
+- Verovio is now used also for Lieder and PDMX as second renderer
+
+Only 30 epochs as an agent harness terminated the training ...
+
 # Run 520 - Epoch 14 - discarded
 Commit: c0a84a090eb2afb7282d1272df0e661aad42a7fc
 Day: 7 November
