@@ -326,6 +326,27 @@ class TestStaffParsing(unittest.TestCase):
         )
         self.assertEqual("lower", result[2].position)
 
+    def test_measure_rests_like_starts_with_clef_key_and_time(self) -> None:
+        # The hidden staff gets its own clef and the key and time of the shown staff
+        symbols = [
+            EncodedSymbol("clef_G2", position="upper"),
+            EncodedSymbol("chord"),
+            EncodedSymbol("clef_F4", position="lower"),
+            EncodedSymbol("keySignature_-1"),
+            EncodedSymbol("timeSignature/2"),
+            EncodedSymbol("note_4", "C4", position="upper"),
+            EncodedSymbol("barline"),
+        ]
+
+        result = _measure_rests_like(
+            symbols, is_grandstaff=False, clefs=[EncodedSymbol("clef_G2", position="upper")]
+        )
+
+        self.assertEqual(
+            ["clef_G2", "keySignature_-1", "timeSignature/2", "measureRest", "barline"],
+            [s.rhythm for s in result],
+        )
+
     def test_clean_up_voice_restores_unmarked_triplets(self) -> None:
         # Three eighths in the right hand against each quarter in the left hand
         measure = """note_8 C5 _ _ _ upper&note_4 C3 _ _ _ lower
