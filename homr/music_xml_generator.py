@@ -212,7 +212,7 @@ def build_measures(
     # Without a printed time signature at its start, a page continues in the previous
     # page's one: the model reads only the beat type, so an estimate from the measure
     # lengths can't tell 2/2 from 4/4, and would bring a time change at every page.
-    inherited_length = _measure_length(inherited_time)
+    inherited_length = _time_signature_length(inherited_time)
     if inherited_length is not None and not _starts_with_time_signature(groups):
         state.nominator = inherited_length
     else:
@@ -335,7 +335,7 @@ def build_measures(
     return measures
 
 
-def _measure_length(time: TimeSignature | None) -> Fraction | None:
+def _time_signature_length(time: TimeSignature | None) -> Fraction | None:
     if time is None:
         return None
     try:
