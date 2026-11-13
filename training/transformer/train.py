@@ -27,6 +27,7 @@ from training.omr_datasets.filter_from_index import (
     without_invalid_tokens,
     write_invalid_tokens,
 )
+from training.omr_datasets.photo_index import photos_train_index
 from training.run_id import get_run_id
 from training.transformer.data_loader import collate_trimmed, label_names, load_dataset
 from training.transformer.distribute import Distribute
@@ -125,6 +126,14 @@ def _check_datasets_are_present(selected_datasets: list[str], invalid_tokens_fil
 
         if dataset == pdmx_train_index and not os.path.exists(pdmx_train_index):
             convert_pdmx()
+
+        if dataset == photos_train_index and not os.path.exists(photos_train_index):
+            # imported here: it needs the engraving libraries, which only this converter uses
+            from training.omr_datasets.convert_photos import (  # noqa: PLC0415
+                convert_photos,
+            )
+
+            convert_photos()
     write_invalid_tokens(invalid_tokens_file)
 
 
@@ -153,8 +162,9 @@ def train_transformer(
         lieder_train_index,
         grandstaff_train_index,
         pdmx_train_index,
+        photos_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0]
+    dataset_weights = [1.0, 1.0, 1.0, 1.0]
     invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index, invalid_tokens_file)
