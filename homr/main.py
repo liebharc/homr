@@ -25,7 +25,12 @@ from homr.bounding_boxes import (
 )
 from homr.debug import Debug
 from homr.model import InputPredictions, MultiStaff, Note, Staff
-from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
+from homr.music_xml_generator import (
+    TimeSignature,
+    XmlGeneratorArguments,
+    generate_xml,
+    last_time_signatures,
+)
 from homr.noise_filtering import filter_predictions
 from homr.note_detection import add_notes_to_staffs, combine_noteheads_with_stems
 from homr.onnx_providers import coreml_available, cuda_available, rocm_available
@@ -186,6 +191,7 @@ def process_image(
     image_path: str,
     config: ProcessingConfig,
     xml_generator_args: XmlGeneratorArguments,
+    inherited_times: list[TimeSignature | None] | None = None,
 ) -> str:
     eprint("Processing " + image_path)
     xml_file = replace_extension(image_path, ".musicxml")
@@ -234,7 +240,7 @@ def process_image(
         eprint("Found title:", title)
 
         eprint("Writing XML", result_staffs)
-        xml = generate_xml(xml_generator_args, result_staffs, title)
+        xml = generate_xml(xml_generator_args, result_staffs, title, inherited_times)
         ET.ElementTree(xml).write(xml_file, encoding="unicode", xml_declaration=True)
 
         eprint("Finished parsing " + str(len(result_staffs)) + " staves")
@@ -441,10 +447,15 @@ def run_homr(
     """
     eprint("Merging", len(images), "files:", images)
     xml_paths = []
+    # Each page continues in the time signature the previous page ends in
+    times: list[TimeSignature | None] | None = None
     for image_file in images:
         eprint("=========================================")
         try:
-            xml_paths.append(process_image(image_file, config, xml_generator_args))
+            xml_path = process_image(image_file, config, xml_generator_args, times)
+            xml_paths.append(xml_path)
+            # homr wrote this file itself
+            times = last_time_signatures(ET.parse(xml_path).getroot())  # noqa: S314
             eprint("Finished", image_file)
         except Exception as e:
             eprint(f"An error occurred while processing {image_file}: {e}")

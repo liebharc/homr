@@ -9,6 +9,7 @@ from homr.music_xml_generator import (
     _split_mixed_chord,
     convert_ties,
     generate_xml,
+    last_time_signatures,
     rebalance_measure_voices,
 )
 from homr.transformer.vocabulary import EncodedSymbol
@@ -212,6 +213,45 @@ barline . . . . ."""
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
         self.assertEqual(_times(xml), [("6", "8")])
+
+    _PAGE_WITHOUT_TIME_SIGNATURE = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+note_2 C4 _ _ _ upper
+note_2 D4 _ _ _ upper
+barline . . . . .
+note_1 E4 _ _ _ upper
+barline . . . . ."""
+
+    def test_page_without_time_signature_continues_in_the_previous_one(self) -> None:
+        """
+        A later page of a score in 2/2 prints no time signature. Estimated from the
+        measure lengths it would be 4/4, a time change at the page break.
+        """
+        tokens = read_token_lines(self._PAGE_WITHOUT_TIME_SIGNATURE.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "", [("2", "2")])
+
+        self.assertEqual(_times(xml), [("2", "2")])
+        self.assertEqual(last_time_signatures(xml), [("2", "2")])
+
+    def test_time_signature_is_estimated_without_a_previous_page(self) -> None:
+        tokens = read_token_lines(self._PAGE_WITHOUT_TIME_SIGNATURE.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("4", "4")])
+
+    def test_printed_time_signature_at_the_start_of_a_page_is_kept(self) -> None:
+        """A real time change, printed at the start of the page, isn't overridden."""
+        three_four = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2. C4 _ _ _ upper
+barline . . . . .
+note_2. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(three_four.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "", [("2", "2")])
+
+        self.assertEqual(_times(xml), [("3", "4")])
 
     def test_multi_measure_rest_is_written_as_that_many_measures(self) -> None:
         rest_then_note = """clef_G2 . . . . upper
