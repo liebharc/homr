@@ -23,7 +23,13 @@ from typing import TYPE_CHECKING, TypedDict
 import editdistance
 
 from homr.circle_of_fifths import strip_naturals
-from homr.transformer.vocabulary import EncodedSymbol, empty, nonote, sort_token_chords
+from homr.transformer.vocabulary import (
+    EncodedSymbol,
+    empty,
+    nonote,
+    sort_token_chords,
+    split_slur_and_beam,
+)
 from training.omr_datasets.humdrum_kern_parser import convert_kern_to_parts
 from training.omr_datasets.music_xml_parser import (
     music_xml_file_to_tokens,
@@ -176,7 +182,11 @@ def _strip_articulation_from_score(score: "m21.stream.Score") -> None:
 
 
 def _strip_position(symbols: list[EncodedSymbol]) -> list[EncodedSymbol]:
-    return [EncodedSymbol(s.rhythm, s.pitch, s.lift, s.articulation, s.slur) for s in symbols]
+    """Also drops beams, so that scores stay comparable with models without beams."""
+    return [
+        EncodedSymbol(s.rhythm, s.pitch, s.lift, s.articulation, split_slur_and_beam(s.slur)[0])
+        for s in symbols
+    ]
 
 
 def _flatten_part(measures: Sequence[Sequence[EncodedSymbol]]) -> list[EncodedSymbol]:

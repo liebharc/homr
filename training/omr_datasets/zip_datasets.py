@@ -6,7 +6,6 @@ import zipfile
 
 from training.omr_datasets.convert_grandstaff import grandstaff_train_index
 from training.omr_datasets.convert_lieder import lieder_train_index
-from training.omr_datasets.convert_primus import primus_train_index
 from training.transformer.image_utils import crop_info_path
 
 # Setup paths
@@ -14,7 +13,7 @@ script_location = os.path.dirname(os.path.realpath(__file__))
 git_root = os.path.abspath(os.path.join(script_location, "..", ".."))
 
 # Index CSV files
-index_files = [primus_train_index, grandstaff_train_index, lieder_train_index]
+index_files = [grandstaff_train_index, lieder_train_index]
 
 for index_file in index_files:
     index_path = os.path.join(git_root, index_file)

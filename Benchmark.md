@@ -192,14 +192,14 @@ All results are mean OMR-NED in % over the samples where the tool produced outpu
 
 | dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
 | ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- | ------------------------ |
-| polish-scores                   | 15.3 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       | 20.8 (109/112)           |
-| smb                             | 12.8 (679/685) |               |              |                                    | 17.2 (681/685)           |
+| polish-scores                   | 14.6 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       | 20.8 (109/112)           |
+| smb                             | 13.0 (682/685) |               |              |                                    | 17.2 (681/685)           |
 | smb, just the first 10 examples | 24.2 (10/10)   | 50.1 (9/10)   | 38.0 (13/15) | 75.6 (11/20)                       |                          |
 
 ## musicdiff
 
 | dataset                         | homr           | transcoda     | oemer       | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
 | ------------------------------- | -------------- | ------------- | ----------- | ---------------------------------- | ------------------------ |
-| polish-scores                   | 30.7 (112/112) | 52.6 (98/112) |             | musicdiff crashes                  | 26.4 (112/112)           |
-| smb                             | 74.3 (681/685) |               |             |                                    | 72.3 (684/685)           |
+| polish-scores                   | 23.0 (112/112) | 52.6 (98/112) |             | musicdiff crashes                  | 26.4 (112/112)           |
+| smb                             | 71.3 (683/685) |               |             |                                    | 72.3 (684/685)           |
 | smb, just the first 10 examples | 75.5 (10/10)   | 101.9 (9/10)  | 90.8(13/15) | 104.8 (11/20)                      |                          |

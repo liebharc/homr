@@ -169,38 +169,6 @@ def pad_to_3_dims(tensor: torch.Tensor) -> torch.Tensor:
     return tensor
 
 
-def add_margin(image: NDArray, top: int, bottom: int, left: int, right: int) -> NDArray:
-    # Works for (H, W) and (H, W, C) by treating channels uniformly
-
-    if image.ndim == 2:
-        image = image[..., None]  # promote to (H, W, 1)
-        squeeze = True
-    elif image.ndim == 3:
-        squeeze = False
-    else:
-        raise ValueError("Unsupported image shape")
-
-    h, w, c = image.shape
-
-    # per-channel background via mode
-    bg = np.array(
-        [np.bincount(image[..., ch].ravel()).argmax() for ch in range(c)],
-        dtype=image.dtype,
-    )
-
-    top_pad = np.full((top, w, c), bg, dtype=image.dtype)
-    bottom_pad = np.full((bottom, w, c), bg, dtype=image.dtype)
-    img_tb = np.vstack([top_pad, image, bottom_pad])
-
-    new_h = img_tb.shape[0]
-    left_pad = np.full((new_h, left, c), bg, dtype=image.dtype)
-    right_pad = np.full((new_h, right, c), bg, dtype=image.dtype)
-
-    out = np.hstack([left_pad, img_tb, right_pad])
-
-    return out[..., 0] if squeeze else out
-
-
 def apply_clahe(image: NDArray, p: float = 0.1) -> NDArray:
     if np.random.random() > p:
         return image

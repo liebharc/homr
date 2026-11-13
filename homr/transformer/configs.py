@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any
 
@@ -9,7 +10,7 @@ root_dir = os.getcwd()
 
 class FilePaths:
     def __init__(self) -> None:
-        model_name = "pytorch_model_509-2293bba14bfea47d9d28411339362af15fce4c31"
+        model_name = "pytorch_model_566-ccd1cb311c368b5711dd238d2464c615397a3f2b"
         self.encoder_path = os.path.join(
             workspace,
             f"encoder_{model_name}.onnx",
@@ -147,6 +148,9 @@ class Config:
             "decoder_heads": self.decoder_heads,
             "decoder_args": self.decoder_args.to_dict(),
         }
+
+    def to_json_string(self) -> str:
+        return json.dumps(self.to_dict(), indent=2)
 
 
 # Initialize the Config class

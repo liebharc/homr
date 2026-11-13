@@ -42,11 +42,11 @@ Prerequisites:
 
 Download the datasets and convert them to the format required for training:
 
-- `training/omr_datasets/convert_primus.py`
 - `training/omr_datasets/convert_grandstaff.py`
 - `training/omr_datasets/convert_lieder.py`
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
+  - Lieder and PDMX: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore, with a random font and size. See `training/omr_datasets/verovio_staffs.py`.
 
 Some checks:
 
@@ -55,7 +55,7 @@ Some checks:
 - `training/validate_music_xml_conversion.py`: Visualize datasets; takes one of `datasets/*/index.txt` as an argument
 
 Finally, start the training itself with: `training/train.py transformer`.  
-You can check the log and see number of training files to be 190k: `Total number of training files to choose from 190722`
+The log shows the number of training files: `Total number of training files to choose from ...`. PrIMuS isn't used anymore, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
 This takes around 2–4 days.
 
 Batch size for FP16 - don't forget to also modify gradient_accumulation_steps:
@@ -96,6 +96,23 @@ This validation provides a **more representative indication of overall system pe
 **Note:** The test dataset cannot be published due to copyright restrictions. In addition, the dataset is subject to change over time, which may affect the comparability of results across different runs.
 
 Implementation: `rate_validation_result.py`
+
+# Run 566 - Epoch 30
+Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
+Day: 13 November
+Transformer Smoke Test: 5%
+System Level: 5.7 diffs, SER: 3.7%
+Polish scores: 14.6%
+SMB scores: 13.0%
+
+https://github.com/liebharc/homr/pull/211 
+
+- Added support for beams
+- Faster training (model compilation takes longer but then the training itself is about twice as fast)
+- Removed PrIMuS and Musetrainer datasets as PrIMuS carries no beam info and Musetrainer is very small
+- Verovio is now used also for Lieder and PDMX as second renderer
+
+Only 30 epochs as an agent harness terminated the training ...
 
 # Run 520 - Epoch 14 - discarded
 Commit: c0a84a090eb2afb7282d1272df0e661aad42a7fc

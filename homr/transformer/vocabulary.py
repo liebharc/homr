@@ -279,13 +279,54 @@ def build_articulation() -> dict[str, int]:
     articulation.extend(articulations_lieder)
     articulation.extend([f"dynamic_{d}" for d in DYNAMICS_MODIFIER])
 
+    # Combinations found in PDMX and Lieder. Appended last so the indices
+    # of the tokens above stay the same.
+    articulation.extend(
+        [
+            "accent_accentStrong_tremolo",
+            "accent_arpeggiate_staccatissimo",
+            "accent_fermata_trill",
+            "fermata_mordent_staccato_trill",
+            "fermata_staccatissimo",
+            "mordent_staccato",
+            "mordent_trill",
+        ]
+    )
+
     return build_dict(articulation)
 
 
+SLURS = ["slurStart_slurStop", "slurStart", "slurStop"]
+# State of the primary beam of a note. Secondary beams follow from the durations.
+BEAMS = ["beamStart", "beamContinue", "beamStop"]
+
+
 def build_slur() -> dict[str, int]:
+    """
+    Slurs and beams share a branch. Beams are appended last so the indices
+    of the slurs stay the same.
+    """
     slur = [nonote, empty]
-    slur.extend(["slurStart_slurStop", "slurStart", "slurStop"])
+    slur.extend(SLURS)
+    for beam in BEAMS:
+        slur.append(beam)
+        slur.extend(f"{beam}_{s}" for s in SLURS)
     return build_dict(slur)
+
+
+def is_beamable(symbol: "EncodedSymbol") -> bool:
+    """Notes of an eighth or shorter can have a beam."""
+    return symbol.rhythm.startswith("note") and symbol.get_duration().kern >= 8
+
+
+def split_slur_and_beam(value: str) -> tuple[str, str]:
+    """Splits the value of the slur branch, e.g. into ("slurStart", "beamStop")."""
+    if value in (nonote, empty):
+        return value, empty
+    parts = value.split("_")
+    beams = [p for p in parts if p in BEAMS]
+    slurs = [p for p in parts if p not in BEAMS]
+    return str.join("_", slurs) or empty, beams[0] if beams else empty
 
 
 def build_pitch() -> dict[str, int]:
