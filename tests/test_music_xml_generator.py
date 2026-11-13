@@ -104,6 +104,25 @@ class TestMusicXmlGenerator(unittest.TestCase):
     the data sets to check that back and forth conversion works.
     """
 
+    def test_time_signature_estimate_follows_the_voices(self) -> None:
+        # A bar from a real score (Alexander's Ragtime Band): a syncopated right hand
+        # over quarter notes in the left hand. Adding the shortest note of each group
+        # gives 5/4; laid out by voice the bar is 4/4.
+        bar = """rest_4 _ _ _ _ upper&note_4 C3 _ _ _ lower
+note_8. E4 _ _ _ upper&note_4 G3 _ _ _ lower
+note_16 D4 _ _ _ upper
+note_8 E4 _ _ _ upper&note_4 G2 _ _ _ lower
+note_4. G4 _ _ _ upper
+note_4 G3 _ _ _ lower
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+timeSignature/4 . . . . ."""
+        tokens = read_token_lines([*header.splitlines(), *bar.splitlines() * 4])
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        time = xml.find("part/measure/attributes/time")
+        assert time is not None
+        self.assertEqual((time.findtext("beats"), time.findtext("beat-type")), ("4", "4"))
+
     def test_chord_with_different_duratons(self) -> None:
         tabi_measure_18_upper = """clef_G2 . . . . upper
 keySignature_4 . . . . .

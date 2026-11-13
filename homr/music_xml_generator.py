@@ -1276,26 +1276,35 @@ def find_division_and_time_signature_nominators(
     duration_in_measure = Fraction(0)
     segments: list[list[Fraction]] = [[]]
     has_time_signature = False
+    # Measure lengths are taken the way build_measures lays the groups out, so that
+    # voices which overlap (e.g. a melody over chords) aren't counted one after another
+    clock = GroupClock()
     for chord in voice:
         if chord.symbols and chord.symbols[0].rhythm.startswith("timeSignature"):
             if duration_in_measure > Fraction(0):
                 segments[-1].append(duration_in_measure)
                 duration_in_measure = Fraction(0)
+                clock = GroupClock()
             if has_time_signature:
                 segments.append([])
             has_time_signature = True
         elif chord.is_barline() and duration_in_measure > Fraction(0):
             segments[-1].append(duration_in_measure)
             duration_in_measure = Fraction(0)
+            clock = GroupClock()
         else:
+            timed = []
             for symbol in chord.symbols:
                 if symbol.rhythm.startswith(("note", "rest")):
                     frac = symbol.get_duration().fraction
                     if frac > Fraction(0):
                         durations.append(frac)
-            duration = chord.get_duration()
-            if duration > Fraction(0):
-                duration_in_measure += duration
+                        timed.append(frac)
+            if timed and not (len(chord.symbols) == 1 and chord.symbols[0].rhythm.endswith("m")):
+                clock.wait_for_voices(chord)
+                end = clock.time + max(timed)
+                clock.advance(chord)
+                duration_in_measure = max(duration_in_measure, end)
 
     if duration_in_measure > Fraction(0):
         segments[-1].append(duration_in_measure)
