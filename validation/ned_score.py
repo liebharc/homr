@@ -609,6 +609,82 @@ def _musicdiff_register_once() -> None:
         )
 
 
+def _split_kern_documents(kern_text: str) -> list[str]:
+    """Split kern text at each exordium (`**kern ...`) line into separate documents.
+
+    SMB references concatenate one document per system.
+    """
+    docs: list[list[str]] = [[]]
+    for line in kern_text.splitlines():
+        is_exordium = bool(line.strip()) and all(t.startswith("**") for t in line.split("\t"))
+        if is_exordium and any(prev.strip() for prev in docs[-1]):
+            docs.append([])
+        docs[-1].append(line)
+    return ["\n".join(doc) for doc in docs]
+
+
+def _parse_kern_documents(kern_text: str) -> "m21.stream.Score":
+    """Parse kern into one music21 Score, appending each further document's measures.
+
+    converter21 reads concatenated documents as an Opus and musicdiff would only see the
+    first one. Parts are matched by index; repeated clef, key and time signatures at the
+    start of a document are dropped, like the native parser does.
+    """
+    import music21 as m21  # noqa: PLC0415
+
+    scores: list[m21.stream.Score] = []
+    for doc in _split_kern_documents(kern_text):
+        with contextlib.redirect_stderr(io.StringIO()):
+            parsed = m21.converter.parse(doc, format="humdrum")
+        if isinstance(parsed, m21.stream.Opus):
+            scores.extend(parsed.scores)
+        elif isinstance(parsed, m21.stream.Score):
+            scores.append(parsed)
+    if not scores:
+        return m21.stream.Score()
+    merged = scores[0]
+    for score in scores[1:]:
+        _append_score(merged, score)
+    return merged
+
+
+def _append_score(target: "m21.stream.Score", source: "m21.stream.Score") -> None:
+    import music21 as m21  # noqa: PLC0415
+
+    attribute_classes = (m21.clef.Clef, m21.key.KeySignature, m21.meter.TimeSignature)
+    for t_part, s_part in zip(target.parts, source.parts, strict=False):
+        t_measures = t_part.getElementsByClass(m21.stream.Measure)
+        last = t_measures.last()
+        number = (last.number if last is not None else 0) or len(t_measures)
+        for i, measure in enumerate(list(s_part.getElementsByClass(m21.stream.Measure))):
+            if i == 0:
+                for el in list(measure.recurse().getElementsByClass(attribute_classes)):
+                    if el.offset != 0:
+                        continue
+                    active = t_part.recurse().getElementsByClass(type(el)).last()
+                    if active is not None and _same_attribute(active, el):
+                        el.activeSite.remove(el)
+            number += 1
+            measure.number = number
+            t_part.append(measure)
+        for spanner in s_part.getElementsByClass(m21.spanner.Spanner):
+            t_part.insert(0, spanner)
+    for spanner in source.getElementsByClass(m21.spanner.Spanner):
+        target.insert(0, spanner)
+
+
+def _same_attribute(a: object, b: object) -> bool:
+    import music21 as m21  # noqa: PLC0415
+
+    if isinstance(a, m21.clef.Clef) and isinstance(b, m21.clef.Clef):
+        return (a.sign, a.line, a.octaveChange) == (b.sign, b.line, b.octaveChange)
+    if isinstance(a, m21.key.KeySignature) and isinstance(b, m21.key.KeySignature):
+        return a.sharps == b.sharps
+    if isinstance(a, m21.meter.TimeSignature) and isinstance(b, m21.meter.TimeSignature):
+        return (a.ratioString, a.symbol) == (b.ratioString, b.symbol)
+    return False
+
+
 def _musicdiff_parse_scores(
     kern_text: str, raw_output: str, ignore_unreliable_articulation: bool = False
 ) -> tuple:
@@ -624,15 +700,16 @@ def _musicdiff_parse_scores(
     """
     import music21 as m21  # noqa: PLC0415
 
-    with contextlib.redirect_stderr(io.StringIO()):
-        gt_raw = m21.converter.parse(
-            kern_text, format="musicxml" if _is_xml(kern_text) else "humdrum"
+    if _is_xml(kern_text):
+        with contextlib.redirect_stderr(io.StringIO()):
+            gt_raw = m21.converter.parse(kern_text, format="musicxml")
+        if isinstance(gt_raw, m21.stream.Opus):
+            gt_raw = gt_raw.scores[0] if gt_raw.scores else m21.stream.Score()
+        gt_score: m21.stream.Score = (
+            gt_raw if isinstance(gt_raw, m21.stream.Score) else m21.stream.Score()
         )
-    if isinstance(gt_raw, m21.stream.Opus):
-        gt_raw = gt_raw.scores[0] if gt_raw.scores else m21.stream.Score()
-    gt_score: m21.stream.Score = (
-        gt_raw if isinstance(gt_raw, m21.stream.Score) else m21.stream.Score()
-    )
+    else:
+        gt_score = _parse_kern_documents(kern_text)
 
     if _is_xml(raw_output):
         with tempfile.NamedTemporaryFile(

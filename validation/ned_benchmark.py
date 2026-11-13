@@ -277,6 +277,8 @@ class Sample:
         self.sample_id = sample_id
         self.kern_text = kern_text
         self.image_path = image_path
+        self.raw_output = ""
+        self.error = ""
 
     def set_success(self, raw_output: str) -> None:
         self.raw_output = raw_output
@@ -438,7 +440,7 @@ def run_benchmark(
         for sample in active:
             try:
                 with _sample_timeout():
-                    tool(sample.kern_text, sample.image_path)
+                    sample.set_success(tool(sample.kern_text, sample.image_path))
                     _record_success(
                         sample.sample_id,
                         sample.kern_text,
