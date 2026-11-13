@@ -28,7 +28,7 @@ rendered_scores = os.path.join(pdmx_root, "rendered_scores")
 # so we skip attempting those files rather than waste time converting ones we'd filter out later.
 _MAX_COMPLEXITY = 2
 _MAX_TRACKS = 2
-_TARGET_FILES = 10000  # ~50K images
+_TARGET_FILES = 20000  # ~100K images
 
 
 def _load_filtered_paths() -> list[Path]:
