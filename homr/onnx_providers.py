@@ -79,6 +79,22 @@ def coreml_available() -> bool:
     return "CoreMLExecutionProvider" in ort.get_available_providers()
 
 
+_cuda_libraries_loaded = False
+
+
+def _preload_cuda_libraries() -> None:
+    """
+    Loads CUDA and cuDNN from the pip packages before the first CUDA session.
+    Without it, creating a CUDA session can fail with "libcudnn.so.9: cannot open
+    shared object file" (https://github.com/microsoft/onnxruntime/issues/21684)
+    or crash the process.
+    """
+    global _cuda_libraries_loaded  # noqa: PLW0603
+    if not _cuda_libraries_loaded:
+        ort.preload_dlls()
+        _cuda_libraries_loaded = True
+
+
 def gpu_providers(cuda_options: dict[str, Any] | None = None) -> tuple[list[Any], str]:
     """Return ``(providers, io_binding_device)`` for the best available GPU.
 
@@ -87,6 +103,7 @@ def gpu_providers(cuda_options: dict[str, Any] | None = None) -> tuple[list[Any]
     """
     available = ort.get_available_providers()
     if "CUDAExecutionProvider" in available:
+        _preload_cuda_libraries()
         if cuda_options:
             return [("CUDAExecutionProvider", cuda_options)], "cuda"
         return ["CUDAExecutionProvider"], "cuda"
