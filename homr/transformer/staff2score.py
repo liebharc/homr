@@ -27,35 +27,23 @@ class Staff2Score:
                 "Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer
             )  # noqa: E501
 
-    def predict(self, image: NDArray) -> list[EncodedSymbol]:
+    def predict(self, image: NDArray, second_image: NDArray | None = None) -> list[EncodedSymbol]:
         """
-        Inference an image (NDArray) using Tromr.
+        Inference an image (NDArray) using Tromr. second_image: another crop of the same
+        staff, the decoder reads both together.
         """
-        x = _transform(image=image)
-
         t0 = perf_counter()
 
-        # Create special tokens
-        start_token = np.array([[1]], dtype=np.int64)
-        nonote_token = np.array([[0]], dtype=np.int64)
-
-        # Generate context with encoder. The encoder and decoder may run in
-        # different precisions (e.g. the CoreML encoder is fp16 while the
-        # decoder stays on the fp32 CPU model), so cast the context to the
-        # dtype the decoder expects before handing it over.
-        context = self.encoder.generate(x)
+        # The encoder and decoder may run in different precisions (e.g. the CoreML
+        # encoder is fp16 while the decoder stays on the fp32 CPU model), so cast the
+        # context to the dtype the decoder expects before handing it over.
         context_dtype = np.float16 if self.decoder.fp16 else np.float32
-        if context.dtype != context_dtype:
-            context = context.astype(context_dtype)
-
-        # Make a prediction using decoder
-        out = self.decoder.generate(
-            start_token,
-            nonote_token,
-            seq_len=self.config.max_seq_len,
-            eos_token=self.config.eos_token,
-            context=context,
-        )
+        images = [image] if second_image is None else [image, second_image]
+        contexts = [
+            self.encoder.generate(_transform(image=i)).astype(context_dtype, copy=False)
+            for i in images
+        ]
+        out = self.decoder.generate(contexts)
 
         eprint(f"Inference Time Tromr: {perf_counter()-t0}")
 
