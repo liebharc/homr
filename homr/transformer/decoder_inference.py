@@ -6,6 +6,7 @@ import onnxruntime as ort
 from homr.onnx_providers import gpu_providers
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
+from homr.transformer.staff_header import HeaderGate
 from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
@@ -132,6 +133,17 @@ class ScoreDecoder:
 
             if rhythm_sample[0][0] == self.eos_token:
                 break
+
+            header_gate: HeaderGate | None = kwargs.get("header_gate")
+            if header_gate is not None:
+                logits = rhythmsp[0, -1, :].astype(np.float64)
+                probability = 1.0 / float(np.exp(logits - logits.max()).sum())
+                replacement = header_gate.replacement(
+                    rhythm_token[0], position_token[0], probability
+                )
+                if replacement is not None:
+                    rhythm_sample = np.array([[self.config.rhythm_vocab[replacement]]])
+                    rhythm_token = [replacement]
 
             symbol = EncodedSymbol(
                 rhythm=rhythm_token[0],

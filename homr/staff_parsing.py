@@ -15,6 +15,7 @@ from homr.staff_parsing_tromr import parse_staff_tromr
 from homr.staff_regions import StaffRegions
 from homr.system_repair import _layout
 from homr.transformer.configs import Config, default_config
+from homr.transformer.staff_header import StaffContext, update_context
 from homr.transformer.vocabulary import EncodedSymbol, remove_duplicated_symbols
 from homr.triplet_restoration import restore_unmarked_triplets
 from homr.type_definitions import NDArray
@@ -227,12 +228,18 @@ def parse_staff_image(
     regions: StaffRegions,
     config: Config,
     page_to_input_image: PointMapping = identity,
+    staff_context: StaffContext | None = None,
 ) -> list[EncodedSymbol]:
     staff_image, transformed_staff, staff_to_page = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
     eprint("Running TrOmr inference on staff image", index)
-    result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
+    result = parse_staff_tromr(
+        staff_image=staff_image,
+        staff=transformed_staff,
+        config=config,
+        staff_context=staff_context,
+    )
     for symbol in result:
         center = _get_symbol_center(symbol)
         if center is not None:
@@ -375,6 +382,8 @@ def parse_staffs(
     results: dict[tuple[int, int], list[EncodedSymbol]] = {}
     regions = StaffRegions(staffs)
     for voice in range(number_of_voices):
+        # clefs and key in effect, carried from staff to staff of the voice
+        staff_context: StaffContext | None = None
         for staff_index, row in enumerate(staffs):
             if voice not in parts[staff_index]:
                 continue
@@ -384,12 +393,13 @@ def parse_staffs(
                 continue
             staff = row.staffs[parts[staff_index].index(voice)]
             result_staff = parse_staff_image(
-                debug, i, staff, image, regions, config, page_to_input_image
+                debug, i, staff, image, regions, config, page_to_input_image, staff_context
             )
             i += 1
             if len(result_staff) == 0:
                 eprint("Skipping empty staff", i - 1)
                 continue
+            staff_context = update_context(staff_context, result_staff)
             results[(staff_index, voice)] = result_staff
 
     voices = []
