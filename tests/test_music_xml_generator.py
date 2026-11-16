@@ -9,6 +9,7 @@ from homr.music_xml_generator import (
     _split_mixed_chord,
     convert_ties,
     generate_xml,
+    last_time_signatures,
     rebalance_measure_voices,
 )
 from homr.transformer.vocabulary import EncodedSymbol
@@ -162,6 +163,70 @@ rest_1 _ _ _ _ upper
 barline . . . . .""")
         self.assertEqual(len(measures), 2)
 
+    def test_measure_rest_in_a_pickup_is_as_long_as_the_pickup(self) -> None:
+        # The first part is hidden in the first system and gets a measure rest; the
+        # second part starts with a pickup of one quarter note
+        hidden = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+measureRest . . . . upper
+barline . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . .""".splitlines())
+        pickup = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 G4 _ _ _ upper
+barline . . . . .
+note_1 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [hidden, pickup], "")
+        parts = xml.findall("part")
+        lengths = []
+        for part in parts:
+            divisions = int(part.findtext("measure/attributes/divisions", "0"))
+            rest = part.find("measure").find("note")  # type: ignore
+            lengths.append(int(rest.findtext("duration", "0")) / divisions)  # type: ignore
+        self.assertEqual(lengths, [1.0, 1.0])
+
+    def test_empty_first_measure_gets_a_rest_as_long_as_the_pickup(self) -> None:
+        # The model saw an empty pickup measure in the voice; the piano has a quarter
+        empty = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+barline . . . . .
+note_1 C4 _ _ _ upper
+barline . . . . .""".splitlines())
+        pickup = read_token_lines("""clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4 G4 _ _ _ upper
+barline . . . . .
+note_1 C5 _ _ _ upper
+barline . . . . .""".splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [empty, pickup], "")
+        part = xml.findall("part")[0]
+        divisions = int(part.findtext("measure/attributes/divisions", "0"))
+        rest = part.find("measure/note")
+        assert rest is not None
+        self.assertIsNotNone(rest.find("rest"))
+        self.assertEqual(int(rest.findtext("duration", "0")) / divisions, 1.0)
+
+    def test_time_signature_estimate_follows_the_voices(self) -> None:
+        # A bar from a real score (Alexander's Ragtime Band): a syncopated right hand
+        # over quarter notes in the left hand. Adding the shortest note of each group
+        # gives 5/4; laid out by voice the bar is 4/4.
+        bar = """rest_4 _ _ _ _ upper&note_4 C3 _ _ _ lower
+note_8. E4 _ _ _ upper&note_4 G3 _ _ _ lower
+note_16 D4 _ _ _ upper
+note_8 E4 _ _ _ upper&note_4 G2 _ _ _ lower
+note_4. G4 _ _ _ upper
+note_4 G3 _ _ _ lower
+barline . . . . ."""
+        header = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
+timeSignature/4 . . . . ."""
+        tokens = read_token_lines([*header.splitlines(), *bar.splitlines() * 4])
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+        time = xml.find("part/measure/attributes/time")
+        assert time is not None
+        self.assertEqual((time.findtext("beats"), time.findtext("beat-type")), ("4", "4"))
+
     def test_chord_with_different_duratons(self) -> None:
         tabi_measure_18_upper = """clef_G2 . . . . upper
 keySignature_4 . . . . .
@@ -212,6 +277,45 @@ barline . . . . ."""
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
         self.assertEqual(_times(xml), [("6", "8")])
+
+    _PAGE_WITHOUT_TIME_SIGNATURE = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+note_2 C4 _ _ _ upper
+note_2 D4 _ _ _ upper
+barline . . . . .
+note_1 E4 _ _ _ upper
+barline . . . . ."""
+
+    def test_page_without_time_signature_continues_in_the_previous_one(self) -> None:
+        """
+        A later page of a score in 2/2 prints no time signature. Estimated from the
+        measure lengths it would be 4/4, a time change at the page break.
+        """
+        tokens = read_token_lines(self._PAGE_WITHOUT_TIME_SIGNATURE.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "", [("2", "2")])
+
+        self.assertEqual(_times(xml), [("2", "2")])
+        self.assertEqual(last_time_signatures(xml), [("2", "2")])
+
+    def test_time_signature_is_estimated_without_a_previous_page(self) -> None:
+        tokens = read_token_lines(self._PAGE_WITHOUT_TIME_SIGNATURE.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("4", "4")])
+
+    def test_printed_time_signature_at_the_start_of_a_page_is_kept(self) -> None:
+        """A real time change, printed at the start of the page, isn't overridden."""
+        three_four = """clef_G2 . . . . upper
+keySignature_0 . . . . .
+timeSignature/4 . . . . .
+note_2. C4 _ _ _ upper
+barline . . . . .
+note_2. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(three_four.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "", [("2", "2")])
+
+        self.assertEqual(_times(xml), [("3", "4")])
 
     def test_multi_measure_rest_is_written_as_that_many_measures(self) -> None:
         rest_then_note = """clef_G2 . . . . upper
@@ -418,8 +522,8 @@ barline . . . . ."""
         """The model marks the notehead the curve touches, not the whole chord.
 
         On real output almost every slurred chord carries the slur on some of
-        its members only, so a tie has to be found for that pitch alone and
-        leave the rest of the chord as it is.
+        its members only. Once one note is found to be tied into the next chord,
+        the other pitches the two chords share are held too.
         """
         chords = """clef_G2 . . . . upper
 timeSignature/4 . . . . .
@@ -429,10 +533,10 @@ barline . . . . ."""
         tokens = read_token_lines(chords.splitlines())
         xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
 
-        self.assertEqual(_ties(xml), ["start", "stop"])
+        self.assertEqual(sorted(_ties(xml)), ["start", "start", "stop", "stop"])
         self.assertEqual(_slurs(xml), [])
         tied = [n for n in xml.iter("note") if n.find("tie") is not None]
-        self.assertEqual([_pitch(n) for n in tied], ["E", "E"])
+        self.assertEqual(sorted(_pitch(n) for n in tied), ["C", "C", "E", "E"])
 
     def test_slur_from_a_chord_to_a_different_pitch_stays_a_slur(self) -> None:
         chords = """clef_G2 . . . . upper
