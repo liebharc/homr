@@ -108,39 +108,28 @@ def remove_black_contours_at_edges_of_image(gray: NDArray, unit_size: float) -> 
     return gray
 
 
-# Vertical margins (in staff units) of the two crops of every staff: the transformer reads
-# both and combines them, see decoder_inference
-STAFF_MARGIN = 4
-SECOND_STAFF_MARGIN = 3
-
-
-def _calculate_region(staff: Staff, regions: StaffRegions, margin: float = STAFF_MARGIN) -> NDArray:
+def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     x_min = staff.min_x - 2 * staff.average_unit_size
     x_max = staff.max_x + 2 * staff.average_unit_size
     y_min = max(
-        staff.min_y - margin * staff.average_unit_size,
+        staff.min_y - 4 * staff.average_unit_size,
         regions.get_start_of_closest_staff_above(staff.min_y),
     )
     y_max = min(
-        staff.max_y + margin * staff.average_unit_size,
+        staff.max_y + 4 * staff.average_unit_size,
         regions.get_start_of_closest_staff_below(staff.max_y),
     )
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 
 
 def prepare_staff_image(
-    debug: Debug,
-    index: int,
-    staff: Staff,
-    staff_image: NDArray,
-    regions: StaffRegions,
-    margin: float = STAFF_MARGIN,
+    debug: Debug, index: int, staff: Staff, staff_image: NDArray, regions: StaffRegions
 ) -> tuple[NDArray, Staff, PointMapping]:
     """
     Returns the staff image for the transformer, the staff in the coordinates of that image
     and a mapping from the coordinates of that image back to the coordinates of the page.
     """
-    region = _calculate_region(staff, regions, margin)
+    region = _calculate_region(staff, regions)
     image_dimensions = get_tr_omr_canvas_size(
         (int(region[3] - region[1]), int(region[2] - region[0]))
     )
@@ -239,20 +228,11 @@ def parse_staff_image(
     config: Config,
     page_to_input_image: PointMapping = identity,
 ) -> list[EncodedSymbol]:
-    # the second crop first: debug images of the first crop overwrite its ones
-    second_image, _, _ = prepare_staff_image(
-        debug, index, staff, image, regions=regions, margin=SECOND_STAFF_MARGIN
-    )
     staff_image, transformed_staff, staff_to_page = prepare_staff_image(
         debug, index, staff, image, regions=regions
     )
     eprint("Running TrOmr inference on staff image", index)
-    result = parse_staff_tromr(
-        staff_image=staff_image,
-        second_image=second_image,
-        staff=transformed_staff,
-        config=config,
-    )
+    result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
     for symbol in result:
         center = _get_symbol_center(symbol)
         if center is not None:

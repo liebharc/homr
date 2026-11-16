@@ -17,7 +17,7 @@ class FilePaths:
         )  # noqa: E501
         self.decoder_path = os.path.join(
             workspace,
-            f"decoder_{model_name}_dyn.onnx",
+            f"decoder_{model_name}.onnx",
         )  # noqa: E501
 
         self.encoder_path_fp16 = os.path.join(
@@ -26,7 +26,7 @@ class FilePaths:
         )  # noqa: E501
         self.decoder_path_fp16 = os.path.join(
             workspace,
-            f"decoder_{model_name}_dyn_fp16.onnx",
+            f"decoder_{model_name}_fp16.onnx",
         )  # noqa: E501
 
         self.checkpoint = os.path.join(

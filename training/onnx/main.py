@@ -6,7 +6,6 @@ import os
 from homr.segmentation.config import segnet_path_onnx_fp16
 from homr.simple_logging import eprint
 from homr.transformer.configs import Config
-from training.onnx.cache_select import add_cache_selection
 from training.onnx.convert import (
     convert_decoder,
     convert_encoder,
@@ -58,9 +57,6 @@ def tromr_to_onnx(overwrite: bool) -> None:
             fuse_decoder(config.filepaths.decoder_path_fp16)
         except Exception as e:
             eprint(f"Fusing failed. {e}")
-        # after the fusion, its patterns expect the cache inputs as they are
-        add_cache_selection(path_to_decoder, path_to_decoder)
-        add_cache_selection(config.filepaths.decoder_path_fp16, config.filepaths.decoder_path_fp16)
 
     os.remove("decoder_weights.pt")
     os.remove("encoder_weights.pt")
