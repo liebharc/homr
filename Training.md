@@ -101,14 +101,14 @@ Implementation: `rate_validation_result.py`
 Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
 Day: 13 November
 Transformer Smoke Test: 5%
-System Level: 5.7 diffs, SER: 3.7%
-Polish scores: 14.6% | 14.3% after MusicXML fixes
-SMB scores: 13.0%
+System Level: 5.7 diffs, SER: 3.7% | 5.5 diffs, SER: 3.5% after inference improvements
+Polish scores: 14.6% | 13.7% after MusicXML fixes and inference improvements
+SMB scores: 13.0% | 12.7% after inference improvements
 
 https://github.com/liebharc/homr/pull/211 
 
 - Added support for beams
-- Faster training (model compilation takes longer but then the training itself is about twice as fast)
+- Faster training
 - Removed PrIMuS and Musetrainer datasets as PrIMuS carries no beam info and Musetrainer is very small
 - Verovio is now used also for Lieder and PDMX as second renderer
 
