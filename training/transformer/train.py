@@ -188,7 +188,7 @@ def train_transformer(
 
     train_args = TrainingArguments(
         checkpoint_folder,
-        torch_compile=True,
+        torch_compile=compile_model,
         eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
@@ -209,7 +209,7 @@ def train_transformer(
         bf16=not fp32,
         logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
         dataloader_pin_memory=True,
-        dataloader_num_workers=6,
+        dataloader_num_workers=12,
     )
 
     if fine_tune:
