@@ -150,11 +150,9 @@ def train_transformer(
     # PrIMuS isn't used: it has no beams and its Hugging Face copy is CC BY-NC (non-commercial)
     # MuseTrainer isn't used: 1k samples, it adds little next to PDMX and has no license file
     dataset_index = [
-        lieder_train_index,
-        grandstaff_train_index,
         pdmx_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0]
+    dataset_weights = [1.0]
     invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index, invalid_tokens_file)
@@ -190,7 +188,7 @@ def train_transformer(
 
     train_args = TrainingArguments(
         checkpoint_folder,
-        torch_compile=compile_model,
+        torch_compile=True,
         eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
@@ -211,7 +209,7 @@ def train_transformer(
         bf16=not fp32,
         logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
         dataloader_pin_memory=True,
-        dataloader_num_workers=12,
+        dataloader_num_workers=6,
     )
 
     if fine_tune:
