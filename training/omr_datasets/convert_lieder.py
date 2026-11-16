@@ -133,9 +133,13 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
                 shutil.copyfile(source, os.path.join(dest, file))
 
 
-def copy_mxl_files(paths: list[Path], dest: str) -> None:
+def copy_mxl_files(paths: list[Path], dest: str) -> list[str]:
+    new_paths = []
     for path in paths:
-        shutil.copyfile(path, os.path.join(dest, os.path.basename(path)))
+        new_path = os.path.join(dest, os.path.basename(path))
+        shutil.copyfile(path, new_path)
+        new_paths.append(new_path)
+    return new_paths
 
 
 def create_formats(
@@ -378,9 +382,10 @@ def create_musicxml_and_svg_files_from_mxl(paths: list[Path], dest: str) -> None
     """
     Used for pdmx conversion
     """
-    copy_mxl_files(paths, dest)
+    mxl_paths = copy_mxl_files(paths, dest)
 
-    mxl_paths = list(Path(dest).rglob("*.mxl"))
+    if len(paths) != len(mxl_paths):
+        eprint(f"Copying unsuccessful: Copied {len(mxl_paths)} files but expected {len(paths)}")
 
     MuseScore = os.path.join(dataset_root, "MuseScore")
 
@@ -820,7 +825,7 @@ def write_index(
     with open(index_path, "w") as f:
         file_number = 0
         skipped_files = 0
-        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
+        with multiprocessing.Pool(processes=8, maxtasksperchild=1000) as p:
             results = p.imap_unordered(convert, music_xml_files)
             while True:
                 try:
