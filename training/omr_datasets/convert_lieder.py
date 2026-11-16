@@ -580,7 +580,7 @@ def _remove_from_chord(symbols: list[EncodedSymbol], symbol: EncodedSymbol) -> N
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
     for symbol in symbols:
-        if symbol.rhythm.startswith("clef_percussion"):
+        if symbol.rhythm.startswith("clef_percussion") or symbol.rhythm.startswith("clef_TAB"):
             return False
     return True
 
