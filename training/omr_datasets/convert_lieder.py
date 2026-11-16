@@ -161,6 +161,10 @@ def create_formats(
         "lc6236149",
         "lc6420897",
         "lc6196804",
+        "QmXoCjhAW2vgtdmSvCS2YMQdTFeZfxXD7wNTSKkMSg1W8v",
+        "QmVMzhCf6uxFaR7dYp6MN17BPfWf4HcNHYtCUDLut1jWmo",
+        "QmajqAMppi2Zh5Xuv1EzVgijJtfoFM2xGyba13K3zxbux4",
+        "QmdWijpv98CmtSwEd8iwKDy9AMVHoB9Yt5cfH1Lmvwot1m",
     ]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
