@@ -5,6 +5,7 @@ from typing import Any
 import torch
 import torch.distributed as dist
 from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 from transformers import Trainer
 
 from training.transformer.distribute import Distribute
@@ -44,6 +45,25 @@ class HomrTrainer(Trainer):
         self._acc_total: dict[str, int] = defaultdict(int)
 
         self._rhythm_map = map_rhythm_symbol_with_position()
+
+    def _use_spawn_workers(self, dataloader: DataLoader[Any]) -> DataLoader[Any]:
+        # Spawn workers instead of forking: Numba (via augraphy.ShadowCast) uses libgomp,
+        # which deadlocks in forked workers once PyTorch initializes OpenMP in the parent.
+        if self.args.dataloader_num_workers > 0:
+            inner = getattr(dataloader, "base_dataloader", dataloader)
+            inner.multiprocessing_context = "spawn"
+        return dataloader
+
+    def get_train_dataloader(self) -> DataLoader[Any]:
+        return self._use_spawn_workers(super().get_train_dataloader())
+
+    def get_eval_dataloader(
+        self, eval_dataset: str | Dataset[Any] | None = None
+    ) -> DataLoader[Any]:
+        return self._use_spawn_workers(super().get_eval_dataloader(eval_dataset))
+
+    def get_test_dataloader(self, test_dataset: Dataset[Any]) -> DataLoader[Any]:
+        return self._use_spawn_workers(super().get_test_dataloader(test_dataset))
 
     def compute_loss(
         self,
