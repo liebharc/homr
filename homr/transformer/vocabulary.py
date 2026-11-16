@@ -110,6 +110,7 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend([f"clef_F{c}" for c in range(3, 6)])
     rhythm.extend([f"clef_C{c}" for c in range(1, 6)])
     rhythm.extend([f"clef_G{c}" for c in range(1, 3)])
+    rhythm.append("clef_TAB5")
 
     # signatures
     rhythm.extend([f"keySignature_{c}" for c in range(-7, 8)])
