@@ -7,6 +7,9 @@ greedy reading per crop. The reading whose bars fit best wins (bar_fit). Bars wh
 don't fit are decoded again by a small beam search which only accepts fitting bars
 (_repair_bars).
 
+Every token is the best one which the token grammar allows (token_grammar). Decoding
+stops when EOS is the most likely rhythm.
+
 The decoder graph takes `beam_index`, the cache row which each output row continues, and
 cuts the cache to `cache_len`. So beams can be reordered and decoding can continue from
 an earlier step without copying the cache.
@@ -30,10 +33,10 @@ from homr.transformer.bar_fit import (
     is_bar_end,
 )
 from homr.transformer.configs import Config
+from homr.transformer.token_grammar import HEADS, LogProbs, Token, TokenGrammar
 from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
-HEADS = ("rhythm", "pitch", "lift", "position", "articulation", "slur")
 FED = ("rhythm", "pitch", "lift", "articulation", "slur")  # the decoder's token inputs
 INPUT_NAMES = {
     "rhythm": "rhythms",
@@ -57,10 +60,7 @@ START = {"rhythm": 1, "pitch": 0, "lift": 0, "articulation": 0, "slur": 0}
 # it replaces.
 REPAIR_DELTA = 2.3
 REPAIR_WIDTH = 4  # beams
-REPAIR_RHYTHMS = 3  # rhythm alternatives per beam and step, other heads take the best
-
-Token = dict[str, int]
-LogProbs = dict[str, NDArray]
+REPAIR_RHYTHMS = 3  # rhythm alternatives per beam and step, each with its best valid heads
 
 
 def _log_softmax(x: NDArray) -> NDArray:
@@ -125,6 +125,7 @@ class ScoreDecoder:
         self.cache_inputs = [f"cache_in{i}" for i in range(n_cache)]
         self.outputs = OUTPUT_NAMES + [f"cache_out{i}" for i in range(n_cache)]
         self.calls = 0
+        self.grammar = TokenGrammar(config)
 
     def generate(self, contexts: list[NDArray]) -> list[EncodedSymbol]:
         """contexts: the encoder outputs of the crops of one staff."""
@@ -150,10 +151,10 @@ class ScoreDecoder:
                 if done[r]:
                     continue
                 lp = _average([log_probs[row] for row in reading_rows])
-                token = {h: int(lp[h].argmax()) for h in HEADS}
-                if token["rhythm"] == self.eos_token:
+                if self._is_end(lp):
                     done[r] = True
                     continue
+                token = self.grammar.best(lp)
                 decoded[r].append(
                     _Decoded(token, attention[reading_rows[0]], _score(lp, token), lp)
                 )
@@ -168,6 +169,9 @@ class ScoreDecoder:
             return candidates[best]
         crop_rows = [rows[row] for row in readings[best]]
         return self._repair_bars(decoded[best], crop_rows, views, _Cache(cache, readings[best]))
+
+    def _is_end(self, log_probs: LogProbs) -> bool:
+        return int(log_probs["rhythm"].argmax()) == self.eos_token
 
     def _run(
         self,
@@ -243,9 +247,9 @@ class ScoreDecoder:
             )
             beam_index = list(range(n_views))
             lp = _average(log_probs)
-            token = {h: int(lp[h].argmax()) for h in HEADS}
-            if token["rhythm"] == self.eos_token:
+            if self._is_end(lp):
                 break
+            token = self.grammar.best(lp)
             result.append(_Decoded(token, attention[0], _score(lp, token), lp))
             previous, step = _fed(token), step + 1
         return result, _Cache(values, list(range(n_views)))
@@ -259,7 +263,7 @@ class ScoreDecoder:
     ) -> list[EncodedSymbol]:
         """
         Every closed bar which doesn't fit is decoded again from its start with a beam
-        search (top rhythms, other heads take the best) that only accepts fitting bars.
+        search (top rhythms, each with its best valid heads) that only accepts fitting bars.
         The best accepted bar replaces the original one if its log-prob is at most
         REPAIR_DELTA lower, and the rest of the staff is decoded again after it.
         """
@@ -293,17 +297,15 @@ class ScoreDecoder:
             for _ in range(end - start + 1 + 4):
                 expanded = []
                 for b, (score, path, lp, attention) in enumerate(beams):
-                    best = {h: int(lp[h].argmax()) for h in HEADS}
-                    for rhythm in np.argsort(-lp["rhythm"])[:REPAIR_RHYTHMS]:
-                        token = dict(best, rhythm=int(rhythm))
+                    rhythm_scores = self.grammar.rhythm_scores(lp)
+                    for rhythm in np.argsort(-rhythm_scores)[:REPAIR_RHYTHMS]:
+                        token = self.grammar.token(lp, int(rhythm))
                         expanded.append((score + _score(lp, token), path, token, attention, b))
                 expanded.sort(key=lambda e: -e[0])
                 survivors: list[tuple[float, list[_Decoded], Token, int]] = []
                 for score, path, token, attention, b in expanded:
                     if len(survivors) >= REPAIR_WIDTH:
                         break
-                    if token["rhythm"] == self.eos_token:
-                        continue
                     path_with = [*path, _Decoded(token, attention, score, None)]
                     if is_bar_end(self.inv_vocab["rhythm"][token["rhythm"]]):
                         bar = self._symbols(path)
