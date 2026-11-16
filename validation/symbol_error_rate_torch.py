@@ -26,6 +26,7 @@ def calc_symbol_error_rate_for_list(
     model: Any
     if onnx:
         from homr.transformer.staff2score import Staff2Score as Staff2ScoreOnnx  # noqa: PLC0415
+
         config = ConfigTorch()
         config.use_gpu_inference = use_gpu
         model = Staff2ScoreOnnx(config)
