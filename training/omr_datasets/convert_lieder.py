@@ -385,9 +385,7 @@ def create_musicxml_and_svg_files_from_mxl(paths: list[Path], dest: str) -> None
     mxl_paths = copy_mxl_files(paths, dest)
 
     if len(paths) != len(mxl_paths):
-        eprint(
-            f"Copying unsuccessful: Copied {len(mxl_paths)} files but expected {len(paths)}"
-        )
+        eprint(f"Copying unsuccessful: Copied {len(mxl_paths)} files but expected {len(paths)}")
 
     MuseScore = os.path.join(dataset_root, "MuseScore")
 
