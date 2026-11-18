@@ -30,7 +30,7 @@ class TrOMR(nn.Module):
         slurs: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
-        sampling_prob: float = 1.0,
+        sampling_prob: float | torch.Tensor = 1.0,
         **kwargs: Any,
     ) -> Any:
         context = self.encoder(inputs)

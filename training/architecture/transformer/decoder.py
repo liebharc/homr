@@ -377,7 +377,7 @@ class ScoreDecoder(nn.Module):
         slurs: torch.Tensor,
         positions: torch.Tensor,
         mask: torch.Tensor,
-        sampling_prob: float = 1.0,
+        sampling_prob: float | torch.Tensor = 1.0,
         **kwargs: Any,
     ) -> dict[str, Any]:
         liftsi = lifts[:, :-1]
@@ -404,7 +404,9 @@ class ScoreDecoder(nn.Module):
         attention_mask = None
 
         # Scheduled Sampling: Two-pass approach
-        if self.training and sampling_prob < 1.0:
+        # A tensor is only passed when sampling is active, see HomrTrainer.compute_loss
+        scheduled_sampling = isinstance(sampling_prob, torch.Tensor) or sampling_prob < 1.0
+        if self.training and scheduled_sampling:
             with torch.no_grad():
                 self.net.eval()
                 # First pass to get predictions

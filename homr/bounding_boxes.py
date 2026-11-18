@@ -402,6 +402,8 @@ def create_lines(
     lines = cv2.HoughLinesP(
         img, 1, np.pi / 180, threshold, minLineLength=min_line_length, maxLineGap=max_line_gap
     )
+    if lines is None:
+        return []
     boxes = []
     for i, line in enumerate(lines):
         x1, y1, x2, y2 = line[0]

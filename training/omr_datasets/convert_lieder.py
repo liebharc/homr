@@ -133,9 +133,13 @@ def copy_all_mscx_files(working_dir: str, dest: str) -> None:
                 shutil.copyfile(source, os.path.join(dest, file))
 
 
-def copy_mxl_files(paths: list[Path], dest: str) -> None:
+def copy_mxl_files(paths: list[Path], dest: str) -> list[str]:
+    new_paths = []
     for path in paths:
-        shutil.copyfile(path, os.path.join(dest, os.path.basename(path)))
+        new_path = os.path.join(dest, os.path.basename(path))
+        shutil.copyfile(path, new_path)
+        new_paths.append(new_path)
+    return new_paths
 
 
 def create_formats(
@@ -161,6 +165,10 @@ def create_formats(
         "lc6236149",
         "lc6420897",
         "lc6196804",
+        "QmXoCjhAW2vgtdmSvCS2YMQdTFeZfxXD7wNTSKkMSg1W8v",
+        "QmVMzhCf6uxFaR7dYp6MN17BPfWf4HcNHYtCUDLut1jWmo",
+        "QmajqAMppi2Zh5Xuv1EzVgijJtfoFM2xGyba13K3zxbux4",
+        "QmdWijpv98CmtSwEd8iwKDy9AMVHoB9Yt5cfH1Lmvwot1m",
     ]
     if any(issue in source_file for issue in files_with_known_issues):
         return jobs
@@ -378,9 +386,10 @@ def create_musicxml_and_svg_files_from_mxl(paths: list[Path], dest: str) -> None
     """
     Used for pdmx conversion
     """
-    copy_mxl_files(paths, dest)
+    mxl_paths = copy_mxl_files(paths, dest)
 
-    mxl_paths = list(Path(dest).rglob("*.mxl"))
+    if len(paths) != len(mxl_paths):
+        eprint(f"Copying unsuccessful: Copied {len(mxl_paths)} files but expected {len(paths)}")
 
     MuseScore = os.path.join(dataset_root, "MuseScore")
 
@@ -580,7 +589,7 @@ def _remove_from_chord(symbols: list[EncodedSymbol], symbol: EncodedSymbol) -> N
 
 def contains_only_supported_clefs(symbols: list[EncodedSymbol]) -> float:
     for symbol in symbols:
-        if symbol.rhythm.startswith("clef_percussion"):
+        if symbol.rhythm.startswith("clef_percussion") or symbol.rhythm.startswith("clef_TAB"):
             return False
     return True
 
@@ -820,7 +829,7 @@ def write_index(
     with open(index_path, "w") as f:
         file_number = 0
         skipped_files = 0
-        with multiprocessing.Pool(processes=8, maxtasksperchild=2) as p:
+        with multiprocessing.Pool(processes=8, maxtasksperchild=1000) as p:
             results = p.imap_unordered(convert, music_xml_files)
             while True:
                 try:

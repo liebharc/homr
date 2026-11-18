@@ -120,18 +120,126 @@ def build_identification() -> ET.Element:
     return ident
 
 
+TimeSignature = tuple[str, str]
+
+
 def generate_xml(
-    args: XmlGeneratorArguments, staffs: list[list[EncodedSymbol]], title: str
+    args: XmlGeneratorArguments,
+    staffs: list[list[EncodedSymbol]],
+    title: str,
+    inherited_times: list[TimeSignature | None] | None = None,
 ) -> ET.Element:
+    """
+    inherited_times: the time signature in force at the end of the previous page, per
+    part, for a page that continues a score. A part that doesn't start with a time
+    signature continues in it, instead of one inferred from its measure lengths.
+    """
     root = ET.Element("score-partwise", version="4.0")
     root.append(build_work(title))
     root.append(build_identification())
     root.append(build_defaults(args))
     has_two_staves_by_part = [_voice_has_two_staves(staff) for staff in staffs]
     root.append(build_part_list(has_two_staves_by_part))
-    for index, staff in enumerate(staffs):
-        root.append(build_part(args, staff, index, has_two_staves_by_part[index]))
+    parts = [
+        build_part(
+            args,
+            staff,
+            index,
+            has_two_staves_by_part[index],
+            inherited_times[index] if inherited_times and index < len(inherited_times) else None,
+        )
+        for index, staff in enumerate(staffs)
+    ]
+    shorten_measure_rests_in_pickup(parts)
+    root.extend(parts)
     return root
+
+
+def _measure_length(measure: ET.Element, divisions: int) -> Fraction:
+    """The length of a measure in quarter notes: where its last note ends."""
+    position = 0
+    end = 0
+    for child in measure:
+        duration = int(child.findtext("duration", "0") or 0)
+        if child.tag == "note" and child.find("chord") is None:
+            position += duration
+        elif child.tag == "forward":
+            position += duration
+        elif child.tag == "backup":
+            position -= duration
+        end = max(end, position)
+    return Fraction(end, max(divisions, 1))
+
+
+def shorten_measure_rests_in_pickup(parts: list[ET.Element]) -> None:
+    """
+    A part which has nothing in the first measure gets a whole-measure rest there, which
+    fills a full measure. If another part has a shorter first measure, it's a pickup, and
+    the measure rest has to be as short, otherwise the parts get out of step. A first
+    measure without any notes or rests gets such a rest too.
+    """
+    firsts = []
+    for part in parts:
+        measure = part.find("measure")
+        divisions = int(part.findtext("measure/attributes/divisions", "0") or 0)
+        if measure is None or divisions <= 0:
+            return
+        firsts.append((measure, divisions))
+    lengths = [_measure_length(m, d) for m, d in firsts]
+    played = [
+        length
+        for (measure, _), length in zip(firsts, lengths, strict=True)
+        if any(n.find("rest") is None for n in measure.findall("note"))
+    ]
+    if not played:
+        return
+    pickup = max(played)
+    for (measure, divisions), length in zip(firsts, lengths, strict=True):
+        notes = measure.findall("note")
+        if not notes:
+            # Nothing at all in the part's first measure, e.g. the model saw an empty
+            # pickup measure: players fill it to a full measure, so give it rests
+            _add_pickup_rests(measure, pickup, divisions)
+            continue
+        only_measure_rests = all(
+            n.find("rest") is not None and n.find("rest").get("measure") == "yes"  # type: ignore
+            for n in notes
+        )
+        if not only_measure_rests or length <= pickup:
+            continue
+        duration = str(max(1, int(pickup * divisions)))
+        for child in measure:
+            if child.tag in ("note", "backup"):
+                child.find("duration").text = duration  # type: ignore
+
+
+def _add_pickup_rests(measure: ET.Element, pickup: Fraction, divisions: int) -> None:
+    """A rest of the pickup's length on each staff of an empty first measure."""
+    staves = int(measure.findtext("attributes/staves", "1") or 1)
+    duration = str(max(1, int(pickup * divisions)))
+    for staff in range(1, staves + 1):
+        if staff > 1:
+            backup = ET.SubElement(measure, "backup")
+            ET.SubElement(backup, "duration").text = duration
+        note = ET.SubElement(measure, "note")
+        ET.SubElement(note, "rest", measure="yes")
+        ET.SubElement(note, "duration").text = duration
+        ET.SubElement(note, "voice").text = "1" if staff == 1 else "5"
+        ET.SubElement(note, "staff").text = str(staff)
+
+
+def last_time_signatures(root: ET.Element) -> list[TimeSignature | None]:
+    """The last time signature of each part, e.g. to continue a score on the next page."""
+    result: list[TimeSignature | None] = []
+    for part in root.iter("part"):
+        times = list(part.iter("time"))
+        last = times[-1] if times else None
+        result.append(
+            (last.findtext("beats", ""), last.findtext("beat-type", ""))
+            if last is not None
+            else None
+        )
+    return result
 
 
 def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
@@ -140,11 +248,15 @@ def _voice_has_two_staves(voice: list[EncodedSymbol]) -> bool:
 
 
 def build_part(
-    args: XmlGeneratorArguments, voice: list[EncodedSymbol], index: int, has_two_staves: bool
+    args: XmlGeneratorArguments,
+    voice: list[EncodedSymbol],
+    index: int,
+    has_two_staves: bool,
+    inherited_time: TimeSignature | None = None,
 ) -> ET.Element:
     part = ET.Element("part", id=get_part_id(index))
     is_first_part = index == 0
-    for measure in build_measures(args, voice, is_first_part, has_two_staves):
+    for measure in build_measures(args, voice, is_first_part, has_two_staves, inherited_time):
         part.append(measure)
     convert_ties(part)
     add_stems(part)
@@ -158,6 +270,7 @@ def build_measures(
     voice: list[EncodedSymbol],
     is_first_part: bool,
     has_two_staves: bool = False,
+    inherited_time: TimeSignature | None = None,
 ) -> list[ET.Element]:
     clock = GroupClock()
     measure_number = 1
@@ -172,6 +285,9 @@ def build_measures(
             measure.append(
                 build_measure_rest(EncodedSymbol("measureRest", position=position), state)
             )
+
+    def last_measure() -> ET.Element | None:
+        return measures[-1] if measures else None
 
     def close_current_measure() -> None:
         nonlocal clock, measure_number, rest_measures
@@ -189,6 +305,14 @@ def build_measures(
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
     division, nominators = find_division_and_time_signature_nominators(groups)
     state = ConversionState(division, nominators[0])
+    # Without a printed time signature at its start, a page continues in the previous
+    # page's one: the model reads only the beat type, so an estimate from the measure
+    # lengths can't tell 2/2 from 4/4, and would bring a time change at every page.
+    inherited_length = _time_signature_length(inherited_time)
+    if inherited_length is not None and not _starts_with_time_signature(groups):
+        state.nominator = inherited_length
+    else:
+        inherited_time = None
     time_signature_no = 0
     measures: list[ET.Element] = []
     current_measure = ET.Element("measure", number=str(measure_number))
@@ -253,44 +377,62 @@ def build_measures(
             time_signature_no += 1
             build_time_signature(symbol, attributes, state)
         elif "barline" in rhythm:
-            if rhythm != "barline":
-                barline = build_or_get_barline(current_measure, "right")
+            # A barline right after another one (e.g. at the start of a line, or after a
+            # repeat that already ended the measure) doesn't start a new measure. The
+            # first measure of a part is kept even without notes: it's a pickup measure
+            # in which this part has nothing, and dropping it would shift the part.
+            is_empty_pickup = not measures and not has_notes(current_measure)
+            ending_measure = (
+                current_measure if has_notes(current_measure) or is_empty_pickup else last_measure()
+            )
+            if rhythm != "barline" and ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
                 build_barline_style(symbol, barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
         elif rhythm == "repeatStart":
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            # The repeated section starts with the next measure. If the current one has no
+            # notes yet (the repeat sign is at the start of a line), that's this one.
+            if has_notes(current_measure):
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
 
-            barline = build_or_get_barline(current_measure, "right")
+            barline = build_or_get_barline(current_measure, "left")
             build_repeat(symbol, barline)
         elif rhythm == "repeatEnd":
-            barline = build_or_get_barline(current_measure, "right")
-            build_repeat(symbol, barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
+            ending_measure = current_measure if has_notes(current_measure) else last_measure()
+            if ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
+                build_repeat(symbol, barline)
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
         elif rhythm == "repeatEndStart":
-            barline = build_or_get_barline(current_measure, "right")
-            build_repeat(EncodedSymbol("repeatEnd"), barline)
-
-            close_current_measure()
-            measure_number += 1
-            current_measure = ET.Element("measure", number=str(measure_number))
-            barline = build_or_get_barline(current_measure, "right")
+            ending_measure = current_measure if has_notes(current_measure) else last_measure()
+            if ending_measure is not None:
+                barline = build_or_get_barline(ending_measure, "right")
+                build_repeat(EncodedSymbol("repeatEnd"), barline)
+            if ending_measure is current_measure:
+                close_current_measure()
+                measure_number += 1
+                current_measure = ET.Element("measure", number=str(measure_number))
+            barline = build_or_get_barline(current_measure, "left")
             build_repeat(EncodedSymbol("repeatStart"), barline)
         elif rhythm.startswith("voltaStart"):
             volta_number = state.start_volta(measure_number)
             barline = build_or_get_barline(current_measure, "left")
             build_barline_ending(symbol, barline, volta_number)
         elif rhythm.startswith(("voltaStop", "voltaDiscontinue")):
-            volta_number = state.stop_volta(measure_number)
-            barline = build_or_get_barline(current_measure, "right")
-            build_barline_ending(symbol, barline, volta_number)
+            # Comes after the barline that ended the volta's last measure
+            stopped_measure = current_measure if has_notes(current_measure) else last_measure()
+            if stopped_measure is not None:
+                volta_number = state.stop_volta(int(stopped_measure.get("number", "0")))
+                barline = build_or_get_barline(stopped_measure, "right")
+                build_barline_ending(symbol, barline, volta_number)
 
         elif rhythm.startswith(("dynamic", "octaveShift")) or symbol.articulation.startswith(
             "dynamic"
@@ -303,18 +445,42 @@ def build_measures(
         else:
             eprint("Symbol isn't supported yet ", symbol)
 
-    if len(list(current_measure)) > 0:
+    if has_notes(current_measure) or not measures:
         stop_octave_shifts(current_measure, state)
         close_current_measure()
-    elif measures:
+    else:
         stop_octave_shifts(measures[-1], state)
     # A clef opens a second attributes element, so look at the whole first measure
     if measures[0].find("attributes/time") is None:
         time_el = ET.SubElement(first_attributes, "time")
-        beats = max(int(state.nominator * 4), 1)
-        ET.SubElement(time_el, "beats").text = str(beats)
-        ET.SubElement(time_el, "beat-type").text = "4"
+        if inherited_time is not None:
+            beats_text, beat_type = inherited_time
+        else:
+            beats_text, beat_type = str(max(int(state.nominator * 4), 1)), "4"
+        ET.SubElement(time_el, "beats").text = beats_text
+        ET.SubElement(time_el, "beat-type").text = beat_type
     return measures
+
+
+def _time_signature_length(time: TimeSignature | None) -> Fraction | None:
+    if time is None:
+        return None
+    try:
+        length = Fraction(int(time[0]), int(time[1]))
+    except (ValueError, ZeroDivisionError):
+        return None
+    return length if length > 0 else None
+
+
+def _starts_with_time_signature(groups: list[SymbolChord]) -> bool:
+    """Whether a time signature comes before the first note, rest or barline."""
+    for group in groups:
+        rhythm = group.symbols[0].rhythm if group.symbols else ""
+        if rhythm.startswith("timeSignature"):
+            return True
+        if rhythm.startswith(("note", "rest", "measureRest")) or group.is_barline():
+            return False
+    return False
 
 
 class GroupClock:
@@ -437,6 +603,14 @@ def build_or_get_attributes(
     if last_attributes is not None and not force_new:
         return last_attributes
     return ET.SubElement(measure, "attributes")
+
+
+def has_notes(measure: ET.Element) -> bool:
+    """
+    Whether a measure has notes or rests. A measure without them only holds what
+    precedes the first note of a line: clef, key, time signature or a new-system mark.
+    """
+    return measure.find("note") is not None
 
 
 def build_or_get_barline(measure: ET.Element, location: str) -> ET.Element:
@@ -883,6 +1057,7 @@ def tie_event(before: list[ET.Element], after: list[ET.Element]) -> None:
     some members only. So each slurred note looks for its own pitch in the
     next event rather than the chord being taken as a whole.
     """
+    is_tied = False
     for start_note in before:
         begins = get_slur(start_note, "start")
         if begins is None:
@@ -902,7 +1077,43 @@ def tie_event(before: list[ET.Element], after: list[ET.Element]) -> None:
             end_notation.remove(end_slur)
             add_tie(start_note, "start", begin_notation)
             add_tie(stop_note, "stop", end_notation)
+            is_tied = True
             break
+    if is_tied:
+        tie_rest_of_chord(before, after)
+
+
+def tie_rest_of_chord(before: list[ET.Element], after: list[ET.Element]) -> None:
+    """Tie the other notes of a chord which continue into the next chord.
+
+    A tied chord is engraved with a tie on every held notehead, but the model
+    marks only the one its curve touches. So once a slur between two chords has
+    been found to be a tie, the other pitches which both chords share are held
+    too: without this, they are played again on the second chord.
+    """
+    if len(before) < 2 or len(after) < 2:
+        return
+    after_by_pitch = {get_note_pitch(n): n for n in after if get_note_pitch(n) is not None}
+    for start_note in before:
+        pitch = get_note_pitch(start_note)
+        stop_note = after_by_pitch.get(pitch)
+        if pitch is None or stop_note is None:
+            continue
+        if _has_tie(start_note, "start") or _has_tie(stop_note, "stop"):
+            continue
+        add_tie(start_note, "start", _notations(start_note))
+        add_tie(stop_note, "stop", _notations(stop_note))
+
+
+def _has_tie(note: ET.Element, type_: str) -> bool:
+    return any(tie.get("type") == type_ for tie in note.findall("tie"))
+
+
+def _notations(note: ET.Element) -> ET.Element:
+    notations = note.find("notations")
+    if notations is None:
+        notations = ET.SubElement(note, "notations")
+    return notations
 
 
 def build_clef(model_clef: EncodedSymbol, attributes: ET.Element) -> None:
@@ -1276,26 +1487,35 @@ def find_division_and_time_signature_nominators(
     duration_in_measure = Fraction(0)
     segments: list[list[Fraction]] = [[]]
     has_time_signature = False
+    # Measure lengths are taken the way build_measures lays the groups out, so that
+    # voices which overlap (e.g. a melody over chords) aren't counted one after another
+    clock = GroupClock()
     for chord in voice:
         if chord.symbols and chord.symbols[0].rhythm.startswith("timeSignature"):
             if duration_in_measure > Fraction(0):
                 segments[-1].append(duration_in_measure)
                 duration_in_measure = Fraction(0)
+                clock = GroupClock()
             if has_time_signature:
                 segments.append([])
             has_time_signature = True
         elif chord.is_barline() and duration_in_measure > Fraction(0):
             segments[-1].append(duration_in_measure)
             duration_in_measure = Fraction(0)
+            clock = GroupClock()
         else:
+            timed = []
             for symbol in chord.symbols:
                 if symbol.rhythm.startswith(("note", "rest")):
                     frac = symbol.get_duration().fraction
                     if frac > Fraction(0):
                         durations.append(frac)
-            duration = chord.get_duration()
-            if duration > Fraction(0):
-                duration_in_measure += duration
+                        timed.append(frac)
+            if timed and not (len(chord.symbols) == 1 and chord.symbols[0].rhythm.endswith("m")):
+                clock.wait_for_voices(chord)
+                end = clock.time + max(timed)
+                clock.advance(chord)
+                duration_in_measure = max(duration_in_measure, end)
 
     if duration_in_measure > Fraction(0):
         segments[-1].append(duration_in_measure)

@@ -16,7 +16,8 @@ class Encoder:
         self.use_gpu = False
         if config.use_gpu_inference:
             try:
-                providers, device = gpu_providers({"cudnn_conv_algo_search": "DEFAULT"})
+                # EXHAUSTIVE: with DEFAULT cuDNN picks a slow fp16 convolution
+                providers, device = gpu_providers({"cudnn_conv_algo_search": "EXHAUSTIVE"})
                 self.encoder = ort.InferenceSession(
                     config.filepaths.encoder_path_fp16,
                     providers=providers,
