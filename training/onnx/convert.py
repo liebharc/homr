@@ -155,7 +155,10 @@ def convert_decoder(overwrite: bool) -> str | None:
     slurs = torch.randint(0, config.num_slur_tokens, (1, 1)).long()
     cache_len = torch.tensor([cache_length]).long()
     cache = kv_cache
-    context = torch.randn((1, 1280, config.encoder_dim)).float()
+    context_length = (config.max_height // config.patch_height) * (
+        config.max_width // config.patch_size
+    )
+    context = torch.randn((1, context_length, config.encoder_dim)).float()
 
     dynamic_axes["context"] = {1: "cache_exists"}
 

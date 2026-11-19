@@ -82,6 +82,7 @@ class Config:
         self.filepaths = FilePaths()
         self.channels = 1
         self.patch_size = 16
+        self.patch_height = 8  # The encoder output has a finer grid vertically, for the pitch
         self.max_height = 256
         self.max_width = 1280
         self.max_seq_len = 608
@@ -130,6 +131,7 @@ class Config:
             "filepaths": self.filepaths.to_dict(),
             "channels": self.channels,
             "patch_size": self.patch_size,
+            "patch_height": self.patch_height,
             "max_height": self.max_height,
             "max_width": self.max_width,
             "max_seq_len": self.max_seq_len,
