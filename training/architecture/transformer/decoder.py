@@ -54,8 +54,9 @@ class ScoreTransformerWrapper(nn.Module):
             config.decoder_dim, config.max_seq_len, l2norm_embed=l2norm_embed
         )
         self.attention_width = config.max_width // config.patch_size
-        self.attention_height = config.max_height // config.patch_size
+        self.attention_height = config.max_height // config.patch_height
         self.patch_size = config.patch_size
+        self.patch_height = config.patch_height
 
         self.attn_layers = attn_layers
         self.post_emb_norm = nn.LayerNorm(dim)
@@ -163,9 +164,10 @@ class ScoreTransformerWrapper(nn.Module):
             # get the kv cache tensors from the LayerIntermediates class
             # the cache is built up like this:
             # LayerIntermediates(atten_intermediates=Intermediates(cached_kv=(cache_k, cache_v)))
-            # cache is alternating between shapes (batch, 8, seq_len, 64) and (batch, 8, 1281, 64)
+            # cache is alternating between shapes (batch, 8, seq_len, 64)
+            # and (batch, 8, context_len, 64)
             # 8 probably corresponds to the number of decoder_heads
-            # 1281 is the same as the encoder output
+            # context_len is the length of the encoder output
             cache_out = []
             attn_inters = cache.attn_intermediates
             if return_center_of_attention:
@@ -234,7 +236,7 @@ class ScoreTransformerWrapper(nn.Module):
         center_of_attention = torch.stack(
             [
                 col * self.patch_size,
-                row * self.patch_size,
+                row * self.patch_height,
             ]
         )
 
