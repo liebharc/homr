@@ -154,7 +154,7 @@ def train_transformer(
         grandstaff_train_index,
         pdmx_train_index,
     ]
-    dataset_weights = [1.0, 1.0, 1.0]
+    dataset_weights = [1.0]
     invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index, invalid_tokens_file)
@@ -190,7 +190,7 @@ def train_transformer(
 
     train_args = TrainingArguments(
         checkpoint_folder,
-        torch_compile=compile_model,
+        torch_compile=False,  # compiled via model.compile_modules()
         eval_strategy="epoch",
         save_strategy="epoch",
         learning_rate=1e-5 if fine_tune else 1e-4,
@@ -222,6 +222,9 @@ def train_transformer(
         model.unfreeze_lift_decoder()
     else:
         model = TrOMR(config)
+
+    if compile_model:
+        model.compile_modules()
 
     model_name = "pytorch_model"
 
