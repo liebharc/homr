@@ -154,7 +154,7 @@ def train_transformer(
         grandstaff_train_index,
         pdmx_train_index,
     ]
-    dataset_weights = [1.0]
+    dataset_weights = [1.0, 1.0, 1.0]
     invalid_tokens_file = os.path.join(git_root, checkpoint_folder, "invalid_tokens.txt")
     if distribute.is_rank0():
         _check_datasets_are_present(dataset_index, invalid_tokens_file)
