@@ -11,10 +11,12 @@ from training.omr_datasets.photo_maps import FH, FW, PhotoConditions
 from training.omr_datasets.photo_measure import (
     MIN_INK,
     MIN_SPOTS,
+    calibrate,
     check_look,
     failed_measure,
     fit_look,
     line_up,
+    line_up_maps,
     measure_and_check,
     refine_maps,
 )
@@ -226,6 +228,23 @@ class TestFit(unittest.TestCase):
         ):
             self.assertLessEqual(float(np.median(np.abs(b / a - 1))), 0.05)
 
+    def test_small_leftover_shifts_are_not_taken_for_blur(self) -> None:
+        # a bent page: shifts of a few pixels that change faster than the 96 px spots can follow
+        # (real photos keep 0.5 px typically, 2-3 px at worst, after the first line-up)
+        h, w = SHAPE
+        ys, xs = np.mgrid[:h, :w].astype(np.float32)
+        jitter = (
+            2.5 * np.sin(xs / 37.0) * np.cos(ys / 53.0),
+            2.5 * np.cos(xs / 47.0) * np.sin(ys / 41.0),
+        )
+        seen = photo_seen(self.flat, shifted_maps(self.maps, jitter), self.truth, 230)
+        got = fit_look(
+            self.flat, line_up_maps(self.flat, self.maps, seen, self.usable), seen, self.usable
+        )
+        assert got is not None  # noqa: S101
+        ratio = got.blur[self.spots, 0] / self.truth.blur[self.spots, 0]
+        self.assertGreaterEqual(float((np.abs(ratio - 1) <= 0.1).mean()), 0.8, np.round(ratio, 2))
+
     def test_sparse_print_still_covers_the_page(self) -> None:
         sparse = self.flat.copy()
         sparse[:, FW // 2 :] = 255
@@ -281,6 +300,19 @@ class TestCheck(unittest.TestCase):
         self.assertLessEqual(abs(check.skirt), 0.001)
         self.assertIsNone(failed_measure(check))
 
+    def test_skirt_measure_ignores_stray_ink(self) -> None:
+        # specks of ink the template doesn't have (dust, a pencil dot) near the print
+        stray = self.seen.copy()
+        rng = np.random.default_rng(7)
+        for y, x in zip(
+            rng.integers(50, SHAPE[0] - 50, 400), rng.integers(50, SHAPE[1] - 50, 400), strict=True
+        ):
+            stray[y : y + 2, x : x + 2] = 0.6
+        check = check_look(
+            stray, draw_ink(self.flat, self.maps, self.look), self.known, self.usable
+        )
+        self.assertLessEqual(abs(check.skirt), 0.001)
+
     def test_check_names_what_is_wrong(self) -> None:
         blurrier = Look(
             self.look.blur * np.array([2, 2, 1], np.float32),
@@ -295,6 +327,16 @@ class TestCheck(unittest.TestCase):
         reason = failed_measure(self.check_of(no_skirt))
         assert reason is not None  # noqa: S101
         self.assertIn("skirt", reason)
+
+    def test_calibrate_matches_line_darkness_and_solid_black(self) -> None:
+        off = Look(self.look.blur, self.look.strength * 0.9, self.look.skirt, (1.0, 0.02))
+        before = self.check_of(off)
+        self.assertGreater(abs(before.line_darkness - 1), 0.05)
+        fixed = calibrate(off, self.flat, self.maps, self.seen, self.usable)
+        after = self.check_of(fixed)
+        self.assertAlmostEqual(after.line_darkness, 1.0, delta=0.02)
+        self.assertAlmostEqual(after.solid, 1.0, delta=0.02)
+        self.assertAlmostEqual(fixed.curve[0], 0.8, delta=0.1)
 
     def test_measure_and_check_end_to_end(self) -> None:
         true_maps = shifted_maps(self.maps, smooth_shift())
