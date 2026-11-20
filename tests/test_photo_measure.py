@@ -1,12 +1,19 @@
+import math
 import unittest
 
 import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-from training.omr_datasets.photo_look import STEP, known_print, spots
+from training.omr_datasets.photo_look import STEP, Look, draw_ink, known_print, spots
 from training.omr_datasets.photo_maps import FH, FW
-from training.omr_datasets.photo_measure import line_up, refine_maps
+from training.omr_datasets.photo_measure import (
+    MIN_INK,
+    MIN_SPOTS,
+    fit_look,
+    line_up,
+    refine_maps,
+)
 
 SHAPE = (1000, 707)  # a photo of the whole page, about as fine as a real one per staff
 SPACING = 42  # flat pixels between staff lines: 12 photo pixels
@@ -131,3 +138,101 @@ class TestLineUp(unittest.TestCase):
             if (a, b) != (i, j) and not np.isnan(dy[a, b])
         ]
         self.assertLess(abs(float(dy[i, j]) - float(np.median(near))), 1.0)
+
+
+def true_look(shape: tuple[int, int] = SHAPE) -> Look:
+    """Blur from (1.0, 0.8, 0) at the top to (2.2, 1.2, pi/4) at the bottom, strength 0.85 to
+    0.95, a skirt of 10% at sigma 6 and a darkness curve (0.8, 0.02)."""
+    rows, cols = spots(shape)
+    t = np.repeat((np.arange(rows) / (rows - 1))[:, None], cols, axis=1).astype(np.float32)
+    blur = np.stack([1.0 + 1.2 * t, 0.8 + 0.4 * t, t * math.pi / 4], axis=-1)
+    return Look(
+        blur.astype(np.float32), (0.85 + 0.1 * t).astype(np.float32), (0.1, 6.0), (0.8, 0.02)
+    )
+
+
+def photo_seen(flat: NDArray, maps: tuple[NDArray, NDArray], look: Look, paper: float) -> NDArray:
+    """The darkness a photo with this paper level shows: grey levels rounded as a camera would,
+    with a little grain."""
+    drawn = draw_ink(flat, maps, look)
+    grain = np.random.default_rng(3).normal(0, 1.0, drawn.shape)
+    grey = np.clip(np.round(paper * (1 - drawn) + grain), 0, 255)
+    return np.asarray(1 - grey / paper, np.float32)
+
+
+def with_print(flat: NDArray, maps: tuple[NDArray, NDArray]) -> NDArray:
+    """The spots (row, column) that carry print, as fit_look measures them."""
+    known = known_print(flat, maps)
+    rows, cols = spots(known.shape)
+    return np.array(
+        [
+            [
+                (i + 1) * STEP <= known.shape[0]
+                and (j + 1) * STEP <= known.shape[1]
+                and known[i * STEP : (i + 1) * STEP, j * STEP : (j + 1) * STEP].mean() >= MIN_INK
+                for j in range(cols)
+            ]
+            for i in range(rows)
+        ]
+    )
+
+
+def angle_apart(a: NDArray, b: NDArray) -> NDArray:
+    d = np.abs(a - b) % math.pi
+    return np.minimum(d, math.pi - d)
+
+
+class TestFit(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.flat = synthetic_print()
+        cls.maps = page_maps()
+        cls.truth = true_look()
+        cls.usable = np.ones(SHAPE, bool)
+        cls.bright = fit_look(
+            cls.flat, cls.maps, photo_seen(cls.flat, cls.maps, cls.truth, 230), cls.usable
+        )
+        cls.dim = fit_look(
+            cls.flat, cls.maps, photo_seen(cls.flat, cls.maps, cls.truth, 120), cls.usable
+        )
+        cls.spots = with_print(cls.flat, cls.maps)
+
+    def test_fit_recovers_a_known_look(self) -> None:
+        got = self.bright
+        assert got is not None  # noqa: S101
+        s, t = got.blur[self.spots], self.truth.blur[self.spots]
+        wide_ok = np.abs(s[:, 0] / t[:, 0] - 1) <= 0.1
+        self.assertGreaterEqual(float(wide_ok.mean()), 0.8, np.round(s[:, 0] / t[:, 0], 2))
+        stretched = t[:, 0] / t[:, 1] > 1.3
+        apart = np.degrees(angle_apart(s[stretched, 2], t[stretched, 2]))
+        self.assertGreaterEqual(float((apart <= 15).mean()), 0.8, np.round(apart))
+        strength = got.strength[self.spots] / self.truth.strength[self.spots]
+        self.assertGreaterEqual(
+            float((np.abs(strength - 1) <= 0.05).mean()), 0.8, np.round(strength, 2)
+        )
+        self.assertAlmostEqual(got.skirt[0], 0.1, delta=0.03)
+        self.assertAlmostEqual(got.skirt[1], 6.0, delta=1.5)
+        self.assertAlmostEqual(got.curve[0], 0.8, delta=0.05)
+
+    def test_dim_photo_gives_the_same_look(self) -> None:
+        assert self.bright is not None and self.dim is not None  # noqa: S101
+        for a, b in (
+            (self.bright.blur[self.spots, 0], self.dim.blur[self.spots, 0]),
+            (self.bright.strength[self.spots], self.dim.strength[self.spots]),
+        ):
+            self.assertLessEqual(float(np.median(np.abs(b / a - 1))), 0.05)
+
+    def test_sparse_print_still_covers_the_page(self) -> None:
+        sparse = self.flat.copy()
+        sparse[:, FW // 2 :] = 255
+        sparse[FH // 2 :] = 255
+        got = fit_look(
+            sparse, self.maps, photo_seen(sparse, self.maps, self.truth, 230), self.usable
+        )
+        assert got is not None  # noqa: S101
+        self.assertTrue(np.all(np.isfinite(got.blur)) and np.all(np.isfinite(got.strength)))
+        tiny = np.full((FH, FW), 255, np.uint8)
+        tiny[400:520, 300:900] = sparse[400:520, 300:900]
+        seen = photo_seen(tiny, self.maps, self.truth, 230)
+        self.assertLess(int(with_print(tiny, self.maps).sum()), MIN_SPOTS)
+        self.assertIsNone(fit_look(tiny, self.maps, seen, self.usable))

@@ -53,7 +53,7 @@ def darkness_curve(d: NDArray, curve: tuple[float, float]) -> NDArray:
     return ((d + toe) ** gamma - toe**gamma) / ((1 + toe) ** gamma - toe**gamma)
 
 
-def _filled(grid: NDArray, default: float | tuple[float, ...]) -> NDArray:
+def filled(grid: NDArray, default: float | tuple[float, ...]) -> NDArray:
     """The grid with every spot lacking a value (NaN) given its nearest spot's value."""
     grid = np.asarray(grid, np.float32)
     missing = np.isnan(grid).any(axis=-1) if grid.ndim == 3 else np.isnan(grid)  # noqa: PLR2004
@@ -69,8 +69,8 @@ def field(grid: NDArray, shape: tuple[int, int], step: int = STEP) -> NDArray:
     """Spot values to every pixel of a photo of this shape: missing spots take their nearest
     spot's value, then the values change linearly between spot centres."""
     rows, cols = grid.shape[:2]
-    filled = _filled(grid, 0.0)
-    smooth = cv2.resize(filled, (cols * step, rows * step), interpolation=cv2.INTER_LINEAR)
+    values = filled(grid, 0.0)
+    smooth = cv2.resize(values, (cols * step, rows * step), interpolation=cv2.INTER_LINEAR)
     return np.asarray(smooth[: shape[0], : shape[1]], np.float32)
 
 
@@ -101,7 +101,7 @@ def stretched_kernel(wide: float, narrow: float, angle: float) -> NDArray:
 def blur_by_spot(sharp: NDArray, blur: NDArray, step: int = STEP) -> NDArray:
     """sharp blurred with each spot's stretched Gaussian, blended linearly between spot centres."""
     h, w = sharp.shape
-    blur = _filled(blur, DEFAULT_BLUR)
+    blur = filled(blur, DEFAULT_BLUR)
     kernels = [
         [stretched_kernel(*map(float, blur[i, j])) for j in range(blur.shape[1])]
         for i in range(blur.shape[0])
@@ -138,7 +138,7 @@ def draw_ink(flat: NDArray, maps: tuple[NDArray, NDArray], look: Look) -> NDArra
     if share > 0:
         wide = cv2.GaussianBlur(sharp, (0, 0), max(skirt_sigma, MIN_SIGMA))
         blurred = (1 - share) * blurred + share * wide
-    strength = field(_filled(look.strength, 1.0), sharp.shape, look.step)
+    strength = field(filled(look.strength, 1.0), sharp.shape, look.step)
     drawn = strength * darkness_curve(blurred, look.curve)
     drawn[maps[0] < 0] = 0
     return np.asarray(drawn, np.float32)

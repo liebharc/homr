@@ -6,11 +6,23 @@ known print with them gives back the photo. The same drawing (photo_look.draw_in
 music, so the check of the old print is a check of what gets pasted.
 """
 
+import math
+
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+from scipy.optimize import least_squares
 
-from training.omr_datasets.photo_look import STEP, field, spots
+from training.omr_datasets.photo_look import (
+    STEP,
+    Look,
+    darkness_curve,
+    field,
+    filled,
+    known_print,
+    spots,
+    stretched_kernel,
+)
 from training.omr_datasets.photo_maps import FH, FLAT_MM, FW, PhotoConditions
 
 WINDOW = 256  # photo pixels around a spot for the first, coarse line-up: the map can be 20+ px off
@@ -19,6 +31,17 @@ MIN_INK = 0.02  # a spot with less print than this (mean darkness) isn't measure
 MIN_EXPLAINED = 0.5  # a spot whose lined-up print explains less of its darkness is dropped
 MAX_JUMP = 2.0  # a spot whose shift is further than this from its neighbours' is dropped
 EDGE_MM = 6  # spots this close to the page edge aren't measured: the map is least sure there
+MIN_SPOTS = 12  # with fewer measured spots a photo is left out: too little print to go on
+ROUNDS = 3  # the spot fits and the photo's skirt and curve, fitted in turn
+REACH = 24  # photo pixels of print around a spot that its blur can bring in
+START_SKIRT = (0.05, 6.0)
+START_CURVE = (1.0, 0.02)  # (gamma, TOE)
+# the curve's toe is held here, only its bend (gamma) is fitted: the two trade off almost exactly
+# over the darkness that matters, so fitting both lets the curve soak up the blur
+TOE = 0.02
+# the blur is drawn in single precision: slopes are estimated with steps this big (relative), or
+# the fit sees no slope and stops where it started
+DIFF_STEP = 1e-3
 
 
 def seen_darkness(cond: PhotoConditions) -> NDArray:
@@ -149,3 +172,201 @@ def refine_maps(
     off = on < 0.999  # noqa: PLR2004
     new_x[off], new_y[off] = -1, -1
     return np.asarray(new_x, np.float32), np.asarray(new_y, np.float32)
+
+
+def measured_spots(known: NDArray, usable: NDArray, step: int = STEP) -> list[tuple[int, int]]:
+    """The spots wholly on the usable page, with REACH around them, and with enough print."""
+    h, w = known.shape
+    rows, cols = spots((h, w), step)
+    found = []
+    for i in range(rows):
+        for j in range(cols):
+            y0, x0 = i * step, j * step
+            if y0 - REACH < 0 or x0 - REACH < 0 or y0 + step + REACH > h or x0 + step + REACH > w:
+                continue
+            spot = (slice(y0, y0 + step), slice(x0, x0 + step))
+            if usable[spot].all() and float(known[spot].mean()) >= MIN_INK:
+                found.append((i, j))
+    return found
+
+
+class _Spot:
+    """One spot's print (with REACH around it) and the photo's darkness there."""
+
+    def __init__(self, known: NDArray, seen: NDArray, i: int, j: int, step: int) -> None:
+        y0, x0 = i * step, j * step
+        self.region = known[y0 - REACH : y0 + step + REACH, x0 - REACH : x0 + step + REACH]
+        self.seen = seen[y0 : y0 + step, x0 : x0 + step].astype(np.float64)
+        self.at = (slice(y0, y0 + step), slice(x0, x0 + step))
+        self.params = np.array([0.0, 0.0, 0.0])  # log wide, log narrow, angle
+        self.fitted = False
+        self.blurred = self.blur(self.params)
+
+    def blur(self, params: NDArray) -> NDArray:
+        kernel = stretched_kernel(math.exp(params[0]), math.exp(params[1]), float(params[2]))
+        done = cv2.filter2D(self.region, -1, kernel, borderType=cv2.BORDER_CONSTANT)
+        return np.asarray(done[REACH:-REACH, REACH:-REACH], np.float64)
+
+
+def _shape(
+    blurred: NDArray, skirted: NDArray, skirt: tuple[float, float], curve: tuple[float, float]
+) -> NDArray:
+    return np.asarray(
+        darkness_curve((1 - skirt[0]) * blurred + skirt[0] * skirted, curve), np.float64
+    )
+
+
+def _strength(m: NDArray, t: NDArray) -> float:
+    return max(float((m * t).sum() / max(float((m * m).sum()), 1e-9)), 0.0)
+
+
+def _steady_strength(m: NDArray, t: NDArray) -> float:
+    """The ink strength from the pixels a sub-pixel misplacement barely changes: line middles and
+    the inside of thick ink, where the drawn darkness is high and flat."""
+    gradient = (
+        np.hypot(cv2.Sobel(m, cv2.CV_64F, 1, 0, ksize=3), cv2.Sobel(m, cv2.CV_64F, 0, 1, ksize=3))
+        / 8
+    )
+    steady = (m > 0.3 * m.max()) & (gradient < 0.03)  # noqa: PLR2004
+    if steady.sum() < 20:  # noqa: PLR2004
+        return _strength(m, t)
+    return _strength(m[steady], t[steady])
+
+
+def fit_look(
+    flat: NDArray, maps: tuple[NDArray, NDArray], seen: NDArray, usable: NDArray, step: int = STEP
+) -> Look | None:
+    """The look that, drawn through these (lined-up) maps, best gives the photo's darkness: per
+    spot a stretched blur and an ink strength, per photo the skirt and the darkness curve. Spots
+    without print take their nearest spot's values. None with fewer than MIN_SPOTS spots."""
+    known = known_print(flat, maps)
+    places = measured_spots(known, usable, step)
+    if len(places) < MIN_SPOTS:
+        return None
+    fits = [_Spot(known, seen, i, j, step) for i, j in places]
+    skirt, curve = START_SKIRT, START_CURVE
+    low, high = math.log(0.3), math.log(6.0)
+    for _ in range(ROUNDS):
+        skirted = cv2.GaussianBlur(known, (0, 0), skirt[1]).astype(np.float64)
+        for spot in fits:
+            far = skirted[spot.at]
+
+            def residual(
+                p: NDArray,
+                spot: _Spot = spot,
+                far: NDArray = far,
+                skirt: tuple[float, float] = skirt,
+                curve: tuple[float, float] = curve,
+            ) -> NDArray:
+                m = _shape(spot.blur(p), far, skirt, curve)
+                return np.asarray((spot.seen - _strength(m, spot.seen) * m).ravel())
+
+            # from a round blur the fit has no pull towards any direction: the first round starts
+            # from stretched guesses at four angles and keeps the best
+            starts = (
+                [spot.params]
+                if spot.fitted
+                else [
+                    np.array([math.log(1.3), math.log(0.9), a])
+                    for a in (0, math.pi / 4, math.pi / 2, 3 * math.pi / 4)
+                ]
+            )
+            found = min(
+                (
+                    least_squares(
+                        residual,
+                        s,
+                        bounds=([low, low, -np.inf], [high, high, np.inf]),
+                        x_scale=[0.2, 0.2, 0.3],
+                        diff_step=DIFF_STEP,
+                    )
+                    for s in starts
+                ),
+                key=lambda r: r.cost,
+            )
+            spot.params = found.x
+            spot.fitted = True
+            spot.blurred = spot.blur(found.x)
+
+        def photo_residual(q: NDArray) -> NDArray:
+            sk, cu = (float(q[0]), math.exp(q[1])), (float(q[2]), TOE)
+            spread = cv2.GaussianBlur(known, (0, 0), sk[1]).astype(np.float64)
+            parts = []
+            for spot in fits:
+                m = _shape(spot.blurred, spread[spot.at], sk, cu)
+                parts.append((spot.seen - _strength(m, spot.seen) * m).ravel())
+            return np.concatenate(parts)
+
+        start = [skirt[0], math.log(skirt[1]), curve[0]]
+        found = least_squares(
+            photo_residual,
+            start,
+            bounds=([0, math.log(2), 0.4], [0.4, math.log(20), 1.6]),
+            x_scale=[0.05, 0.2, 0.1],
+            diff_step=DIFF_STEP,
+        )
+        skirt, curve = (float(found.x[0]), math.exp(found.x[1])), (float(found.x[2]), TOE)
+
+    rows, cols = spots(known.shape, step)
+    blur = np.full((rows, cols, 3), np.nan, np.float32)
+    strength = np.full((rows, cols), np.nan, np.float32)
+    skirted = cv2.GaussianBlur(known, (0, 0), skirt[1]).astype(np.float64)
+    for (i, j), spot in zip(places, fits, strict=True):
+        big, small, turn = (
+            math.exp(spot.params[0]),
+            math.exp(spot.params[1]),
+            float(spot.params[2]),
+        )
+        if small > big:
+            big, small, turn = small, big, turn + math.pi / 2
+        blur[i, j] = (big, small, turn % math.pi)
+        strength[i, j] = _steady_strength(
+            _shape(spot.blurred, skirted[spot.at], skirt, curve), spot.seen
+        )
+    return Look(
+        filled(_smoothed_blur(blur), (1.0, 1.0, 0.0)),
+        filled(_smoothed(strength), 1.0),
+        skirt,
+        curve,
+        step,
+    )
+
+
+def _smoothed(grid: NDArray) -> NDArray:
+    """Each measured spot as the median of the measured spots around it (3 x 3): one spot's
+    print may hold too little to measure it well, and the camera's blur changes smoothly."""
+    rows, cols = grid.shape[:2]
+    out = grid.copy()
+    for i in range(rows):
+        for j in range(cols):
+            if np.isnan(grid[i, j]).any():
+                continue
+            near = grid[max(0, i - 1) : i + 2, max(0, j - 1) : j + 2].reshape(-1, *grid.shape[2:])
+            near = near[~np.isnan(near).reshape(len(near), -1).any(axis=1)]
+            out[i, j] = np.median(near, axis=0)
+    return out
+
+
+def _smoothed_blur(blur: NDArray) -> NDArray:
+    """_smoothed on the blur's covariance (xx, yy, xy), where directions average properly."""
+    wide, narrow, angle = blur[..., 0], blur[..., 1], blur[..., 2]
+    c, s = np.cos(angle), np.sin(angle)
+    cov = np.stack(
+        [
+            wide**2 * c**2 + narrow**2 * s**2,
+            wide**2 * s**2 + narrow**2 * c**2,
+            (wide**2 - narrow**2) * c * s,
+        ],
+        axis=-1,
+    )
+    xx, yy, xy = np.moveaxis(_smoothed(cov), -1, 0)
+    mean, half = (xx + yy) / 2, np.sqrt(((xx - yy) / 2) ** 2 + xy**2)
+    out = np.stack(
+        [
+            np.sqrt(mean + half),
+            np.sqrt(np.maximum(mean - half, 1e-6)),
+            (0.5 * np.arctan2(2 * xy, xx - yy)) % np.pi,
+        ],
+        axis=-1,
+    )
+    return np.asarray(out, np.float32)
