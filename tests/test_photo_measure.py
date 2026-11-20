@@ -11,6 +11,7 @@ from training.omr_datasets.photo_maps import FH, FW, PhotoConditions
 from training.omr_datasets.photo_measure import (
     MIN_INK,
     MIN_SPOTS,
+    TOLERANCE,
     calibrate,
     check_look,
     failed_measure,
@@ -219,6 +220,28 @@ class TestFit(unittest.TestCase):
         self.assertAlmostEqual(got.skirt[0], 0.1, delta=0.03)
         self.assertAlmostEqual(got.skirt[1], 6.0, delta=1.5)
         self.assertAlmostEqual(got.curve[0], 0.8, delta=0.05)
+
+    def test_a_sharpened_photo_is_matched(self) -> None:
+        # a slightly narrower blur can stand in for some sharpening: what counts is the photo
+        sharpened = Look(
+            self.truth.blur,
+            self.truth.strength,
+            self.truth.skirt,
+            self.truth.curve,
+            sharpen=(0.25, 2.0),
+        )
+        seen = photo_seen(self.flat, self.maps, sharpened, 230)
+        got = fit_look(self.flat, self.maps, seen, self.usable)
+        assert got is not None  # noqa: S101
+        known = known_print(self.flat, self.maps)
+        check = check_look(seen, draw_ink(self.flat, self.maps, got), known, self.usable)
+        for name in ("line_width", "line_darkness", "line_ink", "solid"):
+            self.assertAlmostEqual(getattr(check, name), 1.0, delta=TOLERANCE, msg=name)
+        # sharpening and the skirt both change the paper beside the ink, and can't be told apart
+        # fully: there the drawn photo comes within 0.005 (the check asks 0.003, so a strongly
+        # sharpened photo can be left out: on the safe side)
+        self.assertLessEqual(abs(check.skirt), 0.005)
+        self.assertLess(self.bright.sharpen[0], 0.08)  # the unsharpened photo: next to none
 
     def test_dim_photo_gives_the_same_look(self) -> None:
         assert self.bright is not None and self.dim is not None  # noqa: S101

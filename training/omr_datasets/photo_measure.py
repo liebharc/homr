@@ -21,7 +21,10 @@ from training.omr_datasets.photo_look import (
     draw_ink,
     field,
     filled,
+    finished_ink,
+    ink_mix,
     known_print,
+    sharpened,
     spots,
     stretched_kernel,
 )
@@ -42,6 +45,13 @@ MIN_SPOTS = 12  # with fewer measured spots a photo is left out: too little prin
 ROUNDS = 3  # the spot fits and the photo's skirt and curve, fitted in turn
 REACH = 24  # photo pixels of print around a spot that its blur can bring in
 START_SKIRT = (0.05, 6.0)
+# the phone's sharpening: its amount is chosen last, from these, as the one whose drawing
+# passes the check best, with the blur and skirt held (fitted along with them, it traded off
+# against them and drifted); its radius is held (with a tiny radius any amount does next to
+# nothing, and radius 2 and 4 fitted real photos alike)
+SHARPEN_RADIUS = 2.0
+START_SHARPEN = (0.0, SHARPEN_RADIUS)  # (amount, radius)
+SHARPEN_TRIES = tuple(round(0.05 * k, 2) for k in range(9))  # 0 to 0.4
 START_CURVE = (1.0, 0.02)  # (gamma, TOE)
 # the curve's toe is held here, only its bend (gamma) is fitted: the two trade off almost exactly
 # over the darkness that matters, so fitting both lets the curve soak up the blur
@@ -264,6 +274,7 @@ class _Spot:
         self.region = known[y0 - REACH : y0 + step + REACH, x0 - REACH : x0 + step + REACH]
         self.seen = seen[y0 : y0 + step, x0 : x0 + step].astype(np.float64)
         self.at = (slice(y0, y0 + step), slice(x0, x0 + step))
+        self.pad = (slice(y0 - REACH, y0 + step + REACH), slice(x0 - REACH, x0 + step + REACH))
         # log wide, log narrow, angle, and the print's leftover shift (dx, dy): lining up leaves a
         # pixel or two on a bent page, and a misplaced line looks like a blurrier one
         self.params = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
@@ -276,15 +287,20 @@ class _Spot:
             region = _moved(region, (float(params[3]), float(params[4])))
         kernel = stretched_kernel(math.exp(params[0]), math.exp(params[1]), float(params[2]))
         done = cv2.filter2D(region, -1, kernel, borderType=cv2.BORDER_CONSTANT)
-        return np.asarray(done[REACH:-REACH, REACH:-REACH], np.float64)
+        return np.asarray(done, np.float64)  # with REACH around the spot: _shape crops it
 
 
 def _shape(
-    blurred: NDArray, skirted: NDArray, skirt: tuple[float, float], curve: tuple[float, float]
+    blurred: NDArray,
+    skirted: NDArray,
+    skirt: tuple[float, float],
+    curve: tuple[float, float],
+    sharpen: tuple[float, float],
 ) -> NDArray:
-    return np.asarray(
-        darkness_curve((1 - skirt[0]) * blurred + skirt[0] * skirted, curve), np.float64
-    )
+    """A spot's drawn darkness from its blurred print and skirt (both with REACH around it, which
+    the sharpening needs), cropped to the spot."""
+    ink = sharpened((1 - skirt[0]) * blurred + skirt[0] * skirted, sharpen)
+    return np.asarray(darkness_curve(ink[REACH:-REACH, REACH:-REACH], curve), np.float64)
 
 
 def _strength(m: NDArray, t: NDArray) -> float:
@@ -316,12 +332,12 @@ def fit_look(
     if len(places) < MIN_SPOTS:
         return None
     fits = [_Spot(known, seen, i, j, step) for i, j in places]
-    skirt, curve = START_SKIRT, START_CURVE
+    skirt, curve, sharpen = START_SKIRT, START_CURVE, START_SHARPEN
     low, high = math.log(0.3), math.log(6.0)
     for _ in range(ROUNDS):
         skirted = cv2.GaussianBlur(known, (0, 0), skirt[1]).astype(np.float64)
         for spot in fits:
-            far = skirted[spot.at]
+            far = skirted[spot.pad]
 
             def residual(
                 p: NDArray,
@@ -329,8 +345,9 @@ def fit_look(
                 far: NDArray = far,
                 skirt: tuple[float, float] = skirt,
                 curve: tuple[float, float] = curve,
+                sharpen: tuple[float, float] = sharpen,
             ) -> NDArray:
-                m = _shape(spot.blur(p), far, skirt, curve)
+                m = _shape(spot.blur(p), far, skirt, curve, sharpen)
                 return np.asarray((spot.seen - _strength(m, spot.seen) * m).ravel())
 
             # from a round blur the fit has no pull towards any direction: the first round starts
@@ -363,28 +380,65 @@ def fit_look(
             spot.fitted = True
             spot.blurred = spot.blur(found.x)
 
-        def photo_residual(q: NDArray, curve: tuple[float, float] = curve) -> NDArray:
-            sk = (float(q[0]), math.exp(q[1]))
-            spread = cv2.GaussianBlur(known, (0, 0), sk[1]).astype(np.float64)
-            parts = []
-            for spot in fits:
-                m = _shape(spot.blurred, spread[spot.at], sk, curve)
-                parts.append((spot.seen - _strength(m, spot.seen) * m).ravel())
-            return np.concatenate(parts)
-
-        found = least_squares(
-            photo_residual,
-            [skirt[0], math.log(skirt[1])],
-            bounds=([0, math.log(2)], [0.4, math.log(MAX_SKIRT)]),
-            x_scale=[0.05, 0.2],
-            diff_step=DIFF_STEP,
-        )
-        skirt = (float(found.x[0]), math.exp(found.x[1]))
+        skirt = _fitted_skirt(fits, known, skirt, curve, sharpen)
         look = calibrate(
-            _assembled(places, fits, known, skirt, curve, step), flat, maps, seen, usable
+            _assembled(places, fits, known, skirt, curve, sharpen, step), flat, maps, seen, usable
         )
         curve = look.curve
-    return look
+    # the phone's sharpening last, with the blur and skirt held: fed back into their fits, they
+    # drift together (a wider blur or a bigger skirt, sharpened more, gives the same lines)
+    mix, checker = ink_mix(flat, maps, look), Checker(seen, known, usable)
+    best: tuple[float, Look] | None = None
+    for amount in SHARPEN_TRIES:
+        trial = calibrate(
+            replace(look, sharpen=(amount, SHARPEN_RADIUS)),
+            flat,
+            maps,
+            seen,
+            usable,
+            mix=mix,
+            checker=checker,
+        )
+        score = worst(checker.check(finished_ink(mix, maps, trial)))
+        if best is None or score < best[0]:
+            best = (score, trial)
+    assert best is not None  # noqa: S101
+    return best[1]
+
+
+def worst(check: "LookCheck") -> float:
+    """How far the check's worst measure is off, in its own tolerances (1 = at the limit)."""
+    ratios = (check.line_width, check.line_darkness, check.line_ink, check.solid)
+    off = [abs(r - 1) / TOLERANCE for r in ratios] + [abs(check.skirt) / SKIRT_TOLERANCE]
+    return max(math.inf if math.isnan(o) else o for o in off)
+
+
+def _fitted_skirt(
+    fits: list[_Spot],
+    known: NDArray,
+    skirt: tuple[float, float],
+    curve: tuple[float, float],
+    sharpen: tuple[float, float],
+) -> tuple[float, float]:
+    """The skirt (share, sigma) that, with the spots' blurs, best gives the photo's pixels."""
+
+    def residual(q: NDArray) -> NDArray:
+        sk = (float(q[0]), math.exp(q[1]))
+        spread = cv2.GaussianBlur(known, (0, 0), sk[1]).astype(np.float64)
+        parts = []
+        for spot in fits:
+            m = _shape(spot.blurred, spread[spot.pad], sk, curve, sharpen)
+            parts.append((spot.seen - _strength(m, spot.seen) * m).ravel())
+        return np.concatenate(parts)
+
+    found = least_squares(
+        residual,
+        [skirt[0], math.log(skirt[1])],
+        bounds=([0, math.log(2)], [0.4, math.log(MAX_SKIRT)]),
+        x_scale=[0.05, 0.2],
+        diff_step=DIFF_STEP,
+    )
+    return float(found.x[0]), math.exp(found.x[1])
 
 
 def _assembled(
@@ -393,6 +447,7 @@ def _assembled(
     known: NDArray,
     skirt: tuple[float, float],
     curve: tuple[float, float],
+    sharpen: tuple[float, float],
     step: int,
 ) -> Look:
     """The spots' fits as a look over the whole page: smoothed, and filled where unmeasured."""
@@ -410,7 +465,7 @@ def _assembled(
             big, small, turn = small, big, turn + math.pi / 2
         blur[i, j] = (big, small, turn % math.pi)
         strength[i, j] = _steady_strength(
-            _shape(spot.blurred, skirted[spot.at], skirt, curve), spot.seen
+            _shape(spot.blurred, skirted[spot.pad], skirt, curve, sharpen), spot.seen
         )
     return Look(
         filled(_smoothed_blur(blur), (1.0, 1.0, 0.0)),
@@ -418,6 +473,7 @@ def _assembled(
         skirt,
         curve,
         step,
+        sharpen,
     )
 
 
@@ -508,33 +564,52 @@ def _trimmed(values: NDArray, share: float = 0.1) -> float:
     return float(kept.mean()) if kept.size else float(np.median(values))
 
 
-def check_look(seen: NDArray, drawn: NDArray, known: NDArray, usable: NDArray) -> LookCheck:
-    """The check of a look: the photo's darkness (seen) against the known print drawn with it
-    (drawn), known being the sharp print lined up with the photo."""
-    ratios: list[tuple[float, float, float]] = []
-    h, w = seen.shape
-    tall, wide = PROFILE
-    for y0 in range(0, h - tall, tall // 2):
-        for x0 in range(0, w - wide, wide):
-            if not usable[y0 : y0 + tall, x0 : x0 + wide].all():
-                continue
+class Checker:
+    """check_look for one photo, ready for many drawings: the photo's own staff lines and the
+    places to measure are found once."""
+
+    def __init__(self, seen: NDArray, known: NDArray, usable: NDArray) -> None:
+        self.windows: list[tuple[int, int, list[tuple[float, float, float, float]]]] = []
+        h, w = seen.shape
+        tall, wide = PROFILE
+        for y0 in range(0, h - tall, tall // 2):
+            for x0 in range(0, w - wide, wide):
+                if usable[y0 : y0 + tall, x0 : x0 + wide].all():
+                    found = _lines(seen[y0 : y0 + tall, x0 : x0 + wide].mean(axis=1))
+                    if found:
+                        self.windows.append((y0, x0, found))
+        ink = (known > 0.5).astype(np.uint8)  # noqa: PLR2004
+        inside = cv2.distanceTransform(ink, cv2.DIST_L2, 3)
+        outside = cv2.distanceTransform(1 - ink, cv2.DIST_L2, 3)
+        self.core = usable & (inside > 2.5)  # noqa: PLR2004
+        self.skirt = usable & (ink == 0) & (outside >= 3) & (outside < 9)  # noqa: PLR2004
+        self.seen_core = float(np.median(seen[self.core])) if self.core.any() else math.nan
+        # a trimmed mean: out there the photo's darkness is a few grey levels, and a median of
+        # whole grey levels snaps to one of them (off by up to half a level); trimmed, stray ink
+        # the template doesn't have (dust, a pencil dot) doesn't count
+        self.seen_skirt = _trimmed(seen[self.skirt]) if self.skirt.any() else math.nan
+
+    def check(self, drawn: NDArray) -> LookCheck:
+        ratios: list[tuple[float, float, float]] = []
+        tall, wide = PROFILE
+        for y0, x0, real in self.windows:
             got = _lines(drawn[y0 : y0 + tall, x0 : x0 + wide].mean(axis=1))
-            for c, spread, peak, total in _lines(seen[y0 : y0 + tall, x0 : x0 + wide].mean(axis=1)):
+            for c, spread, peak, total in real:
                 near = [g for g in got if abs(g[0] - c) < 2]  # noqa: PLR2004
                 if len(near) == 1:
                     ratios.append((near[0][1] / spread, near[0][2] / peak, near[0][3] / total))
-    width, darkness, line_ink = np.median(np.array(ratios), axis=0) if ratios else (math.nan,) * 3
-    ink = (known > 0.5).astype(np.uint8)  # noqa: PLR2004
-    inside = cv2.distanceTransform(ink, cv2.DIST_L2, 3)
-    outside = cv2.distanceTransform(1 - ink, cv2.DIST_L2, 3)
-    core = usable & (inside > 2.5)  # noqa: PLR2004
-    skirt = usable & (ink == 0) & (outside >= 3) & (outside < 9)  # noqa: PLR2004
-    solid = float(np.median(drawn[core]) / np.median(seen[core])) if core.any() else math.nan
-    # a trimmed mean: out there the photo's darkness is a few grey levels, and a median of whole
-    # grey levels snaps to one of them (off by up to half a level); trimmed, stray ink the
-    # template doesn't have (dust, a pencil dot) doesn't count
-    far = _trimmed(drawn[skirt]) - _trimmed(seen[skirt]) if skirt.any() else math.nan
-    return LookCheck(float(width), float(darkness), float(line_ink), solid, far)
+        width, darkness, line_ink = (
+            np.median(np.array(ratios), axis=0) if ratios else (math.nan,) * 3
+        )
+        solid = float(np.median(drawn[self.core])) / self.seen_core if self.core.any() else math.nan
+        far = _trimmed(drawn[self.skirt]) - self.seen_skirt if self.skirt.any() else math.nan
+        return LookCheck(float(width), float(darkness), float(line_ink), solid, far)
+
+
+def check_look(seen: NDArray, drawn: NDArray, known: NDArray, usable: NDArray) -> LookCheck:
+    """The check of a look: the photo's darkness (seen) against the known print drawn with it
+    (drawn), known being the sharp print lined up with the photo."""
+    return Checker(seen, known, usable).check(drawn)
 
 
 def failed_measure(check: LookCheck) -> str | None:
@@ -559,19 +634,25 @@ def failed_measure(check: LookCheck) -> str | None:
 
 
 def calibrate(
-    look: Look, flat: NDArray, maps: tuple[NDArray, NDArray], seen: NDArray, usable: NDArray
+    look: Look,
+    flat: NDArray,
+    maps: tuple[NDArray, NDArray],
+    seen: NDArray,
+    usable: NDArray,
+    *,
+    mix: NDArray | None = None,
+    checker: Checker | None = None,
 ) -> Look:
     """The look with its darkness curve and ink strength set on the measures sub-pixel
-    misplacement can't fake: the curve's bend so that staff lines and solid black come out
-    equally right, then the strength scaled so that both match the photo. A pixel fit is ruled
-    by the ink edges, where leftover misplacement lives. Unchanged without staff lines or solid
-    black to measure."""
-    known = known_print(flat, maps)
+    misplacement can't fake (a pixel fit is ruled by the ink edges, where leftover misplacement
+    lives): the curve's bend so that staff lines and solid black come out equally right, then
+    the strength scaled so that both match the photo. mix (ink_mix) and checker can be given when
+    they are already at hand. Unchanged without staff lines or solid black to measure."""
+    checker = checker or Checker(seen, known_print(flat, maps), usable)
+    mix = ink_mix(flat, maps, look) if mix is None else mix  # the slow part
 
     def measured(gamma: float) -> LookCheck:
-        return check_look(
-            seen, draw_ink(flat, maps, replace(look, curve=(gamma, TOE))), known, usable
-        )
+        return checker.check(finished_ink(mix, maps, replace(look, curve=(gamma, TOE))))
 
     def apart(gamma: float) -> float:
         check = measured(gamma)
@@ -582,6 +663,8 @@ def calibrate(
         low, high = apart(GAMMAS[0]), apart(GAMMAS[1])
         if low * high < 0:
             gamma = float(brentq(apart, *GAMMAS, xtol=0.005))
+        elif math.isfinite(low) and math.isfinite(high):
+            gamma = GAMMAS[0] if abs(low) < abs(high) else GAMMAS[1]
     except (ValueError, ZeroDivisionError):  # nothing to measure: NaN or no solid black
         return look
     check = measured(gamma)

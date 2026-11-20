@@ -5,8 +5,9 @@ photo_measure.py), and the one function that draws ink the way that camera would
 Everything is in photo pixels (the photo brought to PHOTO_SIZE). The page is cut into spots STEP
 pixels apart; per spot there is a blur and an ink strength, and they change smoothly between spots.
 Per photo there is a faint skirt (a small share of the ink spread far out: light scattered in the
-paper and the lens) and a darkness curve (thin, faint strokes come out darker than a straight
-model gives, solid black lighter). Ink is darkness: the share of the paper's light it takes away.
+paper and the lens), the phone's sharpening (it narrows strokes; its light rim is hidden under the
+skirt) and a darkness curve (faint strokes come out darker than a straight model gives, solid
+black lighter). Ink is darkness: the share of the paper's light it takes away.
 """
 
 import math
@@ -21,6 +22,7 @@ from scipy import ndimage
 STEP = 96  # spot spacing, photo pixels at PHOTO_SIZE
 SUPER = 2  # the page is drawn at twice the photo's size, then shrunk: what a camera does
 NO_CURVE = (1.0, 0.0)
+NO_SHARPEN = (0.0, 2.0)
 MIN_SIGMA = 0.3  # a sharper blur than this is a single pixel anyway
 DEFAULT_BLUR = (1.0, 1.0, 0.0)  # for a photo with no measured spot at all
 
@@ -30,13 +32,15 @@ class Look:
     """blur: per spot, the wide and narrow sigma of a stretched Gaussian (photo pixels) and the
     angle of its wide axis, the direction (cos, sin) in (x, y) pixel coordinates. strength: per
     spot, the darkness of fully inked paper before the curve. skirt: (share, sigma), that share of
-    the ink spread with a Gaussian of that sigma. curve: (gamma, toe), see darkness_curve."""
+    the ink spread with a Gaussian of that sigma. curve: (gamma, toe), see darkness_curve.
+    sharpen: (amount, radius), the phone's unsharp mask: ink + amount * (ink - blurred ink)."""
 
     blur: NDArray
     strength: NDArray
     skirt: tuple[float, float]
     curve: tuple[float, float]
     step: int = STEP
+    sharpen: tuple[float, float] = NO_SHARPEN
 
 
 def spots(shape: tuple[int, int], step: int = STEP) -> tuple[int, int]:
@@ -128,18 +132,41 @@ def blur_by_spot(sharp: NDArray, blur: NDArray, step: int = STEP) -> NDArray:
     return np.asarray(out / np.maximum(weight, 1e-6), np.float32)
 
 
+def skirted(blurred: NDArray, sharp: NDArray, skirt: tuple[float, float]) -> NDArray:
+    """The blurred ink with a share of the sharp ink spread into the skirt instead."""
+    share, sigma = skirt
+    if share <= 0:
+        return blurred
+    return np.asarray(
+        (1 - share) * blurred + share * cv2.GaussianBlur(sharp, (0, 0), max(sigma, MIN_SIGMA))
+    )
+
+
+def sharpened(ink: NDArray, sharpen: tuple[float, float]) -> NDArray:
+    """The phone's unsharp mask on the ink: narrower strokes, the same ink in all."""
+    amount, radius = sharpen
+    if amount <= 0:
+        return ink
+    return np.asarray(ink + amount * (ink - cv2.GaussianBlur(ink, (0, 0), max(radius, MIN_SIGMA))))
+
+
 def draw_ink(flat: NDArray, maps: tuple[NDArray, NDArray], look: Look) -> NDArray:
     """The darkness the camera would show at every photo pixel for the flat page's ink: the sharp
-    print blurred per spot, a share of it spread into the skirt, through the darkness curve, times
-    the ink strength. 0 off the page."""
+    print blurred per spot, a share of it spread into the skirt, sharpened, through the darkness
+    curve, times the ink strength. 0 off the page."""
+    return finished_ink(ink_mix(flat, maps, look), maps, look)
+
+
+def ink_mix(flat: NDArray, maps: tuple[NDArray, NDArray], look: Look) -> NDArray:
+    """draw_ink's slow first half: the print blurred per spot, with its skirt."""
     sharp = known_print(flat, maps)
-    blurred = blur_by_spot(sharp, look.blur, look.step)
-    share, skirt_sigma = look.skirt
-    if share > 0:
-        wide = cv2.GaussianBlur(sharp, (0, 0), max(skirt_sigma, MIN_SIGMA))
-        blurred = (1 - share) * blurred + share * wide
-    strength = field(filled(look.strength, 1.0), sharp.shape, look.step)
-    drawn = strength * darkness_curve(blurred, look.curve)
+    return skirted(blur_by_spot(sharp, look.blur, look.step), sharp, look.skirt)
+
+
+def finished_ink(mix: NDArray, maps: tuple[NDArray, NDArray], look: Look) -> NDArray:
+    """draw_ink's quick second half: sharpened, through the curve, times the strength."""
+    strength = field(filled(look.strength, 1.0), mix.shape, look.step)
+    drawn = strength * darkness_curve(sharpened(mix, look.sharpen), look.curve)
     drawn[maps[0] < 0] = 0
     return np.asarray(drawn, np.float32)
 
@@ -152,6 +179,7 @@ def save_look(path: Path, look: Look) -> None:
         skirt=np.array(look.skirt),
         curve=np.array(look.curve),
         step=np.array(look.step),
+        sharpen=np.array(look.sharpen),
     )
 
 
@@ -163,4 +191,5 @@ def load_look(path: Path) -> Look:
         (float(saved["skirt"][0]), float(saved["skirt"][1])),
         (float(saved["curve"][0]), float(saved["curve"][1])),
         int(saved["step"]),
+        (float(saved["sharpen"][0]), float(saved["sharpen"][1])),
     )

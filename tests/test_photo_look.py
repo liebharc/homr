@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 
 from training.omr_datasets.photo_look import (
     NO_CURVE,
+    NO_SHARPEN,
     STEP,
     Look,
     darkness_curve,
@@ -91,6 +92,26 @@ class TestPhotoLook(unittest.TestCase):
         ring = (r >= 6) & (r <= 12)
         self.assertGreater(float(skirted[ring].sum()), 5 * float(plain[ring].sum()))
 
+    def test_sharpening_narrows_a_line_and_keeps_its_ink(self) -> None:
+        flat = np.full((FH, FW), 255, np.uint8)
+        flat[FH // 2 - 6 : FH // 2 + 6, 400:2000] = 0  # a staff line across the page
+        plain = draw_ink(flat, page_maps(), even_look(1.5, 1.5, 0.0))
+        look = even_look(1.5, 1.5, 0.0)
+        look.sharpen = (0.3, 2.0)
+        sharp = draw_ink(flat, page_maps(), look)
+        column = SHAPE[1] // 2
+        a, b = plain[:, column], sharp[:, column]
+        ys = np.arange(SHAPE[0], dtype=np.float64)
+
+        def width(p: NDArray) -> float:
+            centre = (p * ys).sum() / p.sum()
+            return float(np.sqrt((p * (ys - centre) ** 2).sum() / p.sum()))
+
+        self.assertLess(width(b), 0.95 * width(a))
+        self.assertGreater(float(b.max()), float(a.max()))
+        self.assertAlmostEqual(float(b.sum() / a.sum()), 1.0, delta=0.03)
+        self.assertEqual(even_look(1.0, 1.0, 0.0).sharpen, NO_SHARPEN)
+
     def test_draw_ink_is_finite_at_the_page_edge(self) -> None:
         map_x, map_y = page_maps()
         map_x[:40], map_y[:40] = -1, -1  # the top of the photo is off the page
@@ -109,6 +130,7 @@ class TestPhotoLook(unittest.TestCase):
     def test_look_round_trip(self) -> None:
         look = even_look(2.0, 1.5, 0.3, (0.1, 6.0))
         look.strength[2, 3] = 0.8
+        look.sharpen = (0.25, 1.5)
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "photo.look.npz"
             save_look(path, look)
@@ -116,3 +138,4 @@ class TestPhotoLook(unittest.TestCase):
         self.assertTrue(np.array_equal(back.blur, look.blur))
         self.assertTrue(np.array_equal(back.strength, look.strength))
         self.assertEqual((back.skirt, back.curve, back.step), (look.skirt, look.curve, STEP))
+        self.assertEqual(back.sharpen, look.sharpen)
