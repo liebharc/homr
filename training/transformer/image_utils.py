@@ -251,6 +251,14 @@ def _gradient_grids(h: int, w: int) -> tuple[NDArray, NDArray]:
 
 
 _MIN_STAFF_CONTRAST = 60
+_INK_SHARE_OF_PAPER = 128 / 255  # on white paper: darker than 128
+_PAPER_KERNEL = cv2.getStructuringElement(cv2.MORPH_RECT, (41, 41))  # wider than any stroke
+
+
+def _find_ink(gray: NDArray) -> NDArray:
+    """Pixels much darker than the paper around them, so dark paper doesn't count as ink."""
+    paper = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, _PAPER_KERNEL)
+    return gray < paper * _INK_SHARE_OF_PAPER
 
 
 def _enforce_min_staff_contrast(image: NDArray, ink_mask: NDArray) -> NDArray:
@@ -308,7 +316,7 @@ def distort_image(image: NDArray, allow_occlusions: bool = False) -> NDArray:
 
     # Capture ink locations after geometry, before brightness augmentation
     _pre_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
-    ink_mask = _pre_gray < 128
+    ink_mask = _find_ink(_pre_gray)
 
     # Ink and background
     image = apply_ink_color_shift(image)
