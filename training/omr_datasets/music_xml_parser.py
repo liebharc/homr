@@ -26,6 +26,7 @@ from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
     DYNAMICS,
     DYNAMICS_MODIFIER,
+    MULTIREST,
     OCTAVE_CLEFS,
     OCTAVE_SHIFT_STOP,
     VALID_TIME_SIGNATURE_DENOMINATORS,
@@ -989,10 +990,9 @@ def _process_multi_rests(part: TokensPart, measure_style: ET.Element) -> int:
     # MusicXML represents a multi-measure rest as N ordinary <measure>s. MuseScore
     # renders it as one measure, so the following N - 1 XML measures must be omitted
     # by the caller to keep token and SVG measure counts aligned.
+    # All multirests share one token, the digit reader reads the number of measures.
     if rest_duration > 1:
-        part.append_symbol(
-            EncodedSymbol(f"rest_{min(rest_duration, 10)}m", empty, empty, empty, empty, "upper")
-        )
+        part.append_symbol(EncodedSymbol(MULTIREST, empty, empty, empty, empty, "upper"))
     return rest_duration
 
 

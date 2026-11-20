@@ -9,6 +9,7 @@ from homr.simple_logging import eprint
 
 nonote = "."
 empty = "_"  # used for decorations on note, if there is no decoration
+MULTIREST = "rest_2m"  # all multirests, the digit reader reads the number of measures
 
 VALID_TIME_SIGNATURE_DENOMINATORS = [1, 2, 3, 4, 6, 8, 12, 16, 32, 48]
 DYNAMICS = [
@@ -117,7 +118,10 @@ def build_rhythm() -> dict[str, int]:
     rhythm.extend([f"timeSignature/{c}" for c in VALID_TIME_SIGNATURE_DENOMINATORS])
 
     # rhythm, kern durations are based on https://www.humdrum.org/rep/kern/
-    rhythm.extend([f"rest_{c}m" for c in range(2, 11)])  # multirests
+    # Multirests: the datasets only use rest_2m (MULTIREST), the digit reader
+    # reads the number of measures. Remove rest_3m to rest_10m and rename rest_2m
+    # to multirest with the next training which changes the vocabulary.
+    rhythm.extend([f"rest_{c}m" for c in range(2, 11)])
     kern_base_durations = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 32, 64, 128]  # 128, 256, 512
     dots = ["", ".", ".."]
     grace = ["", "G"]
@@ -466,7 +470,8 @@ class EncodedSymbol:
 
     def remove_tuplet(self) -> "EncodedSymbol":
         match = re.match(r"(note|rest)_(\d+)(.*)", self.rhythm)
-        if not match:
+        # The number of a multirest, e.g. rest_5m, is a count of measures
+        if not match or match[3] == "m":
             return self
         duration = int(match[2])
         if duration % 3 == 0:

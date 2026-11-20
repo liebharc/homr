@@ -14,6 +14,7 @@ import onnxruntime as ort
 from homr import color_adjust, download_utils
 from homr.autocrop import autocrop_with_offset
 from homr.bar_line_detection import (
+    add_bar_lines_to_staffs,
     detect_bar_lines,
     prepare_bar_line_image,
 )
@@ -324,6 +325,7 @@ def detect_single_staffs(image_path: str, config: ProcessingConfig) -> SingleSta
         raise Exception("No staffs found")
 
     debug.write_bounding_boxes_alternating_colors("staffs", staffs)
+    add_bar_lines_to_staffs(staffs, bar_line_boxes)
 
     notes = add_notes_to_staffs(
         staffs, noteheads_with_stems, predictions.symbols, predictions.notehead
@@ -415,6 +417,9 @@ def download_weights(segnet_use_gpu: bool, transformer_use_gpu: bool, coreml_enc
 
     models.append(staff_relations.model_path)
     models.append(staff_relations.horizontal_model_path)
+    from homr import number_recognition  # noqa: PLC0415
+
+    models.append(number_recognition.model_path)
     missing_models = [model for model in models if not os.path.exists(model)]
 
     if len(missing_models) == 0:

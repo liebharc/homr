@@ -1,5 +1,6 @@
 import unittest
 
+from homr.transformer.vocabulary import MULTIREST
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 
 
@@ -24,6 +25,6 @@ class TestMultipleRestParser(unittest.TestCase):
         measures = music_xml_string_to_tokens(xml)[0]
 
         self.assertEqual(len(measures), 2)
-        self.assertEqual(measures[0][2].rhythm, "rest_3m")
+        self.assertEqual(measures[0][2].rhythm, MULTIREST)
         self.assertEqual(measures[0][3].rhythm, "barline")
         self.assertEqual(measures[1][0].rhythm, "rest_1")

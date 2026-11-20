@@ -303,8 +303,8 @@ def build_measures(
         rest_measures = 0
 
     groups = split_mixed_chords(add_tuplet_start_stop(group_into_chords(voice)))
-    division, nominators = find_division_and_time_signature_nominators(groups)
-    state = ConversionState(division, nominators[0])
+    division, nominators, leading_length = find_division_and_time_signature_nominators(groups)
+    state = ConversionState(division, leading_length)
     # Without a printed time signature at its start, a page continues in the previous
     # page's one: the model reads only the beat type, so an estimate from the measure
     # lengths can't tell 2/2 from 4/4, and would bring a time change at every page.
@@ -456,7 +456,8 @@ def build_measures(
         if inherited_time is not None:
             beats_text, beat_type = inherited_time
         else:
-            beats_text, beat_type = str(max(int(state.nominator * 4), 1)), "4"
+            beats, denominator = time_signature_of("timeSignature/4", leading_length)
+            beats_text, beat_type = str(beats), str(denominator)
         ET.SubElement(time_el, "beats").text = beats_text
         ET.SubElement(time_el, "beat-type").text = beat_type
     return measures
@@ -1130,11 +1131,29 @@ def build_time_signature(
     model_time_signature: EncodedSymbol, attributes: ET.Element, state: ConversionState
 ) -> None:
     time = ET.SubElement(attributes, "time")
-    denominator = model_time_signature.rhythm.split("/")[1]
-    beats = max(int(state.nominator * int(denominator)), 1)
+    beats, denominator = time_signature_of(model_time_signature.rhythm, state.nominator)
     ET.SubElement(time, "beats").text = str(beats)
-    ET.SubElement(time, "beat-type").text = denominator
+    ET.SubElement(time, "beat-type").text = str(denominator)
     state.beats = beats
+    state.nominator = Fraction(beats, denominator)
+
+
+def time_signature_of(rhythm: str, measure_length: Fraction) -> tuple[int, int]:
+    """
+    Beats and beat type of a time signature token, e.g. timeSignature3/4. Without a
+    numerator, e.g. timeSignature/4, the beats come from the measure length. If it's no
+    whole number of beats, the beat type gets smaller, so that the measures still fit.
+    """
+    numerator, denominator_text = rhythm.removeprefix("timeSignature").split("/")
+    denominator = int(denominator_text)
+    if numerator:
+        return int(numerator), denominator
+    for candidate in (denominator, 2 * denominator, 4 * denominator):
+        beats = measure_length * candidate
+        if beats.denominator == 1 and candidate <= 16:  # noqa: PLR2004
+            return max(int(beats), 1), candidate
+    # An unusual length, likely a wrong estimate
+    return max(round(measure_length * denominator), 1), denominator
 
 
 def build_barline_style(barline: EncodedSymbol, xml: ET.Element) -> None:
@@ -1478,14 +1497,16 @@ def find_common_division(durations: list[Fraction]) -> int:
 
 def find_division_and_time_signature_nominators(
     voice: list[SymbolChord],
-) -> tuple[int, list[Fraction]]:
+) -> tuple[int, list[Fraction], Fraction]:
     """
-    Returns the division and one measure length per time signature, estimated from the
-    measures up to the next time signature. Measures before the first one count towards it.
+    Returns the division, one measure length per time signature, estimated from the
+    measures up to the next time signature, and the length of the measures before the
+    first time signature. Measures before the first one also count towards it.
     """
     durations = [Fraction(1, 4)]
     duration_in_measure = Fraction(0)
     segments: list[list[Fraction]] = [[]]
+    leading: list[Fraction] = []
     has_time_signature = False
     # Measure lengths are taken the way build_measures lays the groups out, so that
     # voices which overlap (e.g. a melody over chords) aren't counted one after another
@@ -1498,6 +1519,8 @@ def find_division_and_time_signature_nominators(
                 clock = GroupClock()
             if has_time_signature:
                 segments.append([])
+            else:
+                leading = list(segments[0])
             has_time_signature = True
         elif chord.is_barline() and duration_in_measure > Fraction(0):
             segments[-1].append(duration_in_measure)
@@ -1522,7 +1545,7 @@ def find_division_and_time_signature_nominators(
 
     all_measures = [d for segment in segments for d in segment]
     if len(all_measures) == 0:
-        return find_common_division(durations), [Fraction(1)] * len(segments)
+        return find_common_division(durations), [Fraction(1)] * len(segments), Fraction(1)
 
     # A time signature without measures after it, e.g. a courtesy one at the end of a
     # system, belongs to the measures of the next one
@@ -1533,8 +1556,9 @@ def find_division_and_time_signature_nominators(
             following = np.median(segment)  # type: ignore
         nominators.append(following)
     nominators.reverse()
+    leading_length: Fraction = np.median(leading) if leading else nominators[0]  # type: ignore
 
-    return find_common_division(durations), nominators
+    return find_common_division(durations), nominators, leading_length
 
 
 _BEFORE_NOTES_ORDER = ["clef", "keySignature", "timeSignature"]
