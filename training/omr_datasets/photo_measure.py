@@ -7,6 +7,7 @@ music, so the check of the old print is a check of what gets pasted.
 """
 
 import math
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -17,6 +18,7 @@ from training.omr_datasets.photo_look import (
     STEP,
     Look,
     darkness_curve,
+    draw_ink,
     field,
     filled,
     known_print,
@@ -42,6 +44,11 @@ TOE = 0.02
 # the blur is drawn in single precision: slopes are estimated with steps this big (relative), or
 # the fit sees no slope and stops where it started
 DIFF_STEP = 1e-3
+# the per-photo check: drawn / real within this, for line width, line darkness, ink per line and
+# solid black; the skirt (darkness 3-9 px out from the ink) within this share of the paper
+TOLERANCE = 0.05
+SKIRT_TOLERANCE = 0.003
+PROFILE = (96, 24)  # height, width of the strips staff lines are measured in
 
 
 def seen_darkness(cond: PhotoConditions) -> NDArray:
@@ -370,3 +377,109 @@ def _smoothed_blur(blur: NDArray) -> NDArray:
         axis=-1,
     )
     return np.asarray(out, np.float32)
+
+
+@dataclass
+class LookCheck:
+    """How the drawn print compares with the photo, on measures a fraction-of-a-pixel
+    misplacement can't fake: per staff line (each found where it sits in its own image) its
+    width, peak darkness and total ink, drawn / real; the middle of thick ink, drawn / real; and
+    the darkness 3-9 px out from the ink, drawn minus real. Medians over the page."""
+
+    line_width: float
+    line_darkness: float
+    line_ink: float
+    solid: float
+    skirt: float
+
+
+def _lines(profile: NDArray) -> list[tuple[float, float, float, float]]:
+    """(centre, spread, peak, total ink) of every staff line across a darkness profile."""
+    found = []
+    for i in range(4, len(profile) - 4):
+        v = profile[i]
+        if (
+            v > 0.25  # noqa: PLR2004
+            and v == profile[i - 3 : i + 4].max()
+            and profile[i - 4] < 0.5 * v
+            and profile[i + 4] < 0.5 * v
+        ):
+            win = np.clip(profile[i - 4 : i + 5], 0, None)
+            x = np.arange(-4, 5)
+            c = float((win * x).sum() / win.sum())
+            found.append(
+                (
+                    i + c,
+                    float(np.sqrt((win * (x - c) ** 2).sum() / win.sum())),
+                    float(v),
+                    float(win.sum()),
+                )
+            )
+    return found
+
+
+def check_look(seen: NDArray, drawn: NDArray, known: NDArray, usable: NDArray) -> LookCheck:
+    """The check of a look: the photo's darkness (seen) against the known print drawn with it
+    (drawn), known being the sharp print lined up with the photo."""
+    ratios: list[tuple[float, float, float]] = []
+    h, w = seen.shape
+    tall, wide = PROFILE
+    for y0 in range(0, h - tall, tall // 2):
+        for x0 in range(0, w - wide, wide):
+            if not usable[y0 : y0 + tall, x0 : x0 + wide].all():
+                continue
+            got = _lines(drawn[y0 : y0 + tall, x0 : x0 + wide].mean(axis=1))
+            for c, spread, peak, total in _lines(seen[y0 : y0 + tall, x0 : x0 + wide].mean(axis=1)):
+                near = [g for g in got if abs(g[0] - c) < 2]  # noqa: PLR2004
+                if len(near) == 1:
+                    ratios.append((near[0][1] / spread, near[0][2] / peak, near[0][3] / total))
+    width, darkness, line_ink = np.median(np.array(ratios), axis=0) if ratios else (math.nan,) * 3
+    ink = (known > 0.5).astype(np.uint8)  # noqa: PLR2004
+    inside = cv2.distanceTransform(ink, cv2.DIST_L2, 3)
+    outside = cv2.distanceTransform(1 - ink, cv2.DIST_L2, 3)
+    core = usable & (inside > 2.5)  # noqa: PLR2004
+    skirt = usable & (ink == 0) & (outside >= 3) & (outside < 9)  # noqa: PLR2004
+    solid = float(np.median(drawn[core]) / np.median(seen[core])) if core.any() else math.nan
+    far = float(np.median(drawn[skirt]) - np.median(seen[skirt])) if skirt.any() else math.nan
+    return LookCheck(float(width), float(darkness), float(line_ink), solid, far)
+
+
+def failed_measure(check: LookCheck) -> str | None:
+    """Every measure outside its tolerance, as text ('line width 0.88x, skirt -0.0100'), or None
+    when the look passes."""
+    wrong = []
+    for name, value in (
+        ("line width", check.line_width),
+        ("line darkness", check.line_darkness),
+        ("line ink", check.line_ink),
+        ("solid black", check.solid),
+    ):
+        if math.isnan(value):
+            wrong.append(f"{name}: nothing to measure")
+        elif abs(value - 1) > TOLERANCE:
+            wrong.append(f"{name} {value:.2f}x")
+    if math.isnan(check.skirt):
+        wrong.append("skirt: nothing to measure")
+    elif abs(check.skirt) > SKIRT_TOLERANCE:
+        wrong.append(f"skirt {check.skirt:+.4f}")
+    return ", ".join(wrong) or None
+
+
+def measure_and_check(
+    cond: PhotoConditions, flat: NDArray
+) -> tuple[Look, tuple[NDArray, NDArray]] | str:
+    """A photo's look and its finer page maps, measured from the template page that was
+    printed (flat), or why the photo is left out."""
+    seen = seen_darkness(cond)
+    ok = usable(cond)
+    shift = line_up(known_print(flat, (cond.map_x, cond.map_y)), seen, ok)
+    if int((~np.isnan(shift[0])).sum()) < MIN_SPOTS:
+        return "too little print lined up with its template"
+    maps = refine_maps((cond.map_x, cond.map_y), shift)
+    look = fit_look(flat, maps, seen, ok)
+    if look is None:
+        return "too little print to measure"
+    reason = failed_measure(
+        check_look(seen, draw_ink(flat, maps, look), known_print(flat, maps), ok)
+    )
+    return reason if reason is not None else (look, maps)

@@ -1,4 +1,5 @@
 import math
+import time
 import unittest
 
 import cv2
@@ -6,12 +7,15 @@ import numpy as np
 from numpy.typing import NDArray
 
 from training.omr_datasets.photo_look import STEP, Look, draw_ink, known_print, spots
-from training.omr_datasets.photo_maps import FH, FW
+from training.omr_datasets.photo_maps import FH, FW, PhotoConditions
 from training.omr_datasets.photo_measure import (
     MIN_INK,
     MIN_SPOTS,
+    check_look,
+    failed_measure,
     fit_look,
     line_up,
+    measure_and_check,
     refine_maps,
 )
 
@@ -236,3 +240,68 @@ class TestFit(unittest.TestCase):
         seen = photo_seen(tiny, self.maps, self.truth, 230)
         self.assertLess(int(with_print(tiny, self.maps).sum()), MIN_SPOTS)
         self.assertIsNone(fit_look(tiny, self.maps, seen, self.usable))
+
+
+def conditions_of(
+    seen_flat: NDArray,
+    maps: tuple[NDArray, NDArray],
+    look: Look,
+    true_maps: tuple[NDArray, NDArray],
+) -> PhotoConditions:
+    """A photo of `seen_flat` drawn with `look` through `true_maps`, on paper with a gentle shadow,
+    whose page map (`maps`) is a few pixels off, as UVDoc's and the marks' are."""
+    h, w = maps[0].shape
+    ys = np.mgrid[:h, :w][0].astype(np.float32)
+    paper_grey = 225 - 25 * ys / h
+    drawn = draw_ink(seen_flat, true_maps, look)
+    grain = np.random.default_rng(5).normal(0, 1.0, drawn.shape)
+    grey = np.clip(np.round(paper_grey * (1 - drawn) + grain), 0, 255).astype(np.uint8)
+    photo = cv2.cvtColor(grey, cv2.COLOR_GRAY2BGR)
+    paper = np.repeat(paper_grey[..., None], 3, axis=2).astype(np.float32)
+    return PhotoConditions(photo, maps[0], maps[1], np.ones((h, w), bool), paper, 0.3, 2.0)
+
+
+class TestCheck(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.flat = synthetic_print()
+        cls.maps = page_maps()
+        cls.look = true_look()
+        cls.seen = photo_seen(cls.flat, cls.maps, cls.look, 230)
+        cls.known = known_print(cls.flat, cls.maps)
+        cls.usable = np.ones(SHAPE, bool)
+
+    def check_of(self, look: Look) -> object:
+        return check_look(self.seen, draw_ink(self.flat, self.maps, look), self.known, self.usable)
+
+    def test_check_passes_the_model_that_drew_the_photo(self) -> None:
+        check = self.check_of(self.look)
+        for name in ("line_width", "line_darkness", "line_ink", "solid"):
+            self.assertAlmostEqual(getattr(check, name), 1.0, delta=0.02, msg=name)
+        self.assertLessEqual(abs(check.skirt), 0.001)
+        self.assertIsNone(failed_measure(check))
+
+    def test_check_names_what_is_wrong(self) -> None:
+        blurrier = Look(
+            self.look.blur * np.array([2, 2, 1], np.float32),
+            self.look.strength,
+            self.look.skirt,
+            self.look.curve,
+        )
+        reason = failed_measure(self.check_of(blurrier))
+        assert reason is not None  # noqa: S101
+        self.assertTrue("line width" in reason or "line darkness" in reason, reason)
+        no_skirt = Look(self.look.blur, self.look.strength, (0.0, 1.0), self.look.curve)
+        reason = failed_measure(self.check_of(no_skirt))
+        assert reason is not None  # noqa: S101
+        self.assertIn("skirt", reason)
+
+    def test_measure_and_check_end_to_end(self) -> None:
+        true_maps = shifted_maps(self.maps, smooth_shift())
+        cond = conditions_of(self.flat, self.maps, self.look, true_maps)
+        start = time.time()
+        result = measure_and_check(cond, self.flat)
+        self.assertLess(time.time() - start, 120)
+        self.assertNotIsInstance(result, str, result)
+        other = measure_and_check(cond, synthetic_print(seed=1))
+        self.assertIsInstance(other, str)
