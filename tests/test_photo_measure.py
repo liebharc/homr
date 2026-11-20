@@ -12,6 +12,7 @@ from training.omr_datasets.photo_measure import (
     MIN_INK,
     MIN_SPOTS,
     TOLERANCE,
+    LookCheck,
     calibrate,
     check_look,
     failed_measure,
@@ -97,6 +98,15 @@ def at_spots(field: NDArray, shape: tuple[int, int] = SHAPE) -> NDArray:
 
 
 class TestLineUp(unittest.TestCase):
+    flat: NDArray
+    maps: tuple[NDArray, NDArray]
+    truth: tuple[NDArray, NDArray]
+    true_maps: tuple[NDArray, NDArray]
+    seen: NDArray
+    known: NDArray
+    usable: NDArray
+    shift: tuple[NDArray, NDArray]
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.flat = synthetic_print()
@@ -190,6 +200,14 @@ def angle_apart(a: NDArray, b: NDArray) -> NDArray:
 
 
 class TestFit(unittest.TestCase):
+    flat: NDArray
+    maps: tuple[NDArray, NDArray]
+    truth: Look
+    usable: NDArray
+    bright: Look | None
+    dim: Look | None
+    spots: NDArray
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.flat = synthetic_print()
@@ -241,6 +259,7 @@ class TestFit(unittest.TestCase):
         # fully: there the drawn photo comes within 0.005 (the check asks 0.003, so a strongly
         # sharpened photo can be left out: on the safe side)
         self.assertLessEqual(abs(check.skirt), 0.005)
+        assert self.bright is not None  # noqa: S101
         self.assertLess(self.bright.sharpen[0], 0.08)  # the unsharpened photo: next to none
 
     def test_dim_photo_gives_the_same_look(self) -> None:
@@ -304,6 +323,13 @@ def conditions_of(
 
 
 class TestCheck(unittest.TestCase):
+    flat: NDArray
+    maps: tuple[NDArray, NDArray]
+    look: Look
+    seen: NDArray
+    known: NDArray
+    usable: NDArray
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.flat = synthetic_print()
@@ -313,7 +339,7 @@ class TestCheck(unittest.TestCase):
         cls.known = known_print(cls.flat, cls.maps)
         cls.usable = np.ones(SHAPE, bool)
 
-    def check_of(self, look: Look) -> object:
+    def check_of(self, look: Look) -> LookCheck:
         return check_look(self.seen, draw_ink(self.flat, self.maps, look), self.known, self.usable)
 
     def test_check_passes_the_model_that_drew_the_photo(self) -> None:
