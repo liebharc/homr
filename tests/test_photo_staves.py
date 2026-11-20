@@ -2,7 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training.omr_datasets.photo_staves import answers, match_staff, targets
+import numpy as np
+
+from training.omr_datasets.photo_look import NO_CURVE, Look, spots
+from training.omr_datasets.photo_staves import (
+    BLUR_LIMIT,
+    answers,
+    match_staff,
+    staff_blur,
+    targets,
+    too_blurry,
+)
 
 NOTE = (
     "<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration>"
@@ -72,3 +82,18 @@ class TestPhotoStaves(unittest.TestCase):
         self.assertIsNone(match_staff(((300, 230), (1100, 230), (2090, 230)), drawn))
         # the middle above the staff
         self.assertIsNone(match_staff(((110, 150), (1100, 150), (2090, 150)), drawn))
+
+    def test_too_blurry_at_the_limit(self) -> None:
+        self.assertTrue(too_blurry(BLUR_LIMIT * 10 + 0.01, 10))
+        self.assertFalse(too_blurry(BLUR_LIMIT * 10 - 0.01, 10))
+
+    def test_staff_blur_reads_the_field(self) -> None:
+        shape = (480, 640)
+        rows, cols = spots(shape)
+        blur = np.zeros((rows, cols, 3), np.float32)
+        blur[..., 1] = 0.8
+        blur[:, : cols // 2, 0] = 1.0
+        blur[:, cols // 2 :, 0] = 3.0
+        look = Look(blur, np.ones((rows, cols), np.float32), (0.0, 1.0), NO_CURVE)
+        self.assertAlmostEqual(staff_blur(look, (100, 240), shape), 1.0, delta=0.1)
+        self.assertAlmostEqual(staff_blur(look, (590, 240), shape), 3.0, delta=0.1)

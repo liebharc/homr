@@ -339,16 +339,19 @@ def make_pages(
 
 
 _loaded_maps: dict[Path, tuple[NDArray, NDArray]] = {}  # per process: each photo's map once
+_loaded_looks: dict[Path, Look] = {}
 
 
-def _cut_one(job: tuple[Path, Path, Any, Path, Cut]) -> tuple[list[str], Counter[str]]:
-    image_path, page_maps, config, staves_dir, cut = job
+def _cut_one(job: tuple[Path, Path, Path, Any, Path, Cut]) -> tuple[list[str], Counter[str]]:
+    image_path, page_maps, look, config, staves_dir, cut = job
     cv2.setNumThreads(1)
     if page_maps not in _loaded_maps:
         maps = np.load(page_maps)
         _loaded_maps[page_maps] = (maps["map_x"], maps["map_y"])
+    if look not in _loaded_looks:
+        _loaded_looks[look] = load_look(look)
     page = json.loads(image_path.with_suffix(".page.json").read_text(encoding="utf-8"))
-    return cut(image_path, _loaded_maps[page_maps], page, config, staves_dir)
+    return cut(image_path, _loaded_maps[page_maps], page, config, staves_dir, _loaded_looks[look])
 
 
 def cut_pages(
@@ -367,7 +370,7 @@ def cut_pages(
         page = json.loads(image_path.with_suffix(".page.json").read_text(encoding="utf-8"))
         photo = photos.get(page["photo"])
         if photo is not None:  # else its photo is gone
-            jobs.append((image_path, photo.page_maps, config, staves_dir, cut))
+            jobs.append((image_path, photo.page_maps, photo.look, config, staves_dir, cut))
     lines, dropped = [], Counter[str]()
     for found, why in _map_jobs(_cut_one, jobs, workers):
         lines += found
