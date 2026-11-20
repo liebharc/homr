@@ -24,11 +24,10 @@ from training.omr_datasets.photo_maps import (
 )
 
 FONTS = ["Leipzig", "Bravura", "Gootville", "Leland", "Petaluma"]
-SIZES = [30, 40, 55]  # Verovio scale: small, normal, large staves
+SIZES = [30, 40, 55]  # small, normal, large staves (Verovio's scale)
 SUPER = 2  # draw the page at twice the photo's size, then shrink: what a camera does
 BLEED = 0.25  # printer ink spreads: strokes are widened by this many 300 dpi pixels each side
 BLURS = [0, 0.5, 0.75, 1, 1.25, 1.5]  # sigmas tried to match the photo's ink edges
-ZOOM = 1.5  # Verovio's page drawn at this zoom
 SCALE = 0.86  # the music's share of the template page width, leaving room for the marks
 MARK = round(10 * FLAT_MM)
 MARK_CENTER = 10 * FLAT_MM
@@ -122,16 +121,18 @@ def layout(svg: str, zoom: float, f: float, x0: float, y0: float) -> list[dict[s
 def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> EngravedPage | None:
     """The most bars from bar `start` (0 = the first) that fit on one page, placed as on a
     template page (without the marks: the photo's map is in template pixels). None when fewer
-    than 4 bars fit."""
+    than 4 bars fit. A bigger size lays the music out on a smaller page, so the staves come out
+    bigger once the page is fitted to the template (Verovio's scale only scales the drawing)."""
+    k = 40 / size
     options = {
-        "pageWidth": 2100,
-        "pageHeight": 2970,
-        "scale": size,
+        "pageWidth": round(2100 * k),
+        "pageHeight": round(2970 * k),
+        "scale": 40,
         "adjustPageHeight": False,
         "footer": "none",
         "font": font,
-        "pageMarginLeft": 150,
-        "pageMarginRight": 150,
+        "pageMarginLeft": round(150 * k),
+        "pageMarginRight": round(150 * k),
         "header": "none",
     }
 
@@ -151,7 +152,9 @@ def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> Engra
     if low < 4:
         return None
     svg = toolkit(low).renderToSVG(1)
-    png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=ZOOM)
+    # drawn at least as wide as it sits on the page: enlarging it afterwards would blur it
+    zoom = SCALE * FW / (options["pageWidth"] * options["scale"] / 100)
+    png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=zoom)
     music = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
     if music is None:
         return None
@@ -164,7 +167,7 @@ def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> Engra
     flat = np.full((FH, FW), 255, np.uint8)
     y0, x0 = (FH - small.shape[0]) // 2, (FW - small.shape[1]) // 2
     flat[y0 : y0 + small.shape[0], x0 : x0 + small.shape[1]] = small
-    return EngravedPage(flat, measures_from(xml, start, low), layout(svg, ZOOM, f, x0, y0))
+    return EngravedPage(flat, measures_from(xml, start, low), layout(svg, zoom, f, x0, y0))
 
 
 def ink_strength(darkness: NDArray, page: NDArray, level: float) -> float:

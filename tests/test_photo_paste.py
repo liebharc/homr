@@ -92,6 +92,17 @@ class TestPhotoPaste(unittest.TestCase):
         self.assertEqual(part.findall("measure")[0].get("number"), "6")
         self.assertEqual(sum(s["bars"] for s in page.systems), 7)
 
+    def test_sizes_give_different_staff_heights(self) -> None:
+        heights = {}
+        for size in (30, 40, 55):
+            page = engrave_on_template(piano_score(12), "Leipzig", size)
+            assert page is not None  # noqa: S101
+            boxes = [staff for system in page.systems for staff in system["staffs"]]
+            heights[size] = float(np.median([bottom - top for _, top, _, bottom in boxes]))
+        self.assertLess(heights[30], heights[40])
+        self.assertLess(heights[40], heights[55])
+        self.assertGreater(heights[55] / heights[30], 1.4)
+
     def test_engraved_page_lists_its_bars_and_staves(self) -> None:
         page = engrave_on_template(piano_score(8), "Leipzig", 40)
         self.assertIsNotNone(page)
