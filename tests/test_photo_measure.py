@@ -19,6 +19,7 @@ from training.omr_datasets.photo_measure import (
     fit_look,
     line_up,
     line_up_maps,
+    map_off_mm,
     measure_and_check,
     refine_maps,
 )
@@ -361,6 +362,27 @@ class TestCheck(unittest.TestCase):
             stray, draw_ink(self.flat, self.maps, self.look), self.known, self.usable
         )
         self.assertLessEqual(abs(check.skirt), 0.001)
+
+    def test_a_blank_photo_gives_no_solid_black_rather_than_an_error(self) -> None:
+        check = check_look(
+            np.zeros(SHAPE, np.float32),
+            draw_ink(self.flat, self.maps, self.look),
+            self.known,
+            self.usable,
+        )
+        self.assertTrue(math.isnan(check.solid))
+        self.assertIsNotNone(failed_measure(check))
+
+    def test_a_map_off_by_more_than_erasing_allows_is_measured(self) -> None:
+        maps = page_maps()  # about 3.5 flat pixels per photo pixel
+        rows, cols = spots(SHAPE)
+        shift = (np.zeros((rows, cols), np.float32), np.full((rows, cols), np.nan, np.float32))
+        shift[1][2:4, 2:4] = 1.0
+        self.assertLess(map_off_mm(shift, maps), 1.0)
+        shift[1][3, 3] = 30.0  # 30 photo px: about 105 flat px, 9 mm
+        self.assertAlmostEqual(
+            map_off_mm(shift, maps), 30 * (FH - 1) / (SHAPE[0] - 1) / (300 / 25.4), delta=0.5
+        )
 
     def test_check_names_what_is_wrong(self) -> None:
         blurrier = Look(

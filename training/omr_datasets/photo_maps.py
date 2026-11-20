@@ -28,6 +28,7 @@ PHOTO_SIZE = 2000  # long side every photo is brought to
 # With fewer marks they all sat on one side of the page, and the map was guessed for the rest:
 # the new music landed off the paper's bends and the old print showed through
 MIN_MARKS = 4
+ERASE_MARGIN_MM = 8  # the old print is erased this far around its box: the map can be off
 UVDOC_INPUT = (488, 712)
 
 
@@ -201,7 +202,12 @@ def old_print(template: dict[str, Any]) -> list[tuple[float, float, float, float
     x, y, w, h = template["music_box"]
     label_x, label_y = FW / 2 + 12 * mm, FH - 7 * mm
     boxes = [
-        (x - 8 * mm, y - 8 * mm, x + w + 8 * mm, y + h + 8 * mm),
+        (
+            x - ERASE_MARGIN_MM * mm,
+            y - ERASE_MARGIN_MM * mm,
+            x + w + ERASE_MARGIN_MM * mm,
+            y + h + ERASE_MARGIN_MM * mm,
+        ),
         (label_x - 3 * mm, label_y - 6 * mm, FW - 16 * mm, label_y + 4 * mm),
     ]
     if "patch_box" in template:

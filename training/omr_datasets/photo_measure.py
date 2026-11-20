@@ -28,13 +28,22 @@ from training.omr_datasets.photo_look import (
     spots,
     stretched_kernel,
 )
-from training.omr_datasets.photo_maps import FH, FLAT_MM, FW, PhotoConditions
+from training.omr_datasets.photo_maps import (
+    ERASE_MARGIN_MM,
+    FH,
+    FLAT_MM,
+    FW,
+    PhotoConditions,
+)
 
 WINDOW = 256  # photo pixels around a spot for the first, coarse line-up: the map can be 20+ px off
 FINE = 128  # photo pixels around a spot for the fine line-up
 MIN_INK = 0.02  # a spot with less print than this (mean darkness) isn't measured
 MIN_EXPLAINED = 0.5  # a spot whose lined-up print explains less of its darkness is dropped
 MAX_JUMP = 2.0  # a spot whose shift is further than this from its neighbours' is dropped
+# a photo whose page map was off by more than this is left out: the old print is erased only
+# ERASE_MARGIN_MM around its box, so some could be left on the paper
+MAP_OFF_MAX_MM = 0.75 * ERASE_MARGIN_MM
 # the second, finer line-up: after the first, a real photo's print is still off by about 0.5 px,
 # changing from one 48 px area to the next, which a fit would take for blur
 FINE_STEP = 48
@@ -228,6 +237,19 @@ def line_up_maps(
     FINE_STEP spot on the result."""
     first = refine_maps(maps, line_up(known_print(flat, maps), seen, usable))
     return refine_maps(first, line_up_fine(known_print(flat, first), seen, usable), FINE_STEP)
+
+
+def map_off_mm(shift: tuple[NDArray, NDArray], maps: tuple[NDArray, NDArray]) -> float:
+    """The most the page map was off where it was lined up (line_up's shift), in millimetres of
+    the flat page."""
+    dx, dy = shift
+    found = ~np.isnan(dx) & ~np.isnan(dy)
+    if not found.any():
+        return 0.0
+    map_x = maps[0]
+    both = (map_x[:, 1:] >= 0) & (map_x[:, :-1] >= 0)
+    flat_per_photo = float(np.median(np.abs(np.diff(map_x, axis=1))[both])) if both.any() else 1.0
+    return float(np.hypot(dx[found], dy[found]).max()) * flat_per_photo / FLAT_MM
 
 
 def refine_maps(
@@ -601,7 +623,10 @@ class Checker:
         width, darkness, line_ink = (
             np.median(np.array(ratios), axis=0) if ratios else (math.nan,) * 3
         )
-        solid = float(np.median(drawn[self.core])) / self.seen_core if self.core.any() else math.nan
+        # no darkness where the print is solid black: a map so far off that it measures paper
+        solid = (
+            float(np.median(drawn[self.core])) / self.seen_core if self.seen_core > 0 else math.nan
+        )
         far = _trimmed(drawn[self.skirt]) - self.seen_skirt if self.skirt.any() else math.nan
         return LookCheck(float(width), float(darkness), float(line_ink), solid, far)
 
@@ -665,7 +690,7 @@ def calibrate(
             gamma = float(brentq(apart, *GAMMAS, xtol=0.005))
         elif math.isfinite(low) and math.isfinite(high):
             gamma = GAMMAS[0] if abs(low) < abs(high) else GAMMAS[1]
-    except (ValueError, ZeroDivisionError):  # nothing to measure: NaN or no solid black
+    except (ValueError, ZeroDivisionError, RuntimeError):  # nothing to measure, or no root
         return look
     check = measured(gamma)
     scale = 1 / math.sqrt(check.line_darkness * check.solid)
@@ -684,6 +709,9 @@ def measure_and_check(
     shift = line_up(known_print(flat, (cond.map_x, cond.map_y)), seen, ok)
     if int((~np.isnan(shift[0])).sum()) < MIN_SPOTS:
         return "too little print lined up with its template"
+    off = map_off_mm(shift, (cond.map_x, cond.map_y))
+    if off > MAP_OFF_MAX_MM:
+        return f"page map off by {off:.0f} mm, more than erasing allows"
     maps = refine_maps((cond.map_x, cond.map_y), shift)
     maps = refine_maps(maps, line_up_fine(known_print(flat, maps), seen, ok), FINE_STEP)
     look = fit_look(flat, maps, seen, ok)

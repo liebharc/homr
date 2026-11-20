@@ -14,9 +14,12 @@ from numpy.typing import NDArray
 
 from tests.test_photo_maps import page_with_marks
 from tests.test_photo_paste import piano_score
+from training.omr_datasets import convert_photos
 from training.omr_datasets.convert_photos import (
+    LOOK_VERSION,
     run,
     songs,
+    template_pictures,
     template_song_ids,
     training_page,
     training_photo,
@@ -81,6 +84,31 @@ def fake_measure(
         cond.map_x,
         cond.map_y,
     )
+
+
+SEEN_MAPS: list[float] = []  # what the recording cut was handed, in this process
+
+
+def moving_measure(
+    cond: PhotoConditions, flat: NDArray
+) -> tuple[Look, tuple[NDArray, NDArray]] | str:
+    """fake_measure, with finer maps 5 px over from the coarse ones."""
+    found = fake_measure(cond, flat)
+    assert not isinstance(found, str)  # noqa: S101
+    return found[0], (cond.map_x + 5, cond.map_y)
+
+
+def raising_measure(
+    cond: PhotoConditions, flat: NDArray
+) -> tuple[Look, tuple[NDArray, NDArray]] | str:
+    raise ZeroDivisionError("float division by zero")
+
+
+def recording_cut(
+    image_path: Path, maps: tuple[NDArray, NDArray], *rest: Any
+) -> tuple[list[str], Counter[str]]:
+    SEEN_MAPS.append(float(maps[0][500, 400]))
+    return fake_cut(image_path, maps, *rest)
 
 
 def template_pages(folder: Path, numbers: tuple[int, ...], failing: tuple[int, ...] = ()) -> Path:
@@ -312,7 +340,7 @@ class TestConvertPhotosRuns(unittest.TestCase):
         self.run_it()
         self.run_it()
         self.assertEqual(len(MEASURED), 2)
-        self.assertTrue((self.root / "maps" / "a.look.npz").exists())
+        self.assertTrue((self.root / "maps" / f"a.look{LOOK_VERSION}.npz").exists())
 
     def test_a_photo_failing_its_check_is_left_out(self) -> None:
         self.photo(23, "a.jpg")
@@ -336,3 +364,66 @@ class TestConvertPhotosRuns(unittest.TestCase):
         with contextlib.redirect_stderr(said):
             self.assertEqual(self.run_it(), 1)
         self.assertIn("b: left out, no template picture", said.getvalue())
+
+    def test_the_finer_maps_are_used_on_every_run(self) -> None:
+        self.photo(23, "a.jpg")
+        SEEN_MAPS.clear()
+        for _ in range(2):
+            convert_photos._loaded_maps.clear()  # as a new run would: each run is its own process
+            convert_photos._loaded_looks.clear()
+            run(
+                self.photos,
+                self.templates,
+                self.songs,
+                self.root,
+                mapper=CountingMapper,
+                cut=recording_cut,
+                songs_per_photo=1,
+                template_pages=self.pictures,
+                measure=moving_measure,
+            )
+        with np.load(self.root / "maps" / "a.page.npz") as saved:
+            coarse = float(saved["map_x"][500, 400])
+        self.assertEqual(SEEN_MAPS, [coarse + 5, coarse + 5])
+
+    def test_a_missing_template_picture_is_not_remembered(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        (self.pictures / "T24.png").unlink()
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(self.run_it(), 1)
+        self.pictures = template_pages(Path(self.folder.name), (24,))
+        self.assertEqual(self.run_it(), 2)
+
+    def test_a_look_saved_by_another_version_is_measured_again(self) -> None:
+        self.photo(23, "a.jpg")
+        (self.root / "maps").mkdir(parents=True)
+        (self.root / "maps" / "a.look.npz").write_bytes(b"made by an older version")
+        MEASURED.clear()
+        self.assertEqual(self.run_it(), 1)
+        self.assertEqual(len(MEASURED), 1)
+
+    def test_an_error_while_measuring_leaves_only_that_photo_out(self) -> None:
+        self.photo(23, "a.jpg")
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said), self.assertRaises(RuntimeError):  # no staves at all
+            run(
+                self.photos,
+                self.templates,
+                self.songs,
+                self.root,
+                mapper=CountingMapper,
+                cut=fake_cut,
+                songs_per_photo=1,
+                template_pages=self.pictures,
+                measure=raising_measure,
+            )
+        self.assertIn("a: left out, measuring failed (ZeroDivisionError", said.getvalue())
+
+    def test_a_dataset_without_template_pictures_says_to_download_it_again(self) -> None:
+        dataset = Path(self.folder.name) / "homr-photo-pages-main"
+        (dataset / "templates").mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, "download"):
+            template_pictures(dataset)
+        (dataset / "templates" / "pages").mkdir()
+        self.assertEqual(template_pictures(dataset), dataset / "templates" / "pages")
