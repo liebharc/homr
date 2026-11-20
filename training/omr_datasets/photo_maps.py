@@ -76,16 +76,15 @@ class Uvdoc:
 
 @dataclass
 class PhotoConditions:
-    """What a photo does to a page: the upright photo, its map to the flat page, the paper with
-    the printed music painted over, how dark its ink is and how sharp the ink edges are."""
+    """What a photo does to a page: the upright photo, its map to the flat page and the paper
+    with the printed music painted over. What the camera did to the ink is measured from it in
+    photo_measure.py."""
 
     photo: NDArray
     map_x: NDArray
     map_y: NDArray
     on_page: NDArray
     paper: NDArray
-    ink_level: float
-    sharp: float
 
 
 def find_marks(photo: NDArray) -> dict[int, NDArray]:
@@ -156,18 +155,6 @@ def at(maps: tuple[NDArray, NDArray], points: NDArray) -> NDArray:
     return np.stack([map_x[yi, xi], map_y[yi, xi]], axis=1)
 
 
-def edge_sharpness(n: NDArray, page: NDArray) -> float:
-    """Steepness of the ink edges in an image divided by its paper (1 = paper): 90th percentile
-    of the gradient."""
-    any_ink = (n < 0.82) & page
-    edges = cv2.dilate(any_ink.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-    edges &= page & (n >= 0.6)
-    if not edges.any():
-        return 0.0
-    gradient = np.hypot(cv2.Sobel(n, cv2.CV_32F, 1, 0), cv2.Sobel(n, cv2.CV_32F, 0, 1))
-    return float(np.percentile(gradient[edges], 90))
-
-
 def erased(
     photo: NDArray,
     gray: NDArray,
@@ -208,14 +195,19 @@ def erased(
 
 def old_print(template: dict[str, Any]) -> list[tuple[float, float, float, float]]:
     """Where a template's print lies on the flat page: the music with 8 mm to spare (the map is
-    off by about 4 mm), and the small label at the bottom with 3 mm."""
+    off by about 4 mm), the small label at the bottom with 3 mm, and the calibration patch of
+    newer pages with 3 mm."""
     mm = FLAT_MM
     x, y, w, h = template["music_box"]
     label_x, label_y = FW / 2 + 12 * mm, FH - 7 * mm
-    return [
+    boxes = [
         (x - 8 * mm, y - 8 * mm, x + w + 8 * mm, y + h + 8 * mm),
         (label_x - 3 * mm, label_y - 6 * mm, FW - 16 * mm, label_y + 4 * mm),
     ]
+    if "patch_box" in template:
+        px, py, pw, ph = template["patch_box"]
+        boxes.append((px - 3 * mm, py - 3 * mm, px + pw + 3 * mm, py + ph + 3 * mm))
+    return boxes
 
 
 def mark_boxes(template: dict[str, Any]) -> list[tuple[float, float, float, float]]:
@@ -260,10 +252,7 @@ def conditions(
     inside = on_page & (map_x >= edge) & (map_x <= FW - 1 - edge)
     inside &= (map_y >= edge) & (map_y <= FH - 1 - edge)
     paper = erased(photo, gray, around, inside=inside, where=where, solid=solid, marks=known[0])
-    n = gray.astype(np.float32) / np.maximum(around, 1)
-    ink_level = float(np.median(n[(n < 0.6) & on_page]))  # the ink's core, as a share of the paper
-    sharp = edge_sharpness(n, on_page)
-    return PhotoConditions(photo, map_x, map_y, on_page, paper, ink_level, sharp)
+    return PhotoConditions(photo, map_x, map_y, on_page, paper)
 
 
 def prepare_photo(

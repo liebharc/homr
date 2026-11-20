@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
+from training.omr_datasets.photo_look import NO_CURVE, Look, draw_ink, spots
 from training.omr_datasets.photo_maps import FH, FW, PhotoConditions
 from training.omr_datasets.photo_paste import (
     bar_count,
@@ -119,17 +120,38 @@ class TestPhotoPaste(unittest.TestCase):
     def test_too_short_a_song_gives_no_page(self) -> None:
         self.assertIsNone(engrave_on_template(piano_score(2), "Bravura", 55))
 
-    def test_put_on_photo_only_changes_the_page(self) -> None:
+    def setUp(self) -> None:
         h, w = 120, 160
-        photo = np.random.default_rng(1).integers(150, 230, (h, w, 3), np.uint8)
+        self.photo = np.random.default_rng(1).integers(150, 230, (h, w, 3), np.uint8)
         on_page = np.zeros((h, w), bool)
         on_page[:, : w // 2] = True
         qx, qy = np.meshgrid(np.linspace(0, FW - 1, w), np.linspace(0, FH - 1, h))
         map_x = np.where(on_page, qx, -1).astype(np.float32)
         map_y = np.where(on_page, qy, -1).astype(np.float32)
-        cond = PhotoConditions(photo, map_x, map_y, on_page, photo.astype(np.float32), 0.3, 2.0)
-        flat = np.full((FH, FW), 255, np.uint8)
-        flat[:, : FW // 4] = 0  # ink on the left quarter of the page
-        result = put_on_photo(photo, cond, flat)
-        self.assertTrue(np.array_equal(result[:, w // 2 :], photo[:, w // 2 :]))
-        self.assertLess(float(result[:, : w // 8].mean()), float(photo[:, : w // 8].mean()) - 50)
+        self.cond = PhotoConditions(
+            self.photo, map_x, map_y, on_page, self.photo.astype(np.float32)
+        )
+        self.flat = np.full((FH, FW), 255, np.uint8)
+        self.flat[:, : FW // 4] = 0  # ink on the left quarter of the page
+
+    def look(self, blur: tuple[float, float, float], strength: float, **more: object) -> Look:
+        rows, cols = spots(self.photo.shape[:2])
+        grid = np.full((rows, cols, 3), blur, np.float32)
+        return Look(grid, np.full((rows, cols), strength, np.float32), (0.0, 1.0), NO_CURVE, **more)  # type: ignore[arg-type]
+
+    def test_put_on_photo_only_changes_the_page(self) -> None:
+        result = put_on_photo(self.photo, self.cond, self.look((0.5, 0.5, 0.0), 1.0), self.flat)
+        w = self.photo.shape[1]
+        self.assertTrue(np.array_equal(result[:, w // 2 :], self.photo[:, w // 2 :]))
+        self.assertLess(
+            float(result[:, : w // 8].mean()), float(self.photo[:, : w // 8].mean()) - 50
+        )
+
+    def test_paste_is_the_checked_redraw(self) -> None:
+        look = self.look((1.2, 0.8, 0.5), 0.9, sharpen=(0.1, 2.0))
+        look.skirt, look.curve = (0.05, 4.0), (0.85, 0.02)
+        result = put_on_photo(self.photo, self.cond, look, self.flat)
+        drawn = draw_ink(self.flat, (self.cond.map_x, self.cond.map_y), look)
+        expected = np.clip(self.cond.paper * (1 - drawn[..., None]), 0, 255).astype(np.uint8)
+        on = self.cond.on_page
+        self.assertTrue(np.array_equal(result[on], expected[on]))

@@ -1,3 +1,5 @@
+import contextlib
+import io
 import subprocess
 import sys
 import tempfile
@@ -19,7 +21,8 @@ from training.omr_datasets.convert_photos import (
     training_page,
     training_photo,
 )
-from training.omr_datasets.photo_maps import FH, FW, prepare_photo
+from training.omr_datasets.photo_look import NO_CURVE, Look, spots
+from training.omr_datasets.photo_maps import FH, FW, PhotoConditions, prepare_photo
 
 
 def template(number: int) -> dict[str, Any]:
@@ -59,6 +62,37 @@ class CountingMapper:
 
 def fake_cut(image_path: Path, *_: Any) -> tuple[list[str], Counter[str]]:
     return [f"{image_path.stem}.png,{image_path.stem}.tokens"], Counter()
+
+
+MEASURED: list[int] = []  # calls of the fake measures in this process
+FAILS = 7  # a template picture with this grey in its corner fails its fake check
+
+
+def fake_measure(
+    cond: PhotoConditions, flat: NDArray
+) -> tuple[Look, tuple[NDArray, NDArray]] | str:
+    """A camera that does nothing; a check that fails pictures marked FAILS."""
+    MEASURED.append(1)
+    if flat[0, 0] == FAILS:
+        return "line width 0.80x"
+    rows, cols = spots(cond.photo.shape[:2])
+    blur = np.full((rows, cols, 3), (0.5, 0.5, 0.0), np.float32)
+    return Look(blur, np.ones((rows, cols), np.float32), (0.0, 1.0), NO_CURVE), (
+        cond.map_x,
+        cond.map_y,
+    )
+
+
+def template_pages(folder: Path, numbers: tuple[int, ...], failing: tuple[int, ...] = ()) -> Path:
+    """The template pictures of these pages (their marks on white), in folder/pages."""
+    pages = folder / "pages_of_templates"
+    pages.mkdir(parents=True, exist_ok=True)
+    for number in numbers:
+        grey = cv2.cvtColor(page_with_marks(number, size=(FH, FW), mark=280), cv2.COLOR_BGR2GRAY)
+        if number in failing:
+            grey[0, 0] = FAILS
+        cv2.imwrite(str(pages / f"T{number}.png"), grey)
+    return pages
 
 
 class TestConvertPhotos(unittest.TestCase):
@@ -101,6 +135,7 @@ class TestConvertPhotos(unittest.TestCase):
                 cv2.imwrite(str(photos / f"T{number}.jpg"), page)
             song_list = [(f"song{i}", piano_score(8)) for i in range(4)]
             CountingMapper.calls = 0
+            pictures = template_pages(Path(folder), (23, 24, 45))
             first = run(
                 photos,
                 templates,
@@ -109,6 +144,8 @@ class TestConvertPhotos(unittest.TestCase):
                 mapper=CountingMapper,
                 cut=fake_cut,
                 songs_per_photo=2,
+                template_pages=pictures,
+                measure=fake_measure,
             )
             self.assertEqual(CountingMapper.calls, 2)
             second = run(
@@ -119,6 +156,8 @@ class TestConvertPhotos(unittest.TestCase):
                 mapper=CountingMapper,
                 cut=fake_cut,
                 songs_per_photo=2,
+                template_pages=pictures,
+                measure=fake_measure,
             )
             self.assertEqual(CountingMapper.calls, 2)
             lines = (root / "index.txt").read_text().splitlines()
@@ -141,6 +180,7 @@ class TestConvertPhotosRuns(unittest.TestCase):
         self.photos.mkdir()
         self.templates = {t["name"]: t for t in (template(23), template(24))}
         self.songs = [(f"song{i}", piano_score(8)) for i in range(6)]
+        self.pictures = template_pages(Path(self.folder.name), (23, 24))
 
     def photo(self, number: int, name: str) -> None:
         page = page_with_marks(number, size=(FH, FW), mark=280)
@@ -155,6 +195,8 @@ class TestConvertPhotosRuns(unittest.TestCase):
             mapper=CountingMapper,
             cut=cut,
             songs_per_photo=1,
+            template_pages=self.pictures,
+            measure=fake_measure,
         )
 
     def test_a_photo_added_later_is_used(self) -> None:
@@ -203,6 +245,8 @@ class TestConvertPhotosRuns(unittest.TestCase):
             mapper=Failing,
             cut=fake_cut,
             songs_per_photo=1,
+            template_pages=self.pictures,
+            measure=fake_measure,
         )
         self.assertEqual(kept, 1)
 
@@ -224,6 +268,8 @@ class TestConvertPhotosRuns(unittest.TestCase):
             mapper=CountingMapper,
             cut=fake_cut,
             songs_per_photo=6,
+            template_pages=self.pictures,
+            measure=fake_measure,
         )
         firsts = set()
         for answer in (self.root / "pages").glob("*.musicxml"):
@@ -246,6 +292,8 @@ class TestConvertPhotosRuns(unittest.TestCase):
                 cut=fake_cut,
                 songs_per_photo=2,
                 workers=workers,
+                template_pages=self.pictures,
+                measure=fake_measure,
             )
             pages = {p.name: p.read_text(encoding="utf-8") for p in (root / "pages").glob("*.json")}
             found.append((pages, (root / "index.txt").read_text()))
@@ -256,3 +304,35 @@ class TestConvertPhotosRuns(unittest.TestCase):
         broken = [("broken", "<score-partwise><part id='P1'><measure/>")]
         self.songs = broken + self.songs
         self.assertEqual(self.run_it(), 1)
+
+    def test_a_look_is_measured_once(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        MEASURED.clear()
+        self.run_it()
+        self.run_it()
+        self.assertEqual(len(MEASURED), 2)
+        self.assertTrue((self.root / "maps" / "a.look.npz").exists())
+
+    def test_a_photo_failing_its_check_is_left_out(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        self.pictures = template_pages(Path(self.folder.name), (24,), failing=(24,))
+        said = io.StringIO()
+        MEASURED.clear()
+        with contextlib.redirect_stderr(said):
+            self.assertEqual(self.run_it(), 1)
+            self.run_it()
+        self.assertIn("b: left out, line width 0.80x", said.getvalue())
+        pages = sorted(p.name for p in (self.root / "pages").glob("*.jpg"))
+        self.assertEqual(pages, ["a__000.jpg"])
+        self.assertEqual(len(MEASURED), 2)  # the failure is remembered too
+
+    def test_a_missing_template_picture_leaves_the_photo_out(self) -> None:
+        self.photo(23, "a.jpg")
+        self.photo(24, "b.jpg")
+        (self.pictures / "T24.png").unlink()
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said):
+            self.assertEqual(self.run_it(), 1)
+        self.assertIn("b: left out, no template picture", said.getvalue())

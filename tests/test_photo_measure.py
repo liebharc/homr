@@ -300,7 +300,7 @@ def conditions_of(
     grey = np.clip(np.round(paper_grey * (1 - drawn) + grain), 0, 255).astype(np.uint8)
     photo = cv2.cvtColor(grey, cv2.COLOR_GRAY2BGR)
     paper = np.repeat(paper_grey[..., None], 3, axis=2).astype(np.float32)
-    return PhotoConditions(photo, maps[0], maps[1], np.ones((h, w), bool), paper, 0.3, 2.0)
+    return PhotoConditions(photo, maps[0], maps[1], np.ones((h, w), bool), paper)
 
 
 class TestCheck(unittest.TestCase):

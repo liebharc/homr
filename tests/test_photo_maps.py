@@ -11,6 +11,7 @@ from training.omr_datasets.photo_maps import (
     apply_fit,
     find_marks,
     mark_fit,
+    old_print,
     prepare_photo,
     upright,
 )
@@ -90,3 +91,20 @@ class TestPhotoMaps(unittest.TestCase):
             blank = Path(folder) / "blank.jpg"
             cv2.imwrite(str(blank), np.full((800, 600, 3), 230, np.uint8))
             self.assertIsNone(prepare_photo(blank, TEMPLATE_T23, uvdoc=None))
+
+    def test_old_print_covers_the_patch(self) -> None:
+        patch = [295, 3200, 178, 178]
+        boxes = old_print({**TEMPLATE_T23, "patch_box": patch})
+        x, y, w, h = patch
+        self.assertTrue(
+            any(
+                left <= x and top <= y and x + w <= right and y + h <= bottom
+                for left, top, right, bottom in boxes
+            )
+        )
+        self.assertFalse(
+            any(
+                left <= x and top <= y and x + w <= right and y + h <= bottom
+                for left, top, right, bottom in old_print(TEMPLATE_T23)
+            )
+        )
