@@ -8,6 +8,7 @@ from homr.simple_logging import eprint
 from homr.transformer.configs import Config
 from homr.transformer.decoder_inference import get_decoder
 from homr.transformer.encoder_inference import Encoder
+from homr.transformer.staff_header import HeaderGate, StaffContext
 from homr.transformer.vocabulary import EncodedSymbol
 from homr.type_definitions import NDArray
 
@@ -27,9 +28,12 @@ class Staff2Score:
                 "Failed to find tokenizer config" + self.config.filepaths.rhythmtokenizer
             )  # noqa: E501
 
-    def predict(self, image: NDArray) -> list[EncodedSymbol]:
+    def predict(
+        self, image: NDArray, staff_context: StaffContext | None = None
+    ) -> list[EncodedSymbol]:
         """
-        Inference an image (NDArray) using Tromr.
+        Inference an image (NDArray) using Tromr. staff_context: clefs and key in effect from the
+        previous staff of the voice, see staff_header.
         """
         x = _transform(image=image)
 
@@ -55,6 +59,7 @@ class Staff2Score:
             seq_len=self.config.max_seq_len,
             eos_token=self.config.eos_token,
             context=context,
+            header_gate=HeaderGate(staff_context),
         )
 
         eprint(f"Inference Time Tromr: {perf_counter()-t0}")
