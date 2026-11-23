@@ -36,33 +36,36 @@ def find_peaks(
     if len(x) < 3:
         return np.array([], dtype=int), {}
 
+    # Python floats, indexing numpy arrays element-wise is slow
+    values = x.tolist()
+
     # Find local maxima, handling flat regions
     peaks_list: list[int] = []
     i = 1
-    while i < len(x) - 1:
+    while i < len(values) - 1:
         # Check if we're at a local maximum or start of plateau
-        if x[i] > x[i - 1]:
+        if values[i] > values[i - 1]:
             # Find end of plateau
             j = i
-            while j < len(x) - 1 and x[j] == x[j + 1]:
+            while j < len(values) - 1 and values[j] == values[j + 1]:
                 j += 1
 
             # Check if plateau ends with a descent (making it a peak)
-            if j < len(x) - 1 and x[j] > x[j + 1]:
+            if j < len(values) - 1 and values[j] > values[j + 1]:
                 # Peak is at the midpoint of the plateau
                 peak_idx = (i + j) // 2
                 peaks_list.append(peak_idx)
                 i = j + 1
             else:
                 i = j + 1
-        elif x[i] == x[i - 1]:
+        elif values[i] == values[i - 1]:
             # Start of a flat region from the left
             j = i
-            while j < len(x) - 1 and x[j] == x[j + 1]:
+            while j < len(values) - 1 and values[j] == values[j + 1]:
                 j += 1
 
             # Check if it's a peak (higher than left, and either at end or higher than right)
-            if j < len(x) - 1 and x[j] > x[j + 1]:
+            if j < len(values) - 1 and values[j] > values[j + 1]:
                 peak_idx = (i + j) // 2
                 peaks_list.append(peak_idx)
             i = j + 1
@@ -90,21 +93,21 @@ def find_peaks(
             # Calculate prominence properly
             # Find the lowest contour line around the peak
             # Look left for the minimum until we hit a higher peak or boundary
-            left_min = x[peak]
+            left_min = values[peak]
             for k in range(peak - 1, -1, -1):
-                if x[k] > x[peak]:
+                if values[k] > values[peak]:
                     break
-                left_min = min(left_min, x[k])
+                left_min = min(left_min, values[k])
 
             # Look right for the minimum until we hit a higher peak or boundary
-            right_min = x[peak]
-            for k in range(peak + 1, len(x)):
-                if x[k] > x[peak]:
+            right_min = values[peak]
+            for k in range(peak + 1, len(values)):
+                if values[k] > values[peak]:
                     break
-                right_min = min(right_min, x[k])
+                right_min = min(right_min, values[k])
 
             # Prominence is height above the higher of the two minima
-            peak_prominence = x[peak] - max(left_min, right_min)
+            peak_prominence = values[peak] - max(left_min, right_min)
 
             if peak_prominence >= prominence:
                 valid_peaks.append(peak)
