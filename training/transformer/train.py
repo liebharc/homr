@@ -193,7 +193,7 @@ def train_transformer(
     def training_args(output_dir: str, epochs: int, learning_rate: float) -> TrainingArguments:
         return TrainingArguments(
             output_dir,
-            torch_compile=compile_model,
+            torch_compile=False,
             eval_strategy="epoch",
             save_strategy="epoch",
             learning_rate=learning_rate,
@@ -224,6 +224,9 @@ def train_transformer(
         config.scheduled_sampling_start_prob = config.scheduled_sampling_end_prob
     else:
         model = TrOMR(config)
+
+    if compile_model:
+        model.compile_modules()
 
     model_name = "pytorch_model"
 

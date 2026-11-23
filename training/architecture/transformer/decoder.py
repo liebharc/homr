@@ -396,7 +396,7 @@ class ScoreDecoder(nn.Module):
         positionso = positions[:, 1:]
 
         if mask.shape[1] == rhythms.shape[1]:
-            mask = mask[:, :-1]
+            mask = mask[:, 1:]
         mask = mask.bool()
 
         # Padding is only at the end, so causal attention never lets a real token see it.
