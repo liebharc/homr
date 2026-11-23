@@ -265,31 +265,22 @@ def test_grand_staff_scopes_accidentals_per_staff() -> None:
     ]
 
 
-def test_explicit_natural_lift_emits_natural() -> None:
+def test_natural_lift_sets_zero_alter_without_forcing_accidental() -> None:
     syms = [
         EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
         EncodedSymbol("timeSignature/4", ".", ".", ".", ".", "."),
         EncodedSymbol("note_4", "F4", "N", "_", "_", "upper"),
-        EncodedSymbol("barline", ".", ".", ".", ".", "."),
-    ]
-    xml = generate_xml(XmlGeneratorArguments(), [syms], "")
-    assert _acc_list(xml) == [("F4", "1", None, "natural")]
-
-
-def test_explicit_natural_repeated_within_measure_is_kept() -> None:
-    # Explicit naturals are printed accidentals: a second N after N is a real precaution,
-    # not a duplicate of the implicit accidental state.
-    syms = [
-        EncodedSymbol("clef_G2", "_", "_", "_", "_", "upper"),
-        EncodedSymbol("timeSignature/4", ".", ".", ".", ".", "."),
+        EncodedSymbol("note_4", "F4", "#", "_", "_", "upper"),
         EncodedSymbol("note_4", "F4", "N", "_", "_", "upper"),
         EncodedSymbol("note_4", "F4", "N", "_", "_", "upper"),
         EncodedSymbol("barline", ".", ".", ".", ".", "."),
     ]
     xml = generate_xml(XmlGeneratorArguments(), [syms], "")
     assert _acc_list(xml) == [
-        ("F4", "1", None, "natural"),
-        ("F4", "1", None, "natural"),
+        ("F4", "1", "0", None),
+        ("F4", "1", "1", "sharp"),
+        ("F4", "1", "0", "natural"),
+        ("F4", "1", "0", None),
     ]
 
 
@@ -548,20 +539,14 @@ def test_existing_accidental_in_unison_is_order_independent() -> None:
         assert accidentals.count("sharp") == 1
 
 
-def test_two_explicit_naturals_in_unison_print_one_accidental() -> None:
-    # Both voices of a unison carry lift "N": the first inserts the natural, the second
-    # must see that printed accidental even though neither note had one before the loop.
+def test_unison_naturals_cancel_key_signature_once() -> None:
     part = ET.fromstring(
         "<part id='P1'><measure number='1'>"
-        "<attributes><divisions>4</divisions><key><fifths>0</fifths></key></attributes>"
-        "<note homr-explicit-natural='1'>"
-        "<pitch><step>F</step><octave>4</octave></pitch>"
-        "<duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>"
-        "<backup><duration>4</duration></backup>"
-        "<note homr-explicit-natural='1'>"
-        "<pitch><step>F</step><octave>4</octave></pitch>"
-        "<duration>4</duration><voice>2</voice><type>quarter</type><staff>1</staff></note>"
-        "</measure></part>"
+        "<attributes><divisions>4</divisions><key><fifths>1</fifths></key></attributes>"
+        + _xml_note("F", 4, alter=0, voice=1)
+        + "<backup><duration>4</duration></backup>"
+        + _xml_note("F", 4, alter=0, voice=2)
+        + "</measure></part>"
     )
     add_accidentals(part)
     assert _part_acc_list(part) == [

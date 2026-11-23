@@ -783,7 +783,6 @@ def rebalance_measure_voices(measure: ET.Element) -> None:
 
 # The position of the model (e.g. upper2) of a note while the part is built
 _POSITION_ATTRIBUTE = "homr-position"
-_EXPLICIT_NATURAL_ATTRIBUTE = "homr-explicit-natural"
 
 
 def _is_second_voice(note: ET.Element) -> bool:
@@ -793,7 +792,6 @@ def _is_second_voice(note: ET.Element) -> bool:
 def _remove_position_attributes(part: ET.Element) -> None:
     for note in part.iter("note"):
         note.attrib.pop(_POSITION_ATTRIBUTE, None)
-        note.attrib.pop(_EXPLICIT_NATURAL_ATTRIBUTE, None)
 
 
 _SHARP_ORDER = ("F", "C", "G", "D", "A", "E", "B")
@@ -991,7 +989,6 @@ def add_accidentals(part: ET.Element) -> None:
                         (tie_start_sys is not None and tie_start_sys < system_id)
                         or (tie_start_sys is None and saw_system_break and slice_key[0] == 0)
                     )
-                    explicit_natural = note.get(_EXPLICIT_NATURAL_ATTRIBUTE) == "1"
 
                     if note.find("accidental") is not None:
                         emitted_or_existing = True
@@ -1002,18 +999,9 @@ def add_accidentals(part: ET.Element) -> None:
                         pass
                     else:
                         if tie_crossed_system:
-                            needs_acc = (
-                                is_false_relation
-                                or explicit_natural
-                                or (alter not in (key_expected, expected))
-                            )
+                            needs_acc = is_false_relation or alter not in (key_expected, expected)
                         else:
-                            needs_acc = (
-                                is_false_relation
-                                or explicit_natural
-                                or expected is None
-                                or alter != expected
-                            )
+                            needs_acc = is_false_relation or expected is None or alter != expected
                         accidental = (
                             _ALTER_TO_ACCIDENTAL.get(alter) if isinstance(alter, int) else None
                         )
@@ -1547,8 +1535,6 @@ def build_note_or_rest(
         ET.SubElement(pitch, "octave").text = sounding_pitch[1:]
         if model_note.lift == nonote:
             eprint("WARNING note with invalid lift", model_note)
-        elif model_note.lift == "N":
-            note.set(_EXPLICIT_NATURAL_ATTRIBUTE, "1")
         elif model_note.lift != empty:
             ET.SubElement(pitch, "alter").text = str(LIFT_TO_ALTER[model_note.lift])
 
