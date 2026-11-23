@@ -259,6 +259,7 @@ def build_part(
     for measure in build_measures(args, voice, is_first_part, has_two_staves, inherited_time):
         part.append(measure)
     convert_ties(part)
+    add_accidentals(part)
     add_stems(part)
     convert_beams(part)
     _remove_position_attributes(part)
@@ -782,6 +783,7 @@ def rebalance_measure_voices(measure: ET.Element) -> None:
 
 # The position of the model (e.g. upper2) of a note while the part is built
 _POSITION_ATTRIBUTE = "homr-position"
+_EXPLICIT_NATURAL_ATTRIBUTE = "homr-explicit-natural"
 
 
 def _is_second_voice(note: ET.Element) -> bool:
@@ -791,6 +793,248 @@ def _is_second_voice(note: ET.Element) -> bool:
 def _remove_position_attributes(part: ET.Element) -> None:
     for note in part.iter("note"):
         note.attrib.pop(_POSITION_ATTRIBUTE, None)
+        note.attrib.pop(_EXPLICIT_NATURAL_ATTRIBUTE, None)
+
+
+_SHARP_ORDER = ("F", "C", "G", "D", "A", "E", "B")
+_FLAT_ORDER = ("B", "E", "A", "D", "G", "C", "F")
+_ALTER_TO_ACCIDENTAL = {
+    -2: "flat-flat",
+    -1: "flat",
+    0: "natural",
+    1: "sharp",
+    2: "double-sharp",
+}
+
+
+def _key_signature_alters(fifths: int) -> dict[str, int]:
+    if fifths > 0:
+        return dict.fromkeys(_SHARP_ORDER[:fifths], 1)
+    if fifths < 0:
+        return dict.fromkeys(_FLAT_ORDER[:-fifths], -1)
+    return {}
+
+
+def _insert_accidental(note: ET.Element, text: str) -> None:
+    acc = ET.Element("accidental")
+    acc.text = text
+    # MusicXML order: after <dot> (if any), else after <type>, else after <voice>/<duration>
+    children = list(note)
+    insert_at = len(children)
+    for tag in ("dot", "type", "voice", "duration", "pitch"):
+        indices = [i for i, el in enumerate(children) if el.tag == tag]
+        if indices:
+            insert_at = indices[-1] + 1
+            break
+    note.insert(insert_at, acc)
+
+
+def _note_alter(note: ET.Element) -> int | float:
+    alter_text = note.findtext("pitch/alter")
+    if not alter_text:
+        return 0
+    value = float(alter_text)
+    # Microtones (e.g. <alter>0.5</alter>) have no printed accidental: keep them as is
+    return int(value) if value.is_integer() else value
+
+
+@dataclass
+class _AccidentalEvent:
+    onset: int
+    kind: int  # 0=system break, 1=key signature, 2=grace note, 3=regular note
+    grace_seq: int
+    doc_idx: int
+    sub_idx: int
+    payload: ET.Element | tuple[str | None, int] | None
+
+
+def _collect_measure_accidental_events(measure: ET.Element) -> list[_AccidentalEvent]:
+    events: list[_AccidentalEvent] = []
+    time = 0
+    last_start = 0
+    grace_seq = 0
+    for doc_idx, child in enumerate(measure):
+        if child.tag == "backup":
+            dur = int(child.findtext("duration", "0") or 0)
+            time = max(0, time - dur)
+            last_start = time
+            grace_seq = 0
+        elif child.tag == "forward":
+            dur = int(child.findtext("duration", "0") or 0)
+            time += dur
+            last_start = time
+            grace_seq = 0
+        elif child.tag == "print":
+            if child.get("new-system") == "yes" or child.get("new-page") == "yes":
+                events.append(_AccidentalEvent(time, 0, 0, doc_idx, 0, None))
+        elif child.tag == "attributes":
+            for sub_idx, key_el in enumerate(child.findall("key")):
+                fifths_text = key_el.findtext("fifths")
+                if fifths_text is None:
+                    continue
+                try:
+                    fifths = int(fifths_text)
+                except ValueError:
+                    continue
+                events.append(
+                    _AccidentalEvent(time, 1, 0, doc_idx, sub_idx, (key_el.get("number"), fifths))
+                )
+        elif child.tag == "note":
+            dur = int(child.findtext("duration", "0") or 0)
+            is_grace = child.find("grace") is not None
+            is_chord = child.find("chord") is not None
+            if is_grace:
+                onset = time
+                if not is_chord:
+                    last_start = time
+                    grace_seq += 1
+                ev_grace_seq = grace_seq
+            elif is_chord:
+                onset = last_start
+                ev_grace_seq = 0
+            else:
+                onset = time
+                last_start = time
+                time += dur
+                grace_seq = 0
+                ev_grace_seq = 0
+            if child.find("pitch") is not None:
+                kind = 2 if is_grace else 3
+                events.append(_AccidentalEvent(onset, kind, ev_grace_seq, doc_idx, 0, child))
+    events.sort(key=lambda e: (e.onset, e.kind, e.grace_seq, e.doc_idx, e.sub_idx))
+    return events
+
+
+def add_accidentals(part: ET.Element) -> None:
+    """Emit printed <accidental> elements from sounding <alter>, active key signature,
+    and measure-local accidental state (per staff, step, octave) in chronological order.
+
+    Because training strips explicit naturals (strip_naturals), the model outputs
+    sounding pitch in <alter>. Tied continuations (<tie type="stop"/>) do not repeat
+    accidentals within the same system, but do repeat them after a system/page break.
+    Simultaneous false relations at the same (onset, staff, step, octave) are handled
+    canonically independent of XML order.
+    """
+    default_key_alters: dict[str, int] = {}
+    staff_key_alters: dict[str, dict[str, int]] = {}
+    system_id = 0
+    open_ties: dict[tuple[str, str, str, str], int] = {}
+
+    for measure in part.findall("measure"):
+        events = _collect_measure_accidental_events(measure)
+        # Value None marks an ambiguous pitch after a simultaneous false relation
+        active: dict[tuple[str, str, str], int | float | None] = {}
+        saw_system_break = False
+        idx = 0
+        while idx < len(events):
+            ev = events[idx]
+            if ev.kind == 0:
+                system_id += 1
+                saw_system_break = True
+                idx += 1
+                continue
+            if ev.kind == 1:
+                assert isinstance(ev.payload, tuple)
+                key_staff, fifths = ev.payload
+                new_alters = _key_signature_alters(fifths)
+                if key_staff is None:
+                    default_key_alters = new_alters
+                    staff_key_alters.clear()
+                    active.clear()
+                else:
+                    staff_key_alters[key_staff] = new_alters
+                    for k in [k for k in active if k[0] == key_staff]:
+                        del active[k]
+                idx += 1
+                continue
+
+            slice_key = (ev.onset, ev.kind, ev.grace_seq)
+            by_pitch: dict[tuple[str, str, str], list[ET.Element]] = defaultdict(list)
+            while (
+                idx < len(events)
+                and (
+                    events[idx].onset,
+                    events[idx].kind,
+                    events[idx].grace_seq,
+                )
+                == slice_key
+            ):
+                note = events[idx].payload
+                assert isinstance(note, ET.Element)
+                pitch = note.find("pitch")
+                if pitch is not None:
+                    staff = note.findtext("staff", "1")
+                    step = pitch.findtext("step", "")
+                    octave = pitch.findtext("octave", "")
+                    by_pitch[(staff, step, octave)].append(note)
+                idx += 1
+
+            for pitch_key, notes in by_pitch.items():
+                staff, step, octave = pitch_key
+                key_expected = staff_key_alters.get(staff, default_key_alters).get(step, 0)
+                expected: int | float | None = (
+                    active[pitch_key] if pitch_key in active else key_expected
+                )
+                alters = {_note_alter(n) for n in notes}
+                is_false_relation = len(alters) > 1
+                has_printed_accidental = any(n.find("accidental") is not None for n in notes)
+                emitted_or_existing = has_printed_accidental
+
+                for note in notes:
+                    alter = _note_alter(note)
+                    voice = note.findtext("voice", "1")
+                    tie_key = (staff, voice, step, octave)
+                    is_tie_stop = _has_tie(note, "stop")
+                    is_tie_start = _has_tie(note, "start")
+                    tie_start_sys = open_ties.get(tie_key)
+                    tie_crossed_system = is_tie_stop and (
+                        (tie_start_sys is not None and tie_start_sys < system_id)
+                        or (tie_start_sys is None and saw_system_break and slice_key[0] == 0)
+                    )
+                    explicit_natural = note.get(_EXPLICIT_NATURAL_ATTRIBUTE) == "1"
+
+                    if note.find("accidental") is not None:
+                        emitted_or_existing = True
+                    elif has_printed_accidental and not is_false_relation:
+                        # Another note of this unison already carries the printed accidental
+                        pass
+                    elif is_tie_stop and not tie_crossed_system:
+                        pass
+                    else:
+                        if tie_crossed_system:
+                            needs_acc = (
+                                is_false_relation
+                                or explicit_natural
+                                or (alter not in (key_expected, expected))
+                            )
+                        else:
+                            needs_acc = (
+                                is_false_relation
+                                or explicit_natural
+                                or expected is None
+                                or alter != expected
+                            )
+                        accidental = (
+                            _ALTER_TO_ACCIDENTAL.get(alter) if isinstance(alter, int) else None
+                        )
+                        if needs_acc and accidental is not None:
+                            _insert_accidental(note, accidental)
+                            has_printed_accidental = True
+                            emitted_or_existing = True
+
+                    if emitted_or_existing and not is_false_relation:
+                        # A unison in another voice shares this accidental: don't print it twice
+                        expected = alter
+
+                    if is_tie_start:
+                        open_ties[tie_key] = system_id
+                    elif slice_key[1] == 3:
+                        open_ties.pop(tie_key, None)
+
+                if is_false_relation:
+                    active[pitch_key] = None
+                elif emitted_or_existing:
+                    active[pitch_key] = next(iter(alters))
 
 
 def add_stems(part: ET.Element) -> None:
@@ -1303,6 +1547,8 @@ def build_note_or_rest(
         ET.SubElement(pitch, "octave").text = sounding_pitch[1:]
         if model_note.lift == nonote:
             eprint("WARNING note with invalid lift", model_note)
+        elif model_note.lift == "N":
+            note.set(_EXPLICIT_NATURAL_ATTRIBUTE, "1")
         elif model_note.lift != empty:
             ET.SubElement(pitch, "alter").text = str(LIFT_TO_ALTER[model_note.lift])
 
