@@ -585,10 +585,7 @@ def _lift_from_pitch_or_accidental(pitch: ET.Element, note: ET.Element) -> str:
             "flat": "b",
             "natural": "N",
             "double-sharp": "##",
-            "sharp-sharp": "##",
             "flat-flat": "bb",
-            "natural-sharp": "#",
-            "natural-flat": "b",
         }.get(v, empty)
     alter = _child(pitch, "alter")
     if alter is None:
