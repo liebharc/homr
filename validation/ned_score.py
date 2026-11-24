@@ -11,6 +11,7 @@ Public API: compute_ned, NedResult, TokenEvent
 import contextlib
 import copy
 import difflib
+import functools
 import io
 import itertools
 import os
@@ -198,6 +199,17 @@ def _component_dist(a: list[EncodedSymbol], b: list[EncodedSymbol], field: str) 
     return editdistance.eval([getattr(s, field) for s in a], [getattr(s, field) for s in b])
 
 
+def _move_split_to(
+    split: list[list[ET.Element]], cursors: list[int], idx: int, target: int
+) -> None:
+    """Adds a backup or forward to the last measure of split part idx to reach target."""
+    delta = target - cursors[idx]
+    if delta:
+        move = ET.SubElement(split[idx][-1], "forward" if delta > 0 else "backup")
+        ET.SubElement(move, "duration").text = str(abs(delta))
+        cursors[idx] = target
+
+
 def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
     """
     Split a single <part> with <staves>2</staves> into two single-staff <part>
@@ -221,24 +233,44 @@ def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
     for measure in part.findall("measure"):
         for idx in range(2):
             split[idx].append(ET.Element("measure", measure.attrib))
+        # The time in the measure, and in each split part. A part gets a backup or
+        # forward where its time differs, e.g. a second voice of the same staff.
+        time = 0
+        cursors = [0, 0]
+        _move_to = functools.partial(_move_split_to, split, cursors)
 
         for child in measure:
             tag = child.tag
 
             if tag in ("backup", "forward"):
-                continue  # timing reset between staves; not needed in split parts
+                duration = int(child.findtext("duration") or 0)
+                time = max(0, time + (duration if tag == "forward" else -duration))
+                continue
 
             if tag == "note":
                 s = _staff_num(child) - 1
+                is_chord = child.find("chord") is not None
+                duration = (
+                    0 if child.find("grace") is not None else int(child.findtext("duration") or 0)
+                )
                 if 0 <= s < 2:
+                    if not is_chord:
+                        _move_to(s, time)
                     split[s][-1].append(child)
+                    if not is_chord:
+                        cursors[s] = time + duration
+                if not is_chord:
+                    time += duration
                 continue
 
             if tag == "direction":
                 s = _staff_num(child) - 1
                 if 0 <= s < 2:
+                    _move_to(s, time)
                     split[s][-1].append(child)
                 else:
+                    for idx in range(2):
+                        _move_to(idx, time)
                     split[0][-1].append(child)
                     split[1][-1].append(copy.deepcopy(child))
                 continue
@@ -259,10 +291,13 @@ def _split_grand_staff_part(part: ET.Element) -> list[ET.Element]:
                     attrs[1].append(copy.deepcopy(ac))
                 for idx, attr_el in enumerate(attrs):
                     if len(attr_el):
+                        _move_to(idx, time)
                         split[idx][-1].append(attr_el)
                 continue
 
             # barline, print, sound, ... -> both parts
+            for idx in range(2):
+                _move_to(idx, time)
             split[0][-1].append(child)
             split[1][-1].append(copy.deepcopy(child))
 

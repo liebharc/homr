@@ -156,7 +156,8 @@ barline . . . . ."""
         (n.findtext("pitch/step", "") + n.findtext("pitch/octave", ""), n.findtext("staff"))
         for n in xml.iter("note")
     ]
-    assert pitches == [("C3", "1"), ("C3", "2"), ("C5", "1"), ("C2", "2")]
+    # One voice after the other
+    assert pitches == [("C3", "1"), ("C5", "1"), ("C3", "2"), ("C2", "2")]
     shifts = sorted((s.get("type", ""), s.get("number", "")) for s in xml.iter("octave-shift"))
     assert shifts == [("down", "1"), ("stop", "1"), ("stop", "2"), ("up", "2")]
 
