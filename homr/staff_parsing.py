@@ -113,11 +113,11 @@ def _calculate_region(staff: Staff, regions: StaffRegions) -> NDArray:
     x_max = staff.max_x + 2 * staff.average_unit_size
     y_min = max(
         staff.min_y - 4 * staff.average_unit_size,
-        regions.get_start_of_closest_staff_above(staff.min_y),
+        regions.get_start_of_closest_staff_above(staff),
     )
     y_max = min(
         staff.max_y + 4 * staff.average_unit_size,
-        regions.get_start_of_closest_staff_below(staff.max_y),
+        regions.get_start_of_closest_staff_below(staff),
     )
     return np.array([int(x_min), int(y_min), int(x_max), int(y_max)])
 

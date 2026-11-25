@@ -2,7 +2,12 @@ import cv2.typing as cvt
 import numpy as np
 
 from homr import constants
-from homr.bounding_boxes import BoundingEllipse, DebugDrawable, RotatedBoundingBox
+from homr.bounding_boxes import (
+    BoundingEllipse,
+    DebugDrawable,
+    RotatedBoundingBox,
+    TouchFilter,
+)
 from homr.model import Note, Staff, StemDirection
 from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
@@ -126,11 +131,12 @@ def combine_noteheads_with_stems(
     """
     result = []
     noteheads = sorted(noteheads, key=lambda notehead: notehead.box[0][1])
-    used_stems = set()
+    touch_filter = TouchFilter(stems)
     for notehead in noteheads:
         thickened_notehead = notehead.make_box_thicker(15)
         found_stem = False
-        for stem in stems:
+        for i in touch_filter.candidates(thickened_notehead):
+            stem = stems[i]
             if stem.is_overlapping(thickened_notehead):
                 is_stem_above = stem.center[1] < notehead.center[1]
                 if is_stem_above:
@@ -138,7 +144,6 @@ def combine_noteheads_with_stems(
                 else:
                     direction = StemDirection.DOWN
                 result.append(NoteheadWithStem(notehead, stem, direction))
-                used_stems.add(stem)
                 found_stem = True
                 break
         if not found_stem:

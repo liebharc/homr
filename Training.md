@@ -104,8 +104,8 @@ Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
 Day: 13 November
 Transformer Smoke Test: 5%
 System Level: 5.7 diffs, SER: 3.7%
-Polish scores: 14.6% | 14.3% after MusicXML fixes
-SMB scores: 13.0%
+Polish scores: 14.6% | 14.0% after the MusicXML rewrite
+SMB scores: 13.0% | 12.7% after the MusicXML rewrite
 
 https://github.com/liebharc/homr/pull/211 
 

@@ -8,6 +8,7 @@ from homr import constants, find_peaks
 from homr.bounding_boxes import (
     DebugDrawable,
     RotatedBoundingBox,
+    TouchFilter,
     create_rotated_bounding_box,
 )
 from homr.debug import Debug
@@ -44,9 +45,11 @@ class StaffLineSegment(DebugDrawable):
 
     def merge(self, other: "StaffLineSegment") -> "StaffLineSegment":
         staff_lines = self.staff_fragments.copy()
+        known = set(staff_lines)
         for fragment in other.staff_fragments:
-            if fragment not in staff_lines:
+            if fragment not in known:
                 staff_lines.append(fragment)
+                known.add(fragment)
         return StaffLineSegment(self.debug_id, staff_lines)
 
     def get_at(self, x: float) -> RotatedBoundingBox | None:
@@ -168,7 +171,20 @@ class RawStaff(RotatedBoundingBox):
             line.draw_onto_image(img, color)
 
 
-def get_staff_for_anchor(anchor: StaffAnchor, staffs: list[RawStaff]) -> RawStaff | None:
+class _StaffDraft:
+    """The lines and anchors of a RawStaff, without the costly bounding box."""
+
+    def __init__(self, staff_id: int, lines: list[StaffLineSegment], anchors: list[StaffAnchor]):
+        self.staff_id = staff_id
+        self.lines = lines
+        self.anchors = anchors
+
+    def merge(self, other: "_StaffDraft") -> "_StaffDraft":
+        lines = [other.lines[i].merge(line) for i, line in enumerate(self.lines)]
+        return _StaffDraft(self.staff_id, lines, self.anchors + other.anchors)
+
+
+def get_staff_for_anchor(anchor: StaffAnchor, staffs: list[_StaffDraft]) -> _StaffDraft | None:
     for staff in staffs:
         for i, anchor_line in enumerate(anchor.staff_lines):
             line_requirement = set(anchor_line.staff_fragments)
@@ -184,7 +200,7 @@ def find_raw_staffs_by_connecting_line_fragments(
     First we build a list of all lines by combining fragments. Then we identify the lines
     which go through the anchors and build a staff from them.
     """
-    staffs: list[RawStaff] = []
+    staffs: list[_StaffDraft] = []
     staff_id = 0
     for anchor in anchors:
         existing_staff = get_staff_for_anchor(anchor, staffs)
@@ -206,11 +222,11 @@ def find_raw_staffs_by_connecting_line_fragments(
                 staff_lines.append(anchor_line)
         if existing_staff:
             staffs.remove(existing_staff)
-            staffs.append(existing_staff.merge(RawStaff(staff_id, staff_lines, [anchor])))
+            staffs.append(existing_staff.merge(_StaffDraft(staff_id, staff_lines, [anchor])))
         else:
-            staffs.append(RawStaff(staff_id, staff_lines, [anchor]))
+            staffs.append(_StaffDraft(staff_id, staff_lines, [anchor]))
         staff_id += 1
-    return staffs
+    return [RawStaff(staff.staff_id, staff.lines, staff.anchors) for staff in staffs]
 
 
 def remove_duplicate_staffs(staffs: list[RawStaff]) -> list[RawStaff]:
@@ -427,6 +443,7 @@ def find_staff_anchors(
     (and never above or beyond them like notes can be).
     """
     result: list[StaffAnchor] = []
+    touch_filter = TouchFilter(staff_lines)
 
     for center_symbol in anchor_symbols:
         # As the symbol disconnects the staff lines it's the hardest to detect them at the center.
@@ -452,7 +469,9 @@ def find_staff_anchors(
             estimated_unit_size = round(symbol.size[1] / (constants.number_of_lines_on_a_staff - 1))
             thickened_bar_line = symbol.make_box_taller(estimated_unit_size)
             overlapping_staff_lines = [
-                line for line in staff_lines if line.is_intersecting(thickened_bar_line)
+                staff_lines[i]
+                for i in touch_filter.candidates(thickened_bar_line)
+                if staff_lines[i].is_intersecting(thickened_bar_line)
             ]
             connected_lines = connect_staff_lines(overlapping_staff_lines, estimated_unit_size)
             if len(connected_lines) > constants.number_of_lines_on_a_staff:
@@ -755,10 +774,7 @@ def find_horizontal_lines(
     image: NDArray, unit_size: float, line_threshold: float = 0.0
 ) -> list[list[int]]:
     # Split into zones horizontally and detects staff lines separately.
-    count = np.zeros(len(image), dtype=np.uint16)
-    sub_ys, _sub_xs = np.where(image > 0)
-    for y in sub_ys:
-        count[y] += 1
+    count = np.count_nonzero(image > 0, axis=1).astype(np.uint16)
 
     count = np.insert(count, [0, len(count)], [0, 0])
     if np.std(count) == 0:
@@ -845,7 +861,11 @@ def find_staffs_without_clef(
     zones = [
         range(int(f * width), min(width, int(f * width) + slice_width)) for f in slices_across_page
     ]
-    boxes = _find_five_line_groups(image, zones, unit_size)
+    boxes = [
+        box
+        for box in _find_five_line_groups(image, zones, unit_size)
+        if not box.is_overlapping_with_any(raw_staffs)
+    ]
     anchors = filter_unusual_anchors(find_staff_anchors(staff_fragments, boxes, are_clefs=True))
     candidates = remove_duplicate_staffs(
         find_raw_staffs_by_connecting_line_fragments(anchors, staff_fragments)

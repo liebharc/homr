@@ -68,8 +68,10 @@ class ConvNeXtEncoder(nn.Module):
             param.requires_grad = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _, requested_stages = self.model.forward_intermediates(x, indices=[2])  # type: ignore
-        features = requested_stages[0]  # Get stage 2 (stride 16)
+        # Get stage 2 (stride 16), the stages after it aren't computed
+        features = self.model.forward_intermediates(  # type: ignore
+            x, indices=[2], stop_early=True, intermediates_only=True
+        )[0]
 
         # features shape: (B, C, H, W) = (B, 384, 16, 80)
         b, c, h, w = features.shape
