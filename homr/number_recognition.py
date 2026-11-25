@@ -21,6 +21,7 @@ from homr.type_definitions import NDArray
 DIGITS = [str(d) for d in range(10)]
 CLASSES = [*DIGITS, "other"]
 OTHER = len(DIGITS)
+READ_DENOMINATORS = (2, 4, 8, 16)
 
 # A crop is crop_units x crop_units staff units around a component, scaled to crop_size
 crop_size = 40
@@ -461,9 +462,11 @@ def read_numbers(gray: NDArray, symbols: list[EncodedSymbol], staff: Staff) -> l
             continue
         reading = read_time_signature(gray, lines, x, classifier)
         denominator = symbol.rhythm.split("/")[1]
-        # Both digits must be read and agree with the transformer
-        if reading.numerator and str(reading.denominator) == denominator:
-            symbol.rhythm = f"timeSignature{reading.numerator}/{denominator}"
+        # Both digits must be read, the digits win over the transformer's beat type
+        if reading.numerator and reading.denominator in READ_DENOMINATORS:
+            if str(reading.denominator) != denominator:
+                eprint("Beat type", denominator, "replaced by", reading)
+            symbol.rhythm = f"timeSignature{reading.numerator}/{reading.denominator}"
         else:
             eprint("Time signature not read", reading, "beat type", denominator)
 
