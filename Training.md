@@ -47,6 +47,8 @@ Download the datasets and convert them to the format required for training:
   - This will also download and run MuseScore as an AppImage. If this fails, check your setup to ensure that you can run `datasets/MuseScore`.
   - Not all files are supported. At the end you'll see something like `Processed 1460/1467 files, skipped 350 files`, which is as expected.
   - Lieder and PDMX: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore, with a random font and size. See `training/omr_datasets/verovio_staffs.py`.
+- `training/omr_datasets/convert_photos.py`
+  - Pastes Lieder songs onto real phone photos of printed template pages ([homr-photo-pages](https://github.com/slobaspeed/homr-photo-pages)). Run it after `convert_lieder.py`; it downloads the photos and [UVDoc](https://github.com/tanguymagne/UVDoc).
 
 Some checks:
 
@@ -97,13 +99,26 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 617
+Commit: b37c78a93962ecd3b4d64c17c1e4e9452e695497
+Day: 25 November
+Transformer Smoke Test: 5%
+System Level: 6.5 diffs, SER: 3.6%
+Polish scores: 13.8%
+SMB scores: 12.7%
+SMP scores: 4.9%
+
+https://github.com/liebharc/homr/pull/236 
+
+- Added photo pages
+
 # Run 566 - Epoch 30
 Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
 Day: 13 November
 Transformer Smoke Test: 5%
 System Level: 5.7 diffs, SER: 3.7%
-Polish scores: 14.6% | 14.3% after MusicXML fixes
-SMB scores: 13.0%
+Polish scores: 14.6% | 14.0% after the MusicXML rewrite
+SMB scores: 13.0% | 12.7% after the MusicXML rewrite
 
 https://github.com/liebharc/homr/pull/211 
 

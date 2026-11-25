@@ -1,14 +1,45 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = "==3.12.*"
+# dependencies = [
+#   "albumentations>=2.0.8,<3",
+#   "augraphy>=8.2.6,<9",
+#   "numpy>=2.4.2,<3",
+#   "onnxruntime>=1.24.1,<2",
+#   "opencv-python>=4.13.0.92,<5",
+#   "pillow>=12.1.1",
+#   "requests>=2.32.5,<3",
+#   "termcolor>=2.4,<4",
+#   "torch>=2.7.1,<3",
+# ]
+#
+# [tool.uv]
+# # albumentations asks for the headless OpenCV, which can't open a window
+# override-dependencies = ["opencv-python-headless; sys_platform == 'never'"]
+#
+# [tool.uv.sources]
+# torch = { index = "pytorch-cpu" }
+#
+# [[tool.uv.index]]
+# name = "pytorch-cpu"
+# url = "https://download.pytorch.org/whl/cpu"
+# explicit = true
+# ///
 # ruff: noqa: T201
 
 import argparse
+import sys
+from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 from termcolor import colored
 
-from homr.staff_parsing import add_image_into_tr_omr_canvas
-from training.transformer.image_utils import (
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from homr.staff_parsing import add_image_into_tr_omr_canvas  # noqa: E402
+from training.transformer.image_utils import (  # noqa: E402
     distort_image,
     random_staff_crop,
     read_crop_info,

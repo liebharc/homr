@@ -9,7 +9,6 @@ import numpy as np
 
 from homr import constants
 from homr.image_utils import crop_image
-from homr.simple_logging import eprint
 from homr.type_definitions import NDArray
 
 
@@ -442,47 +441,6 @@ def create_bounding_ellipses(
     return _get_ellipse_for_whole_group(merge_overlaying_bounding_boxes(boxes))
 
 
-def _do_groups_overlap(group1: list[AngledBoundingBox], group2: list[AngledBoundingBox]) -> bool:
-    for box1 in group1:
-        for box2 in group2:
-            if box1.is_overlapping(box2):
-                return True
-    return False
-
-
-def _merge_groups_recursive(
-    groups: list[list[AngledBoundingBox]], step: int
-) -> list[list[AngledBoundingBox]]:
-    step_limit = 10
-    if step > step_limit:
-        eprint("Too many steps in _merge_groups_recursive, giving back current results")
-        return groups
-    number_of_changes = 0
-    merged: list[list[AngledBoundingBox]] = []
-    used_groups = set()
-    for i, group in enumerate(groups):
-        match_found = False
-        if i in used_groups:
-            continue
-        for j in range(i + 1, len(groups)):
-            if j in used_groups:
-                continue
-            other_group = groups[j]
-            if _do_groups_overlap(group, other_group):
-                merged.append(group + other_group)
-                number_of_changes += 1
-                used_groups.add(j)
-                match_found = True
-                break
-        if not match_found:
-            merged.append(group)
-
-    if number_of_changes == 0:
-        return merged
-    else:
-        return _merge_groups_recursive(merged, step + 1)
-
-
 def _get_ellipse_for_whole_group(groups: list[list[AngledBoundingBox]]) -> list[BoundingEllipse]:
     result = []
     for group in groups:
@@ -526,31 +484,35 @@ class UnionFind:
                 self.rank[rootX] += 1
 
 
-def _merge_groups_optimized(groups: list[list[AngledBoundingBox]]) -> list[list[AngledBoundingBox]]:
-    n = len(groups)
-    uf = UnionFind(n)
+class TouchFilter:
+    """
+    Vectorized _can_shapes_possibly_touch: the indices of the boxes which might touch
+    a box. The exact overlap check must follow.
+    """
 
-    # Try to find overlaps and union groups that overlap
-    for i in range(n):
-        for j in range(i + 1, n):
-            if _do_groups_overlap(groups[i], groups[j]):
-                uf.union(i, j)
+    def __init__(self, boxes: Sequence[AngledBoundingBox]):
+        self.centers = np.array([box.box[0] for box in boxes], dtype=np.float64).reshape(-1, 2)
+        self.major_axes = np.array([max(box.box[1]) for box in boxes], dtype=np.float64)
 
-    # Create merged groups based on the union-find results
-    merged_groups: dict[int, list[AngledBoundingBox]] = {}
-    for i in range(n):
-        root = uf.find(i)
-        if root not in merged_groups:
-            merged_groups[root] = []
-        merged_groups[root].extend(groups[i])
-
-    return list(merged_groups.values())
+    def candidates(self, box: AngledBoundingBox, start: int = 0) -> NDArray:
+        distances = np.hypot(*(self.centers[start:] - box.box[0]).T)
+        # +1 as margin for rounding, the exact check follows
+        limit = self.major_axes[start:] + max(box.box[1]) + 1
+        return np.flatnonzero(distances <= limit) + start
 
 
 def merge_overlaying_bounding_boxes(
     boxes: Sequence[AngledBoundingBox],
 ) -> list[list[AngledBoundingBox]]:
-    initial_groups: list[list[AngledBoundingBox]] = []
-    for box in boxes:
-        initial_groups.append([box])
-    return _merge_groups_optimized(initial_groups)
+    n = len(boxes)
+    uf = UnionFind(n)
+    touch_filter = TouchFilter(boxes)
+    for i in range(n - 1):
+        for j in touch_filter.candidates(boxes[i], i + 1):
+            if uf.find(i) != uf.find(j) and boxes[i].is_overlapping(boxes[j]):
+                uf.union(i, int(j))
+
+    merged_groups: dict[int, list[AngledBoundingBox]] = {}
+    for i in range(n):
+        merged_groups.setdefault(uf.find(i), []).append(boxes[i])
+    return list(merged_groups.values())

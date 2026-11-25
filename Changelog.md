@@ -4,20 +4,27 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
-
 ### Added
 
-- Beams in the transformer vocabulary and the MusicXML output.
+- **Beams**.
+- **Octave clefs and octave shifts** (8va/8vb).
+- Printed accidentals in the MusicXML output.
+  Thanks to [@xavierxav](https://github.com/xavierxav)!
 
 ### Changed
 
-- The training no longer uses PrIMuS. It has no beams and its license doesn't allow commercial use.
-- The training no longer uses the MuseTrainer library. It adds about 1k samples and has no license file.
-- Training images of Lieder and PDMX come from two renderers: half of the single-staff parts and a tenth of the grand staffs are rendered by Verovio instead of MuseScore.
+- Better detection of systems and grand staffs.
+- A photo of two pages side by side keeps only the left page.
+- A page without a printed time signature continues in the time signature of the previous page.
+- Faster recognition.
+- New model, trained without the PrIMuS and MuseTrainer datasets, with more PDMX scores
+  and with part of the images rendered by Verovio.
 
 ### Fixed
 
-- Various fixes in the MusicXML generation. Thanks to [@e-n-f](https://github.com/e-n-f)!
+- Various fixes in the MusicXML export.
+  Thanks to [@e-n-f](https://github.com/e-n-f)!
+- Staffs in a broken row.
 
 ## [0.7.1]
 
