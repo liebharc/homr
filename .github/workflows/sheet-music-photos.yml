@@ -2,7 +2,7 @@ name: Sheet music photos
 
 # Runs the sheet music photos benchmark. On main the result is cached as the baseline,
 # on PRs it's compared against the newest main result in the job summary.
-# PRs run once when opened; add the 'benchmark' label to run again on the latest commit.
+# PRs run only when the 'benchmark' label is added; remove and add it again to rerun on the latest commit.
 
 # Only files which can change the result: homr, the benchmark with its parsers and the dependencies
 on:
@@ -18,7 +18,7 @@ on:
       - '.github/workflows/sheet-music-photos.yml'
   pull_request:
     branches: [main]
-    types: [opened, reopened, labeled]
+    types: [labeled]
     paths: *benchmark-paths
 
   workflow_dispatch:
@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   benchmark:
-    if: github.event.action != 'labeled' || github.event.label.name == 'benchmark'
+    if: github.event_name != 'pull_request' || github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 300
 

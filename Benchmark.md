@@ -192,9 +192,9 @@ All results are mean OMR-NED in % over the samples where the tool produced outpu
 
 | dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
 | ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- | ------------------------ |
-| polish-scores                   | 14.6 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       | 20.8 (109/112)           |
-| smb                             | 13.0 (682/685) |               |              |                                    | 17.2 (681/685)           |
-| smb, just the first 10 examples | 24.2 (10/10)   | 50.1 (9/10)   | 38.0 (13/15) | 75.6 (11/20)                       |                          |
+| polish-scores                   | 14.0 (110/112) | 23.8 (98/112) |              | 78 (112/112)                       | 20.8 (109/112)           |
+| smb                             | 12.7 (682/685) |               |              |                                    | 17.2 (681/685)           |
+| smb, just the first 10 examples | 16.9 (10/10)   | 50.1 (9/10)   | 38.0 (13/15) | 75.6 (11/20)                       |                          |
 
 ## musicdiff
 
@@ -202,6 +202,6 @@ SMB references hold one kern document per system. They are parsed one by one and
 
 | dataset                         | homr           | transcoda     | oemer        | SMT with smt-fp-grandstaff weights | copisteria (copista-28m) |
 | ------------------------------- | -------------- | ------------- | ------------ | ---------------------------------- | ------------------------ |
-| polish-scores                   | 23.0 (112/112) | 52.6 (98/112) |              | musicdiff crashes                  | 26.4 (112/112)           |
-| smb                             | 13.8 (681/685) |               |              |                                    | 16.8 (681/685)           |
-| smb, just the first 10 examples | 16.0 (10/10)   | 78.8 (10/10)  | 77.3 (13/15) | 101.4 (11/20)                      |                          |
+| polish-scores                   | 21.8 (112/112) | 52.6 (98/112) |              | musicdiff crashes                  | 26.4 (112/112)           |
+| smb                             | 12.3 (681/685) |               |              |                                    | 16.8 (681/685)           |
+| smb, just the first 10 examples | 14.5 (10/10)   | 78.8 (10/10)  | 77.3 (13/15) | 101.4 (11/20)                      |                          |
