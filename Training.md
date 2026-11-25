@@ -99,6 +99,19 @@ This validation provides a **more representative indication of overall system pe
 
 Implementation: `rate_validation_result.py`
 
+# Run 617
+Commit: b37c78a93962ecd3b4d64c17c1e4e9452e695497
+Day: 25 November
+Transformer Smoke Test: 5%
+System Level: 6.5 diffs, SER: 3.6%
+Polish scores: 13.8%
+SMB scores: 12.7%
+SMP scores: 4.9%
+
+https://github.com/liebharc/homr/pull/236 
+
+- Added photo pages
+
 # Run 566 - Epoch 30
 Commit: ccd1cb311c368b5711dd238d2464c615397a3f2b
 Day: 13 November
