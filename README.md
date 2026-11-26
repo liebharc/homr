@@ -111,7 +111,11 @@ The symbol sequence is converted into MusicXML format and saved to disk. The res
 
 ## License
 
-homr is licensed under AGPL-3.0. For commercial use and the licenses of the training data behind the model weights, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
+- The code in `homr/` is licensed under [AGPL-3.0](LICENSE) with an [additional permission](LICENSE_EXCEPTION.md) that lets closed source apps use it.
+- The training code in `training/` and all other code is licensed under [AGPL-3.0](LICENSE) only.
+- The model weights are licensed under [CC BY-SA 4.0](LICENSE_WEIGHTS.md).
+
+For commercial use and the licenses of the training data behind the model weights, see [LICENSE_FAQ.md](LICENSE_FAQ.md).
 
 ## Citation
 

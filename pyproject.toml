@@ -3,6 +3,7 @@ name = "homr"
 description = "End-to-end Optical Music Recognition (OMR) system build on top of vision transformers."
 authors = [{name = "Christian Liebhardt", email = "christian.liebhardt@arcor.de"}]
 license = "AGPL-3.0"
+license-files = ["LICENSE", "LICENSE_EXCEPTION.md"]
 readme = "README.md"
 homepage = "https://github.com/liebharc/homr"
 documentation = "https://github.com/liebharc/homr"
