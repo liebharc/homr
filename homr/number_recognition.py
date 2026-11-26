@@ -1,7 +1,8 @@
 """
 Reads the numbers of time signatures and of multi-measure rests. The transformer reads
 only the beat type of a time signature and can't count the measures of a multi-measure
-rest. A small CNN classifies the connected components near these symbols as digits.
+rest. A small CNN reads a crop of the staff around the symbol: the numerator and the
+denominator of a time signature, and the number above a multi-measure rest.
 """
 
 import os
@@ -18,19 +19,26 @@ from homr.simple_logging import eprint
 from homr.transformer.vocabulary import EncodedSymbol, nonote
 from homr.type_definitions import NDArray
 
-DIGITS = [str(d) for d in range(10)]
-CLASSES = [*DIGITS, "other"]
-OTHER = len(DIGITS)
-READ_DENOMINATORS = (2, 4, 8, 16)
+# The crop in staff units: CROP_HALF_WIDTH left and right of the symbol, CROP_ABOVE above
+# the top line and CROP_BELOW below the bottom line, at CROP_PX pixels per unit
+CROP_PX = 8
+CROP_HALF_WIDTH = 3
+CROP_ABOVE = 5
+CROP_BELOW = 1
+CROP_WIDTH = 2 * CROP_HALF_WIDTH * CROP_PX
+CROP_HEIGHT = (CROP_ABOVE + 4 + CROP_BELOW) * CROP_PX
 
-# A crop is crop_units x crop_units staff units around a component, scaled to crop_size
-crop_size = 40
-crop_units = 4.5
-# Probability above which a component counts as digit
-digit_probability = 0.6
+# Outputs: numbers as digit slots, right aligned, class 0 is an empty slot
+NUMERATOR_DIGITS = 2
+COUNT_DIGITS = 3
+DIGIT_CLASSES = 11
+DENOMINATORS = [0, 1, 2, 4, 8, 16, 32]  # 0: no time signature
+READ_DENOMINATORS = (2, 4, 8, 16)
+# Probability above which a reading is used
+min_probability = 0.6
 
 script_location = os.path.dirname(os.path.realpath(__file__))
-model_name = "digits_v2.onnx"
+model_name = "numbers_v1.onnx"
 model_path = os.path.join(script_location, "number_recognition", model_name)
 
 
@@ -46,18 +54,6 @@ class StaffLines:
     @property
     def middle(self) -> float:
         return self.top + 2 * self.unit
-
-
-@dataclass
-class Component:
-    x: int
-    y: int
-    w: int
-    h: int
-
-    @property
-    def center(self) -> tuple[float, float]:
-        return self.x + self.w / 2, self.y + self.h / 2
 
 
 def staff_lines(staff: Staff, height: int) -> StaffLines | None:
@@ -77,235 +73,97 @@ def _binarize(gray: NDArray) -> NDArray:
     return binary.astype(np.uint8)
 
 
-def _remove_staff_lines(binary: NDArray, lines: StaffLines) -> NDArray:
-    """Removes the pixels of the staff lines which aren't part of a symbol crossing them."""
-    result = binary.copy()
-    thickness = max(1, round(lines.unit * 0.25))
-    height = binary.shape[0]
-    for i in range(5):
-        y = round(lines.top + i * lines.unit)
-        top = max(0, y - thickness)
-        bottom = min(height, y + thickness + 1)
-        above = binary[max(0, top - 1)] if top > 0 else np.zeros(binary.shape[1], np.uint8)
-        below = binary[bottom] if bottom < height else np.zeros(binary.shape[1], np.uint8)
-        # A column of the band is only the line if there is no ink just above and below
-        is_line = (above == 0) & (below == 0)
-        result[top:bottom, is_line] = 0
-    return result
-
-
-def _components(binary: NDArray) -> list[Component]:
-    count, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
-    return [
-        Component(int(s[0]), int(s[1]), int(s[2]), int(s[3])) for s in stats[1:count] if s[4] > 1
-    ]
-
-
-def crop_around(gray: NDArray, center: tuple[float, float], unit: float) -> NDArray:
-    """A crop_size x crop_size crop of crop_units staff units, white outside of the image."""
-    scale = crop_size / (crop_units * unit)
+def crop_at(gray: NDArray, x: float, lines: StaffLines) -> NDArray:
+    """The model input around x, white outside of the image."""
+    scale = CROP_PX / lines.unit
     matrix = np.array(
         [
-            [scale, 0, crop_size / 2 - center[0] * scale],
-            [0, scale, crop_size / 2 - center[1] * scale],
+            [scale, 0, CROP_WIDTH / 2 - x * scale],
+            [0, scale, CROP_ABOVE * CROP_PX - lines.top * scale],
         ],
         dtype=np.float32,
     )
     return cv2.warpAffine(
         gray,
         matrix,
-        (crop_size, crop_size),
-        flags=cv2.INTER_AREA,
+        (CROP_WIDTH, CROP_HEIGHT),
+        flags=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=255,
     )
 
 
-class DigitClassifier:
+def decode_digits(probabilities: NDArray) -> tuple[int | None, float]:
+    """
+    The number of right aligned digit slots (slots x DIGIT_CLASSES) and its probability.
+    None if there is no number or the slots don't form one.
+    """
+    classes = probabilities.argmax(axis=1)
+    probability = float(np.prod(probabilities.max(axis=1)))
+    digits = [int(c) - 1 for c in classes if c > 0]
+    leading_empty = int(np.argmax(classes > 0)) if digits else len(classes)
+    # Digits must follow each other without empty slots and the first must not be a 0
+    if not digits or len(digits) != len(classes) - leading_empty or digits[0] == 0:
+        return None, probability
+    return int("".join(str(d) for d in digits)), probability
+
+
+@dataclass
+class Reading:
+    numerator: int | None
+    denominator: int | None
+    count: int | None
+    probability_time_signature: float
+    probability_count: float
+
+
+class NumberReader:
     def __init__(self, path: str = model_path) -> None:
         import onnxruntime as ort  # noqa: PLC0415
 
         self.session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
 
-    def predict(self, crops: list[NDArray]) -> NDArray:
-        """Class probabilities for each crop (crops x classes)."""
+    def read(self, crops: list[NDArray]) -> list[Reading]:
         if not crops:
-            return np.zeros((0, len(CLASSES)), dtype=np.float32)
+            return []
         batch = np.stack(crops).astype(np.float32)[:, None] / 255
-        logits = self.session.run(None, {"crops": batch})[0]
-        exp = np.exp(logits - logits.max(axis=1, keepdims=True))
-        return exp / exp.sum(axis=1, keepdims=True)
+        numerators, denominators, counts = self.session.run(None, {"crops": batch})
+        result = []
+        for numerator_logits, denominator_logits, count_logits in zip(
+            numerators, denominators, counts, strict=True
+        ):
+            numerator, p_numerator = decode_digits(_softmax(numerator_logits))
+            p_denominators = _softmax(denominator_logits[None])[0]
+            denominator = DENOMINATORS[int(p_denominators.argmax())] or None
+            count, p_count = decode_digits(_softmax(count_logits))
+            result.append(
+                Reading(
+                    numerator,
+                    denominator,
+                    count,
+                    p_numerator * float(p_denominators.max()),
+                    p_count,
+                )
+            )
+        return result
 
 
-_classifier: DigitClassifier | None = None
+def _softmax(logits: NDArray) -> NDArray:
+    exp = np.exp(logits - logits.max(axis=-1, keepdims=True))
+    return exp / exp.sum(axis=-1, keepdims=True)
 
 
-def _get_classifier() -> DigitClassifier | None:
-    global _classifier  # noqa: PLW0603
-    if _classifier is None:
+_reader: NumberReader | None = None
+
+
+def _get_reader() -> NumberReader | None:
+    global _reader  # noqa: PLW0603
+    if _reader is None:
         if not os.path.exists(model_path):
-            eprint("Digit model is missing, can't read numbers", model_path)
+            eprint("Number model is missing, can't read numbers", model_path)
             return None
-        _classifier = DigitClassifier()
-    return _classifier
-
-
-def _merge_overlapping(components: list[Component], max_gap: float) -> list[Component]:
-    """
-    Merges components which overlap horizontally and are at most max_gap apart vertically,
-    e.g. the parts of a digit which a staff line or a faint print split.
-    """
-    result = sorted(components, key=lambda c: c.x)
-    merged = True
-    while merged:
-        merged = False
-        for i in range(len(result)):
-            for j in range(i + 1, len(result)):
-                a, b = result[i], result[j]
-                overlap = min(a.x + a.w, b.x + b.w) - max(a.x, b.x)
-                gap = max(a.y, b.y) - min(a.y + a.h, b.y + b.h)
-                if overlap > 0.5 * min(a.w, b.w) and gap <= max_gap:
-                    x0, y0 = min(a.x, b.x), min(a.y, b.y)
-                    x1, y1 = max(a.x + a.w, b.x + b.w), max(a.y + a.h, b.y + b.h)
-                    result[i] = Component(x0, y0, x1 - x0, y1 - y0)
-                    del result[j]
-                    merged = True
-                    break
-            if merged:
-                break
-    return result
-
-
-def _read_number(
-    gray: NDArray,
-    components: list[Component],
-    unit: float,
-    classifier: DigitClassifier,
-    max_gap: float,
-    center_x: float,
-    max_offset: float,
-) -> tuple[int, list[Component]] | None:
-    """
-    Classifies the components and returns the number whose digits are closest to center_x
-    and its digits, or None if no number is within max_offset of it.
-    """
-    if not components:
-        return None
-    crops = [crop_around(gray, c.center, unit) for c in components]
-    probabilities = classifier.predict(crops)
-    digits = [
-        (component, int(np.argmax(p)))
-        for component, p in zip(components, probabilities, strict=True)
-        if np.argmax(p) != OTHER and np.max(p) >= digit_probability
-    ]
-    if not digits:
-        return None
-    digits.sort(key=lambda d: d[0].x)
-    # Digits which belong to one number follow each other closely
-    groups: list[list[tuple[Component, int]]] = [[digits[0]]]
-    for digit in digits[1:]:
-        last = groups[-1][-1][0]
-        if digit[0].x - (last.x + last.w) <= max_gap * unit:
-            groups[-1].append(digit)
-        else:
-            groups.append([digit])
-
-    def distance(group: list[tuple[Component, int]]) -> float:
-        left = group[0][0].x
-        right = group[-1][0].x + group[-1][0].w
-        return abs((left + right) / 2 - center_x)
-
-    best = min(groups, key=distance)
-    if distance(best) > max_offset:
-        return None
-    return int("".join(str(d[1]) for d in best)), [d[0] for d in best]
-
-
-@dataclass
-class TimeSignatureReading:
-    numerator: int | None
-    denominator: int | None
-
-
-def read_time_signature(
-    gray: NDArray, lines: StaffLines, x: float, classifier: DigitClassifier
-) -> TimeSignatureReading:
-    """Reads the digits in the upper and lower half of the staff around x."""
-    binary = _remove_staff_lines(_binarize(gray), lines)
-    unit = lines.unit
-    # The digits often touch at the middle line
-    cut = max(1, round(0.12 * unit))
-    binary[round(lines.middle) - cut : round(lines.middle) + cut + 1] = 0
-    left = max(0, int(x - 3 * unit))
-    right = min(gray.shape[1], int(x + 3 * unit))
-
-    components = _components(binary[:, left:right])
-
-    def half(top: float, bottom: float) -> int | None:
-        inside = [
-            c for c in components if top - 0.6 * unit <= c.y and c.y + c.h <= bottom + 0.6 * unit
-        ]
-        candidates = [
-            Component(c.x + left, c.y, c.w, c.h)
-            for c in _merge_overlapping(inside, max_gap=0.4 * unit)
-            if 1.2 * unit <= c.h <= 2.8 * unit and c.w <= 2.5 * unit  # noqa: PLR2004
-        ]
-        result = _read_number(
-            gray, candidates, unit, classifier, max_gap=0.8, center_x=x, max_offset=3 * unit
-        )
-        return result[0] if result else None
-
-    return TimeSignatureReading(half(lines.top, lines.middle), half(lines.middle, lines.bottom))
-
-
-def read_number_above(
-    gray: NDArray, lines: StaffLines, left: float, right: float, classifier: DigitClassifier
-) -> int | None:
-    """Reads a number above the staff between left and right, e.g. of a multi-measure rest."""
-    unit = lines.unit
-    top = max(0, int(lines.top - 6 * unit))
-    bottom = int(lines.top - 0.2 * unit)
-    x0 = max(0, int(left))
-    x1 = min(gray.shape[1], int(right))
-    if bottom <= top or x1 <= x0:
-        return None
-    binary = _binarize(gray)[top:bottom]
-    components = [
-        Component(c.x, c.y + top, c.w, c.h)
-        for c in _merge_overlapping(_components(binary), max_gap=0.25 * unit)
-    ]
-    candidates = [
-        c
-        for c in components
-        if x0 <= c.x and c.x + c.w <= x1 and 1.0 * unit <= c.h <= 3.5 * unit and c.w <= 3 * unit
-    ]
-    # The number of a multi-measure rest is centered over the measure, unlike e.g. a
-    # measure number at the start of a line
-    result = _read_number(
-        gray,
-        candidates,
-        unit,
-        classifier,
-        max_gap=1.0,
-        center_x=(left + right) / 2,
-        max_offset=0.35 * (right - left),
-    )
-    if result is None:
-        return None
-    number, digits = result
-    # It stands alone, unlike e.g. the number of a tempo mark like "♩ = 50"
-    group_left = min(d.x for d in digits)
-    group_right = max(d.x + d.w for d in digits)
-    group_top = min(d.y for d in digits)
-    group_bottom = max(d.y + d.h for d in digits)
-    for c in components:
-        if c in digits or max(c.w, c.h) < 0.4 * unit:  # noqa: PLR2004
-            continue
-        overlaps_vertically = c.y < group_bottom and c.y + c.h > group_top
-        gap = max(group_left - (c.x + c.w), c.x - group_right)
-        if overlaps_vertically and gap < 1.0 * unit:
-            return None
-    return number
+        _reader = NumberReader()
+    return _reader
 
 
 _BARLINE = re.compile(
@@ -415,19 +273,37 @@ def _is_multirest(rhythm: str) -> bool:
 def _full_measure_rest(
     symbols: list[EncodedSymbol], measure: list[int], typical_length: Fraction | None
 ) -> int | None:
-    """The index of the rest if it's the only symbol of the measure and fills it."""
+    """
+    The index of the longest rest if the measure has only rests and that rest fills it.
+    The transformer often reads the bar of a multirest as several rests.
+    """
     timed = [i for i in measure if _is_timed(symbols[i])]
-    has_chord = any(symbols[i].rhythm == "chord" for i in measure)
-    if len(timed) != 1 or has_chord or not symbols[timed[0]].rhythm.startswith("rest"):
+    if not timed or not all(symbols[i].rhythm.startswith("rest") for i in timed):
         return None
-    rest = symbols[timed[0]]
-    if _is_multirest(rest.rhythm):
-        return timed[0]
+    multirests = [i for i in timed if _is_multirest(symbols[i].rhythm)]
+    if multirests:
+        return multirests[0]
+    longest = max(timed, key=lambda i: symbols[i].get_duration().fraction)
+    rest = symbols[longest]
     # Excludes e.g. a short rest before a repeat sign which splits a measure
     duration = rest.get_duration().fraction
     if duration >= Fraction(1, 2) or (typical_length is not None and duration >= typical_length):
-        return timed[0]
+        return longest
     return None
+
+
+def _content_start(
+    symbols: list[EncodedSymbol], measure: list[int], start: float, lines: StaffLines
+) -> float:
+    """The start of a measure after its clef, key and time signature."""
+    xs = [
+        x
+        for i in measure
+        if symbols[i].rhythm.startswith(("clef", "keySignature", "timeSignature"))
+        for x in [_symbol_x(symbols[i])]
+        if x is not None and x > start
+    ]
+    return max(xs) + 1.5 * lines.unit if xs else start
 
 
 def _starts_with_barline(symbols: list[EncodedSymbol]) -> bool:
@@ -451,19 +327,25 @@ def read_numbers(gray: NDArray, symbols: list[EncodedSymbol], staff: Staff) -> l
     lines = staff_lines(staff, gray.shape[0])
     if lines is None:
         return symbols
-    classifier = _get_classifier()
-    if classifier is None:
+    reader = _get_reader()
+    if reader is None:
         return symbols
-    for symbol in symbols:
-        if not symbol.rhythm.startswith("timeSignature/"):
-            continue
-        x = _symbol_x(symbol)
-        if x is None:
-            continue
-        reading = read_time_signature(gray, lines, x, classifier)
+    time_signatures = [
+        (symbol, x)
+        for symbol in symbols
+        if symbol.rhythm.startswith("timeSignature/")
+        for x in [_symbol_x(symbol)]
+        if x is not None
+    ]
+    readings = reader.read([crop_at(gray, x, lines) for _, x in time_signatures])
+    for (symbol, _), reading in zip(time_signatures, readings, strict=True):
         denominator = symbol.rhythm.split("/")[1]
-        # Both digits must be read, the digits win over the transformer's beat type
-        if reading.numerator and reading.denominator in READ_DENOMINATORS:
+        # Both numbers must be read, they win over the transformer's beat type
+        if (
+            reading.numerator
+            and reading.denominator in READ_DENOMINATORS
+            and reading.probability_time_signature >= min_probability
+        ):
             if str(reading.denominator) != denominator:
                 eprint("Beat type", denominator, "replaced by", reading)
             symbol.rhythm = f"timeSignature{reading.numerator}/{reading.denominator}"
@@ -482,21 +364,39 @@ def read_numbers(gray: NDArray, symbols: list[EncodedSymbol], staff: Staff) -> l
     ]
     typical_length = sorted(lengths)[len(lengths) // 2] if lengths else None
     rests = []
+    others: dict[int, list[int]] = {}
     for measure_no, measure in enumerate(measures):
         rest_index = _full_measure_rest(symbols, measure, typical_length)
         if rest_index is None:
             continue
         rest = symbols[rest_index]
         bounds = _measure_bounds(measure_no, _symbol_x(rest), intervals, matches_measures)
+        if bounds is not None:
+            bounds = (_content_start(symbols, measure, bounds[0], lines), bounds[1])
         rests.append((measure_no, rest, bounds))
+        others[id(rest)] = [
+            i
+            for i in measure
+            if i != rest_index and symbols[i].rhythm.startswith(("rest", "chord"))
+        ]
     # The attention of rests in a row is imprecise, if two point to the same measure
     # neither is reliable, else both would get its number
     all_bounds = [bounds for _, _, bounds in rests]
-    for measure_no, rest, bounds in rests:
-        shared = not matches_measures and all_bounds.count(bounds) > 1
-        number = None
-        if bounds is not None and not shared:
-            number = read_number_above(gray, lines, bounds[0], bounds[1], classifier)
+    readable = [
+        (measure_no, rest, bounds)
+        for measure_no, rest, bounds in rests
+        if bounds is not None and (matches_measures or all_bounds.count(bounds) == 1)
+    ]
+    # The number of a multirest is centered over the measure
+    readings = reader.read([crop_at(gray, (b[0] + b[1]) / 2, lines) for _, _, b in readable])
+    numbers = {
+        id(rest): reading.count
+        for (_, rest, _), reading in zip(readable, readings, strict=True)
+        if reading.probability_count >= min_probability
+    }
+    dropped: set[int] = set()
+    for measure_no, rest, _ in rests:
+        number = numbers.get(id(rest))
         if number is None or number < 1:
             # The transformer only tells that it's a multirest, not for how many measures
             if _is_multirest(rest.rhythm):
@@ -505,9 +405,11 @@ def read_numbers(gray: NDArray, symbols: list[EncodedSymbol], staff: Staff) -> l
             else:
                 continue
         eprint("Rest with number", number, "in measure", measure_no)
+        # The other rests of the measure were misread parts of the multirest
+        dropped.update(others[id(rest)])
         if number == 1:
             rest.rhythm = "measureRest"
             rest.pitch = rest.lift = rest.articulation = rest.slur = nonote
         else:
             rest.rhythm = f"rest_{number}m"
-    return symbols
+    return [symbol for i, symbol in enumerate(symbols) if i not in dropped]

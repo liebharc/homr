@@ -9,12 +9,14 @@ import numpy as np
 from homr.bounding_boxes import RotatedBoundingBox
 from homr.model import BarLine, Staff, StaffPoint
 from homr.number_recognition import (
-    CLASSES,
-    OTHER,
-    Component,
+    CROP_HEIGHT,
+    CROP_WIDTH,
+    DIGIT_CLASSES,
+    Reading,
     _full_measure_rest,
     _measures,
-    _merge_overlapping,
+    crop_at,
+    decode_digits,
     measure_intervals,
     read_numbers,
     staff_lines,
@@ -47,6 +49,13 @@ def _staff(barlines: list[int], tops: tuple[int, ...] = (100,)) -> Staff:
 
 def _symbols(rhythms: str) -> list[EncodedSymbol]:
     return [EncodedSymbol(r) for r in rhythms.split()]
+
+
+def _reader(reading: Reading) -> mock.Mock:
+    """A reader which reads the same for every crop."""
+    reader = mock.Mock()
+    reader.read.side_effect = lambda crops: [reading] * len(crops)
+    return reader
 
 
 class TestNumberRecognition(unittest.TestCase):
@@ -82,33 +91,66 @@ class TestNumberRecognition(unittest.TestCase):
         self.assertIsNone(_full_measure_rest(symbols, measures[1], None))
         self.assertIsNone(_full_measure_rest(symbols, measures[2], None))
 
-    def test_merge_overlapping_joins_parts_of_a_digit(self) -> None:
-        top_bar = Component(10, 10, 12, 3)
-        body = Component(10, 14, 12, 12)
-        neighbor = Component(25, 10, 10, 16)
-        merged = _merge_overlapping([top_bar, body, neighbor], max_gap=2)
-        self.assertEqual(merged, [Component(10, 10, 12, 16), neighbor])
+    def test_misread_multirest_bar_is_a_full_measure_rest(self) -> None:
+        symbols = _symbols("rest_8 chord rest_2 barline rest_2 note_4")
+        measures = _measures(symbols)
+        self.assertEqual(_full_measure_rest(symbols, measures[0], None), 2)
+        self.assertIsNone(_full_measure_rest(symbols, measures[1], None))
+
+    def test_numbered_rest_drops_the_other_rests_of_its_measure(self) -> None:
+        symbols = _symbols("clef_G2 rest_2 chord rest_8 barline note_4 note_4 barline")
+        sevens = _reader(Reading(None, None, 7, 0.9, 0.9))
+        with mock.patch("homr.number_recognition._get_reader", return_value=sevens):
+            result = read_numbers(_staff_image([500, 959]), symbols, _staff([500, 959]))
+        self.assertEqual([s.rhythm for s in result][:3], ["clef_G2", "rest_7m", "barline"])
+
+    def test_decode_digits(self) -> None:
+        def slots(*classes: int) -> np.ndarray:
+            return np.eye(DIGIT_CLASSES)[list(classes)]
+
+        self.assertEqual(decode_digits(slots(0, 4))[0], 3)
+        self.assertEqual(decode_digits(slots(2, 3))[0], 12)
+        self.assertEqual(decode_digits(slots(0, 2, 1))[0], 10)
+        self.assertIsNone(decode_digits(slots(0, 0))[0])
+        # A gap or a leading zero is no number
+        self.assertIsNone(decode_digits(slots(2, 0, 3))[0])
+        self.assertIsNone(decode_digits(slots(1, 4))[0])
+
+    def test_crop_at_puts_the_staff_at_a_fixed_place(self) -> None:
+        image = _staff_image([])
+        lines = staff_lines(_staff([]), image.shape[0])
+        assert lines is not None
+        crop = crop_at(image, 500, lines)
+        self.assertEqual(crop.shape, (CROP_HEIGHT, CROP_WIDTH))
+        rows = np.where((crop < 128).mean(axis=1) > 0.9)[0]  # noqa: PLR2004
+        # The top line is 5 units, the bottom line 9 units below the top of the crop
+        self.assertEqual([rows.min(), rows.max()], [40, 72])
+
+    def test_time_signature_gets_numerator(self) -> None:
+        symbols = _symbols("clef_G2 timeSignature/4 note_4 barline")
+        symbols[1].coordinates = (100.0, 124.0)
+        reader = _reader(Reading(3, 4, None, 0.9, 0.9))
+        with mock.patch("homr.number_recognition._get_reader", return_value=reader):
+            result = read_numbers(_staff_image([959]), symbols, _staff([959]))
+        self.assertEqual(result[1].rhythm, "timeSignature3/4")
 
     def test_multirest_without_number_lasts_one_measure(self) -> None:
         symbols = _symbols("clef_G2 rest_4m barline note_4 note_4 barline")
-        no_digits = mock.Mock()
-        no_digits.predict.side_effect = lambda crops: np.eye(len(CLASSES))[[OTHER] * len(crops)]
-        with mock.patch("homr.number_recognition._get_classifier", return_value=no_digits):
+        no_digits = _reader(Reading(None, None, None, 0.9, 0.9))
+        with mock.patch("homr.number_recognition._get_reader", return_value=no_digits):
             result = read_numbers(_staff_image([500, 959]), symbols, _staff([500, 959]))
         self.assertEqual(result[1].rhythm, "measureRest")
 
     def test_rests_pointing_to_the_same_measure_get_no_number(self) -> None:
         # Two barline intervals for three measures: the rests are placed by attention
         image = _staff_image([500, 959])
-        cv2.rectangle(image, (265, 60), (277, 82), 0, -1)  # a "number" above the first measure
-        fives = mock.Mock()
-        fives.predict.side_effect = lambda crops: np.eye(len(CLASSES))[[5] * len(crops)]
+        fives = _reader(Reading(None, None, 5, 0.9, 0.9))
 
         def read(attention_x: list[float]) -> list[str]:
             symbols = _symbols("clef_G2 rest_1 barline rest_1 barline note_4 note_4 barline")
             for index, x in zip([1, 3], attention_x, strict=True):
                 symbols[index].coordinates = (x, 120.0)
-            with mock.patch("homr.number_recognition._get_classifier", return_value=fives):
+            with mock.patch("homr.number_recognition._get_reader", return_value=fives):
                 return [s.rhythm for s in read_numbers(image, symbols, _staff([500, 959]))]
 
         self.assertEqual(read([200, 700])[1], "rest_5m")
