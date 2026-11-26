@@ -105,6 +105,8 @@ The transformer model generates these predictions in sequence, processing the de
 
 **Note**: The transformer output provides the sequence of symbols but does not include explicit positional information (horizontal or vertical coordinates). However, the model computes the center of attention as a byproduct of the attention mechanism, which is used to estimate the focus point on the staff image. homr maps this point back to the input image and writes it as a comment into each note of the MusicXML output, e.g. `<!-- imgpos: 45, 231 -->`. These are rough positions: they point at or near the symbol, but aren't pixel-exact.
 
+**Note**: With `--output-confidence` homr also writes how sure the decoder was about each note, again as a comment, e.g. `<!-- conf: r:0.9987:0.9971;p:0.9412:0.8803;l:0.9999:0.9998;a:0.9990:0.9981;s:0.9995:0.9990;o:0.9993:0.9987 -->`. There is one entry per decoder branch, separated by `;`: `r` rhythm, `p` pitch, `l` lift (accidental), `a` articulation, `s` slur and beam, `o` position. Each entry reads `branch:probability:margin`, with the softmax probability of the token homr picked and its margin to the second most likely token (both between 0 and 1, a small margin means the model hesitated between two readings). The choice of the token doesn't change, and without the flag the output is the same as before. The values describe the model's certainty and are not calibrated error rates.
+
 ### Stage 4: MusicXML Output
 
 The symbol sequence is converted into MusicXML format and saved to disk. The resulting file can be processed with tools like [musescore](https://musescore.com/) or [relieur](https://github.com/papoteur-mga/relieur) (for multi-image combinations).

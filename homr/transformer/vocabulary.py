@@ -458,6 +458,10 @@ class EncodedSymbol:
         self.coordinates = coordinates
         # The coordinates mapped back to the image which was given to homr as input
         self.image_coordinates: tuple[float, float] | None = None
+        # Only set if the decoder was asked for it (Config.output_confidence). Per decoder
+        # branch (r, p, l, a, s, o for rhythm, pitch, lift, articulation, slur, position)
+        # the probability of the chosen token and its margin to the runner-up.
+        self.confidence: dict[str, tuple[float, float]] | None = None
         self._duration: SymbolDuration | None = None
 
     def is_tuplet(self) -> bool:

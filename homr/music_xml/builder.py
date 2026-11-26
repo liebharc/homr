@@ -340,6 +340,7 @@ class PartBuilder:
         if symbol.image_coordinates is not None:
             x, y = symbol.image_coordinates
             note.image_position = (round(x), round(y))
+        note.confidence = symbol.confidence
         return note
 
     def add_articulations(self, note: m.Note, articulations: str) -> None:

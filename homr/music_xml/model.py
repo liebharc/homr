@@ -56,6 +56,8 @@ class Note:
     ornaments: list[tuple[str, dict[str, str], str | None]] = field(default_factory=list)
     slurs: list[Slur] = field(default_factory=list)
     image_position: tuple[int, int] | None = None
+    # Decoder confidence per branch: probability and margin to the runner-up
+    confidence: dict[str, tuple[float, float]] | None = None
     start: int = 0  # in divisions from the start of the measure
 
     @property

@@ -119,6 +119,9 @@ class Config:
         # creation, so it only pays off across many images. Set via the
         # --coreml-encoder CLI flag.
         self.use_coreml_encoder = False
+        # Opt-in: let the decoder report how sure it was about each symbol
+        # (EncodedSymbol.confidence). Set via the --output-confidence CLI flag.
+        self.output_confidence = False
 
         # Scheduled Sampling parameters
         self.scheduled_sampling_start_prob = 1.0

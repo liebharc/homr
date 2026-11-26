@@ -142,6 +142,16 @@ class ScoreDecoder:
                 position=position_token[0],
                 coordinates=attention,
             )
+            if self.config.output_confidence:
+                # Only reads the logits, the choice above stays the plain argmax.
+                symbol.confidence = {
+                    "r": head_confidence(rhythmsp[:, -1, :]),
+                    "p": head_confidence(pitchsp[:, -1, :]),
+                    "l": head_confidence(liftsp[:, -1, :]),
+                    "a": head_confidence(articulationsp[:, -1, :]),
+                    "s": head_confidence(slursp[:, -1, :]),
+                    "o": head_confidence(positionsp[:, -1, :]),
+                }
             symbols.append(symbol)
 
             out_lift = np.concatenate((out_lift, lift_sample), axis=-1)
@@ -178,6 +188,20 @@ class ScoreDecoder:
             input_names.append(f"cache_in{i}")
             output_names.append(f"cache_out{i}")
         return cache, input_names, output_names
+
+
+def head_confidence(logits: NDArray) -> tuple[float, float]:
+    """
+    Returns the softmax probability of the most likely token of one decoder branch
+    and its margin to the second most likely token.
+    """
+    x = np.asarray(logits, dtype=np.float64).reshape(-1)
+    e = np.exp(x - np.max(x))
+    p = e / e.sum()
+    if p.size < 2:  # noqa: PLR2004
+        return 1.0, 1.0
+    second, first = np.partition(p, -2)[-2:]
+    return float(first), float(first - second)
 
 
 def detokenize(tokens: NDArray, vocab: dict[int, str]) -> list[str]:
