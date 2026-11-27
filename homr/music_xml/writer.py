@@ -152,6 +152,11 @@ def _note(parent: ET.Element, note: m.Note) -> None:  # noqa: C901
     if note.image_position is not None:
         x, y = note.image_position
         xml.append(ET.Comment(f" imgpos: {x}, {y} "))
+    if note.confidence:
+        entries = ";".join(
+            f"{head}:{p:.4f}:{margin:.4f}" for head, (p, margin) in note.confidence.items()
+        )
+        xml.append(ET.Comment(f" conf: {entries} "))
 
 
 def _notations(note_xml: ET.Element, note: m.Note) -> None:

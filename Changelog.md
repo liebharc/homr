@@ -10,6 +10,7 @@ All notable changes to this project will be documented here.
 - **Octave clefs and octave shifts** (8va/8vb).
 - Printed accidentals in the MusicXML output.
   Thanks to [@xavierxav](https://github.com/xavierxav)!
+- `--output-confidence` writes the decoder's confidence for each note as a MusicXML comment.
 
 ### Changed
 

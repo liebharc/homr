@@ -186,6 +186,8 @@ class ProcessingConfig:
     # Only helps across many images (slow one-time MLProgram compile).
     coreml_encoder: bool
     title_detection: bool
+    # Opt-in (--output-confidence): write the decoder confidence of each note as a comment
+    output_confidence: bool = False
 
 
 def process_image(
@@ -226,6 +228,7 @@ def process_image(
         transformer_config = Config()
         transformer_config.use_gpu_inference = config.transformer_use_gpu
         transformer_config.use_coreml_encoder = config.coreml_encoder
+        transformer_config.output_confidence = config.output_confidence
 
         result_staffs = parse_staffs(
             debug,
@@ -506,6 +509,12 @@ def main() -> None:
         "--output-tempo", type=int, help="Adds a tempo to the musicxml with the given bpm"
     )
     parser.add_argument(
+        "--output-confidence",
+        action="store_true",
+        help="Writes how sure the model was about each note as a comment into the musicxml. "
+        + "See the README for the format.",
+    )
+    parser.add_argument(
         "--write-staff-positions",
         action="store_true",
         help="Writes the position of all detected staffs to a txt file.",
@@ -569,6 +578,7 @@ def main() -> None:
         segnet_use_gpu,
         coreml_encoder,
         not args.no_title,
+        args.output_confidence,
     )
 
     xml_generator_args = XmlGeneratorArguments(
