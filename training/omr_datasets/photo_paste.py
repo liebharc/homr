@@ -21,6 +21,9 @@ from training.omr_datasets.photo_maps import FH, FLAT_MM, FW, PhotoConditions
 FONTS = ["Leipzig", "Bravura", "Gootville", "Leland", "Petaluma"]
 SIZES = [30, 40, 55]  # small, normal, large staves (Verovio's scale)
 DRAWN_AT = 40  # Verovio's scale for every size: the size sets the page Verovio lays out on
+# the music is drawn at this share of the width it takes on the page: 1 is never enlarged (an
+# enlarged drawing would add blur of its own); tests use less, for speed
+DETAIL = 1.0
 SCALE = 0.86  # the music's share of the template page width, leaving room for the marks
 MARK = round(10 * FLAT_MM)
 MARK_CENTER = 10 * FLAT_MM
@@ -147,7 +150,7 @@ def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> Engra
         return None
     svg = toolkit(low).renderToSVG(1)
     # drawn at least as wide as it sits on the page: enlarging it afterwards would blur it
-    zoom = SCALE * FW / (page_width * DRAWN_AT / 100)
+    zoom = DETAIL * SCALE * FW / (page_width * DRAWN_AT / 100)
     png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=zoom)
     music = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
     if music is None:

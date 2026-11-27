@@ -20,6 +20,12 @@ class TrOMR(nn.Module):
         self.decoder.eval()
         self.encoder.eval()
 
+    def compile_modules(self) -> None:
+        """Compile encoder and repeated decoder blocks separately in-place."""
+        self.encoder.compile()
+        for _norm, block, _residual in self.decoder.net.attn_layers.layers:
+            block.compile()
+
     def forward(
         self,
         inputs: torch.Tensor,

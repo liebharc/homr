@@ -3,16 +3,15 @@
 import unittest
 import xml.etree.ElementTree as ET
 
+from homr.music_xml.passes import convert_ties, rebalance_voices
+from homr.music_xml.tokens import SymbolChord, _split_mixed_chord
 from homr.music_xml_generator import (
-    SymbolChord,
     XmlGeneratorArguments,
-    _split_mixed_chord,
-    convert_ties,
     generate_xml,
     last_time_signatures,
-    rebalance_measure_voices,
 )
 from homr.transformer.vocabulary import EncodedSymbol
+from tests.music_xml_model import apply, read_part
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import (
     read_token_lines,
@@ -434,7 +433,8 @@ barline . . . . ."""
         )
 
     def test_rebalance_measure_voices_assigns_stable_voices_per_staff(self) -> None:
-        measure = ET.Element("measure")
+        part = ET.Element("part", id="P1")
+        measure = ET.SubElement(part, "measure", number="1")
 
         note1 = self._build_test_note(duration=4, staff=1, voice=1)
         measure.append(note1)
@@ -457,14 +457,11 @@ barline . . . . ."""
         note6 = self._build_test_note(duration=2, staff=2, voice=1)
         measure.append(note6)
 
-        rebalance_measure_voices(measure)
+        model = read_part(part)
+        rebalance_voices(model)
 
-        self.assertEqual(self._read_note_voice(note1), "2")
-        self.assertEqual(self._read_note_voice(note2), "1")
-        self.assertEqual(self._read_note_voice(note3), "1")
-        self.assertEqual(self._read_note_voice(note4), "1")
-        self.assertEqual(self._read_note_voice(note5), "6")
-        self.assertEqual(self._read_note_voice(note6), "5")
+        voices = [note.voice for note in model.measures[0].notes()]
+        self.assertEqual(voices, [2, 1, 1, 1, 6, 5])
 
     def _build_test_note(
         self, duration: int, staff: int, voice: int, is_chord: bool = False
@@ -481,11 +478,6 @@ barline . . . . ."""
         backup = ET.Element("backup")
         ET.SubElement(backup, "duration").text = str(duration)
         return backup
-
-    def _read_note_voice(self, note: ET.Element) -> str:
-        v = note.findtext("voice")
-        self.assertIsNotNone(v)
-        return str(v)
 
     def test_slur_between_same_pitches_becomes_a_tie(self) -> None:
         """A slur joining two identical pitches is a tie, and needs both elements."""
@@ -639,8 +631,7 @@ barline . . . . ."""
         ET.SubElement(note, "voice").text = "1"
         ET.SubElement(note, "staff").text = "1"
 
-        convert_ties(part)
-        self.assertEqual(_ties(part), [])
+        self.assertEqual(_ties(apply(convert_ties, part)), [])
 
     def test_tie_found_while_another_slur_is_open_on_the_same_staff(self) -> None:
         """Several slurs share a staff, and so share a slur number.
@@ -1084,10 +1075,27 @@ barline . . . . ."""
             c.findtext("sign") for c in _first_measure(xml).iter("clef") if c.get("number") == "2"
         ]
         self.assertEqual(lower_clefs, ["F", "G"])
-        pitches = [_pitch(n) + n.findtext("pitch/octave", "") for n in _notes(_first_measure(xml))]
+        voices: dict[str, list[str]] = {}
+        voice = ""
+        for child in _first_measure(xml):
+            if child.tag == "note":
+                voice = child.findtext("voice", "")
+                voices.setdefault(voice, []).append(
+                    _pitch(child) + child.findtext("pitch/octave", "")
+                )
+            elif (
+                child.tag == "attributes" and voice and child.find("clef[@number='2']") is not None
+            ):
+                voices[voice].append("clef")
         self.assertEqual(
-            pitches,
-            ["rest", "D2", "A2", "F3", "A3", "F4", "A4", "F5", "A5", "F4", "A4", "C4", "F5", "D5"],
+            voices,
+            {
+                # The clef of the lower staff changes after the first eighth
+                "1": ["rest", "clef", "A3", "F5", "A5", "F5", "D5"],
+                "2": ["F3"],
+                "5": ["D2", "A2", "F4", "A4", "F4", "A4"],
+                "6": ["C4"],
+            },
         )
 
     def test_real_page_barline_in_a_chord(self) -> None:

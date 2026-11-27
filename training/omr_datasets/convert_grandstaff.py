@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import shutil
 from pathlib import Path
 
 import cv2
@@ -20,6 +21,7 @@ git_root = Path(script_location).parent.parent.absolute()
 dataset_root = os.path.join(git_root, "datasets")
 grandstaff_root = os.path.join(dataset_root, "grandstaff")
 grandstaff_train_index = os.path.join(grandstaff_root, "index.txt")
+flat_grandstaff = os.path.join(grandstaff_root, "flat")
 
 
 def _get_dark_pixels_per_row(image: NDArray) -> NDArray:
@@ -100,9 +102,13 @@ def _convert_file(path: Path, ony_recreate_token_files: bool = False) -> str:  #
             image = _check_staff_image(image_file, basename)
         else:
             image = _create_staff_image(image_file, basename)
-        return (
-            str(Path(image).relative_to(git_root)) + "," + str(Path(tokens).relative_to(git_root))
-        )
+        dest_image = Path(flat_grandstaff) / str(image).split("grandstaff/", 1)[1]
+        dest_tokens = Path(flat_grandstaff) / str(tokens).split("grandstaff/", 1)[1]
+        dest_image.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(image, dest_image)
+        Path(tokens).replace(dest_tokens)
+
+        return str(dest_image.relative_to(git_root)) + "," + str(dest_tokens.relative_to(git_root))
 
     except SvgValidationError:
         return ""

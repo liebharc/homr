@@ -28,11 +28,11 @@ class TestStaffRegions(unittest.TestCase):
             [],
         )
         regions = StaffRegions([system1, system2])
-        self.assertEqual(0, regions.get_start_of_closest_staff_above(100))
-        self.assertEqual(200, regions.get_start_of_closest_staff_above(201))
-        self.assertEqual(400, regions.get_start_of_closest_staff_above(500))
-        self.assertEqual(600, regions.get_start_of_closest_staff_above(633))
-        self.assertEqual(800, regions.get_start_of_closest_staff_above(1000))
+        self.assertEqual(0, regions.get_start_of_closest_staff_above(build_staff(100, 140)))
+        self.assertEqual(200, regions.get_start_of_closest_staff_above(build_staff(201, 241)))
+        self.assertEqual(400, regions.get_start_of_closest_staff_above(build_staff(500, 540)))
+        self.assertEqual(600, regions.get_start_of_closest_staff_above(build_staff(633, 673)))
+        self.assertEqual(800, regions.get_start_of_closest_staff_above(build_staff(1000, 1040)))
 
     def test_staff_below(self) -> None:
         system1 = MultiStaff(
@@ -50,7 +50,7 @@ class TestStaffRegions(unittest.TestCase):
             [],
         )
         regions = StaffRegions([system1, system2])
-        self.assertEqual(100, regions.get_start_of_closest_staff_below(0))
-        self.assertEqual(100, regions.get_start_of_closest_staff_below(99))
-        self.assertEqual(700, regions.get_start_of_closest_staff_below(600))
-        self.assertEqual(1e12, regions.get_start_of_closest_staff_below(800))
+        self.assertEqual(100, regions.get_start_of_closest_staff_below(build_staff(-40, 0)))
+        self.assertEqual(100, regions.get_start_of_closest_staff_below(build_staff(59, 99)))
+        self.assertEqual(700, regions.get_start_of_closest_staff_below(build_staff(560, 600)))
+        self.assertEqual(1e12, regions.get_start_of_closest_staff_below(build_staff(760, 800)))

@@ -7,6 +7,7 @@ import unittest
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import cv2
 import numpy as np
@@ -26,6 +27,23 @@ from training.omr_datasets.convert_photos import (
 )
 from training.omr_datasets.photo_look import NO_CURVE, Look, spots
 from training.omr_datasets.photo_maps import FH, FW, PhotoConditions, prepare_photo
+
+# Small photos and a coarse engraving: the same steps, a fraction of the pixels
+_FAST: list[Any] = [
+    mock.patch("training.omr_datasets.photo_maps.PHOTO_SIZE", 700),
+    mock.patch("training.omr_datasets.convert_photos.PHOTO_SIZE", 700),
+    mock.patch("training.omr_datasets.photo_paste.DETAIL", 0.5),
+]
+
+
+def setUpModule() -> None:
+    for patch in _FAST:
+        patch.start()
+
+
+def tearDownModule() -> None:
+    for patch in reversed(_FAST):
+        patch.stop()
 
 
 def template(number: int) -> dict[str, Any]:

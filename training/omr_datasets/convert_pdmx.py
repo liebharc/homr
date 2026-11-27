@@ -111,7 +111,7 @@ def convert_pdmx(only_recreate_token_files: bool = False) -> None:
     music_xml_files = list(Path(rendered_scores).rglob("*.musicxml"))
     write_index(
         pdmx_train_index,
-        music_xml_files,
+        music_xml_files[: len(mxl_paths)],
         convert_file_only_token_pdmx if only_recreate_token_files else convert_token_and_image_pdmx,
     )
     eprint("Done indexing")
