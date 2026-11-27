@@ -41,6 +41,10 @@ torch._dynamo.config.suppress_errors = True
 torch._dynamo.config.automatic_dynamic_shapes = False
 torch._dynamo.config.recompile_limit = 64
 
+# Fine tuning: first only the encoder, then the whole model at a low learning rate
+# (epochs, learning rate, encoder only)
+FINE_TUNE_PHASES = [(5, 1e-4, True), (10, 2e-5, False)]
+
 
 class FreezeCallback(TrainerCallback):
     """
@@ -145,8 +149,6 @@ def train_transformer(
     number_of_epochs = 35
     if smoke_test:
         number_of_epochs = 10
-    elif fine_tune:
-        number_of_epochs = 15
     resume_from_checkpoint = None
 
     checkpoint_folder = "current_training"
@@ -198,38 +200,38 @@ def train_transformer(
     batch_size = 16  # 16gb vram
     eval_batch_size = 32
 
-    train_args = TrainingArguments(
-        checkpoint_folder,
-        torch_compile=False,  # compiled via model.compile_modules()
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        learning_rate=1e-5 if fine_tune else 1e-4,
-        optim="adamw_torch_fused",
-        gradient_accumulation_steps=max(1, 2 // distribute.get_world_size()),
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=eval_batch_size,
-        num_train_epochs=number_of_epochs,
-        weight_decay=0.05,
-        warmup_ratio=0.1,
-        lr_scheduler_type="cosine",
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_accuracy",
-        greater_is_better=True,
-        report_to=["tensorboard"],
-        logging_dir=os.path.join("logs", f"run{run_id}"),
-        label_names=label_names,
-        bf16=not fp32,
-        logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
-        dataloader_pin_memory=True,
-        dataloader_num_workers=12,
-    )
+    def training_args(output_dir: str, epochs: int, learning_rate: float) -> TrainingArguments:
+        return TrainingArguments(
+            output_dir,
+            torch_compile=False,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            learning_rate=learning_rate,
+            optim="adamw_torch_fused",
+            gradient_accumulation_steps=max(1, 2 // distribute.get_world_size()),
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=eval_batch_size,
+            num_train_epochs=epochs,
+            weight_decay=0.05,
+            warmup_ratio=0.1,
+            lr_scheduler_type="cosine",
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_accuracy",
+            greater_is_better=True,
+            report_to=["tensorboard"],
+            logging_dir=os.path.join("logs", f"run{run_id}", os.path.basename(output_dir)),
+            label_names=label_names,
+            bf16=not fp32,
+            logging_nan_inf_filter=False,  # the filter syncs with the GPU every step
+            dataloader_pin_memory=True,
+            dataloader_num_workers=12,
+        )
 
     if fine_tune:
         eprint("Fine tuning model from", config.filepaths.checkpoint)
         model = load_model(config)
-        model.freeze_encoder()
-        model.freeze_decoder()
-        model.unfreeze_lift_decoder()
+        # The checkpoint is fully trained: don't restart the schedule in every phase
+        config.scheduled_sampling_start_prob = config.scheduled_sampling_end_prob
     else:
         model = TrOMR(config)
 
@@ -248,21 +250,37 @@ def train_transformer(
         return
 
     try:
-        callbacks: list[TrainerCallback] = [EarlyStoppingCallback(early_stopping_patience=5)]
-        if not fine_tune:
-            callbacks.append(FreezeCallback(epochs_to_freeze=2))
-
-        trainer = HomrTrainer(
-            model,
-            train_args,
-            train_dataset=datasets["train"],
-            data_collator=collate_trimmed,
-            eval_dataset=datasets["validation"],
-            callbacks=callbacks,
-            distribute=distribute,
-        )
-
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        if fine_tune:
+            for phase, (epochs, learning_rate, encoder_only) in enumerate(FINE_TUNE_PHASES):
+                model.unfreeze_all()
+                if encoder_only:
+                    model.freeze_decoder()
+                eprint(f"Fine tuning phase {phase}: {epochs} epochs, lr {learning_rate}")
+                output_dir = os.path.join(checkpoint_folder, f"fine{phase}")
+                trainer = HomrTrainer(
+                    model,
+                    training_args(output_dir, epochs, learning_rate),
+                    train_dataset=datasets["train"],
+                    data_collator=collate_trimmed,
+                    eval_dataset=datasets["validation"],
+                    callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
+                    distribute=distribute,
+                )
+                trainer.train()
+        else:
+            trainer = HomrTrainer(
+                model,
+                training_args(checkpoint_folder, number_of_epochs, 1e-4),
+                train_dataset=datasets["train"],
+                data_collator=collate_trimmed,
+                eval_dataset=datasets["validation"],
+                callbacks=[
+                    EarlyStoppingCallback(early_stopping_patience=5),
+                    FreezeCallback(epochs_to_freeze=2),
+                ],
+                distribute=distribute,
+            )
+            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     except KeyboardInterrupt:
         eprint("Interrupted")
     if distribute.is_rank0():

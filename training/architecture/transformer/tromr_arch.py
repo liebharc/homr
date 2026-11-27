@@ -69,11 +69,6 @@ class TrOMR(nn.Module):
         for param in self.decoder.parameters():
             param.requires_grad = False
 
-    def freeze_encoder(self) -> None:
-        """Freeze all encoder parameters to prevent updates during training."""
-        for param in self.encoder.parameters():
-            param.requires_grad = False
-
     def freeze_backbone(self) -> None:
         """Freeze only the encoder backbone."""
         if hasattr(self.encoder, "freeze_backbone"):
@@ -84,10 +79,8 @@ class TrOMR(nn.Module):
         if hasattr(self.encoder, "unfreeze_backbone"):
             self.encoder.unfreeze_backbone()
 
-    def unfreeze_lift_decoder(self) -> None:
-        for param in self.decoder.net.lift_emb.parameters():
-            param.requires_grad = True
-        for param in self.decoder.net.to_logits_lift.parameters():
+    def unfreeze_all(self) -> None:
+        for param in self.parameters():
             param.requires_grad = True
 
 
