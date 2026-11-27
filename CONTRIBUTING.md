@@ -57,7 +57,13 @@ This ensures that reviewers and users can easily access and evaluate the impact 
 
 ## Licensing
 
-By contributing to `homr`, you agree that your contributions will be licensed under both the AGPL and Apache 2 licenses. This ensures that your contributions can be used in a wide range of applications while maintaining the project's open-source nature.
+By contributing to `homr`, you agree that your contributions are licensed as follows:
+
+- Code in `homr/`: [AGPL-3.0](LICENSE) with the [homr app permission](LICENSE_EXCEPTION.md).
+- All other code, including the training code in `training/`: [AGPL-3.0](LICENSE) only.
+- Model weights: [CC BY-SA 4.0](LICENSE_WEIGHTS.md).
+
+Only contribute code and data that you have the right to contribute under these licenses. If you take code from another project, keep its license notice and say so in the pull request.
 
 ## Questions?
 
