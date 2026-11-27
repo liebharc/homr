@@ -28,12 +28,19 @@ from training.omr_datasets.convert_lieder import (
     git_root,
 )
 from training.omr_datasets.music_xml_parser import music_xml_file_to_tokens
+from training.omr_datasets.photo_look import Look, field, filled
 from training.transformer.training_vocabulary import token_lines_to_str
 
 if TYPE_CHECKING:
     from homr.main import ProcessingConfig
 
 END_SLACK = 0.04  # share of a staff's width its found ends may land from the drawn ends
+# a staff whose blur (the wide side of its spot's stretched Gaussian) is more than this share of its
+# staff-line spacing is left out: its answer would list notes nobody could read. Measured on clean
+# OpenScore Lieder pages shrunk to a photo's size and blurred more and more, read by homr (model
+# 588): the median page error is 5.9% at 0.1 and 14.3% at 0.2 (7.1% clean), crossing 5 points
+# above clean at 0.173 (research/synthetic-omr/blur_limit.py in the photo-pages author's notes)
+BLUR_LIMIT = 0.17
 
 Target = tuple[tuple[int, int], list[float]]
 Point = tuple[float, float]
@@ -104,12 +111,30 @@ def match_staff(
     return match
 
 
+def too_blurry(sigma: float, spacing: float, limit: float = BLUR_LIMIT) -> bool:
+    """Whether a blur of sigma is too much for staff lines this far apart (both in pixels)."""
+    return spacing <= 0 or sigma / spacing > limit
+
+
+def blur_field(look: Look, shape: tuple[int, int]) -> NDArray:
+    """The wide side of the look's blur at every pixel of a photo of this shape."""
+    return field(filled(look.blur[..., 0], 1.0), shape, look.step)
+
+
+def staff_blur(look: Look, point: tuple[float, float], shape: tuple[int, int]) -> float:
+    """The wide side of the look's blur at a photo point (x, y)."""
+    x = min(max(round(point[0]), 0), shape[1] - 1)
+    y = min(max(round(point[1]), 0), shape[0] - 1)
+    return float(blur_field(look, shape)[y, x])
+
+
 def cut_page(
     image_path: Path,
     maps: tuple[NDArray, NDArray],
     page: dict[str, Any],
     config: "ProcessingConfig",
     out_dir: Path,
+    look: Look | None = None,
 ) -> tuple[list[str], Counter[str]]:
     """Cuts one generated photo (its answer beside it as .musicxml) into staves. Writes
     <photo>-<n>.png, .tokens and .where (which system and part it is) to out_dir. Returns the
@@ -142,6 +167,7 @@ def cut_page(
 
     lines = []
     n = 0
+    blur: NDArray | None = None  # made when the first staff needs it
     for row in multi_staffs:
         for staff in row.staffs:
             n += 1
@@ -177,6 +203,20 @@ def cut_page(
             if text is None:
                 dropped["unsupported clef"] += 1
                 continue
+            if look is not None:
+                if blur is None:
+                    blur = blur_field(look, map_x.shape)
+                mid_x = (staff.min_x + staff.max_x) / 2
+                (bx, by), (_, below) = to_input((mid_x, mid_y)), to_input(
+                    (mid_x, mid_y + staff.average_unit_size)
+                )
+                at = (
+                    min(max(round(by), 0), blur.shape[0] - 1),
+                    min(max(round(bx), 0), blur.shape[1] - 1),
+                )
+                if too_blurry(float(blur[at]), abs(below - by)):
+                    dropped["too blurry to read"] += 1
+                    continue
             name = f"{image_path.stem}-{n}"  # photo names can hold dots: no with_suffix here
             png, token_file = out_dir / f"{name}.png", out_dir / f"{name}.tokens"
             cv2.imwrite(str(png), captured["image"])

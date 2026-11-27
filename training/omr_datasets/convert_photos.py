@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -34,14 +34,17 @@ from homr.download_utils import download_file, unzip_file
 from homr.simple_logging import eprint
 from training.omr_datasets.convert_lieder import convert_lieder, git_root, lieder
 from training.omr_datasets.photo_index import photos_root, photos_train_index
+from training.omr_datasets.photo_look import Look, load_look, save_look
 from training.omr_datasets.photo_maps import (
     PHOTO_SIZE,
     PageMapper,
+    PhotoConditions,
     Uvdoc,
     find_marks,
     page_number,
     prepare_photo,
 )
+from training.omr_datasets.photo_measure import measure_and_check
 from training.omr_datasets.photo_paste import (
     FONTS,
     SIZES,
@@ -58,11 +61,17 @@ UVDOC_URL = f"https://github.com/tanguymagne/UVDoc/archive/{UVDOC_COMMIT}.zip"
 FIRST_TRAINING_PAGE, LAST_PAGE = 23, 124  # 8 * 124 + 7 = 999, the last id of the marks
 FORBIDDEN_PAGES = [*range(1, 23), *range(43, 51)]  # homr's test music; the test photos
 SONGS_PER_PHOTO = 100
+# saved with every photo's measured look, its finer maps and the reason it was left out: raise it
+# when a change to the measuring makes the old ones wrong, and they are measured again
+LOOK_VERSION = 1
 WORKERS = min(8, os.cpu_count() or 1)  # making pages, on the CPU
 CUT_WORKERS = 2  # cutting staves: each runs homr's segmentation on the GPU
 SEED = 31
 
 Cut = Callable[..., tuple[list[str], Counter[str]]]
+# what the camera did to a photo's print, measured from its template picture, with the finer page
+# maps; or why the photo is left out
+Measure = Callable[[PhotoConditions, NDArray], tuple[Look, tuple[NDArray, NDArray]] | str]
 
 
 def training_page(number: int | None) -> bool:
@@ -147,13 +156,16 @@ class CachedMaps:
 
 @dataclass
 class Photo:
-    """A usable training photo: where it is, its template, UVDoc's cached maps of it and the
-    finished map to the flat page (both in root/maps)."""
+    """A usable training photo: where it is, its template, UVDoc's cached maps of it, the
+    finished map to the flat page (erasing uses it), the finer map lined up with the photo's own
+    print and what its camera did to the ink (all in root/maps)."""
 
     path: Path
     template: dict[str, Any]
     uvdoc_maps: Path
     page_maps: Path
+    fine_maps: Path
+    look: Path
 
 
 def find_photos(
@@ -191,8 +203,74 @@ def find_photos(
         if cond is not None:
             page_maps = root / "maps" / f"{path.stem}.page.npz"
             np.savez_compressed(page_maps, map_x=cond.map_x, map_y=cond.map_y)
-            found[path.stem] = Photo(path, template, cached.cache, page_maps)
+            fine = root / "maps" / f"{path.stem}.fine{LOOK_VERSION}.npz"
+            look = root / "maps" / f"{path.stem}.look{LOOK_VERSION}.npz"
+            found[path.stem] = Photo(path, template, cached.cache, page_maps, fine, look)
     return found
+
+
+def _left_out(photo: Photo) -> Path:
+    return photo.look.with_name(f"{photo.path.stem}.left_out{LOOK_VERSION}.txt")
+
+
+def _measure_one(job: tuple[str, Photo, Path, Measure]) -> tuple[str, bool] | None:
+    """Measures one photo's look and saves it with its finer maps. Else why it's left out, and
+    whether that is the photo's own (remembered) or the setup's (tried again next run)."""
+    name, photo, template_pages, measure = job
+    cv2.setNumThreads(1)
+    picture = template_pages / f"{photo.template['name']}.png"
+    flat = cv2.imread(str(picture), cv2.IMREAD_GRAYSCALE) if picture.exists() else None
+    if flat is None:
+        return "no template picture", False
+    cached = CachedMaps(None)
+    cached.cache = photo.uvdoc_maps
+    try:
+        cond = prepare_photo(photo.path, photo.template, cached)
+        if cond is None:
+            return "no map", False
+        result = measure(cond, flat)
+    except Exception as e:  # one odd photo mustn't stop all the others
+        return f"measuring failed ({type(e).__name__}: {e})", True
+    if isinstance(result, str):
+        return result, True
+    look, (map_x, map_y) = result
+    np.savez_compressed(photo.fine_maps, map_x=map_x, map_y=map_y)
+    save_look(photo.look, look)
+    return None
+
+
+def measure_photos(
+    photos: dict[str, Photo],
+    template_pages: Path,
+    *,
+    measure: Measure = measure_and_check,
+    workers: int = 1,
+) -> dict[str, Photo]:
+    """The photos whose look could be measured from their template picture and passes its
+    check (photo_measure.py). Each photo is measured once (for this LOOK_VERSION): its look and
+    finer maps are saved beside its maps, or why it was left out. A setup problem (no template
+    picture, no map) isn't remembered: the photo is tried again next run."""
+    jobs = [
+        (name, photo, template_pages, measure)
+        for name, photo in sorted(photos.items())
+        if not (photo.look.exists() and photo.fine_maps.exists()) and not _left_out(photo).exists()
+    ]
+    setup: dict[str, str] = {}
+    for (name, photo, _, _), why in zip(jobs, _map_jobs(_measure_one, jobs, workers), strict=True):
+        if why is not None:
+            reason, remembered = why
+            if remembered:
+                _left_out(photo).write_text(reason, encoding="utf-8")
+            else:
+                setup[name] = reason
+    kept = {}
+    for name, photo in sorted(photos.items()):
+        if photo.look.exists() and photo.fine_maps.exists():
+            kept[name] = photo
+        else:
+            reason = setup.get(name) or _left_out(photo).read_text(encoding="utf-8")
+            eprint(f"{name}: left out, {reason}")
+    return kept
 
 
 def _map_jobs(job: Callable[[Any], Any], jobs: list[Any], workers: int) -> list[Any]:
@@ -217,6 +295,9 @@ def _photo_pages(
     cond = prepare_photo(photo.path, photo.template, cached)
     if cond is None:
         return 0
+    finer = np.load(photo.fine_maps)  # lined up with the photo's own print when measured
+    cond = replace(cond, map_x=finer["map_x"], map_y=finer["map_y"])
+    look = load_look(photo.look)
     made, broken = 0, 0
     for i in range(k, len(song_list), photos):
         if made == songs_per_photo:
@@ -235,7 +316,7 @@ def _photo_pages(
         if page is None:
             continue
         stem = f"{name}__{made:03d}"
-        image = put_on_photo(cond.photo, cond, page.flat)
+        image = put_on_photo(cond.photo, cond, look, page.flat)
         cv2.imwrite(str(pages_dir / f"{stem}.jpg"), image, [cv2.IMWRITE_JPEG_QUALITY, 92])
         (pages_dir / f"{stem}.musicxml").write_text(page.musicxml, encoding="utf-8")
         info = {"photo": name, "song": song, "start": start, "systems": page.systems}
@@ -258,7 +339,7 @@ def make_pages(
     afresh when photos were added or taken away."""
     names = sorted(photos)
     done = pages_dir / "done.json"
-    wanted = {"photos": names, "songs_per_photo": songs_per_photo}
+    wanted = {"photos": names, "songs_per_photo": songs_per_photo, "look_version": LOOK_VERSION}
     if done.exists() and json.loads(done.read_text(encoding="utf-8")) == wanted:
         return
     pages_dir.mkdir(parents=True, exist_ok=True)
@@ -275,16 +356,19 @@ def make_pages(
 
 
 _loaded_maps: dict[Path, tuple[NDArray, NDArray]] = {}  # per process: each photo's map once
+_loaded_looks: dict[Path, Look] = {}
 
 
-def _cut_one(job: tuple[Path, Path, Any, Path, Cut]) -> tuple[list[str], Counter[str]]:
-    image_path, page_maps, config, staves_dir, cut = job
+def _cut_one(job: tuple[Path, Path, Path, Any, Path, Cut]) -> tuple[list[str], Counter[str]]:
+    image_path, page_maps, look, config, staves_dir, cut = job
     cv2.setNumThreads(1)
     if page_maps not in _loaded_maps:
         maps = np.load(page_maps)
         _loaded_maps[page_maps] = (maps["map_x"], maps["map_y"])
+    if look not in _loaded_looks:
+        _loaded_looks[look] = load_look(look)
     page = json.loads(image_path.with_suffix(".page.json").read_text(encoding="utf-8"))
-    return cut(image_path, _loaded_maps[page_maps], page, config, staves_dir)
+    return cut(image_path, _loaded_maps[page_maps], page, config, staves_dir, _loaded_looks[look])
 
 
 def cut_pages(
@@ -303,7 +387,7 @@ def cut_pages(
         page = json.loads(image_path.with_suffix(".page.json").read_text(encoding="utf-8"))
         photo = photos.get(page["photo"])
         if photo is not None:  # else its photo is gone
-            jobs.append((image_path, photo.page_maps, config, staves_dir, cut))
+            jobs.append((image_path, photo.fine_maps, photo.look, config, staves_dir, cut))
     lines, dropped = [], Counter[str]()
     for found, why in _map_jobs(_cut_one, jobs, workers):
         lines += found
@@ -319,18 +403,22 @@ def run(
     root: Path,
     *,
     mapper: Callable[[], PageMapper],
+    template_pages: Path,
+    measure: Measure = measure_and_check,
     cut: Cut = cut_page,
     songs_per_photo: int = SONGS_PER_PHOTO,
     config: Any = None,
     workers: int = 1,
     cut_workers: int = 1,
 ) -> int:
-    """Maps, then pages, then staves, each finished before the next starts (UVDoc runs on the CPU,
-    homr's segmentation on the GPU). Pages are made on `workers` processes, staves cut on
+    """Maps, then each photo's look (measured from its template picture in template_pages), then
+    pages, then staves, each finished before the next starts (UVDoc runs on the CPU, homr's
+    segmentation on the GPU). Looks and pages are made on `workers` processes, staves cut on
     `cut_workers`; the result doesn't depend on either. Writes root/index.txt afresh; returns its
     number of lines. Raises when no staff is kept, so training doesn't quietly run without the
     photos. song_list: (name, MusicXML text or file)."""
     photos = find_photos(photo_dir, templates, root, mapper)
+    photos = measure_photos(photos, template_pages, measure=measure, workers=workers)
     make_pages(photos, song_list, root / "pages", songs_per_photo, workers=workers)
     lines = cut_pages(photos, root / "pages", root / "staves", cut, config, workers=cut_workers)
     if not lines:
@@ -349,6 +437,18 @@ def _downloaded(url: str, folder: str, variable: str) -> Path:
         download_file(url, str(archive))
         unzip_file(str(archive), str(dataset_root))
     return path
+
+
+def template_pictures(dataset: Path) -> Path:
+    """The dataset's template pictures (templates/pages); an error saying to download the
+    dataset again when it predates them."""
+    pages = dataset / "templates" / "pages"
+    if not pages.is_dir():
+        raise RuntimeError(
+            f"{dataset} has no templates/pages: it was downloaded before the photo pages measured "
+            "each photo's look; delete it to download it again"
+        )
+    return pages
 
 
 def convert_photos() -> None:
@@ -383,6 +483,7 @@ def convert_photos() -> None:
         songs(song_dir, template_song_ids(templates.values())),
         photos_root,
         mapper=lambda: Uvdoc(uvdoc_dir),
+        template_pages=template_pictures(dataset),
         songs_per_photo=SONGS_PER_PHOTO,
         config=config,
         workers=WORKERS,

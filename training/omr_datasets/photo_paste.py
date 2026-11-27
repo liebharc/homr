@@ -1,6 +1,6 @@
 """
 Songs engraved by Verovio and drawn onto phone photos of template pages, through the photo's map
-to the flat page (photo_maps.py), as dark and as blurred as the photo's own ink.
+to the flat page (photo_maps.py), the way the photo's camera drew its own print (photo_look.py).
 """
 
 import copy
@@ -15,20 +15,15 @@ import numpy as np
 import verovio
 from numpy.typing import NDArray
 
-from training.omr_datasets.photo_maps import (
-    FH,
-    FLAT_MM,
-    FW,
-    PhotoConditions,
-    edge_sharpness,
-)
+from training.omr_datasets.photo_look import Look, draw_ink
+from training.omr_datasets.photo_maps import FH, FLAT_MM, FW, PhotoConditions
 
 FONTS = ["Leipzig", "Bravura", "Gootville", "Leland", "Petaluma"]
-SIZES = [30, 40, 55]  # Verovio scale: small, normal, large staves
-SUPER = 2  # draw the page at twice the photo's size, then shrink: what a camera does
-BLEED = 0.25  # printer ink spreads: strokes are widened by this many 300 dpi pixels each side
-BLURS = [0, 0.5, 0.75, 1, 1.25, 1.5]  # sigmas tried to match the photo's ink edges
-ZOOM = 1.5  # Verovio's page drawn at this zoom
+SIZES = [30, 40, 55]  # small, normal, large staves (Verovio's scale)
+DRAWN_AT = 40  # Verovio's scale for every size: the size sets the page Verovio lays out on
+# the music is drawn at this share of the width it takes on the page: 1 is never enlarged (an
+# enlarged drawing would add blur of its own); tests use less, for speed
+DETAIL = 1.0
 SCALE = 0.86  # the music's share of the template page width, leaving room for the marks
 MARK = round(10 * FLAT_MM)
 MARK_CENTER = 10 * FLAT_MM
@@ -122,16 +117,19 @@ def layout(svg: str, zoom: float, f: float, x0: float, y0: float) -> list[dict[s
 def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> EngravedPage | None:
     """The most bars from bar `start` (0 = the first) that fit on one page, placed as on a
     template page (without the marks: the photo's map is in template pixels). None when fewer
-    than 4 bars fit."""
+    than 4 bars fit. A bigger size lays the music out on a smaller page, so the staves come out
+    bigger once the page is fitted to the template (Verovio's scale only scales the drawing)."""
+    k = 40 / size
+    page_width = round(2100 * k)
     options = {
-        "pageWidth": 2100,
-        "pageHeight": 2970,
-        "scale": size,
+        "pageWidth": page_width,
+        "pageHeight": round(2970 * k),
+        "scale": DRAWN_AT,
         "adjustPageHeight": False,
         "footer": "none",
         "font": font,
-        "pageMarginLeft": 150,
-        "pageMarginRight": 150,
+        "pageMarginLeft": round(150 * k),
+        "pageMarginRight": round(150 * k),
         "header": "none",
     }
 
@@ -151,7 +149,9 @@ def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> Engra
     if low < 4:
         return None
     svg = toolkit(low).renderToSVG(1)
-    png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=ZOOM)
+    # drawn at least as wide as it sits on the page: enlarging it afterwards would blur it
+    zoom = DETAIL * SCALE * FW / (page_width * DRAWN_AT / 100)
+    png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), background_color="white", scale=zoom)
     music = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
     if music is None:
         return None
@@ -164,57 +164,16 @@ def engrave_on_template(xml: str, font: str, size: int, start: int = 0) -> Engra
     flat = np.full((FH, FW), 255, np.uint8)
     y0, x0 = (FH - small.shape[0]) // 2, (FW - small.shape[1]) // 2
     flat[y0 : y0 + small.shape[0], x0 : x0 + small.shape[1]] = small
-    return EngravedPage(flat, measures_from(xml, start, low), layout(svg, ZOOM, f, x0, y0))
+    return EngravedPage(flat, measures_from(xml, start, low), layout(svg, zoom, f, x0, y0))
 
 
-def ink_strength(darkness: NDArray, page: NDArray, level: float) -> float:
-    """How much a fully dark pixel darkens the paper, so the core of the drawn ink is as dark as
-    the photo's (level, a share of the paper). Thin strokes never reach full darkness once shrunk
-    and blurred."""
-    strength = 1 - level
-    for _ in range(5):
-        core = (1 - strength * darkness < 0.6) & page
-        if not core.any():
-            break
-        strength = min((1 - level) / max(float(np.median(darkness[core])), 1e-3), 1.0)
-    return strength
-
-
-def put_on_photo(
-    photo: NDArray, cond: PhotoConditions, flat: NDArray, bleed: float = BLEED
-) -> NDArray:
-    """The flat page drawn onto the photo's paper, its ink widened by the printer's bleed and
-    blurred as much as the photo's own ink. Pixels off the page stay as they are."""
-    if bleed:  # a fraction blends the two whole widths around it
-        low = int(bleed)
-        wide = [
-            (
-                flat
-                if r == 0
-                else cv2.erode(
-                    flat, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
-                )
-            )
-            for r in (low, low + 1)
-        ]
-        part = bleed - low
-        flat = np.asarray(
-            wide[0] if part == 0 else cv2.addWeighted(wide[0], 1 - part, wide[1], part, 0)
-        )
-    h, w = cond.map_x.shape
-    big = (w * SUPER, h * SUPER)
-    big_x = cv2.resize(cond.map_x, big, interpolation=cv2.INTER_LINEAR)
-    big_y = cv2.resize(cond.map_y, big, interpolation=cv2.INTER_LINEAR)
-    lit = cv2.remap(flat, big_x, big_y, cv2.INTER_LINEAR, borderValue=255)
-    darkness = 1 - cv2.resize(lit, (w, h), interpolation=cv2.INTER_AREA).astype(np.float32) / 255
-    tried: list[tuple[float, float, NDArray, float]] = []
-    for s in BLURS:
-        d = np.asarray(cv2.GaussianBlur(darkness, (0, 0), s) if s else darkness)
-        strength = ink_strength(d, cond.on_page, cond.ink_level)
-        off = abs(edge_sharpness(1 - d * strength, cond.on_page) - cond.sharp)
-        tried.append((off, s, d, strength))
-    _, _, blurred, strength = min(tried, key=lambda t: t[:2])
-    made = cond.paper * (1 - blurred[..., None] * strength)
+def put_on_photo(photo: NDArray, cond: PhotoConditions, look: Look, flat: NDArray) -> NDArray:
+    """The flat page drawn onto the photo's paper as its camera drew ink there (photo_look's
+    draw_ink, the drawing the photo's look was checked with). Pixels off the page stay as they
+    are."""
+    drawn = draw_ink(flat, (cond.map_x, cond.map_y), look)
+    made = np.clip(cond.paper * (1 - drawn[..., None]), 0, 255).astype(np.uint8)
+    on = cond.on_page & (cond.map_x >= 0)
     result = photo.copy()
-    result[cond.on_page] = np.clip(made, 0, 255).astype(np.uint8)[cond.on_page]
+    result[on] = made[on]
     return result
