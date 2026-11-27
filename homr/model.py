@@ -180,8 +180,8 @@ class Note(SymbolOnStaff):
 
 
 class BarLine(SymbolOnStaff):
-    def __init__(self, box: RotatedBoundingBox):
-        super().__init__(box.center)
+    def __init__(self, box: RotatedBoundingBox, center: tuple[float, float] | None = None):
+        super().__init__(box.center if center is None else center)
         self.box = box
 
     def draw_onto_image(self, img: NDArray, color: tuple[int, int, int] = (255, 0, 0)) -> None:
@@ -194,7 +194,7 @@ class BarLine(SymbolOnStaff):
         return str(self)
 
     def copy(self) -> "BarLine":
-        return BarLine(self.box)
+        return BarLine(self.box, self.center)
 
 
 class Clef(SymbolOnStaff):

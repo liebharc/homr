@@ -31,6 +31,7 @@ from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
     DYNAMICS,
     DYNAMICS_MODIFIER,
+    MULTIREST,
     OCTAVE_CLEFS,
     OCTAVE_SHIFT_STOP,
     VALID_TIME_SIGNATURE_DENOMINATORS,
@@ -366,10 +367,10 @@ class PartTokenizer:
                 self.measure.append_symbol(EncodedSymbol(f"timeSignature/{beat_type}"))
             elif isinstance(item, m.MultipleRest):
                 multiple_rest = item.measures
+                # All multirests share one token, the digit reader reads the number
                 if item.measures > 1:
-                    rhythm = f"rest_{min(item.measures, 10)}m"
                     self.measure.append_symbol(
-                        EncodedSymbol(rhythm, empty, empty, empty, empty, "upper")
+                        EncodedSymbol(MULTIREST, empty, empty, empty, empty, "upper")
                     )
             elif isinstance(item, m.Barline):
                 self.barline(item)

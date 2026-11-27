@@ -76,6 +76,20 @@ class TestVocabulary(unittest.TestCase):
             ],
         )
 
+    def test_time_signatures_with_another_numerator_are_kept(self) -> None:
+        symbols = [
+            EncodedSymbol("timeSignature4/2"),
+            EncodedSymbol("note_1"),
+            EncodedSymbol("timeSignature3/2"),
+            EncodedSymbol("note_1"),
+            EncodedSymbol("timeSignature3/2"),
+        ]
+        result = remove_duplicated_symbols(symbols)
+        self.assertEqual(
+            [s.rhythm for s in result],
+            ["timeSignature4/2", "note_1", "timeSignature3/2", "note_1"],
+        )
+
     def test_remove_duplicates_in_chord(self) -> None:
         tokens_str = """clef_G2 _ _ _ _ upper&clef_F4 _ _ _ _ lower
 keySignature_1 . . . . .
@@ -229,3 +243,10 @@ barline . . . . ."""
             duration = kern_to_symbol_duration(kern)
             self.assertEqual(duration.normal_notes, 1)
             self.assertEqual(duration.actual_notes, 1)
+
+    def test_multirest_count_is_no_tuplet(self) -> None:
+        for count in ["3", "5", "7", "12", "15"]:
+            rest = EncodedSymbol(f"rest_{count}m")
+            self.assertFalse(rest.is_tuplet())
+            self.assertEqual(rest.remove_tuplet().rhythm, f"rest_{count}m")
+        self.assertEqual(EncodedSymbol("rest_12").remove_tuplet().rhythm, "rest_8")

@@ -10,7 +10,7 @@ from homr.music_xml_generator import (
     generate_xml,
     last_time_signatures,
 )
-from homr.transformer.vocabulary import EncodedSymbol
+from homr.transformer.vocabulary import MULTIREST, EncodedSymbol
 from tests.music_xml_model import apply, read_part
 from training.omr_datasets.music_xml_parser import music_xml_string_to_tokens
 from training.transformer.training_vocabulary import (
@@ -336,8 +336,72 @@ barline . . . . ."""
 
         parsed = music_xml_string_to_tokens(ET.tostring(xml, encoding="unicode"))[0]
         rhythms = [s.rhythm for measure in parsed for s in measure]
-        self.assertIn("rest_3m", rhythms)
+        self.assertIn(MULTIREST, rhythms)
         self.assertIn("note_1", rhythms)
+
+    def test_read_numerator_is_used(self) -> None:
+        six_eight = """clef_G2 . . . . upper
+timeSignature6/8 . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(six_eight.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("6", "8")])
+
+    def test_beats_and_rest_durations_fit_the_measure(self) -> None:
+        """
+        Issue 215: 3/8 measures with a beat type of 4 were written as 1/4, while
+        the rests of a multi-measure rest were 3/8 long.
+        """
+        three_eight = """clef_G2 . . . . upper
+timeSignature/4 . . . . .
+note_4. C4 _ _ _ upper
+barline . . . . .
+rest_2m _ _ _ _ upper
+barline . . . . .
+note_4. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(three_eight.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("3", "8")])
+        divisions = int(xml.findtext("part/measure/attributes/divisions", ""))
+        measures = xml.findall("part/measure")
+        self.assertEqual(len(measures), 4)
+        for measure in measures:
+            self.assertEqual(sum(_duration(n) for n in _notes(measure)), divisions * 3 // 2)
+
+    def test_whole_rest_alone_fills_the_measure(self) -> None:
+        """Issue 245: a full-bar rest in 9/8 was written four quarters long."""
+        nine_eight = """clef_G2 . . . . upper
+timeSignature9/8 . . . . .
+rest_1 _ _ _ _ upper
+barline . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+note_4. E4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(nine_eight.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        divisions = int(xml.findtext("part/measure/attributes/divisions", ""))
+        rest = _notes(xml.findall("part/measure")[0])[0]
+        self.assertEqual(rest.find("rest").get("measure"), "yes")  # type: ignore[union-attr]
+        self.assertEqual(_duration(rest), divisions * 9 // 2)
+
+    def test_page_starts_in_the_length_of_its_first_measures(self) -> None:
+        three_eight_then_three_four = """clef_G2 . . . . upper
+note_4. C4 _ _ _ upper
+barline . . . . .
+timeSignature3/4 . . . . .
+note_2. D4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(three_eight_then_three_four.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        self.assertEqual(_times(xml), [("3", "8"), ("3", "4")])
 
     def test_time_signature_is_computed_if_none_was_recognized(self) -> None:
         no_time_signature = """clef_G2 . . . . upper

@@ -8,6 +8,7 @@ from homr import constants
 from homr.debug import Debug
 from homr.image_utils import crop_image_and_return_new_top
 from homr.model import MultiStaff, Staff
+from homr.number_recognition import read_numbers
 from homr.point_mapping import PointMapping, chain, identity, undo_crop, undo_resize
 from homr.simple_logging import eprint
 from homr.staff_dewarping import StaffDewarping, dewarp_staff_image
@@ -152,7 +153,6 @@ def prepare_staff_image(
     staff_image = dewarp.dewarp(staff_image)
     staff_image, top_left = crop_image_and_return_new_top(staff_image, *region_step2)
     undo_crop2 = undo_crop(*top_left)
-    scaling_factor = 1
 
     eprint("Dewarping staff", index, "done")
 
@@ -160,17 +160,26 @@ def prepare_staff_image(
     before_canvas_shape = staff_image.shape
     staff_image = center_image_on_canvas(staff_image, image_dimensions)
     canvas_content_shape = (int(image_dimensions[1]), int(image_dimensions[0]))
+    canvas_y_offset = _canvas_y_offset(canvas_content_shape[0])
     to_page = chain(
-        undo_crop(0, -_canvas_y_offset(canvas_content_shape[0])),
+        undo_crop(0, -canvas_y_offset),
         undo_resize(before_canvas_shape, canvas_content_shape),
         undo_crop2,
         dewarp.undewarp_point,
         undo_crop1,
         undo_scaling,
     )
+    scale_x = canvas_content_shape[1] / before_canvas_shape[1]
+    scale_y = canvas_content_shape[0] / before_canvas_shape[0]
+
+    def to_staff_image(point: tuple[float, float]) -> tuple[float, float]:
+        x, y = dewarp.dewarp_point(point)
+        return (x - top_left[0]) * scale_x, (y - top_left[1]) * scale_y + canvas_y_offset
+
+    staff = staff.transform_coordinates(to_staff_image)
     debug.write_image_with_fixed_suffix(f"_staff-{index}_input.jpg", staff_image)
     if debug.debug:
-        transformed_staff = _dewarp_staff(staff, dewarp, top_left, scaling_factor)
+        transformed_staff = staff
         transformed_staff_image = staff_image.copy()
         for symbol in transformed_staff.symbols:
             center = symbol.center
@@ -233,6 +242,7 @@ def parse_staff_image(
     )
     eprint("Running TrOmr inference on staff image", index)
     result = parse_staff_tromr(staff_image=staff_image, staff=transformed_staff, config=config)
+    result = read_numbers(staff_image, result, transformed_staff)
     for symbol in result:
         center = _get_symbol_center(symbol)
         if center is not None:

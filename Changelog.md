@@ -25,6 +25,8 @@ All notable changes to this project will be documented here.
 - Various fixes in the MusicXML export.
   Thanks to [@e-n-f](https://github.com/e-n-f)!
 - Staffs in a broken row.
+- Wrong time signatures, e.g. 4/2 written as 4/4.
+- Multi-measure rests with the wrong number of measures.
 
 ## [0.7.1]
 

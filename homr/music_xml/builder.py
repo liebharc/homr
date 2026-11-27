@@ -14,6 +14,7 @@ from homr.music_xml.tokens import (
     group_into_chords,
     starts_with_time_signature,
     time_signature_length,
+    time_signature_of,
 )
 from homr.simple_logging import eprint
 from homr.transformer.vocabulary import (
@@ -73,8 +74,10 @@ class PartBuilder:
     ) -> None:
         self.part = part
         self.groups = group_into_chords(voice)
-        self.division, self.nominators = division_and_measure_lengths(self.groups)
-        self.nominator = self.nominators[0]
+        self.division, self.nominators, self.leading_length = division_and_measure_lengths(
+            self.groups
+        )
+        self.nominator = self.leading_length
         # Without a printed time signature at its start, a page continues in the previous
         # page's one: the model reads only the beat type, so an estimate from the measure
         # lengths can't tell 2/2 from 4/4, and would bring a time change at every page.
@@ -124,10 +127,12 @@ class PartBuilder:
             if self.inherited_time is not None:
                 measures[0].items.append(m.Time(*self.inherited_time))
             else:
-                measures[0].items.append(m.Time(str(max(int(self.nominator * 4), 1)), "4"))
+                beats, beat_type = time_signature_of("timeSignature/4", self.leading_length)
+                measures[0].items.append(m.Time(str(beats), str(beat_type)))
         return measures
 
     def close_measure(self) -> None:
+        self.mark_whole_measure_rests()
         self.part.measures.append(self.measure)
         # MusicXML writes a multi-measure rest as that many measures
         number = self.measure.number
@@ -186,9 +191,9 @@ class PartBuilder:
     def on_time(self, group: SymbolChord, _: int) -> None:
         self.nominator = self.nominators[min(self.time_signature_no, len(self.nominators) - 1)]
         self.time_signature_no += 1
-        denominator = group.symbols[0].rhythm.split("/")[1]
-        self.beats = max(int(self.nominator * int(denominator)), 1)
-        self.measure.items.append(m.Time(str(self.beats), denominator, self.time))
+        self.beats, denominator = time_signature_of(group.symbols[0].rhythm, self.nominator)
+        self.nominator = Fraction(self.beats, denominator)
+        self.measure.items.append(m.Time(str(self.beats), str(denominator), self.time))
 
     def on_barline(self, group: SymbolChord, _: int) -> None:
         """
@@ -245,6 +250,19 @@ class PartBuilder:
             is_measure_rest=True,
             duration=self.divisions(self.nominator),
         )
+
+    def mark_whole_measure_rests(self) -> None:
+        """A whole rest alone in its staff fills the measure in any meter, e.g. 9/8."""
+        for staff in {n.staff for n in self.measure.notes()}:
+            notes = [n for n in self.measure.notes() if n.staff == staff and not n.is_grace]
+            if len(notes) != 1:
+                continue
+            rest = notes[0]
+            is_whole_rest = rest.is_rest and rest.type == "whole" and rest.dots == 0
+            if is_whole_rest and rest.time_modification is None:
+                rest.is_measure_rest = True
+                rest.start = 0
+                rest.duration = self.divisions(self.nominator)
 
     def add_measure_rests(self, measure: m.Measure) -> None:
         for staff in (1, 2) if self.part.has_two_staves else (1,):

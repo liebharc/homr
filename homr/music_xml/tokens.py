@@ -141,14 +141,18 @@ def split_mixed_chords(groups: list[SymbolChord]) -> list[SymbolChord]:
     return result
 
 
-def division_and_measure_lengths(groups: list[SymbolChord]) -> tuple[int, list[Fraction]]:
+def division_and_measure_lengths(
+    groups: list[SymbolChord],
+) -> tuple[int, list[Fraction], Fraction]:
     """
-    The division and one measure length per time signature, estimated from the measures
-    up to the next time signature. Measures before the first one count towards it.
+    The division, one measure length per time signature, estimated from the measures
+    up to the next time signature, and the length of the measures before the first time
+    signature. Measures before the first one also count towards it.
     """
     lengths = [Fraction(1, 4)] + [length(s) for g in groups if g.is_notes() for s in g.timed()]
     division = math.lcm(*(d.denominator for d in lengths))
     segments: list[list[Fraction]] = [[]]
+    leading: list[Fraction] = []
     has_time_signature = False
     end = Fraction(0)
     for group in groups:
@@ -158,6 +162,8 @@ def division_and_measure_lengths(groups: list[SymbolChord]) -> tuple[int, list[F
                 end = Fraction(0)
             if has_time_signature:
                 segments.append([])
+            else:
+                leading = list(segments[0])
             has_time_signature = True
         elif group.is_barline():
             if end > 0:
@@ -169,7 +175,7 @@ def division_and_measure_lengths(groups: list[SymbolChord]) -> tuple[int, list[F
         segments[-1].append(end)
     all_measures = [d for segment in segments for d in segment]
     if not all_measures:
-        return division, [Fraction(1)] * len(segments)
+        return division, [Fraction(1)] * len(segments), Fraction(1)
     # A time signature without measures after it, e.g. a courtesy one at the end of a
     # system, belongs to the measures of the next one
     result: list[Fraction] = []
@@ -178,7 +184,27 @@ def division_and_measure_lengths(groups: list[SymbolChord]) -> tuple[int, list[F
         if segment:
             following = Fraction(np.median(segment))  # type: ignore[arg-type]
         result.append(following)
-    return division, result[::-1]
+    result.reverse()
+    leading_length = Fraction(np.median(leading)) if leading else result[0]  # type: ignore[arg-type]
+    return division, result, leading_length
+
+
+def time_signature_of(rhythm: str, measure_length: Fraction) -> tuple[int, int]:
+    """
+    Beats and beat type of a time signature token, e.g. timeSignature3/4. Without a
+    numerator, e.g. timeSignature/4, the beats come from the measure length. If it's no
+    whole number of beats, the beat type gets smaller, so that the measures still fit.
+    """
+    numerator, denominator_text = rhythm.removeprefix("timeSignature").split("/")
+    denominator = int(denominator_text)
+    if numerator:
+        return int(numerator), denominator
+    for candidate in (denominator, 2 * denominator, 4 * denominator):
+        beats = measure_length * candidate
+        if beats.denominator == 1 and candidate <= 16:  # noqa: PLR2004
+            return max(int(beats), 1), candidate
+    # An unusual length, likely a wrong estimate
+    return max(round(measure_length * denominator), 1), denominator
 
 
 def starts_with_time_signature(groups: list[SymbolChord]) -> bool:
