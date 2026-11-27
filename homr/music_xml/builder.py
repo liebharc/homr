@@ -132,6 +132,7 @@ class PartBuilder:
         return measures
 
     def close_measure(self) -> None:
+        self.mark_whole_measure_rests()
         self.part.measures.append(self.measure)
         # MusicXML writes a multi-measure rest as that many measures
         number = self.measure.number
@@ -249,6 +250,19 @@ class PartBuilder:
             is_measure_rest=True,
             duration=self.divisions(self.nominator),
         )
+
+    def mark_whole_measure_rests(self) -> None:
+        """A whole rest alone in its staff fills the measure in any meter, e.g. 9/8."""
+        for staff in {n.staff for n in self.measure.notes()}:
+            notes = [n for n in self.measure.notes() if n.staff == staff and not n.is_grace]
+            if len(notes) != 1:
+                continue
+            rest = notes[0]
+            is_whole_rest = rest.is_rest and rest.type == "whole" and rest.dots == 0
+            if is_whole_rest and rest.time_modification is None:
+                rest.is_measure_rest = True
+                rest.start = 0
+                rest.duration = self.divisions(self.nominator)
 
     def add_measure_rests(self, measure: m.Measure) -> None:
         for staff in (1, 2) if self.part.has_two_staves else (1,):

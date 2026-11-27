@@ -373,6 +373,24 @@ barline . . . . ."""
         for measure in measures:
             self.assertEqual(sum(_duration(n) for n in _notes(measure)), divisions * 3 // 2)
 
+    def test_whole_rest_alone_fills_the_measure(self) -> None:
+        """Issue 245: a full-bar rest in 9/8 was written four quarters long."""
+        nine_eight = """clef_G2 . . . . upper
+timeSignature9/8 . . . . .
+rest_1 _ _ _ _ upper
+barline . . . . .
+note_4. C4 _ _ _ upper
+note_4. D4 _ _ _ upper
+note_4. E4 _ _ _ upper
+barline . . . . ."""
+        tokens = read_token_lines(nine_eight.splitlines())
+        xml = generate_xml(XmlGeneratorArguments(), [tokens], "")
+
+        divisions = int(xml.findtext("part/measure/attributes/divisions", ""))
+        rest = _notes(xml.findall("part/measure")[0])[0]
+        self.assertEqual(rest.find("rest").get("measure"), "yes")  # type: ignore[union-attr]
+        self.assertEqual(_duration(rest), divisions * 9 // 2)
+
     def test_page_starts_in_the_length_of_its_first_measures(self) -> None:
         three_eight_then_three_four = """clef_G2 . . . . upper
 note_4. C4 _ _ _ upper
